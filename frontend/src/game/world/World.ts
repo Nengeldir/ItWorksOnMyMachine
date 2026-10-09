@@ -1,5 +1,6 @@
 import { Vector3 } from "three";
 import { buildCourse, buildObstacles, type Course } from "./course";
+import { Forest } from "./forest";
 import { type Obstacle, ObstacleGrid } from "./obstacles";
 import { type Palette, paletteFor } from "./palette";
 import { Terrain } from "./terrain";
@@ -7,12 +8,13 @@ import { Terrain } from "./terrain";
 // Distances beyond this don't matter for scoring, so obstacle lookups can stop there
 export const PROXIMITY_RANGE = 12;
 
-/** Everything a seed decides: terrain, course, obstacles, colors. No rendering. */
+/** Everything a seed decides: terrain, river, forests, course, obstacles, colors. No rendering. */
 export class World {
   readonly seed: number;
   readonly terrain: Terrain;
   readonly course: Course;
   readonly obstacles: Obstacle[];
+  readonly forest: Forest;
   readonly palette: Palette;
   private readonly grid: ObstacleGrid;
 
@@ -22,12 +24,18 @@ export class World {
     this.course = buildCourse(seed, this.terrain);
     this.obstacles = buildObstacles(seed, this.terrain, this.course);
     this.grid = new ObstacleGrid(this.obstacles, PROXIMITY_RANGE);
+    this.forest = new Forest(seed, this.terrain, this.course, PROXIMITY_RANGE);
     this.palette = paletteFor(seed);
   }
 
-  /** Distance from a point to the nearest surface (negative inside) */
+  /** Distance from a point to the nearest surface: ground, water, rock or tree (negative inside) */
   distance(x: number, y: number, z: number): number {
-    return Math.min(this.terrain.distance(x, y, z), this.grid.distance(x, y, z));
+    return Math.min(
+      this.terrain.distance(x, y, z),
+      this.terrain.waterDistance(x, y, z),
+      this.grid.distance(x, y, z),
+      this.forest.distance(x, y, z),
+    );
   }
 
   /** Where to put a pilot who has passed `checkpoints` rings */

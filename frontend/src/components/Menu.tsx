@@ -46,7 +46,7 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
         <h1>
           Wing<span>race</span>
         </h1>
-        <p>Wingsuit races down endless canyons. Fly close to the rock, beat your friends to the last ring.</p>
+        <p>Wingsuit races down endless mountain valleys. Skim the pines, beat your friends to the last ring.</p>
       </header>
 
       <section className="menu-card pilot">

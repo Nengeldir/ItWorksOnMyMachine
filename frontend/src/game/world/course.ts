@@ -29,17 +29,17 @@ export interface Course {
 
 interface Key {
   z: number;
-  side: number; // -1..1 across the canyon floor
-  above: number; // metres above the canyon floor
+  side: number; // -1..1 across the valley floor
+  above: number; // metres above the valley floor
 }
 
 const SAMPLE_STEP = 2; // metres of z between racing line samples
 
-/** Rings down the canyon, from the seed. Same seed, same course. */
+/** Rings down the valley, from the seed. Same seed, same course. */
 export function buildCourse(seed: number, terrain: Terrain): Course {
   const rng = makeRng(seed, "course");
 
-  // The start, then every ring: where across the canyon and how high
+  // The start, then every ring: where across the valley and how high
   const keys: Key[] = [{ z: -60, side: 0, above: 120 }];
   let z = 230;
   for (let i = 0; i < RING_COUNT; i++) {
@@ -48,7 +48,7 @@ export function buildCourse(seed: number, terrain: Terrain): Course {
   }
   const radii = keys.slice(1).map((_, i) => (i === RING_COUNT - 1 ? FINISH_RADIUS : RING_RADIUS));
 
-  // The racing line follows the canyon's bends between the keys, so it never cuts through a wall
+  // The racing line follows the valley's bends between the keys, so it never cuts through a slope
   const firstZ = keys[0].z;
   const lastZ = keys[keys.length - 1].z + 150;
   const dense: Vector3[] = [];
@@ -102,7 +102,7 @@ export function buildCourse(seed: number, terrain: Terrain): Course {
     }
   }
 
-  // Face a point a little way down the line, so the run starts with a view of the canyon
+  // Face a point a little way down the line, so the run starts with a view down the valley
   const lookAt = dense[Math.min(dense.length - 1, indexAt(firstZ + 160))];
   return {
     start: dense[0].clone(),
@@ -125,7 +125,7 @@ function ringGroundClearance(terrain: Terrain, center: Vector3, radius: number):
   return lowest;
 }
 
-/** Pillars, floating rocks and arches near the course, never on the racing line */
+/** Rock spires, boulders and arches near the course, never on the racing line */
 export function buildObstacles(seed: number, terrain: Terrain, course: Course): Obstacle[] {
   const rng = makeRng(seed, "obstacles");
   const obstacles: Obstacle[] = [];
@@ -139,24 +139,27 @@ export function buildObstacles(seed: number, terrain: Terrain, course: Course): 
     return true;
   };
 
-  // Rock towers on the canyon floor
-  for (let z = 120; z < endZ; z += range(rng, 26, 55)) {
-    const x = terrain.centerX(z) + range(rng, -1, 1) * terrain.halfWidth(z) * 0.95;
+  // Rock spires standing in the meadows, here and there
+  for (let z = 150; z < endZ; z += range(rng, 140, 320)) {
+    const side = rng() < 0.5 ? -1 : 1;
+    const x = terrain.centerX(z) + side * range(rng, 0.35, 0.95) * terrain.halfWidth(z);
     const ground = terrain.height(x, z);
-    const radius = range(rng, 7, 15);
-    const pillar = new Pillar(x, z, ground - 12, ground + range(rng, 45, 160), radius, radius * 0.6);
-    if (clearOfLine(pillar, LINE_CLEARANCE)) obstacles.push(pillar);
+    const radius = range(rng, 6, 12);
+    const spire = new Pillar(x, z, ground - 10, ground + range(rng, 40, 110), radius * 1.3, radius * 1.3 * 0.35);
+    if (clearOfLine(spire, LINE_CLEARANCE)) obstacles.push(spire);
   }
 
-  // Floating boulders
-  for (let i = 0; i < 80; i++) {
+  // Boulders lying in the grass, half sunk into it
+  for (let i = 0; i < 70; i++) {
     const z = range(rng, 150, endZ);
-    const x = terrain.centerX(z) + range(rng, -1.15, 1.15) * terrain.halfWidth(z);
-    const rock = new Rock(x, terrain.floorY(z) + range(rng, 25, 170), z, range(rng, 5, 20));
+    const side = rng() < 0.5 ? -1 : 1;
+    const x = terrain.centerX(z) + side * (terrain.riverWidth(z) * 2 + range(rng, 0, 1) * terrain.halfWidth(z));
+    const radius = range(rng, 3, 9);
+    const rock = new Rock(x, terrain.height(x, z) + radius * 0.3, z, radius);
     if (clearOfLine(rock, LINE_CLEARANCE)) obstacles.push(rock);
   }
 
-  // Arches spanning the canyon
+  // Natural rock arches over the river
   for (let i = 0; i < 8; i++) {
     const z = range(rng, 300, endZ - 200);
     const dx = terrain.centerX(z + 20) - terrain.centerX(z - 20);
@@ -164,7 +167,7 @@ export function buildObstacles(seed: number, terrain: Terrain, course: Course): 
       terrain.centerX(z),
       terrain.floorY(z) - range(rng, 0, 15),
       z,
-      terrain.halfWidth(z) + range(rng, 20, 50),
+      terrain.halfWidth(z) * 0.8 + range(rng, 10, 40),
       range(rng, 5, 9),
       Math.atan2(dx, 40),
     );
