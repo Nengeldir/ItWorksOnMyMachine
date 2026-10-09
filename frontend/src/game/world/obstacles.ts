@@ -34,7 +34,8 @@ export class Pillar implements Obstacle {
 
   distance(x: number, y: number, z: number): number {
     const t = Math.min(1, Math.max(0, (y - this.bottom) / (this.top - this.bottom)));
-    const r = this.radius + (this.topRadius - this.radius) * t;
+    // The mesh is a roughened 7-sided prism: its flat faces sit at ~0.9 of the radius
+    const r = (this.radius + (this.topRadius - this.radius) * t) * 0.9;
     const side = Math.hypot(x - this.x, z - this.z) - r;
     if (y <= this.top) return side;
     return Math.hypot(Math.max(side, 0), y - this.top);

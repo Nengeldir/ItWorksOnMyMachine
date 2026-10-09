@@ -9,6 +9,7 @@ from urllib.parse import unquote
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from models import (
@@ -25,7 +26,7 @@ from models import (
     TokenRequest,
     User,
 )
-from rooms import FINISH_TOLERANCE_MS, Listener, Player, Room, RoomError, RoomManager, encode, now_ms
+from rooms import Listener, Player, Room, RoomError, RoomManager, check_finish_time, encode, now_ms
 from store import Store
 
 # Load the .env file from the project root (Docker passes the variables in directly)
@@ -33,6 +34,7 @@ load_dotenv()
 
 ROOM_CODE = re.compile(r"^[A-Z0-9]{3,8}$")
 RUN_TOKEN_TTL_MS = 60 * 60 * 1000
+MAX_OPEN_RUNS = 10_000
 
 rooms = RoomManager()
 store = Store(os.path.join(os.getenv("DATA_DIR", "data"), "game.db"))
@@ -73,7 +75,7 @@ def extract_user(request: Request, client_id: str = "", nickname: str = "") -> U
 
 def room_code(code: str) -> str:
     code = code.upper()
-    if not ROOM_CODE.match(code):
+    if not ROOM_CODE.fullmatch(code):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Room codes are 3 to 8 letters or digits")
     return code
 
@@ -177,7 +179,8 @@ async def finish_race(code: str, body: FinishRequest):
         place = room.finish(player, body.time_ms)
     except RoomError as e:
         raise room_error(e)
-    best = store.add_run(room.seed, player.user_id, player.name, player.finish_ms or body.time_ms, body.ghost)
+    # SQLite and the ghost's JSON run in a worker thread, so the room relay doesn't stall
+    best = await run_in_threadpool(store.add_run, room.seed, player.user_id, player.name, body.time_ms, body.ghost)
     return {"place": place, "personal_best_ms": best}
 
 
@@ -196,9 +199,12 @@ async def leave_room(code: str, body: TokenRequest):
 async def start_run(body: RunStartRequest):
     """Called when a solo run's clock starts, so the server can check the finish time."""
     now = now_ms()
-    for token, (_, started) in list(solo_runs.items()):
-        if now - started > RUN_TOKEN_TTL_MS:
-            del solo_runs[token]
+    # Oldest first (dicts keep insertion order): drop expired runs, and the oldest when full
+    while solo_runs:
+        token, (_, started) = next(iter(solo_runs.items()))
+        if now - started <= RUN_TOKEN_TTL_MS and len(solo_runs) < MAX_OPEN_RUNS:
+            break
+        del solo_runs[token]
     token = secrets.token_urlsafe(16)
     solo_runs[token] = (body.seed, now)
     return RunStartResponse(run_token=token)
@@ -210,15 +216,17 @@ async def finish_run(body: RunFinishRequest, request: Request):
     if run is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown or already finished run")
     seed, started = run
-    if body.time_ms < now_ms() - started - FINISH_TOLERANCE_MS:
-        raise HTTPException(status.HTTP_409_CONFLICT, "Finish time doesn't match the server clock")
+    try:
+        check_finish_time(body.time_ms, now_ms() - started)
+    except RoomError as e:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(e))
 
     user = extract_user(request, body.client_id, body.nickname)
-    best = store.add_run(seed, user.id, user.name, body.time_ms, body.ghost)
+    best = await run_in_threadpool(store.add_run, seed, user.id, user.name, body.time_ms, body.ghost)
     return RunFinishResponse(
-        rank=store.rank(seed, body.time_ms),
+        rank=await run_in_threadpool(store.rank, seed, body.time_ms, user.id),
         personal_best_ms=best,
-        leaderboard=store.leaderboard(seed, me=user.id),
+        leaderboard=await run_in_threadpool(store.leaderboard, seed, 10, user.id),
     )
 
 
@@ -230,12 +238,12 @@ async def leaderboard(
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
 ):
     user = extract_user(request, client_id)
-    return store.leaderboard(seed, limit, me=user.id)
+    return await run_in_threadpool(store.leaderboard, seed, limit, user.id)
 
 
 @app.get("/api/ghosts", response_model=list[GhostRun])
 async def ghosts(seed: Seed, limit: Annotated[int, Query(ge=1, le=5)] = 3):
-    return store.ghosts(seed, limit)
+    return await run_in_threadpool(store.ghosts, seed, limit)
 
 
 if __name__ == "__main__":

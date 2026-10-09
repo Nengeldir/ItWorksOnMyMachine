@@ -48,6 +48,7 @@ def test_room_flow():
 
 def test_bad_room_code():
     assert client.post("/api/rooms/no!/join", json={"client_id": "c1"}).status_code == 400
+    assert client.post("/api/rooms/ABC%0A/join", json={"client_id": "c1"}).status_code == 400
 
 
 def test_stream_with_stale_token_is_404():
@@ -66,6 +67,7 @@ def test_solo_runs_and_ghosts():
             json={"run_token": token, "time_ms": time_ms, "client_id": client_id, "nickname": client_id.upper(), "ghost": ghost()},
         ).json()
 
+    # 68 s against B's 65 s; A's own earlier 70 s doesn't count against it
     assert result["rank"] == 2
     assert result["personal_best_ms"] == 68_000
     assert [(e["name"], e["time_ms"]) for e in result["leaderboard"]] == [("B", 65_000), ("A", 68_000)]
@@ -80,3 +82,22 @@ def test_solo_finish_faster_than_server_clock_is_rejected():
     app_module.solo_runs[token] = (s, started - 90_000)
     response = client.post("/api/runs/finish", json={"run_token": token, "time_ms": 30_000, "client_id": "x"})
     assert response.status_code == 409
+
+
+def test_solo_finish_right_after_start_is_rejected():
+    token = client.post("/api/runs/start", json={"seed": 7}).json()["run_token"]
+    response = client.post("/api/runs/finish", json={"run_token": token, "time_ms": 1_000, "client_id": "x"})
+    assert response.status_code == 409
+
+
+def test_own_slower_run_ranks_against_others_only():
+    seed = 999
+    for time_ms in (60_000, 70_000):
+        token = client.post("/api/runs/start", json={"seed": seed}).json()["run_token"]
+        s, started = app_module.solo_runs[token]
+        app_module.solo_runs[token] = (s, started - time_ms)
+        result = client.post(
+            "/api/runs/finish", json={"run_token": token, "time_ms": time_ms, "client_id": "solo"}
+        ).json()
+    assert result["rank"] == 1
+    assert result["personal_best_ms"] == 60_000

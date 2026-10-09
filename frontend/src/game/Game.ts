@@ -107,7 +107,7 @@ export class Game {
   private world!: World;
   private view!: WorldView;
   private selfId = "";
-  private startSlot = 0;
+  private startSlot: number | null = null; // place on the start grid, null = alone
   private participants: Participant[] = [];
 
   private raceState: RaceState = "free";
@@ -217,7 +217,7 @@ export class Game {
 
   /** No race: fly around, rings are just scenery */
   freeFlight(respawn: boolean) {
-    this.startSlot = 0;
+    this.startSlot = null;
     this.raceState = "free";
     this.checkpoints = 0;
     this.finishMs = null;
@@ -225,8 +225,8 @@ export class Game {
     if (respawn) this.respawn(0);
   }
 
-  /** Puts you on the start grid (slot 0, 1, …), frozen until the clock reaches startAt */
-  startCountdown(startAt: number, slot = 0) {
+  /** Puts you on the start line (or grid slot 0, 1, … in a room), frozen until the clock reaches startAt */
+  startCountdown(startAt: number, slot: number | null = null) {
     this.startSlot = slot;
     this.raceState = "countdown";
     this.startAt = startAt;
@@ -313,7 +313,7 @@ export class Game {
 
   private respawn(checkpoints: number) {
     const { position, direction } = this.world.spawnPoint(checkpoints);
-    if (checkpoints === 0 && this.startSlot > 0) {
+    if (checkpoints === 0 && this.startSlot !== null) {
       // A start grid four abreast, so racers don't spawn inside each other
       const side = tmp.crossVectors(direction, THREE.Object3D.DEFAULT_UP).normalize();
       const column = (this.startSlot % 4) - 1.5;
