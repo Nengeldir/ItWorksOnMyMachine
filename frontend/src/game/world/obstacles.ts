@@ -3,7 +3,7 @@
 // math instead of mesh raycasts.
 
 export interface Obstacle {
-  readonly kind: "pillar" | "rock" | "arch";
+  readonly kind: "pillar" | "rock" | "arch" | "tree";
   readonly x: number;
   readonly z: number;
   /** Horizontal radius that contains the whole shape */
@@ -42,7 +42,7 @@ export class Pillar implements Obstacle {
   }
 }
 
-/** A floating boulder */
+/** A boulder (resting on the ground) */
 export class Rock implements Obstacle {
   readonly kind = "rock";
   readonly x: number;
@@ -65,7 +65,7 @@ export class Rock implements Obstacle {
   }
 }
 
-/** A half torus standing across the canyon, to fly under */
+/** A half torus standing across the valley, to fly under */
 export class Arch implements Obstacle {
   readonly kind = "arch";
   readonly x: number;

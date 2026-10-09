@@ -1,9 +1,10 @@
 # Wingrace
 
 A Superflight-style wingsuit game for the browser, with multiplayer races.
-Every course is a canyon generated from a seed: same seed, same canyon,
-rings, pillars, floating rocks and arches for everyone. Dive for speed, skim
-the rock for style points and a boost, and beat your friends to the last ring.
+Every course is a low-poly mountain valley generated from a seed: a river,
+pine forests, snow-capped peaks, rock arches and the rings, the same for
+everyone on the same seed. Dive for speed, skim the trees and the water for
+style points and a boost, and beat your friends to the last ring.
 
 - **Race friends:** create a room, share the link, everyone flies the same map
   at the same time and sees each other live.
@@ -97,12 +98,17 @@ Trackmania. That keeps the backend small, and it works over plain HTTP:
   route can hold back SSE events; Caddy streams `text/event-stream` by itself.
 
 **Seeded worlds** ([`frontend/src/game/world/`](frontend/src/game/world)): the
-terrain is a heightmap function, a meandering canyon that keeps dropping, built
-from simplex noise and a seeded PRNG. Chunks are meshed on an 8 m grid around
-the camera. Collisions use the same grid, and the obstacles are simple shapes
-with signed distance functions, so crash checks and proximity scoring are a
-few lines of math. The racing line follows the canyon through every ring, and
-obstacles keep clear of it.
+terrain is a heightmap function: a river valley that keeps dropping, foothills,
+and ridged-noise mountains, built from simplex noise and a seeded PRNG. Chunks
+are meshed on a 10 m grid around the camera with one flat color per triangle
+(grass, forest floor, rock, snow by height and steepness), which gives the
+low-poly look. Each chunk also gets its pine trees, placed from the seed and the
+chunk's position alone, so every client grows the same forest. Collisions use
+the same grid as the meshes, and trees, rocks and arches are simple shapes with
+signed distance functions, so crash checks and proximity scoring are a few lines
+of math. The racing line follows the valley through every ring, and trees and
+obstacles keep clear of it. Each seed also picks a palette: Alpine, Misty
+pines, Autumn, Dusk or Winter.
 
 **Flight model** ([`frontend/src/game/flight.ts`](frontend/src/game/flight.ts)):
 an arcade, energy-based wingsuit. The nose points where you go, gravity along
