@@ -1,20 +1,68 @@
 import { useEffect, useState } from "react";
-import { getMe, type User } from "./api";
-import AppHeader from "./components/AppHeader";
-import Todos from "./components/Todos";
+import { type User, getMe } from "./api";
+import GameScreen from "./components/GameScreen";
+import Menu from "./components/Menu";
+import { type Settings, loadSettings, saveSettings } from "./storage";
+
+export type Screen =
+  | { kind: "menu"; joinCode?: string }
+  | { kind: "solo"; seed: number }
+  | { kind: "room"; code: string };
+
+// Screens live in the URL, so a room link can be shared and reloads keep you in place
+function screenFromUrl(): Screen {
+  const params = new URLSearchParams(location.search);
+  const room = params.get("room")?.toUpperCase();
+  if (room && /^[A-Z0-9]{3,8}$/.test(room)) {
+    // First visit through an invite link: pick a name before joining
+    return loadSettings().nickname ? { kind: "room", code: room } : { kind: "menu", joinCode: room };
+  }
+  const seed = Number(params.get("seed"));
+  if (Number.isInteger(seed) && seed >= 1 && seed < 2 ** 31) return { kind: "solo", seed };
+  return { kind: "menu" };
+}
+
+function urlFor(screen: Screen): string {
+  if (screen.kind === "solo") return `/?seed=${screen.seed}`;
+  if (screen.kind === "room") return `/?room=${screen.code}`;
+  return "/";
+}
 
 const App = () => {
-  const [me, setMe] = useState<User | undefined>();
+  const [screen, setScreen] = useState<Screen>(screenFromUrl);
+  const [settings, setSettings] = useState<Settings>(loadSettings);
+  const [me, setMe] = useState<User | null>(null);
 
   useEffect(() => {
-    getMe().then(setMe);
+    getMe()
+      .then(setMe)
+      .catch(() => setMe(null));
+    const onPopState = () => setScreen(screenFromUrl());
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
+  const go = (next: Screen) => {
+    history.pushState(null, "", urlFor(next));
+    setScreen(next);
+  };
+
+  const updateSettings = (next: Settings) => {
+    setSettings(next);
+    saveSettings(next);
+  };
+
+  if (screen.kind === "menu") {
+    return <Menu me={me} settings={settings} onSettings={updateSettings} joinCode={screen.joinCode} go={go} />;
+  }
   return (
-    <>
-      <AppHeader me={me} />
-      <Todos me={me} />
-    </>
+    <GameScreen
+      key={urlFor(screen)}
+      screen={screen}
+      settings={settings}
+      onSettings={updateSettings}
+      onExit={() => go({ kind: "menu" })}
+    />
   );
 };
 

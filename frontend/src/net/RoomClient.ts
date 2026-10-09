@@ -1,0 +1,147 @@
+import { ApiError, type Joined, type RoomInfo, type Snapshot, request } from "../api";
+import type { NetState } from "../game/Game";
+import type { GhostData } from "../game/ghost";
+import { ServerClock } from "./clock";
+
+export type ConnectionStatus = "connecting" | "connected" | "reconnecting" | "failed";
+
+export interface RoomHandlers {
+  joined(id: string): void;
+  room(info: RoomInfo): void;
+  snapshot(snapshot: Snapshot): void;
+  status(status: ConnectionStatus, message?: string): void;
+}
+
+export interface Identity {
+  clientId: string;
+  nickname: string;
+}
+
+/**
+ * One player's connection to a race room, over plain HTTP:
+ * an SSE stream brings room events and position snapshots down,
+ * and small POSTs carry your own position up ~15 times a second.
+ */
+export class RoomClient {
+  readonly code: string;
+  readonly clock = new ServerClock();
+  private readonly identity: Identity;
+  private readonly handlers: RoomHandlers;
+  private token = "";
+  private source: EventSource | null = null;
+  private sending = false;
+  private closed = false;
+  private rejoinTimer = 0;
+
+  constructor(code: string, identity: Identity, handlers: RoomHandlers) {
+    this.code = code;
+    this.identity = identity;
+    this.handlers = handlers;
+  }
+
+  private url(action: string): string {
+    return `/api/rooms/${encodeURIComponent(this.code)}/${action}`;
+  }
+
+  async connect() {
+    this.handlers.status("connecting");
+    await this.clock.sync();
+    await this.join();
+  }
+
+  private async join() {
+    if (this.closed) return;
+    try {
+      const joined = await request<Joined>(this.url("join"), "POST", {
+        client_id: this.identity.clientId,
+        nickname: this.identity.nickname,
+      });
+      if (this.closed) return;
+      this.token = joined.token;
+      this.handlers.joined(joined.id);
+      this.handlers.room(joined.room);
+      this.openStream();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        this.handlers.status("failed", e.message); // room is full
+      } else {
+        this.handlers.status("reconnecting", "Can't reach the server, retrying…");
+        this.scheduleRejoin(2000);
+      }
+    }
+  }
+
+  private scheduleRejoin(delay: number) {
+    if (this.closed || this.rejoinTimer) return;
+    this.token = "";
+    this.source?.close();
+    this.rejoinTimer = window.setTimeout(() => {
+      this.rejoinTimer = 0;
+      void this.join();
+    }, delay);
+  }
+
+  private openStream() {
+    this.source?.close();
+    const source = new EventSource(`${this.url("stream")}?token=${encodeURIComponent(this.token)}`);
+    this.source = source;
+    source.onopen = () => this.handlers.status("connected");
+    source.onmessage = (event) => {
+      const message = JSON.parse(event.data) as RoomInfo | Snapshot;
+      if (message.type === "room") this.handlers.room(message);
+      else if (message.type === "snap") this.handlers.snapshot(message);
+    };
+    source.onerror = () => {
+      if (source !== this.source) return;
+      this.handlers.status("reconnecting", "Connection lost, reconnecting…");
+      // CLOSED means the server refused us (e.g. it restarted and forgot us): join again.
+      // Otherwise the browser reconnects the stream by itself.
+      if (source.readyState === EventSource.CLOSED) this.scheduleRejoin(1000);
+    };
+  }
+
+  /** Fire and forget; skipped while the previous one is still on its way */
+  sendState(state: NetState) {
+    if (!this.token || this.sending || this.closed) return;
+    this.sending = true;
+    fetch(this.url("state"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: this.token, t: Math.round(this.clock.now()), ...state }),
+    })
+      .then((response) => {
+        if (response.status === 404) this.scheduleRejoin(500);
+      })
+      .catch(() => {})
+      .finally(() => {
+        this.sending = false;
+      });
+  }
+
+  start(): Promise<void> {
+    return request(this.url("start"), "POST", { token: this.token });
+  }
+
+  newMap(): Promise<void> {
+    return request(this.url("map"), "POST", { token: this.token });
+  }
+
+  finish(timeMs: number, ghost: GhostData): Promise<{ place: number; personal_best_ms: number }> {
+    return request(this.url("finish"), "POST", { token: this.token, time_ms: timeMs, ghost });
+  }
+
+  close() {
+    this.closed = true;
+    window.clearTimeout(this.rejoinTimer);
+    this.source?.close();
+    if (this.token) {
+      // keepalive lets the request finish even when the page is closing
+      void fetch(this.url("leave"), {
+        method: "POST",
+        keepalive: true,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: this.token }),
+      }).catch(() => {});
+    }
+  }
+}

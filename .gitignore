@@ -451,3 +451,6 @@ pyrightconfig.json
 .ionide
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,visualstudiocode,jetbrains+all,python,node
+
+### Game data (SQLite leaderboards when running the backend locally) ###
+backend/data/

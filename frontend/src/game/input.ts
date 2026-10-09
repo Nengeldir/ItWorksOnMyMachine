@@ -1,0 +1,123 @@
+import type { FlightInput } from "./flight";
+import { clamp } from "./world/terrain";
+
+export interface ControlSettings {
+  invertPitch: boolean;
+  mouseSensitivity: number; // 0.25..3, 1 = default
+}
+
+export type InputAction = "respawn" | "mute";
+
+const DEAD_ZONE = 0.12;
+
+function deadZone(value: number): number {
+  if (Math.abs(value) < DEAD_ZONE) return 0;
+  return (value - Math.sign(value) * DEAD_ZONE) / (1 - DEAD_ZONE);
+}
+
+function isTyping(event: KeyboardEvent): boolean {
+  const target = event.target as HTMLElement | null;
+  return !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA");
+}
+
+/**
+ * Keyboard, mouse (pointer lock) and gamepad, merged into pitch and roll.
+ * Flight-stick convention by default: forward / W / mouse up dives.
+ */
+export class Input {
+  settings: ControlSettings;
+  onAction?: (action: InputAction) => void;
+  locked = false;
+  private readonly element: HTMLElement;
+  private readonly keys = new Set<string>();
+  // The mouse moves a virtual stick that drifts back to center
+  private stickX = 0;
+  private stickY = 0;
+  private padButtons: boolean[] = [];
+
+  constructor(element: HTMLElement, settings: ControlSettings) {
+    this.element = element;
+    this.settings = settings;
+    window.addEventListener("keydown", this.onKeyDown);
+    window.addEventListener("keyup", this.onKeyUp);
+    window.addEventListener("blur", this.onBlur);
+    document.addEventListener("mousemove", this.onMouseMove);
+    document.addEventListener("pointerlockchange", this.onLockChange);
+  }
+
+  dispose() {
+    window.removeEventListener("keydown", this.onKeyDown);
+    window.removeEventListener("keyup", this.onKeyUp);
+    window.removeEventListener("blur", this.onBlur);
+    document.removeEventListener("mousemove", this.onMouseMove);
+    document.removeEventListener("pointerlockchange", this.onLockChange);
+    if (document.pointerLockElement === this.element) document.exitPointerLock();
+  }
+
+  /** Call from a click handler: browsers only lock the pointer on a user gesture */
+  lockPointer() {
+    if (document.pointerLockElement !== this.element) {
+      this.element.requestPointerLock()?.catch?.(() => {});
+    }
+  }
+
+  private onKeyDown = (event: KeyboardEvent) => {
+    if (isTyping(event)) return;
+    this.keys.add(event.code);
+    if (event.code.startsWith("Arrow") || event.code === "Space") event.preventDefault();
+    if (event.repeat) return;
+    if (event.code === "KeyR") this.onAction?.("respawn");
+    if (event.code === "KeyM") this.onAction?.("mute");
+  };
+
+  private onKeyUp = (event: KeyboardEvent) => {
+    this.keys.delete(event.code);
+  };
+
+  private onBlur = () => {
+    this.keys.clear();
+  };
+
+  private onMouseMove = (event: MouseEvent) => {
+    if (!this.locked) return;
+    const sensitivity = 0.0045 * this.settings.mouseSensitivity;
+    this.stickX = clamp(this.stickX + event.movementX * sensitivity, -1, 1);
+    this.stickY = clamp(this.stickY + event.movementY * sensitivity, -1, 1);
+  };
+
+  private onLockChange = () => {
+    this.locked = document.pointerLockElement === this.element;
+    if (!this.locked) {
+      this.stickX = 0;
+      this.stickY = 0;
+    }
+  };
+
+  private key(...codes: string[]): number {
+    return codes.some((code) => this.keys.has(code)) ? 1 : 0;
+  }
+
+  sample(dt: number): FlightInput {
+    const recenter = Math.exp(-dt * 3.5);
+    this.stickX *= recenter;
+    this.stickY *= recenter;
+
+    // Positive pitch = nose up. Forward on keys, mouse and stick dives.
+    // (Moving the mouse up gives a negative movementY, like pushing a stick forward.)
+    let pitch = this.key("KeyS", "ArrowDown") - this.key("KeyW", "ArrowUp") + this.stickY;
+    let roll = this.key("KeyD", "ArrowRight") - this.key("KeyA", "ArrowLeft") + this.stickX;
+
+    const pad = navigator.getGamepads?.().find((p) => p?.connected);
+    if (pad) {
+      roll += deadZone(pad.axes[0] ?? 0);
+      pitch += deadZone(pad.axes[1] ?? 0);
+      // Y / triangle respawns, Start mutes
+      const pressed = pad.buttons.map((b) => b.pressed);
+      if (pressed[3] && !this.padButtons[3]) this.onAction?.("respawn");
+      this.padButtons = pressed;
+    }
+
+    if (this.settings.invertPitch) pitch = -pitch;
+    return { pitch: clamp(pitch, -1, 1), roll: clamp(roll, -1, 1) };
+  }
+}
