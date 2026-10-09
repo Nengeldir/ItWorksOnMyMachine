@@ -1,3 +1,4 @@
+import { MathUtils, Vector3 } from "three";
 import { makeRng, pick } from "../rng";
 
 export interface Palette {
@@ -11,6 +12,14 @@ export interface Palette {
   sun: string;
   sunIntensity: number;
   ambient: number;
+  // Lighting mood
+  sunElevation: number; // degrees above the horizon
+  sunAzimuth: number; // degrees; 0 = straight down the canyon (ahead of you), so low suns backlight the run
+  night: number; // 0 = day … 1 = night: stars, glowing trims, stronger bloom
+  mist: string; // valley mist that pools on the canyon floor
+  mistDensity: number; // 0..1
+  clouds: string;
+  glow: number; // brightness of particles and trails; bright scenes need more to read
 }
 
 // Each map picks one from its seed, like Superflight's color themes
@@ -26,6 +35,13 @@ export const PALETTES: readonly Palette[] = [
     sun: "#fff0d6",
     sunIntensity: 2.2,
     ambient: 1.4,
+    sunElevation: 11,
+    sunAzimuth: -28,
+    night: 0.2,
+    mist: "#ffc4a3",
+    mistDensity: 0.55,
+    clouds: "#ffd3c4",
+    glow: 1.1,
   },
   {
     name: "Glacier",
@@ -38,6 +54,13 @@ export const PALETTES: readonly Palette[] = [
     sun: "#ffffff",
     sunIntensity: 2.4,
     ambient: 1.5,
+    sunElevation: 32,
+    sunAzimuth: 35,
+    night: 0,
+    mist: "#eef8ff",
+    mistDensity: 0.45,
+    clouds: "#ffffff",
+    glow: 1.3,
   },
   {
     name: "Jungle",
@@ -50,6 +73,13 @@ export const PALETTES: readonly Palette[] = [
     sun: "#fffbe0",
     sunIntensity: 2.2,
     ambient: 1.4,
+    sunElevation: 48,
+    sunAzimuth: -40,
+    night: 0,
+    mist: "#d8f6de",
+    mistDensity: 0.7,
+    clouds: "#f6fff7",
+    glow: 1.2,
   },
   {
     name: "Desert",
@@ -62,6 +92,13 @@ export const PALETTES: readonly Palette[] = [
     sun: "#fff4dc",
     sunIntensity: 2.3,
     ambient: 1.4,
+    sunElevation: 24,
+    sunAzimuth: 40,
+    night: 0,
+    mist: "#ffe5bd",
+    mistDensity: 0.35,
+    clouds: "#fff1da",
+    glow: 1.25,
   },
   {
     name: "Nightshade",
@@ -74,6 +111,13 @@ export const PALETTES: readonly Palette[] = [
     sun: "#d8c6ff",
     sunIntensity: 1.8,
     ambient: 1.6,
+    sunElevation: 26,
+    sunAzimuth: -18,
+    night: 1,
+    mist: "#6a3d9e",
+    mistDensity: 0.6,
+    clouds: "#5e4488",
+    glow: 0.9,
   },
   {
     name: "Lagoon",
@@ -86,8 +130,22 @@ export const PALETTES: readonly Palette[] = [
     sun: "#ffffff",
     sunIntensity: 2.3,
     ambient: 1.4,
+    sunElevation: 42,
+    sunAzimuth: 15,
+    night: 0,
+    mist: "#cbf3ff",
+    mistDensity: 0.5,
+    clouds: "#ffffff",
+    glow: 1.2,
   },
 ];
+
+/** Unit vector towards the sun (or moon) */
+export function sunDirection(palette: Palette): Vector3 {
+  const el = MathUtils.degToRad(palette.sunElevation);
+  const az = MathUtils.degToRad(palette.sunAzimuth);
+  return new Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
+}
 
 export function paletteFor(seed: number): Palette {
   return pick(makeRng(seed, "palette"), PALETTES);

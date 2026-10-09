@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { outlineMaterial, toonMaterial } from "./toon";
+import { ATMOSPHERE } from "./world/atmosphere";
 import { ANIM, FX } from "./tuning";
 import { clamp, smoothstep } from "./world/terrain";
 
@@ -99,6 +100,7 @@ class PartBuilder {
       item.geometry.dispose();
     }
     geometry.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(start * 3), 3));
+    geometry.setAttribute("glow", new THREE.Float32BufferAttribute(new Float32Array(start), 1));
     geometry.computeBoundingSphere();
     return { geometry, ranges };
   }
@@ -118,17 +120,27 @@ interface Painted {
 const paintColor = new THREE.Color();
 const paintPoint = new THREE.Vector3();
 
+/** How close two colors are, 1 = the same */
+function likeness(a: THREE.Color, b: THREE.Color): number {
+  const d = Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b);
+  return 1 - smoothstep(0.03, 0.22, d);
+}
+
+/** Writes vertex colors, and a glow for the gold trims and the wingtips (they light up at night) */
 function applyPaint({ geometry, ranges }: Painted, tones: Tones) {
   const position = geometry.getAttribute("position");
   const color = geometry.getAttribute("color") as THREE.BufferAttribute;
+  const glow = geometry.getAttribute("glow") as THREE.BufferAttribute;
   for (const { start, count, paint } of ranges) {
     for (let i = start; i < start + count; i++) {
       if (typeof paint === "string") paintColor.copy(tones[paint]);
       else paint(paintPoint.fromBufferAttribute(position, i), tones, paintColor, i - start);
       color.setXYZ(i, paintColor.r, paintColor.g, paintColor.b);
+      glow.setX(i, Math.max(likeness(paintColor, tones.trim), likeness(paintColor, tones.tip) * 0.8));
     }
   }
   color.needsUpdate = true;
+  glow.needsUpdate = true;
 }
 
 /** A leaf-shaped feather with a little thickness, lying along +x */
@@ -176,6 +188,7 @@ class Cloth {
     }
     const uvAttribute = new THREE.BufferAttribute(uv, 3);
     geometry.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(uv.length), 3));
+    geometry.setAttribute("glow", new THREE.Float32BufferAttribute(new Float32Array(uv.length / 3), 1));
     (geometry.getAttribute("position") as THREE.BufferAttribute).setUsage(THREE.DynamicDrawUsage);
     this.painted = {
       geometry,
@@ -736,7 +749,7 @@ export class Avatar {
 
     // Aura breathes with the flaps and burns brighter when skimming
     const auraMat = this.aura.material as THREE.SpriteMaterial;
-    auraMat.opacity = (0.14 + 0.08 * Math.max(0, stroke) * this.effort + proximity * 0.25) * FX.aura;
+    auraMat.opacity = (0.14 + 0.08 * Math.max(0, stroke) * this.effort + proximity * 0.25) * FX.aura * (1 + ATMOSPHERE.night.value * 1.5);
     this.aura.visible = auraMat.opacity > 0.01;
 
     if (!this.detailed && dt > 0) return;

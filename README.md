@@ -122,8 +122,10 @@ of the physics, the wings flap harder when climbing, turning or slow and fold
 back in a dive, the cloth ripples with speed, and hard turns throw a barrel
 roll. Gates are cohorts of floating crystals that flare and burst when you fly
 through. One GPU particle system draws every mote, star and shard, and bright
-things bloom (High quality). The game steps its quality down by itself if the
-frame rate can't keep up.
+things bloom (High quality). Each palette is a lighting mood as well: sun
+position, valley mist, painted clouds, stars at night, and how brightly trims
+and effects glow. The game steps its quality down by itself if the frame rate
+can't keep up.
 
 **Leaderboards and ghosts:** a finished run is uploaded with a 15 Hz recording
 of the flight. Each player's best run per seed keeps its ghost; the top three

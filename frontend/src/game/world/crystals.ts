@@ -90,7 +90,7 @@ const crystalFragment = /* glsl */ `
     vec3 n = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
     vec3 v = normalize(-vViewPosition);
     float facing = abs(dot(n, v));
-    float fresnel = pow(1.0 - facing, 2.2);
+    float fresnel = pow(clamp(1.0 - facing, 0.0, 1.0), 2.2);
     float diffuse = abs(dot(n, sunDirection)) * 0.5 + 0.5;
     float spec = pow(max(dot(reflect(-sunDirection, n), v), 0.0), 28.0);
     float facet = fract(sin(dot(floor(n * 3.0 + vSeed), vec3(12.9898, 78.233, 37.719))) * 43758.5453);
@@ -165,6 +165,61 @@ const veilFragment = /* glsl */ `
     #ifdef USE_FOG
       color *= 1.0 - smoothstep(fogNear, fogFar, vFogDepth) * (1.0 - vGate.y);
     #endif
+    gl_FragColor = vec4(color, 1.0);
+  }
+`;
+
+// A pillar of light rising from the next gate and the finish, visible from afar
+const beamVertex = /* glsl */ `
+  attribute float gate;
+  uniform vec4 gates[GATE_COUNT];
+  uniform float time;
+  uniform float passDuration;
+  varying float vHeight;
+  varying float vFacing;
+  varying float vAngle;
+  varying vec4 vGate;
+  varying float vK;
+  varying float vDepth;
+  void main() {
+    vGate = gates[int(gate + 0.5)];
+    float since = time - vGate.z;
+    vK = since >= 0.0 && since < passDuration ? since / passDuration : -1.0;
+    vHeight = position.y;
+    vAngle = atan(position.z, position.x);
+    vec4 mvPosition = modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+    vec3 n = normalize(normalMatrix * mat3(instanceMatrix) * normal);
+    vFacing = abs(dot(n, normalize(-mvPosition.xyz)));
+    vDepth = -mvPosition.z;
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`;
+
+const beamFragment = /* glsl */ `
+  uniform vec3 ice;
+  uniform vec3 accent;
+  uniform vec3 gold;
+  uniform float glow;
+  uniform float time;
+  varying float vHeight;
+  varying float vFacing;
+  varying float vAngle;
+  varying vec4 vGate;
+  varying float vK;
+  varying float vDepth;
+  void main() {
+    // Strongest for the finish, then the next gate; a flare runs up it on a pass
+    float strength = vGate.x * max(vGate.y * 0.55, vGate.w * 0.8);
+    if (vK >= 0.0) strength += (1.0 - vK) * 1.5 * step(abs(vHeight - vK * 1.2), 0.25);
+    if (strength < 0.002) discard;
+    float streaks = 0.65 + 0.35 * sin(vHeight * 60.0 - time * 2.5 + vAngle * 3.0);
+    // pow() of a negative number is NaN, and bloom would smear one NaN pixel over the whole screen
+    float fade = pow(clamp(1.0 - vHeight, 0.0, 1.0), 2.2) * smoothstep(0.0, 0.03, vHeight);
+    float soft = pow(clamp(vFacing, 0.0, 1.0), 1.5);
+    // Close up it would fill the screen: fade it out near the camera
+    float near = smoothstep(20.0, 120.0, vDepth);
+    vec3 base = mix(accent, gold, vGate.w);
+    vec3 color = mix(base, vec3(1.0), 0.3) * strength * streaks * fade * soft * near * glow * 0.9;
     gl_FragColor = vec4(color, 1.0);
   }
 `;
@@ -290,7 +345,36 @@ export class CrystalGates {
     veils.frustumCulled = false;
     veils.renderOrder = 3;
 
-    this.group.add(crystals, veils);
+    // Light pillars: an open cylinder per gate, 700 m tall
+    const tube = this.geometry(new THREE.CylinderGeometry(1, 1, 1, 20, 1, true));
+    tube.translate(0, 0.5, 0);
+    tube.setAttribute("gate", new THREE.InstancedBufferAttribute(new Float32Array(rings.map((_, i) => i)), 1));
+    const beamMaterial = this.material(
+      new THREE.ShaderMaterial({
+        defines,
+        uniforms: { ...shared },
+        vertexShader: beamVertex,
+        fragmentShader: beamFragment,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+      }),
+    );
+    const beams = new THREE.InstancedMesh(tube, beamMaterial, Math.max(1, rings.length));
+    beams.count = rings.length;
+    rings.forEach((ring, i) => {
+      tmpMatrix.compose(
+        tmpScale.copy(ring.position).setY(ring.position.y - ring.radius),
+        tmpQuaternion.identity(),
+        new THREE.Vector3(ring.radius * 0.35, 700, ring.radius * 0.35),
+      );
+      beams.setMatrixAt(i, tmpMatrix);
+    });
+    beams.frustumCulled = false;
+    beams.renderOrder = 2;
+
+    this.group.add(crystals, veils, beams);
   }
 
   private material(material: THREE.ShaderMaterial) {
@@ -327,6 +411,11 @@ export class CrystalGates {
     if (state) state.passedAt = fxTime.value;
   }
 
+  /** Are a gate's crystals (mostly) showing? */
+  shown(index: number): boolean {
+    return (this.states[index]?.visible ?? 0) > 0.5;
+  }
+
   /** Is a gate in the middle of its pass animation? */
   passing(index: number): boolean {
     const since = fxTime.value - (this.states[index]?.passedAt ?? -1e3);
@@ -338,14 +427,16 @@ export class CrystalGates {
     const ring = this.rings[index];
     const spin = fxTime.value * RINGS.spin;
     tmpQuaternion.setFromUnitVectors(Z, ring.normal);
-    out.length = 0;
-    for (const { angle, radius } of this.layout[index] ?? []) {
-      out.push(
-        new THREE.Vector3(Math.cos(angle + spin) * radius, Math.sin(angle + spin) * radius, 0)
-          .applyQuaternion(tmpQuaternion)
-          .add(ring.position),
-      );
-    }
+    const layout = this.layout[index] ?? [];
+    // Reuses the vectors already in `out`
+    while (out.length < layout.length) out.push(new THREE.Vector3());
+    out.length = layout.length;
+    layout.forEach(({ angle, radius }, i) => {
+      out[i]
+        .set(Math.cos(angle + spin) * radius, Math.sin(angle + spin) * radius, 0)
+        .applyQuaternion(tmpQuaternion)
+        .add(ring.position);
+    });
     return out;
   }
 

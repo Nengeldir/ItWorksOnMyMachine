@@ -26,6 +26,9 @@ export interface ParticleSpec {
 /** Shared by everything that animates with time in a shader: trails, particles, crystals */
 export const fxTime = { value: 0 };
 
+/** How bright glowing effects are in this biome's light (bright skies wash additive light out) */
+export const FX_LIGHT = { boost: { value: 1 } };
+
 const vertexShader = /* glsl */ `
   attribute vec3 velocity;
   attribute vec4 timing; // birth, life, size, kind
@@ -33,6 +36,7 @@ const vertexShader = /* glsl */ `
   attribute vec3 color;
   uniform float time;
   uniform float pixelScale;
+  uniform float boost;
   varying vec3 vColor;
   varying float vAlpha;
   varying float vKind;
@@ -62,7 +66,7 @@ const vertexShader = /* glsl */ `
     float grow = smoothstep(0.0, 0.08, t);
     float shrink = kind > 0.5 && kind < 1.5 ? sin(3.14159 * t) : 1.0 - t * t;
     gl_PointSize = timing.z * grow * shrink * pixelScale / max(0.1, -mvPosition.z);
-    vColor = color * physics.z;
+    vColor = color * physics.z * boost;
     vAlpha = (kind > 2.5 ? (1.0 - t) * 0.5 : pow(1.0 - t, 1.2)) * smoothstep(1.5, 7.0, -mvPosition.z);
     vKind = kind;
     vSpin = seed + age * 3.0;
@@ -150,6 +154,7 @@ export class Particles {
       fog: true,
     });
     material.uniforms.time = fxTime;
+    material.uniforms.boost = FX_LIGHT.boost;
     this.points = new THREE.Points(geometry, material);
     this.points.frustumCulled = false;
     this.points.renderOrder = 5;

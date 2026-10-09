@@ -8,10 +8,11 @@ import { Debris } from "./effects";
 import { FLIGHT, Flight, type FlightInput } from "./flight";
 import { type GhostData, GhostRecorder, type GhostRun, ghostSamples } from "./ghost";
 import { type ControlSettings, Input } from "./input";
-import { Kind, Particles, fxTime } from "./particles";
+import { FX_LIGHT, Kind, Particles, fxTime } from "./particles";
 import { PilotFx } from "./pilotfx";
 import { INTERPOLATION_DELAY_MS, Pilot, type PilotSample } from "./pilots";
 import { SpeedLines } from "./speedlines";
+import { TOON_LIGHT } from "./toon";
 import { FX, RANGES, RINGS, TUNING_GROUPS, loadTuning, resetTuning, saveTuning } from "./tuning";
 import { clamp } from "./world/terrain";
 import { World } from "./world/World";
@@ -135,6 +136,7 @@ export class Game {
   private flash = 0;
   private dustDebt = 0;
   private moteDebt = 0;
+  private glintDebt = 0;
   private readonly recorder = new GhostRecorder();
   private readonly live = new Map<string, Pilot>();
   private ghosts: Pilot[] = [];
@@ -243,6 +245,11 @@ export class Game {
     this.scene.add(this.view.group);
     this.particles.clear();
     this.speedLines.setColor(this.world.palette.horizon);
+    // How effects react to this biome's light: glows pop at night, and get a push in bright daylight
+    const palette = this.world.palette;
+    FX_LIGHT.boost.value = palette.glow;
+    TOON_LIGHT.rimColor.value.set(palette.sun).lerp(WHITE, 0.35);
+    TOON_LIGHT.glow.value = 0.15 + palette.night * 1.3;
     const { start } = this.world.course;
     this.view.updateChunks(start.x, start.z, Infinity);
     this.setGhosts([]);
@@ -571,6 +578,33 @@ export class Game {
     }
   }
 
+  /** Crystals catch the light: brief star glints on the gates near you */
+  private gateGlints(dt: number) {
+    const rings = this.world.course.rings;
+    const camera = this.rig.camera.position;
+    this.glintDebt += 10 * this.particles.budget * dt;
+    if (this.glintDebt < 1) return;
+    // Start at a random gate, so nearby gates share the glints
+    const first = Math.floor(Math.random() * rings.length);
+    for (let n = 0; n < rings.length && this.glintDebt >= 1; n++) {
+      const i = (first + n) % rings.length;
+      const d = rings[i].position.distanceToSquared(camera);
+      if (d > 350 * 350 || !this.view.gates.shown(i)) continue;
+      const crystals = this.view.gates.crystalPositions(i, this.crystalPoints);
+      const p = crystals[Math.floor(Math.random() * crystals.length)];
+      if (!p) continue;
+      this.glintDebt--;
+      this.particles.emit(at.copy(p).add(tmp.set(rand(-0.8, 0.8), rand(-0.8, 0.8), rand(-0.8, 0.8))), vel.set(0, 0, 0), {
+        life: rand(0.35, 0.6),
+        size: rand(1.2, 2.2),
+        color: WHITE,
+        kind: Kind.Star,
+        intensity: 2.6,
+      });
+    }
+    this.glintDebt = Math.min(this.glintDebt, 2);
+  }
+
   /** Glitter drifting around the next gate, so it sparkles from afar */
   private gateMotes(dt: number) {
     if (this.raceState !== "racing" && this.raceState !== "countdown") return;
@@ -668,6 +702,7 @@ export class Game {
     this.view.updateChunks(camera.position.x, camera.position.z, 4);
     this.view.update(camera, dt);
     this.gateMotes(dt);
+    this.gateGlints(dt);
     const flying = !crashed && this.raceState !== "countdown";
     this.speedLines.update(dt, body.position, flying ? this.flight.velocity : tmp.set(0, 0, 0), camera, this.particles.budget);
 
@@ -793,7 +828,7 @@ export class Game {
     this.particles.setViewport(this.renderer.domElement.height, camera.fov);
     if (this.bloomOn && !this.composer) void this.createComposer();
     if (this.bloomOn && this.composer && this.bloomPass) {
-      this.bloomPass.strength = FX.bloom;
+      this.bloomPass.strength = FX.bloom * (1 + this.world.palette.night * 0.6);
       this.bloomPass.radius = FX.bloomRadius;
       this.bloomPass.threshold = FX.bloomThreshold;
       this.composer.render();

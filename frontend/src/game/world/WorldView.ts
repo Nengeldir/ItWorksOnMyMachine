@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { hashToUnit } from "../rng";
+import { ATMOSPHERE, atmospheric, skyMaterial } from "./atmosphere";
 import { CrystalGates, type RingMode } from "./crystals";
+import { sunDirection } from "./palette";
 import { Arch, Pillar, Rock } from "./obstacles";
 import { CELL, CHUNK_CELLS, CHUNK_SIZE, smoothstep } from "./terrain";
 import type { World } from "./World";
@@ -8,8 +10,6 @@ import type { World } from "./World";
 export const VIEW_DISTANCE = 1500;
 const FOG_NEAR = 250;
 const FOG_FAR = 1350;
-export const SUN_DIRECTION = new THREE.Vector3(-0.45, 0.55, 0.7).normalize();
-
 export type { RingMode };
 
 /** Moves a geometry's vertices a little, the same way for vertices that share a spot */
@@ -36,7 +36,6 @@ export class WorldView {
   private readonly geometries: THREE.BufferGeometry[] = [];
   readonly gates: CrystalGates;
   private readonly sky: THREE.Mesh;
-  private readonly sun: THREE.Mesh;
   private readonly colors: { ground: THREE.Color; rock: THREE.Color; top: THREE.Color; accent: THREE.Color };
 
   constructor(world: World, scene: THREE.Scene) {
@@ -52,32 +51,39 @@ export class WorldView {
     scene.background = new THREE.Color(palette.horizon);
     scene.fog = new THREE.Fog(palette.horizon, FOG_NEAR, FOG_FAR);
 
-    const hemi = new THREE.HemisphereLight(palette.horizon, palette.ground, palette.ambient);
+    // One set of light uniforms for the sky, terrain and rocks: this biome's mood
+    const sun = sunDirection(palette);
+    ATMOSPHERE.sunDirection.value.copy(sun);
+    ATMOSPHERE.sunColor.value.set(palette.sun);
+    ATMOSPHERE.mistColor.value.set(palette.mist);
+    ATMOSPHERE.mistDensity.value = palette.mistDensity;
+    ATMOSPHERE.horizon.value.set(palette.horizon);
+    ATMOSPHERE.zenith.value.set(palette.zenith);
+    ATMOSPHERE.clouds.value.set(palette.clouds);
+    ATMOSPHERE.night.value = palette.night;
+
+    // The sky lights the shadows from above, the ground bounces its color from below
+    const hemi = new THREE.HemisphereLight(
+      new THREE.Color(palette.horizon).lerp(new THREE.Color(palette.zenith), 0.25),
+      palette.ground,
+      palette.ambient,
+    );
     const sunLight = new THREE.DirectionalLight(palette.sun, palette.sunIntensity);
-    sunLight.position.copy(SUN_DIRECTION);
+    sunLight.position.copy(sun);
     this.group.add(hemi, sunLight);
 
-    this.terrainMaterial = this.material(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
-    this.sky = this.buildSky();
-    this.sun = new THREE.Mesh(
-      this.geometry(new THREE.CircleGeometry(110, 24)),
-      // Brighter than white, so the bloom gives it a glare
-      this.material(
-        new THREE.MeshBasicMaterial({
-          color: new THREE.Color(palette.sun).multiplyScalar(1.8),
-          fog: false,
-          depthWrite: false,
-        }),
-      ),
+    this.terrainMaterial = this.material(
+      atmospheric(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), 1),
     );
-    this.sun.renderOrder = -1;
-    this.group.add(this.sky, this.sun);
+    this.sky = new THREE.Mesh(this.geometry(new THREE.SphereGeometry(4000, 32, 16)), this.material(skyMaterial()));
+    this.sky.renderOrder = -2;
+    this.group.add(this.sky);
     this.buildObstacles();
     this.gates = new CrystalGates(
       world.seed,
       world.course.rings,
       { ice: new THREE.Color("#e6f7ff").lerp(this.colors.accent, 0.12), accent: this.colors.accent },
-      SUN_DIRECTION,
+      sun,
     );
     this.group.add(this.gates.group);
     this.setRings("free", 0);
@@ -91,31 +97,6 @@ export class WorldView {
   private geometry<T extends THREE.BufferGeometry>(geometry: T): T {
     this.geometries.push(geometry);
     return geometry;
-  }
-
-  // --- sky ------------------------------------------------------------------
-
-  private buildSky(): THREE.Mesh {
-    const geometry = this.geometry(new THREE.SphereGeometry(4000, 32, 16));
-    const horizon = new THREE.Color(this.world.palette.horizon);
-    const zenith = new THREE.Color(this.world.palette.zenith);
-    const position = geometry.getAttribute("position");
-    const colors = new Float32Array(position.count * 3);
-    const color = new THREE.Color();
-    for (let i = 0; i < position.count; i++) {
-      const t = Math.pow(Math.max(0, position.getY(i) / 4000), 0.6);
-      color.copy(horizon).lerp(zenith, t);
-      color.toArray(colors, i * 3);
-    }
-    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    const sky = new THREE.Mesh(
-      geometry,
-      this.material(
-        new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }),
-      ),
-    );
-    sky.renderOrder = -2;
-    return sky;
   }
 
   // --- terrain chunks ----------------------------------------------------------
@@ -234,7 +215,7 @@ export class WorldView {
 
   private buildObstacles() {
     const { obstacles, seed } = this.world;
-    const rockMaterial = this.material(new THREE.MeshLambertMaterial({ flatShading: true }));
+    const rockMaterial = this.material(atmospheric(new THREE.MeshLambertMaterial({ flatShading: true }), 0.6));
     const pillars = obstacles.filter((o): o is Pillar => o instanceof Pillar);
     const rocks = obstacles.filter((o): o is Rock => o instanceof Rock);
     const arches = obstacles.filter((o): o is Arch => o instanceof Arch);
@@ -273,7 +254,9 @@ export class WorldView {
     });
     this.group.add(pillarMesh, rockMesh);
 
-    const archMaterial = this.material(new THREE.MeshLambertMaterial({ color: this.colors.rock, flatShading: true }));
+    const archMaterial = this.material(
+      atmospheric(new THREE.MeshLambertMaterial({ color: this.colors.rock, flatShading: true }), 0.6),
+    );
     for (const arch of arches) {
       const mesh = new THREE.Mesh(
         this.geometry(new THREE.TorusGeometry(arch.radius, arch.tube, 7, 36, Math.PI)),
@@ -297,11 +280,9 @@ export class WorldView {
     this.gates.pass(index);
   }
 
-  /** Per frame: sky and sun follow the camera, the gates animate */
+  /** Per frame: the sky follows the camera, the gates animate */
   update(camera: THREE.Camera, dt: number) {
     this.sky.position.copy(camera.position);
-    this.sun.position.copy(camera.position).addScaledVector(SUN_DIRECTION, 3500);
-    this.sun.lookAt(camera.position);
     this.gates.update(dt, camera);
   }
 

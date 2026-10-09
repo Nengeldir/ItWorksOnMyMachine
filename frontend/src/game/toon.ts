@@ -1,7 +1,19 @@
 import * as THREE from "three";
+import { fxTime } from "./particles";
 
 // Cel shading in the style of Genshin Impact: hard light bands from a tiny
 // gradient texture, a soft rim light, and ink outlines from an inverted hull.
+
+/**
+ * Light shared by every toon material, set per biome: the rim takes the sun's
+ * color, and parts painted with a glow (gold trims, wingtips) light up by
+ * themselves: a soft shimmer by day, bright enough to bloom at night.
+ */
+export const TOON_LIGHT = {
+  rimColor: { value: new THREE.Color("#fff4e0") },
+  glow: { value: 0.15 },
+  time: fxTime,
+};
 
 let gradient: THREE.DataTexture | null = null;
 
@@ -43,14 +55,34 @@ export function toonMaterial(options: ToonOptions = {}): THREE.MeshToonMaterial 
   material.onBeforeCompile = (shader) => {
     shader.uniforms.rimStrength = rim;
     shader.uniforms.rimColor = rimColor;
+    shader.uniforms.toonRimColor = TOON_LIGHT.rimColor;
+    shader.uniforms.toonGlow = TOON_LIGHT.glow;
+    shader.uniforms.toonTime = TOON_LIGHT.time;
+    shader.vertexShader = shader.vertexShader
+      .replace("void main() {", "attribute float glow;\nvarying float vGlow;\nvoid main() {")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGlow = glow;");
     shader.fragmentShader = shader.fragmentShader
-      .replace("void main() {", "uniform float rimStrength;\nuniform vec3 rimColor;\nvoid main() {")
+      .replace(
+        "void main() {",
+        `uniform float rimStrength;
+        uniform vec3 rimColor;
+        uniform vec3 toonRimColor;
+        uniform float toonGlow;
+        uniform float toonTime;
+        varying float vGlow;
+        void main() {`,
+      )
+      .replace(
+        "#include <emissivemap_fragment>",
+        `#include <emissivemap_fragment>
+        totalEmissiveRadiance += diffuseColor.rgb * vGlow * toonGlow * (0.85 + 0.15 * sin(toonTime * 2.4 + vGlow * 6.0));`,
+      )
       .replace(
         "#include <opaque_fragment>",
         `{
           float facing = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
           float rimBand = smoothstep(0.55, 0.75, 1.0 - facing);
-          outgoingLight += rimColor * rimBand * rimStrength;
+          outgoingLight += rimColor * toonRimColor * rimBand * rimStrength;
         }
         #include <opaque_fragment>`,
       );

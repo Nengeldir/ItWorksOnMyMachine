@@ -66,9 +66,9 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/Game.ts` | The game: frame loop, fixed 120 Hz physics steps, race state, ring checks, HUD data, effects wiring (gate bursts, skim spray, gate motes), rendering with optional bloom, adaptive quality, the `?tune` panel |
 | `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only |
 | `game/avatar.ts` | The pilot: a cel-shaded chibi flyer built from primitives (merged per body part, vertex-colored), a procedural cape and scarf (`Cloth`), two-segment feathered wings, and all its animation: bank lead spring, barrel rolls, flapping driven by effort, bobbing, cloth ripples, limb reactions. Also `createLabel` and `glowTexture` |
-| `game/toon.ts` | Toon material (3-band gradient and rim light) and the inverted-hull ink outline |
+| `game/toon.ts` | Toon material (3-band gradient, rim light tinted by the biome's sun, self-lit `glow` vertex attribute for trims and wingtips) and the inverted-hull ink outline. `TOON_LIGHT` is set per biome |
 | `game/pilotfx.ts` | Per-pilot effects: wingtip and cape ribbons, light motes, downstroke puffs, barrel-roll star spiral. Shared by you, other players and ghosts |
-| `game/particles.ts` | One GPU particle system (ring buffer, physics in the vertex shader). Kinds: Glow, Star, Shard, Wisp. `fxTime` is the shared shader clock |
+| `game/particles.ts` | One GPU particle system (ring buffer, physics in the vertex shader). Kinds: Glow, Star, Shard, Wisp. `fxTime` is the shared shader clock; `FX_LIGHT.boost` scales all glowing effects per biome |
 | `game/trail.ts` | Glowing additive ribbon (shader: soft edges, light pulses, fades near the camera) |
 | `game/speedlines.ts` | Wind streaks that hang in the air and rush past at speed |
 | `game/camera.ts` | Chase camera (`CAMERA` tuning): lag, partial horizon roll, FOV with speed, FOV kick on gates, shake when skimming |
@@ -83,9 +83,10 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/world/terrain.ts` | Heightmap canyon from simplex noise; distance queries for collisions |
 | `game/world/course.ts` | Racing line, ring placement, obstacle placement |
 | `game/world/obstacles.ts` | Pillars, rocks, arches as signed distance functions, plus a grid for lookups |
-| `game/world/palette.ts` | Six color themes (Dusk, Glacier, Jungle, Desert, Nightshade, Lagoon) |
+| `game/world/palette.ts` | Six biome moods (Dusk, Glacier, Jungle, Desert, Nightshade, Lagoon): colors plus lighting (sun elevation and azimuth, night factor, valley mist, clouds, effect glow). `sunDirection(palette)` |
+| `game/world/atmosphere.ts` | `ATMOSPHERE` light uniforms shared per biome; `atmospheric()` patches Lambert materials (sun-tinted haze matching the sky, valley mist, backlit rims, rock strata); `skyMaterial()` (gradient, HDR sun or moon disc and halo, painted clouds, twinkling stars at night) |
 | `game/world/WorldView.ts` | Meshes for a World: streamed terrain chunks, obstacles, sky, sun, gates |
-| `game/world/crystals.ts` | Crystal gates: instanced crystals (bob, spin, pass flare and burst in the shader), veil discs with the pass shockwave |
+| `game/world/crystals.ts` | Crystal gates: instanced crystals (bob, spin, pass flare and burst in the shader), veil discs with the pass shockwave, light pillars over the next gate and the finish |
 | `session/` | Solo and room sessions wiring a `Game` to the network and UI |
 | `net/` | Server clock sync and the room connection (SSE down, POST up) |
 | `components/` | React screens: menu, HUD, lobby, results, controls |
@@ -106,6 +107,15 @@ Players never collide, so the server only relays positions.
   `EffectComposer` (RenderPass → UnrealBloomPass → OutputPass) with HDR
   half-float targets. Only colors above `FX.bloomThreshold` (1.3) bloom, so
   effects that should glow write colors above 1.
+- **Biome light:** `WorldView` sets `ATMOSPHERE` from the palette, and
+  `Game.setSeed` sets `TOON_LIGHT` (rim color, trim glow: 0.15 by day up to
+  1.45 at night) and `FX_LIGHT.boost` (`palette.glow`). Bloom strength scales
+  with `1 + night * 0.6`. When you add a lit material, hook it into these
+  instead of hard-coding colors.
+- **Shader safety:** never call `pow()` on something that can go negative
+  (clamp first), and never divide by something that can reach zero. One NaN
+  pixel turns the whole bloomed frame black. This happened with the light
+  pillars; see the change log.
 - **Quality levels:** 2 = bloom at up to 2× DPR (composer capped at 1.5×),
   1 = no bloom, 0 = 1× DPR and 40% particles. `adaptQuality` steps down after
   sustained frames over 25 ms, and never back up.
@@ -176,6 +186,39 @@ that bob and shine when passed, and a cartoon humanoid pilot.
   frame per pilot. GPU frame time not reliably measured (the automation tab was
   throttled).
 
+### 2026-10-10: Lighting and shaders per biome (Claude)
+
+Asked for: shaders and lighting that make every biome stunning, effects that
+behave well in different light, shiny catchy things, bright standouts.
+
+- **Biome lighting profiles** (`palette.ts`): each palette now has sun
+  elevation and azimuth (low suns sit ahead of the run, so Dusk is backlit),
+  a night factor, valley mist color and density, cloud color, and an effect
+  glow factor.
+- **Sky shader** (`atmosphere.ts`): replaces the vertex-colored dome and the
+  flat sun disc. Gradient, HDR sun (or moon) disc and halo that bloom, two
+  layers of drifting painted clouds lit from the sun's side with silver
+  linings, twinkling stars at night.
+- **Atmosphere patch** for terrain, pillars, rocks and arches: haze that
+  takes the sun's glow towards the sun (matching the sky, so distant terrain
+  melts into it), mist pooling on the canyon floor, backlit rims on edges seen
+  against the sun, wavering rock strata. The hemisphere light now mixes in
+  the zenith color.
+- **Pilot light**: the toon rim takes the sun's color; gold trims, the cape
+  emblem and hem, and the wingtips carry a `glow` vertex attribute that
+  shimmers by day and blooms at night. The aura grows at night.
+- **Effects follow the light**: `FX_LIGHT.boost` scales particles and
+  trails per biome; bloom is stronger at night.
+- **Catchy things shine**: light pillars rise from the next gate (accent
+  color) and the finish (gold), with a flare running up the pillar on a pass.
+  Random star glints flash on crystals of gates near you.
+- **Bug fixed during the pass**: the pillar shader took `pow()` of a slightly
+  negative number at the cylinder's top edge; the NaN made every bloomed frame
+  black. Clamped there and in the crystal fresnel and the trail shader.
+- Verified: build and lint pass. Looked at Glacier, Nightshade, Dusk and
+  Lagoon in Chrome (stepping the loop by hand because the automation tab was
+  hidden), no console errors. Jungle and Desert not looked at.
+
 ## Next up
 
 - Measure real frame times at High quality on an integrated GPU, in a focused
@@ -184,6 +227,10 @@ that bob and shine when passed, and a cartoon humanoid pilot.
   animation; a "wings unfold" intro would be nice.
 - Remote pilots each cost about 0.7 ms of CPU for animation. With many
   players, animate distant pilots every other frame.
+- Look at Jungle and Desert in a browser, and tune mist density per biome
+  (Dusk's haze may be a little strong).
+- Day/night or time-of-day as a continuous parameter instead of a fixed
+  night factor per palette.
 - `RINGS.crystals` only applies to the next map (gates are built once per
   world).
 - The ponytail and hair are hand-placed; a proper hair cap mesh would look
@@ -273,5 +320,66 @@ that reuse a fixed biome.
 
 ## Biome proposals and construction plan
 
-To be written after the lighting and shader pass (see the next change log
-entry).
+Each biome is a **level** in the roguelike run: a generator recipe (landforms,
+water, vegetation, props), a lighting mood (a palette with the fields above,
+extended), signature particles and set pieces, its own sidequests, and the
+portals out. Biomes share one engine. A biome is data plus a few biome-specific
+modules, never a fork of the renderer.
+
+### The biomes
+
+| # | Biome | Landforms and set pieces | Light and mood | Signature effects | Sidequests |
+| :- | :- | :- | :- | :- | :- |
+| 1 | **Sunlit Canyons** (start; today's map) | Meandering canyon, rock towers, arches, floating boulders | Warm late afternoon, backlit (Dusk / Desert palettes) | Dust motes in sunbeams, heat shimmer | Light the three cairns; thread the needle arches |
+| 2 | **Verdant Highlands** | Rolling hills, terraced cliffs, rivers with waterfalls, dense forest with tall pines and broadleaf canopies | Soft morning sun, humid mist in valleys (Jungle) | Pollen and fireflies in shade, waterfall spray and rainbows, leaves blown off trees by your wake | Chase the spirit birds; collect seeds and plant a glowing tree |
+| 3 | **Glacier Peaks** | Jagged ridges, ice cliffs, crevasses, frozen lakes, snowfields; cloud sea below | Crisp, high sun, blue shadows (Glacier) | Snow blown off ridges, ice sparkle, breath-like frost on wingtips, aurora at the summit | Ring the ice bells; rescue a stranded glider in a blizzard |
+| 4 | **Sky Archipelago** | Floating islands (3D density), waterfalls into the void, vine bridges, cloud banks to dive through | Golden hour above the clouds, god rays through gaps | Cloud wisps parting around you, light motes like Sky's Isle of Dawn | Gather scattered stars; ride the wind walls between islands |
+| 5 | **Coral Lagoon** | Sea stacks, shallow turquoise water, sandbars, coral arches, palm groves | Bright tropical noon, caustics (Lagoon) | Sea spray when skimming water, flying fish, gull flocks | Skim the water for a combo; race the manta through the arches |
+| 6 | **Twilight Forest** | Giant mushroom and redwood forest, roots forming tunnels, glowing ponds | Blue hour, bioluminescence (Nightshade) | Fireflies, glowing spores reacting to your wingbeats, light trails brighter | Relight the lanterns; follow the spirit fox |
+| 7 | **Ember Wastes** | Volcanic ridges, lava rivers, obsidian spires, ash plumes | Red-orange, underlit by lava, dark sky | Embers rising on thermals, heat haze, sparks off obsidian | Ride the thermals to the caldera; outrun the eruption |
+| 8 | **Aurora Summit** (finale) | A spire above the clouds, ring of ancient crystal gates | Night, aurora, stars, moon glare | Aurora ribbons, starfall, every gate a light pillar | The final ascent: a gauntlet of every gate type |
+
+### Shared systems to build (in this order)
+
+1. **Biome definition format** (`world/biomes/*.ts`): `{ name, palette,
+   landforms, water, vegetation, props, particles, sidequests, portals }`, all
+   deterministic from `(runSeed, level)`. Today's `World` becomes the
+   "Sunlit Canyons" recipe.
+2. **Terrain generator v2**: a composable height function (domain-warped
+   ridged noise, terraces, carved river splines), plus an optional 3D density
+   field for islands and overhangs. Generate chunks in a Web Worker, with LOD
+   rings. Collisions stay analytic (height plus SDF obstacles).
+3. **Terrain shader v2**: slope- and height-blended layers (grass, rock,
+   snow, sand) with triplanar sampling on cliffs, building on `atmospheric()`.
+   Keep the flat-shaded painted look; textures are subtle noise, not photos.
+4. **Water**: a plane or river mesh with a stylized shader (depth tint, foam
+   lines, sky reflection, sun glitter that blooms), plus spray particles when
+   skimming.
+5. **Vegetation**: instanced stylized trees (generated trunk and branches,
+   leaf clusters as alpha cards or low-poly blobs with toon shading), placed by
+   Poisson disk over moisture, slope and height; wind sway in the vertex
+   shader; impostors far away. Grass and flowers as GPU-instanced blades near
+   the camera.
+6. **Sky and weather**: extend `skyMaterial` with layered cloud volumes you
+   can fly through (soft instanced billboards), god rays (a screen-space pass
+   at High quality), weather particles (snow, rain, embers, spores).
+7. **Run structure**: portals (a gate variant: swirling veil, beam, a tunnel
+   transition that cross-fades palettes), the upgrade picker UI, run score,
+   sidequest framework, and biome order from the run seed.
+8. **Per-biome audio beds** and music stingers for gates, sidequests and
+   portals.
+
+### What Claude should focus on
+
+- **First:** the biome definition format and the terrain generator v2,
+  because everything else hangs off them. Port the current canyon into the
+  format without changing how it looks, verify, then add Verdant Highlands
+  (the first new one: it exercises rivers, forests and mist).
+- **Second:** vegetation and water, as reusable systems.
+- **Third:** the run loop (portals, upgrades, sidequests) on two biomes,
+  before building more biomes.
+- Keep every biome **beautiful at Medium quality without bloom**. Bloom is
+  the cherry, not the cake.
+- For every new visual system: add knobs to `tuning.ts`, make it react to the
+  biome light (`ATMOSPHERE`, `TOON_LIGHT`, `FX_LIGHT`), check it in the
+  browser in at least a day and a night biome, and log it here.

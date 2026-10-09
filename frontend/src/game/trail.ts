@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { fxTime } from "./particles";
+import { FX_LIGHT, fxTime } from "./particles";
 import { FX } from "./tuning";
 
 const LENGTH = 64;
@@ -31,8 +31,9 @@ const fragmentShader = /* glsl */ `
   varying float vNear;
   #include <fog_pars_fragment>
   void main() {
-    float t = vAlong.x;
-    float across = 1.0 - vAlong.y * vAlong.y; // soft edges
+    // Clamped: interpolation can overshoot a hair, and pow() of a negative is NaN (which bloom spreads)
+    float t = clamp(vAlong.x, 0.0, 1.0);
+    float across = clamp(1.0 - vAlong.y * vAlong.y, 0.0, 1.0); // soft edges
     float fade = pow(1.0 - t, 1.6) * smoothstep(0.0, 0.03, t);
     // Light pulses running down the ribbon
     float pulse = 1.0 + shimmer * (0.5 * sin(t * 46.0 - time * 14.0) + 0.35 * sin(t * 17.0 - time * 5.0));
@@ -160,7 +161,7 @@ export class Trail {
 
   set opacity(value: number) {
     this.mesh.material.uniforms.opacity.value = value;
-    this.mesh.material.uniforms.glow.value = FX.trailGlow;
+    this.mesh.material.uniforms.glow.value = FX.trailGlow * FX_LIGHT.boost.value;
     this.mesh.visible = value > 0.01 && FX.trailGlow > 0 && this.points.length > 1;
   }
 
