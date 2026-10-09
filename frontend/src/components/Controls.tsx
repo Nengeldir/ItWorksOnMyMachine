@@ -15,6 +15,9 @@ const Controls = ({ settings, onSettings }: ControlsProps) => (
       <li>Bank to turn. Dive for speed, pull up to trade it for height.</li>
       <li>Skim the rock for style points and a speed boost.</li>
       <li>
+        <kbd>Q</kbd> / <kbd>E</kbd> or double-tap a roll key: barrel roll
+      </li>
+      <li>
         <kbd>R</kbd> respawn · <kbd>M</kbd> mute · <kbd>Esc</kbd> free the mouse
       </li>
     </ul>

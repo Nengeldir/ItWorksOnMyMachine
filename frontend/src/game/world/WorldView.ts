@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { hashToUnit } from "../rng";
-import type { Ring } from "./course";
+import { CrystalGates, type RingMode } from "./crystals";
 import { Arch, Pillar, Rock } from "./obstacles";
 import { CELL, CHUNK_CELLS, CHUNK_SIZE, smoothstep } from "./terrain";
 import type { World } from "./World";
@@ -8,10 +8,9 @@ import type { World } from "./World";
 export const VIEW_DISTANCE = 1500;
 const FOG_NEAR = 250;
 const FOG_FAR = 1350;
-const SUN_DIRECTION = new THREE.Vector3(-0.45, 0.55, 0.7).normalize();
-const FINISH_COLOR = new THREE.Color("#ffd23f");
+export const SUN_DIRECTION = new THREE.Vector3(-0.45, 0.55, 0.7).normalize();
 
-export type RingMode = "race" | "free" | "hidden";
+export type { RingMode };
 
 /** Moves a geometry's vertices a little, the same way for vertices that share a spot */
 function roughen(geometry: THREE.BufferGeometry, amount: number, salt: string) {
@@ -35,12 +34,10 @@ export class WorldView {
   private readonly terrainMaterial: THREE.MeshLambertMaterial;
   private readonly materials: THREE.Material[] = [];
   private readonly geometries: THREE.BufferGeometry[] = [];
-  private readonly ringMeshes: THREE.Mesh<THREE.TorusGeometry, THREE.MeshBasicMaterial>[] = [];
+  readonly gates: CrystalGates;
   private readonly sky: THREE.Mesh;
   private readonly sun: THREE.Mesh;
   private readonly colors: { ground: THREE.Color; rock: THREE.Color; top: THREE.Color; accent: THREE.Color };
-  private ringMode: RingMode = "free";
-  private nextRing = 0;
 
   constructor(world: World, scene: THREE.Scene) {
     this.world = world;
@@ -64,12 +61,26 @@ export class WorldView {
     this.sky = this.buildSky();
     this.sun = new THREE.Mesh(
       this.geometry(new THREE.CircleGeometry(110, 24)),
-      this.material(new THREE.MeshBasicMaterial({ color: palette.sun, fog: false, depthWrite: false })),
+      // Brighter than white, so the bloom gives it a glare
+      this.material(
+        new THREE.MeshBasicMaterial({
+          color: new THREE.Color(palette.sun).multiplyScalar(1.8),
+          fog: false,
+          depthWrite: false,
+        }),
+      ),
     );
     this.sun.renderOrder = -1;
     this.group.add(this.sky, this.sun);
     this.buildObstacles();
-    this.buildRings();
+    this.gates = new CrystalGates(
+      world.seed,
+      world.course.rings,
+      { ice: new THREE.Color("#e6f7ff").lerp(this.colors.accent, 0.12), accent: this.colors.accent },
+      SUN_DIRECTION,
+    );
+    this.group.add(this.gates.group);
+    this.setRings("free", 0);
   }
 
   private material<T extends THREE.Material>(material: T): T {
@@ -274,50 +285,24 @@ export class WorldView {
     }
   }
 
-  // --- rings -------------------------------------------------------------------
+  // --- rings ---------------------------------------------------------------------
 
-  private buildRings() {
-    const forward = new THREE.Vector3(0, 0, 1);
-    for (const ring of this.world.course.rings) {
-      const mesh = new THREE.Mesh(
-        this.geometry(new THREE.TorusGeometry(ring.radius, ring.finish ? 1.6 : 1, 8, 48)),
-        this.material(new THREE.MeshBasicMaterial({ transparent: true })),
-      );
-      mesh.position.copy(ring.position);
-      mesh.quaternion.setFromUnitVectors(forward, ring.normal);
-      this.ringMeshes.push(mesh);
-      this.group.add(mesh);
-    }
-    this.setRings("free", 0);
-  }
-
-  /** "race": the next ring glows, passed rings disappear. "free": all rings shown quietly. */
+  /** "race": the next gate glows, passed ones are gone. "free": all shown quietly. */
   setRings(mode: RingMode, next: number) {
-    this.ringMode = mode;
-    this.nextRing = next;
-    this.ringMeshes.forEach((mesh, i) => {
-      const ring: Ring = this.world.course.rings[i];
-      const material = mesh.material;
-      mesh.visible = mode !== "hidden" && (mode === "free" || i >= next);
-      mesh.scale.setScalar(1);
-      const isNext = mode === "race" && i === next;
-      material.color.copy(ring.finish ? FINISH_COLOR : isNext ? this.colors.accent : new THREE.Color("#ffffff"));
-      material.opacity = isNext || ring.finish ? 1 : mode === "race" ? 0.55 : 0.35;
-      // The next ring shows through the fog, so you always know where to go
-      material.fog = !isNext;
-      material.needsUpdate = true;
-    });
+    this.gates.setMode(mode, next);
   }
 
-  /** Per frame: sky and sun follow the camera, the next ring pulses */
-  update(camera: THREE.Camera, time: number) {
+  /** Plays a gate's pass animation: the crystals flare, burst and dissolve */
+  passRing(index: number) {
+    this.gates.pass(index);
+  }
+
+  /** Per frame: sky and sun follow the camera, the gates animate */
+  update(camera: THREE.Camera, dt: number) {
     this.sky.position.copy(camera.position);
     this.sun.position.copy(camera.position).addScaledVector(SUN_DIRECTION, 3500);
     this.sun.lookAt(camera.position);
-    if (this.ringMode === "race") {
-      const mesh = this.ringMeshes[this.nextRing];
-      mesh?.scale.setScalar(1 + 0.06 * Math.sin(time * 6));
-    }
+    this.gates.update(dt, camera);
   }
 
   dispose() {
@@ -325,6 +310,7 @@ export class WorldView {
     this.chunks.clear();
     this.geometries.forEach((g) => g.dispose());
     this.materials.forEach((m) => m.dispose());
+    this.gates.dispose();
     this.group.clear();
   }
 }

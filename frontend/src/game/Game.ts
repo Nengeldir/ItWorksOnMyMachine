@@ -1,13 +1,18 @@
 import * as THREE from "three";
+import type { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import type { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { GameAudio } from "./audio";
+import { Avatar } from "./avatar";
 import { CameraRig } from "./camera";
 import { Debris } from "./effects";
 import { FLIGHT, Flight, type FlightInput } from "./flight";
 import { type GhostData, GhostRecorder, type GhostRun, ghostSamples } from "./ghost";
 import { type ControlSettings, Input } from "./input";
+import { Kind, Particles, fxTime } from "./particles";
+import { PilotFx } from "./pilotfx";
 import { INTERPOLATION_DELAY_MS, Pilot, type PilotSample } from "./pilots";
-import { Trail } from "./trail";
-import { WINGTIPS, createWingsuit } from "./wingsuit";
+import { SpeedLines } from "./speedlines";
+import { FX, RANGES, RINGS, TUNING_GROUPS, loadTuning, resetTuning, saveTuning } from "./tuning";
 import { clamp } from "./world/terrain";
 import { World } from "./world/World";
 import { WorldView } from "./world/WorldView";
@@ -19,6 +24,18 @@ const SCORE_RANGE = 10; // proximity counts within this many metres
 const RESPAWN_DELAY = 1.4; // seconds
 const START_SPEED = 32; // m/s
 const HUD_INTERVAL = 100; // ms
+const GOLD = new THREE.Color("#ffd23f");
+const WHITE = new THREE.Color("#ffffff");
+
+/** 2: bloom and full resolution, 1: no bloom, 0: lower resolution and fewer particles */
+type Quality = 0 | 1 | 2;
+// Post-processing renders at most at this pixel ratio: bloom targets are big on retina screens
+const COMPOSER_PIXEL_RATIO = 1.5;
+const QUALITY = [
+  { pixelRatio: 1, particles: 0.4 },
+  { pixelRatio: 1.5, particles: 0.75 },
+  { pixelRatio: 2, particles: 1 },
+] as const;
 
 export type RaceState = "free" | "countdown" | "racing" | "finished";
 
@@ -84,6 +101,12 @@ export interface NetState {
 const tmp = new THREE.Vector3();
 const tmp2 = new THREE.Vector3();
 const projected = new THREE.Vector3();
+const at = new THREE.Vector3();
+const vel = new THREE.Vector3();
+const basisA = new THREE.Vector3();
+const basisB = new THREE.Vector3();
+const color = new THREE.Color();
+const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
 export class Game {
   private readonly container: HTMLElement;
@@ -95,10 +118,23 @@ export class Game {
   private readonly flight = new Flight();
   private readonly prevPosition = new THREE.Vector3();
   private readonly prevQuaternion = new THREE.Quaternion();
-  private readonly body: THREE.Mesh;
-  private readonly trails: Trail[];
+  private readonly avatar: Avatar;
+  private readonly fx: PilotFx;
+  private readonly particles: Particles;
+  private readonly speedLines: SpeedLines;
   private readonly debris: Debris;
   private readonly marker: HTMLDivElement;
+  private readonly vignette: HTMLDivElement;
+  private readonly crystalPoints: THREE.Vector3[] = [];
+  private composer: EffectComposer | null = null;
+  private bloomPass: UnrealBloomPass | null = null;
+  private composerLoading = false;
+  private quality: Quality = 2;
+  private slowFrames = 0;
+  private measured = 0;
+  private flash = 0;
+  private dustDebt = 0;
+  private moteDebt = 0;
   private readonly recorder = new GhostRecorder();
   private readonly live = new Map<string, Pilot>();
   private ghosts: Pilot[] = [];
@@ -136,9 +172,10 @@ export class Game {
     this.container = container;
     this.clock = options.clock;
     this.events = options.events;
+    loadTuning();
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, QUALITY[this.quality].pixelRatio));
     this.renderer.domElement.className = "game-canvas";
     container.appendChild(this.renderer.domElement);
 
@@ -147,17 +184,23 @@ export class Game {
     this.input.onAction = (action) => {
       if (action === "respawn") this.respawnNow();
       if (action === "mute") this.audio.toggleMute();
+      if (action === "barrelLeft" || action === "barrelRight") this.barrelRoll(action === "barrelLeft" ? -1 : 1);
     };
     this.renderer.domElement.addEventListener("click", this.engage);
     // Audio may only start after a user gesture: take the first one, mouse or keyboard
     window.addEventListener("keydown", this.startAudio, { once: true });
     window.addEventListener("pointerdown", this.startAudio, { once: true });
 
-    this.body = createWingsuit(options.color);
-    this.trails = WINGTIPS.map(() => new Trail("#ffffff", 0.12));
+    this.particles = new Particles();
+    this.avatar = new Avatar(options.color);
+    this.fx = new PilotFx(this.avatar, options.color, this.particles);
+    this.speedLines = new SpeedLines();
     this.debris = new Debris(options.color);
-    this.scene.add(this.body, this.debris.mesh, ...this.trails.map((t) => t.mesh));
+    this.scene.add(this.avatar.group, this.debris.mesh, this.particles.points, this.speedLines.mesh, ...this.fx.meshes);
 
+    this.vignette = document.createElement("div");
+    this.vignette.className = "speed-vignette";
+    container.appendChild(this.vignette);
     this.marker = document.createElement("div");
     this.marker.className = "ring-marker";
     container.appendChild(this.marker);
@@ -171,7 +214,7 @@ export class Game {
 
     if (new URLSearchParams(location.search).has("tune")) void this.openTuning();
     // Lets browser tests drive the game in development
-    if (import.meta.env.DEV) Object.assign(window, { __game: this });
+    if (import.meta.env.DEV) Object.assign(window, { __game: this, __fxTime: fxTime, __tuning: Object.fromEntries(TUNING_GROUPS) });
   }
 
   // --- public API --------------------------------------------------------------
@@ -198,6 +241,8 @@ export class Game {
     this.world = new World(seed);
     this.view = new WorldView(this.world, this.scene);
     this.scene.add(this.view.group);
+    this.particles.clear();
+    this.speedLines.setColor(this.world.palette.horizon);
     const { start } = this.world.course;
     this.view.updateChunks(start.x, start.z, Infinity);
     this.setGhosts([]);
@@ -207,7 +252,8 @@ export class Game {
 
   setSelf(id: string, color: string) {
     this.selfId = id;
-    (this.body.material as THREE.MeshLambertMaterial).color.set(color);
+    this.avatar.setColor(color);
+    this.fx.setColor(color);
     this.debris.setColor(color);
   }
 
@@ -246,7 +292,7 @@ export class Game {
       if (player.id === this.selfId) continue;
       keep.add(player.id);
       if (!this.live.has(player.id)) {
-        const pilot = new Pilot(player.id, player.name, player.color, false);
+        const pilot = new Pilot(player.id, player.name, player.color, false, this.particles);
         this.live.set(player.id, pilot);
         this.scene.add(pilot.group, ...pilot.trailMeshes);
       }
@@ -268,7 +314,7 @@ export class Game {
   setGhosts(runs: GhostRun[]) {
     this.ghosts.forEach((g) => this.removePilot(g));
     this.ghosts = runs.map((run, i) => {
-      const pilot = new Pilot(`ghost${i}`, run.name, "#ffffff", true);
+      const pilot = new Pilot(`ghost${i}`, run.name, "#ffffff", true, this.particles);
       pilot.setSamples(ghostSamples(run.ghost));
       this.scene.add(pilot.group, ...pilot.trailMeshes);
       return pilot;
@@ -296,12 +342,16 @@ export class Game {
     this.view.dispose();
     this.live.forEach((p) => this.removePilot(p));
     this.ghosts.forEach((p) => this.removePilot(p));
-    this.trails.forEach((t) => t.dispose());
+    this.fx.dispose();
+    this.avatar.dispose();
+    this.particles.dispose();
+    this.speedLines.dispose();
     this.debris.dispose();
-    (this.body.material as THREE.Material).dispose();
+    this.composer?.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
     this.marker.remove();
+    this.vignette.remove();
   }
 
   // --- flying ------------------------------------------------------------------
@@ -328,8 +378,9 @@ export class Game {
     this.crashedAt = null;
     this.proximity = 0;
     this.combo = 0;
-    this.body.visible = true;
-    this.trails.forEach((t) => t.reset());
+    this.avatar.visible = true;
+    this.fx.reset();
+    this.speedLines.reset();
     this.rig.snap(this.flight.position, this.flight.forward, this.flight.up, this.flight.speed);
   }
 
@@ -341,9 +392,10 @@ export class Game {
   private crash() {
     this.crashedAt = this.elapsed;
     this.crashPoint.copy(this.flight.position);
-    this.body.visible = false;
-    this.trails.forEach((t) => (t.opacity = 0));
+    this.avatar.visible = false;
+    this.fx.hide();
     this.debris.burst(this.flight.position, this.flight.velocity);
+    this.crashBurst();
     this.audio.crash();
     this.combo = 0;
   }
@@ -373,7 +425,23 @@ export class Game {
     if (this.raceState === "racing") {
       this.recorder.record(this.clock() - this.startAt, this.flight.position, this.flight.quaternion);
       this.checkRing();
+    } else if (this.raceState === "free") {
+      // No race, but flying through a gate still makes it shine
+      const rings = this.world.course.rings;
+      for (let i = 0; i < rings.length; i++) {
+        if (!this.view.gates.passing(i) && this.crossed(i)) this.gateBurst(i);
+      }
     }
+  }
+
+  /** Did the last physics step fly through ring `index`? */
+  private crossed(index: number): boolean {
+    const ring = this.world.course.rings[index];
+    const before = tmp.subVectors(this.prevPosition, ring.position).dot(ring.normal);
+    const after = tmp.subVectors(this.flight.position, ring.position).dot(ring.normal);
+    if (before >= 0 || after < 0) return false;
+    const hit = tmp.lerpVectors(this.prevPosition, this.flight.position, before / (before - after));
+    return hit.distanceTo(ring.position) <= ring.radius + 1;
   }
 
   private get multiplier(): number {
@@ -382,13 +450,9 @@ export class Game {
 
   /** Did the last step pass through the next ring? */
   private checkRing() {
-    const ring = this.world.course.rings[this.checkpoints];
-    if (!ring) return;
-    const before = tmp.subVectors(this.prevPosition, ring.position).dot(ring.normal);
-    const after = tmp.subVectors(this.flight.position, ring.position).dot(ring.normal);
-    if (before >= 0 || after < 0) return;
-    const hit = tmp.lerpVectors(this.prevPosition, this.flight.position, before / (before - after));
-    if (hit.distanceTo(ring.position) > ring.radius + 1) return;
+    const index = this.checkpoints;
+    const ring = this.world.course.rings[index];
+    if (!ring || !this.crossed(index)) return;
 
     this.checkpoints++;
     if (ring.finish) {
@@ -396,12 +460,143 @@ export class Game {
       this.raceState = "finished";
       this.finishMs = timeMs;
       this.view.setRings("hidden", 0);
+      this.gateBurst(index);
       this.audio.finish();
       const ghost = this.recorder.finish(timeMs, this.flight.position, this.flight.quaternion);
       this.events.finished?.({ timeMs, ghost });
     } else {
       this.audio.ring();
       this.view.setRings("race", this.checkpoints);
+      this.gateBurst(index);
+    }
+  }
+
+  // --- effects -------------------------------------------------------------------
+
+  private barrelRoll(dir: 1 | -1) {
+    if (this.crashedAt !== null || this.raceState === "countdown") return;
+    this.avatar.barrelRoll(dir);
+  }
+
+  /** A gate was passed: it flares (WorldView), and shards, stars and light burst out of it */
+  private gateBurst(index: number) {
+    const ring = this.world.course.rings[index];
+    this.view.passRing(index);
+    this.rig.kick();
+    this.flash = 1;
+    const amount = this.particles.budget * RINGS.shatter;
+    if (amount <= 0) return;
+    const tint = ring.finish ? GOLD : color.set(this.world.palette.accent);
+    const forward = ring.normal;
+    const crystals = this.view.gates.crystalPositions(index, this.crystalPoints);
+    for (const p of crystals) {
+      const outward = tmp.subVectors(p, ring.position).normalize();
+      for (let k = 0; k < Math.round(3 * amount); k++) {
+        this.particles.emit(
+          at.copy(p).addScaledVector(outward, rand(-0.6, 0.6)),
+          vel
+            .copy(outward)
+            .multiplyScalar(rand(5, 15))
+            .addScaledVector(forward, rand(2, 6) + this.flight.speed * 0.15)
+            .add(tmp2.set(rand(-2, 2), rand(-2, 2), rand(-2, 2))),
+          {
+            life: rand(1, 1.9),
+            size: rand(0.45, 0.95),
+            color: k % 2 ? WHITE : tint,
+            kind: Kind.Shard,
+            gravity: 4,
+            drag: 1.1,
+            intensity: 2.8,
+          },
+        );
+      }
+    }
+    // Stars around the rim and a puff of light around the pilot
+    for (let k = 0; k < Math.round(70 * amount); k++) {
+      const p = crystals[k % crystals.length];
+      at.lerpVectors(ring.position, p, rand(0.85, 1.05));
+      tmp.subVectors(at, ring.position).normalize();
+      this.particles.emit(at, vel.copy(tmp).multiplyScalar(rand(1, 5)).addScaledVector(forward, rand(-2, 4)), {
+        life: rand(1.2, 2.2),
+        size: rand(0.6, 1.2),
+        color: tint,
+        kind: Kind.Star,
+        gravity: -0.5,
+        drag: 1.5,
+        intensity: 3,
+      });
+    }
+    for (let k = 0; k < Math.round(30 * amount); k++) {
+      this.particles.emit(
+        this.flight.position,
+        vel.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize().multiplyScalar(rand(4, 10)).addScaledVector(this.flight.velocity, 0.6),
+        { life: rand(0.5, 0.9), size: rand(0.5, 1.1), color: WHITE, kind: Kind.Glow, drag: 3, intensity: 2 },
+      );
+    }
+  }
+
+  private crashBurst() {
+    const amount = this.particles.budget;
+    color.set(this.world.palette.accent);
+    for (let k = 0; k < Math.round(90 * amount); k++) {
+      this.particles.emit(
+        this.flight.position,
+        vel.set(rand(-1, 1), rand(-0.3, 1), rand(-1, 1)).normalize().multiplyScalar(rand(4, 18)).addScaledVector(this.flight.velocity, -0.1),
+        k % 3
+          ? { life: rand(0.6, 1.4), size: rand(0.4, 0.9), color: WHITE, kind: Kind.Star, gravity: 6, drag: 2, intensity: 2.4 }
+          : { life: rand(0.8, 1.4), size: rand(1.5, 3), color, kind: Kind.Wisp, gravity: -1, drag: 2.5, intensity: 0.8 },
+      );
+    }
+  }
+
+  /** Spray off the ground while skimming it, and sparks when really close */
+  private skimSpray(dt: number) {
+    const { x, y, z } = this.flight.position;
+    const ground = this.world.terrain.height(x, z);
+    const height = y - ground;
+    if (this.smoothProximity < 0.2 || height > 9 || FX.skimDust <= 0) return;
+    this.dustDebt += this.smoothProximity * 110 * FX.skimDust * this.particles.budget * dt;
+    const close = clamp((5 - height) / 4, 0, 1);
+    color.set(this.world.palette.top).lerp(WHITE, 0.4);
+    for (; this.dustDebt >= 1; this.dustDebt--) {
+      at.set(x + rand(-2.5, 2.5), ground + rand(0.2, 0.8), z + rand(-2.5, 2.5));
+      const spark = Math.random() < close * 0.35;
+      this.particles.emit(
+        at,
+        vel.copy(this.flight.velocity).multiplyScalar(spark ? 0.5 : 0.25).add(tmp.set(rand(-4, 4), rand(2, 7), rand(-4, 4))),
+        spark
+          ? { life: rand(0.3, 0.6), size: rand(0.25, 0.45), color: GOLD, kind: Kind.Star, gravity: 12, drag: 1, intensity: 2.5 }
+          : { life: rand(0.6, 1.1), size: rand(1, 2.2), color, kind: Kind.Wisp, gravity: 3, drag: 2.2, intensity: 0.55 },
+      );
+    }
+  }
+
+  /** Glitter drifting around the next gate, so it sparkles from afar */
+  private gateMotes(dt: number) {
+    if (this.raceState !== "racing" && this.raceState !== "countdown") return;
+    const ring = this.world.course.rings[this.checkpoints];
+    if (!ring || ring.position.distanceToSquared(this.flight.position) > 600 * 600) return;
+    this.moteDebt += 30 * this.particles.budget * dt;
+    const n = ring.normal;
+    if (Math.abs(n.y) < 0.95) basisA.crossVectors(n, THREE.Object3D.DEFAULT_UP).normalize();
+    else basisA.set(1, 0, 0);
+    basisB.crossVectors(n, basisA);
+    const tint = ring.finish ? GOLD : color.set(this.world.palette.accent);
+    for (; this.moteDebt >= 1; this.moteDebt--) {
+      const angle = Math.random() * Math.PI * 2;
+      const r = ring.radius * rand(0.9, 1.25);
+      at.copy(ring.position)
+        .addScaledVector(basisA, Math.cos(angle) * r)
+        .addScaledVector(basisB, Math.sin(angle) * r);
+      this.particles.emit(at, vel.copy(n).multiplyScalar(rand(-1.5, 1.5)), {
+        life: rand(1.5, 2.6),
+        size: rand(0.5, 1),
+        color: tint,
+        kind: Kind.Star,
+        gravity: -0.4,
+        drag: 0.8,
+        intensity: 2.2,
+      });
     }
   }
 
@@ -412,6 +607,8 @@ export class Game {
     const dt = this.lastFrame ? Math.min(0.1, (now - this.lastFrame) / 1000) : 0;
     this.lastFrame = now;
     this.elapsed += dt;
+    fxTime.value = this.elapsed;
+    this.adaptQuality(dt);
     const t = this.clock();
 
     if (this.raceState === "countdown") {
@@ -442,20 +639,19 @@ export class Game {
 
     // Draw between the last two physics states
     const alpha = clamp(this.accumulator / STEP, 0, 1);
-    this.body.position.lerpVectors(this.prevPosition, this.flight.position, alpha);
-    this.body.quaternion.slerpQuaternions(this.prevQuaternion, this.flight.quaternion, alpha);
+    const body = this.avatar.group;
+    body.position.lerpVectors(this.prevPosition, this.flight.position, alpha);
+    body.quaternion.slerpQuaternions(this.prevQuaternion, this.flight.quaternion, alpha);
     this.smoothProximity += (this.proximity - this.smoothProximity) * (1 - Math.exp(-dt * 8));
 
     const crashed = this.crashedAt !== null;
     if (!crashed) {
-      tmp2.set(0, 1, 0).applyQuaternion(this.body.quaternion);
-      this.trails.forEach((trail, i) => {
-        trail.push(tmp.copy(WINGTIPS[i]).applyQuaternion(this.body.quaternion).add(this.body.position), tmp2);
-        trail.opacity = clamp((this.flight.speed - 40) / 40 + this.smoothProximity, 0, 0.7);
-      });
+      this.avatar.update(dt, this.flight.speed, this.smoothProximity);
+      this.fx.update(dt, this.flight.speed, this.flight.velocity, this.smoothProximity);
+      this.skimSpray(dt);
       this.rig.update(
         dt,
-        this.body.position,
+        body.position,
         this.flight.forward,
         this.flight.up,
         this.flight.speed,
@@ -468,17 +664,23 @@ export class Game {
     this.debris.update(dt);
 
     const camera = this.rig.camera;
+    camera.updateMatrixWorld();
     this.view.updateChunks(camera.position.x, camera.position.z, 4);
-    this.view.update(camera, this.elapsed);
+    this.view.update(camera, dt);
+    this.gateMotes(dt);
+    const flying = !crashed && this.raceState !== "countdown";
+    this.speedLines.update(dt, body.position, flying ? this.flight.velocity : tmp.set(0, 0, 0), camera, this.particles.budget);
 
     const liveTime = t - INTERPOLATION_DELAY_MS;
-    this.live.forEach((pilot) => pilot.update(liveTime));
+    this.live.forEach((pilot) => pilot.update(liveTime, dt, camera.position));
     const racing = this.raceState !== "free";
-    this.ghosts.forEach((ghost) => ghost.update(racing ? t - this.startAt : -Infinity));
+    this.ghosts.forEach((ghost) => ghost.update(racing ? t - this.startAt : -Infinity, dt, camera.position));
+    this.particles.update();
 
-    this.audio.update(this.flight.speed, this.smoothProximity, !crashed && this.raceState !== "countdown");
+    this.audio.update(this.flight.speed, this.smoothProximity, flying);
     this.updateMarker();
-    this.renderer.render(this.scene, camera);
+    this.updateVignette(dt, flying);
+    this.render();
 
     if (now - this.lastHud > HUD_INTERVAL) {
       this.lastHud = now;
@@ -487,7 +689,7 @@ export class Game {
   };
 
   private hud(t: number): HudState {
-    const { x, y, z } = this.body.position;
+    const { x, y, z } = this.avatar.group.position;
     const raceTimeMs =
       this.raceState === "racing"
         ? t - this.startAt
@@ -571,17 +773,148 @@ export class Game {
     if (this.marker.textContent !== text) this.marker.textContent = text;
   }
 
+  private updateVignette(dt: number, flying: boolean) {
+    this.flash *= Math.exp(-dt * 3);
+    const rush = flying ? clamp((this.flight.speed - 55) / 50, 0, 1) * 0.55 + this.smoothProximity * 0.25 : 0;
+    const opacity = clamp((rush + this.flash * 0.6) * FX.vignette, 0, 1);
+    const text = opacity.toFixed(2);
+    if (this.vignette.style.opacity !== text) this.vignette.style.opacity = text;
+  }
+
+  // --- rendering -------------------------------------------------------------------
+
+  private get bloomOn(): boolean {
+    return this.quality === 2 && FX.bloom > 0;
+  }
+
+  private render() {
+    const camera = this.rig.camera;
+    // Particle sizes are in metres: keep the conversion in step with the zooming FOV
+    this.particles.setViewport(this.renderer.domElement.height, camera.fov);
+    if (this.bloomOn && !this.composer) void this.createComposer();
+    if (this.bloomOn && this.composer && this.bloomPass) {
+      this.bloomPass.strength = FX.bloom;
+      this.bloomPass.radius = FX.bloomRadius;
+      this.bloomPass.threshold = FX.bloomThreshold;
+      this.composer.render();
+    } else {
+      this.renderer.render(this.scene, camera);
+    }
+  }
+
+  /** Bloom post-processing: loaded on first use, so the low-quality path never downloads it */
+  private async createComposer() {
+    if (this.composerLoading) return;
+    this.composerLoading = true;
+    const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }] = await Promise.all([
+      import("three/examples/jsm/postprocessing/EffectComposer.js"),
+      import("three/examples/jsm/postprocessing/RenderPass.js"),
+      import("three/examples/jsm/postprocessing/UnrealBloomPass.js"),
+      import("three/examples/jsm/postprocessing/OutputPass.js"),
+    ]);
+    this.composerLoading = false;
+    if (!this.bloomOn || this.composer) return;
+    const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+    // Half floats keep colors above 1, so only really bright things bloom; 4× MSAA keeps edges clean
+    const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
+    const composer = new EffectComposer(this.renderer, target);
+    composer.setPixelRatio(Math.min(this.renderer.getPixelRatio(), COMPOSER_PIXEL_RATIO));
+    composer.setSize(this.container.clientWidth || 1, this.container.clientHeight || 1);
+    composer.addPass(new RenderPass(this.scene, this.rig.camera));
+    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), FX.bloom, FX.bloomRadius, FX.bloomThreshold);
+    composer.addPass(this.bloomPass);
+    composer.addPass(new OutputPass());
+    this.composer = composer;
+  }
+
+  private setQuality(quality: Quality) {
+    this.quality = quality;
+    if (!this.bloomOn && this.composer) {
+      this.composer.dispose();
+      this.bloomPass?.dispose();
+      this.composer = null;
+      this.bloomPass = null;
+    }
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, QUALITY[quality].pixelRatio));
+    this.particles.budget = QUALITY[quality].particles;
+    this.resize();
+  }
+
+  /** Steps the quality down if frames keep taking too long (never back up, so it can't flicker) */
+  private adaptQuality(dt: number) {
+    this.measured += dt;
+    if (!FX.autoQuality || this.quality === 0 || this.measured < 5 || dt >= 0.1) return;
+    this.slowFrames = dt > 1 / 40 ? this.slowFrames + dt : Math.max(0, this.slowFrames - dt * 0.5);
+    if (this.slowFrames > 2.5) {
+      this.slowFrames = 0;
+      this.measured = 0;
+      this.setQuality((this.quality - 1) as Quality);
+      if (import.meta.env.DEV) console.info(`[wingrace] frame rate low, quality now ${this.quality}`);
+    }
+  }
+
   private resize() {
     const width = this.container.clientWidth || 1;
     const height = this.container.clientHeight || 1;
     this.renderer.setSize(width, height, false);
+    this.composer?.setPixelRatio(Math.min(this.renderer.getPixelRatio(), COMPOSER_PIXEL_RATIO));
+    this.composer?.setSize(width, height);
     this.rig.resize(width / height);
+    this.particles.setViewport(height * this.renderer.getPixelRatio(), this.rig.camera.fov);
   }
 
   private async openTuning() {
     const { default: GUI } = await import("lil-gui");
-    const gui = new GUI({ title: "Flight tuning (?tune)" });
-    for (const key of Object.keys(FLIGHT) as (keyof typeof FLIGHT)[]) gui.add(FLIGHT, key);
-    this.gui = gui;
+    const gui = new GUI({ title: "Tuning (?tune)", width: 300 });
+    const save = () => saveTuning();
+
+    const view = gui.addFolder("Quality");
+    const settings = { quality: this.quality };
+    view
+      .add(settings, "quality", { High: 2, Medium: 1, Low: 0 })
+      .name("quality")
+      .onChange((q: Quality) => this.setQuality(q))
+      .listen();
+    view.add(FX, "autoQuality").name("auto quality").onChange(save);
+    const syncQuality = setInterval(() => (settings.quality = this.quality), 500);
+
+    // Physics isn't saved: a forgotten tweak shouldn't follow you into races
+    const flight = gui.addFolder("Flight physics (not saved)");
+    for (const key of Object.keys(FLIGHT) as (keyof typeof FLIGHT)[]) flight.add(FLIGHT, key);
+    flight.close();
+
+    for (const [title, group] of TUNING_GROUPS) {
+      const folder = gui.addFolder(title);
+      for (const key of Object.keys(group)) {
+        if (key === "autoQuality") continue;
+        const range = RANGES[key];
+        const controller =
+          typeof group[key] === "boolean" || !range
+            ? folder.add(group, key)
+            : folder.add(group, key, range[0], range[1], range[2] ?? (range[1] - range[0]) / 200);
+        controller.onChange(save);
+      }
+      folder.close();
+    }
+
+    const actions = {
+      barrelLeft: () => this.barrelRoll(-1),
+      barrelRight: () => this.barrelRoll(1),
+      copy: () => void navigator.clipboard?.writeText(JSON.stringify({ FLIGHT, ...Object.fromEntries(TUNING_GROUPS) }, null, 2)),
+      reset: () => {
+        resetTuning();
+        gui.controllersRecursive().forEach((c) => c.updateDisplay());
+      },
+    };
+    gui.add(actions, "barrelLeft").name("Barrel roll left (Q)");
+    gui.add(actions, "barrelRight").name("Barrel roll right (E)");
+    gui.add(actions, "copy").name("Copy settings as JSON");
+    gui.add(actions, "reset").name("Reset looks to defaults");
+    this.gui = {
+      destroy: () => {
+        clearInterval(syncQuality);
+        gui.destroy();
+      },
+    };
   }
 }

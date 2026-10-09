@@ -49,6 +49,7 @@ docker compose up -d --build
 | Mouse (click the view)    | Pitch and roll. The mouse acts like a stick.       |
 | `W` `S` / `↑` `↓`         | Dive / pull up (flight-stick style)                |
 | `A` `D` / `←` `→`         | Roll left / right. Banking turns you.              |
+| `Q` `E`, double-tap `A` `D` | Barrel roll (just for show; gamepad: `LB` `RB`)  |
 | Gamepad left stick        | Pitch and roll. `Y` respawns.                      |
 | `R`                       | Respawn at the last ring                           |
 | `M`                       | Mute                                               |
@@ -108,7 +109,21 @@ obstacles keep clear of it.
 an arcade, energy-based wingsuit. The nose points where you go, gravity along
 the flight path speeds you up or slows you down, drag caps the speed, and
 banking turns you. Physics runs at a fixed 120 Hz. Open the game with `?tune`
-(e.g. `http://localhost:5173/?seed=42&tune`) to tune every constant live.
+(e.g. `http://localhost:5173/?seed=42&tune`) to tune every constant live:
+flight physics, the pilot's animation, trails and particles, the crystal gates,
+the camera and the render quality. Look tweaks are remembered in the browser;
+physics tweaks aren't, so they can't follow you into a race.
+
+**Looks** ([`frontend/src/game/avatar.ts`](frontend/src/game/avatar.ts) and
+friends): the pilot is a cel-shaded little flyer with outlines, a cape, a scarf
+and feathered wings, all built from primitives at runtime. Its animation sits on
+top of the flight model and never changes it: the body leans into turns ahead
+of the physics, the wings flap harder when climbing, turning or slow and fold
+back in a dive, the cloth ripples with speed, and hard turns throw a barrel
+roll. Gates are cohorts of floating crystals that flare and burst when you fly
+through. One GPU particle system draws every mote, star and shard, and bright
+things bloom (High quality). The game steps its quality down by itself if the
+frame rate can't keep up.
 
 **Leaderboards and ghosts:** a finished run is uploaded with a 15 Hz recording
 of the flight. Each player's best run per seed keeps its ghost; the top three
@@ -127,6 +142,8 @@ finish that claims to be faster than its own clock allows.
 | `frontend/src/game/Game.ts`            | The game: loop, physics steps, race state, HUD data      |
 | `frontend/src/game/world/`             | Terrain, course, obstacles, palettes, and their meshes   |
 | `frontend/src/game/flight.ts`          | Flight model                                             |
+| `frontend/src/game/avatar.ts`          | The pilot's model and animation                          |
+| `frontend/src/game/tuning.ts`          | Every look-and-feel constant, for the `?tune` panel      |
 | `frontend/src/game/pilots.ts`          | Remote players and ghosts, with interpolation            |
 | `frontend/src/net/`                    | Server clock and the room connection (SSE + POST)        |
 | `frontend/src/session/`                | Solo and room sessions: wire a Game to the network and UI |

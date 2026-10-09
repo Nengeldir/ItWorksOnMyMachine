@@ -6,9 +6,16 @@ export interface ControlSettings {
   mouseSensitivity: number; // 0.25..3, 1 = default
 }
 
-export type InputAction = "respawn" | "mute";
+export type InputAction = "respawn" | "mute" | "barrelLeft" | "barrelRight";
 
 const DEAD_ZONE = 0.12;
+const DOUBLE_TAP_MS = 280;
+const ROLL_KEYS: Record<string, InputAction> = {
+  KeyA: "barrelLeft",
+  ArrowLeft: "barrelLeft",
+  KeyD: "barrelRight",
+  ArrowRight: "barrelRight",
+};
 
 function deadZone(value: number): number {
   if (Math.abs(value) < DEAD_ZONE) return 0;
@@ -34,6 +41,7 @@ export class Input {
   private stickX = 0;
   private stickY = 0;
   private padButtons: boolean[] = [];
+  private lastTap = { code: "", at: 0 };
 
   constructor(element: HTMLElement, settings: ControlSettings) {
     this.element = element;
@@ -68,6 +76,19 @@ export class Input {
     if (event.repeat) return;
     if (event.code === "KeyR") this.onAction?.("respawn");
     if (event.code === "KeyM") this.onAction?.("mute");
+    // Barrel rolls: Q / E, or double-tap a roll key
+    if (event.code === "KeyQ") this.onAction?.("barrelLeft");
+    if (event.code === "KeyE") this.onAction?.("barrelRight");
+    const roll = ROLL_KEYS[event.code];
+    if (roll) {
+      const now = performance.now();
+      if (this.lastTap.code === event.code && now - this.lastTap.at < DOUBLE_TAP_MS) {
+        this.onAction?.(roll);
+        this.lastTap = { code: "", at: 0 };
+      } else {
+        this.lastTap = { code: event.code, at: now };
+      }
+    }
   };
 
   private onKeyUp = (event: KeyboardEvent) => {
@@ -111,9 +132,11 @@ export class Input {
     if (pad) {
       roll += deadZone(pad.axes[0] ?? 0);
       pitch += deadZone(pad.axes[1] ?? 0);
-      // Y / triangle respawns, Start mutes
+      // Y / triangle respawns, the shoulder buttons barrel roll
       const pressed = pad.buttons.map((b) => b.pressed);
       if (pressed[3] && !this.padButtons[3]) this.onAction?.("respawn");
+      if (pressed[4] && !this.padButtons[4]) this.onAction?.("barrelLeft");
+      if (pressed[5] && !this.padButtons[5]) this.onAction?.("barrelRight");
       this.padButtons = pressed;
     }
 
