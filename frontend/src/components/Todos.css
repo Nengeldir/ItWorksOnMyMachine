@@ -1,0 +1,206 @@
+.todos {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 16px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+
+  h2 {
+    margin: 0;
+  }
+}
+
+/* White box with a subtle shadow, used for the table and the preview */
+.card,
+.table-container {
+  background-color: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 4px rgb(0 0 0 / 0.05);
+}
+
+/* Inputs */
+
+.prompt-form input,
+.form-field input,
+.form-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+  background-color: white;
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgb(0 123 255 / 0.15);
+  }
+
+  &:disabled {
+    background-color: var(--surface);
+    cursor: not-allowed;
+  }
+}
+
+.prompt-form {
+  display: flex;
+  gap: 12px;
+}
+
+/* Buttons */
+
+.primary-button,
+.secondary-button {
+  padding: 12px 20px;
+  border: none;
+  border-radius: var(--radius);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.2s;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.primary-button {
+  color: white;
+  background-color: var(--accent);
+
+  &:hover:not(:disabled) {
+    background-color: var(--accent-hover);
+  }
+}
+
+.secondary-button {
+  color: var(--muted);
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+
+  &:hover {
+    background-color: var(--border);
+  }
+}
+
+/* Preview of a generated todo */
+
+.preview {
+  padding: 24px;
+
+  h3 {
+    margin: 0 0 16px;
+  }
+}
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 16px;
+
+  .form-field {
+    flex: 1 1 200px;
+  }
+}
+
+.form-field {
+  margin-bottom: 16px;
+
+  label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+
+  textarea {
+    resize: vertical;
+  }
+}
+
+.button-group {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+/* Todo table */
+
+.table-container {
+  overflow-x: auto; /* Scroll the table, not the page, on small screens */
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 12px 16px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  font-size: 14px;
+  color: var(--muted);
+  background-color: var(--surface);
+}
+
+td {
+  overflow-wrap: anywhere;
+}
+
+td:nth-child(3) {
+  /* Deadline column */
+  white-space: nowrap;
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+td.empty {
+  text-align: center;
+  color: var(--muted);
+}
+
+.delete-button {
+  width: 32px;
+  height: 32px;
+  /* Center on the first line of text and line up with the table's right edge */
+  margin: -4px -8px -4px 0;
+  padding: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: none;
+  border-radius: var(--radius);
+  color: var(--muted);
+  background: none;
+  cursor: pointer;
+  transition:
+    color 0.2s,
+    background-color 0.2s;
+
+  svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  &:hover {
+    color: #dc3545;
+    background-color: #fdecee;
+  }
+}

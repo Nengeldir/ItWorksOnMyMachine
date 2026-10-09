@@ -1,0 +1,25 @@
+:root {
+  /* Shared colors and sizes, used as var(--accent) etc. in the component styles */
+  --accent: #007bff;
+  --accent-hover: #0056b3;
+  --text: #212529;
+  --muted: #495057;
+  --border: #dee2e6;
+  --surface: #f8f9fa;
+  --radius: 8px;
+
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--text);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  background-color: var(--surface);
+}

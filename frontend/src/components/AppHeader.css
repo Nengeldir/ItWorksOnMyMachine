@@ -1,0 +1,50 @@
+.app-header {
+  padding: 48px 20px;
+  text-align: center;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+
+  color: white;
+  background-color: #282c34;
+
+  h1 {
+    margin: 0;
+  }
+
+  p {
+    max-width: 560px;
+    margin: 0;
+  }
+
+  a {
+    color: #61dafb;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  .logo {
+    height: 120px;
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .logo {
+      animation: logo-spin infinite 20s linear;
+    }
+  }
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

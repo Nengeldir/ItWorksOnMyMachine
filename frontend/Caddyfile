@@ -1,0 +1,13 @@
+# Caddy serves the built React app and forwards API requests to the backend.
+# In development, the Vite dev server does the same (see vite.config.ts).
+:8080 {
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html # lets client-side routing (e.g. React Router) work on reload
+		file_server
+	}
+}

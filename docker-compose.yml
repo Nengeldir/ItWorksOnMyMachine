@@ -1,0 +1,14 @@
+services:
+  backend:
+    build: ./backend
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - 8080:8080 # The VIScon portal forwards your team's address to this port
+    depends_on:
+      - backend
+    restart: unless-stopped
