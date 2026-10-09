@@ -20,8 +20,10 @@ PLAYER_TIMEOUT_MS = 15_000
 EMPTY_ROOM_TIMEOUT_MS = 120_000
 # Snapshots go out when something moved, and at least this often
 SNAPSHOT_KEEPALIVE_MS = 1_000
-# Finish times may be this much shorter than the server measured (network, clocks)
+# A reported finish time must match the server's own clock within this much (network, clocks)
 FINISH_TOLERANCE_MS = 3_000
+# No course can be flown faster than this (~4 km at the 120 m/s top speed is 33 s)
+MIN_RACE_MS = 25_000
 MAX_PLAYERS = 12
 MAX_PENDING_EVENTS = 100
 
@@ -120,6 +122,18 @@ class RoomError(Exception):
     pass
 
 
+def check_finish_time(time_ms: int, elapsed_ms: int):
+    """The client's time has to match how long the server saw the run take.
+
+    This doesn't make cheating impossible (the server doesn't fly the course),
+    but you can't finish faster than you actually flew, or faster than physics allows.
+    """
+    if time_ms < MIN_RACE_MS:
+        raise RoomError("that's faster than anyone can fly this course")
+    if abs(time_ms - elapsed_ms) > FINISH_TOLERANCE_MS:
+        raise RoomError("finish time doesn't match the server's clock")
+
+
 class Room:
     def __init__(self, code: str, now: int | None = None):
         self.code = code
@@ -170,6 +184,13 @@ class Room:
 
     def join(self, user_id: str, name: str, now: int | None = None) -> Player:
         now = now if now is not None else now_ms()
+        # Coming back after a reload or a dropped connection: carry on as the same player
+        for player in self.players.values():
+            if player.user_id == user_id and not player.connected:
+                player.name = name
+                player.last_seen = now
+                self.notify(now)
+                return player
         if len(self.players) >= MAX_PLAYERS:
             raise RoomError("room is full")
         used = {p.color for p in self.players.values()}
@@ -240,11 +261,7 @@ class Room:
             raise RoomError("you are not in a running race")
         if player.finish_ms is not None:
             raise RoomError("you already finished")
-        # The client can't claim to be faster than the server saw it fly
-        elapsed = now - self.start_at
-        if time_ms < elapsed - FINISH_TOLERANCE_MS:
-            raise RoomError("finish time doesn't match the race clock")
-        time_ms = min(time_ms, elapsed + FINISH_TOLERANCE_MS)
+        check_finish_time(time_ms, now - self.start_at)
         player.finish_ms = time_ms
         self.results.append({"id": player.id, "name": player.name, "color": player.color, "time_ms": time_ms})
         self.results.sort(key=lambda r: r["time_ms"])

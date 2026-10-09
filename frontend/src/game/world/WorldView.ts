@@ -36,6 +36,7 @@ export class WorldView {
   private readonly materials: THREE.Material[] = [];
   private readonly geometries: THREE.BufferGeometry[] = [];
   private readonly ringMeshes: THREE.Mesh<THREE.TorusGeometry, THREE.MeshBasicMaterial>[] = [];
+  private readonly instanced: THREE.InstancedMesh[] = [];
   private readonly sky: THREE.Mesh;
   private readonly sun: THREE.Mesh;
   private readonly colors: { ground: THREE.Color; rock: THREE.Color; top: THREE.Color; accent: THREE.Color };
@@ -260,6 +261,7 @@ export class WorldView {
       rockMesh.setMatrixAt(i, matrix);
       rockMesh.setColorAt(i, tint(i, "rc"));
     });
+    this.instanced.push(pillarMesh, rockMesh);
     this.group.add(pillarMesh, rockMesh);
 
     const archMaterial = this.material(new THREE.MeshLambertMaterial({ color: this.colors.rock, flatShading: true }));
@@ -323,6 +325,7 @@ export class WorldView {
   dispose() {
     for (const mesh of this.chunks.values()) mesh.geometry.dispose();
     this.chunks.clear();
+    this.instanced.forEach((m) => m.dispose());
     this.geometries.forEach((g) => g.dispose());
     this.materials.forEach((m) => m.dispose());
     this.group.clear();

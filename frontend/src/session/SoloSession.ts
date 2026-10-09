@@ -20,12 +20,20 @@ export interface SoloState {
   result: SoloResult | null;
   leaderboard: LeaderboardEntry[];
   ghosts: string[];
+  error: string | null; // the game couldn't start (no WebGL)
 }
 
 /** A time trial against the clock and the best ghosts on one seed */
 export class SoloSession {
   readonly seed: number;
-  readonly store = new Store<SoloState>({ hud: null, stage: "ready", result: null, leaderboard: [], ghosts: [] });
+  readonly store = new Store<SoloState>({
+    hud: null,
+    stage: "ready",
+    result: null,
+    leaderboard: [],
+    ghosts: [],
+    error: null,
+  });
   private readonly clientId: string;
   private settings: Settings;
   private game: Game | null = null;
@@ -39,7 +47,18 @@ export class SoloSession {
   }
 
   mount(container: HTMLElement) {
-    this.game = new Game(container, {
+    try {
+      this.game = this.createGame(container);
+    } catch (e) {
+      console.error(e);
+      this.store.set({ error: `The game couldn't start: ${(e as Error).message}` });
+      return;
+    }
+    void this.loadLeaderboard();
+  }
+
+  private createGame(container: HTMLElement): Game {
+    return new Game(container, {
       seed: this.seed,
       clock: () => performance.now(),
       controls: this.settings,
@@ -47,7 +66,7 @@ export class SoloSession {
       events: {
         hud: (hud) => this.store.set({ hud }),
         raceStarted: () => {
-          // The server times the run too, so a finish time can't be faked
+          // The server times the run too and checks the finish time against its own clock
           this.runToken = startRun(this.seed)
             .then((r) => r.run_token)
             .catch(() => null);
@@ -55,7 +74,6 @@ export class SoloSession {
         finished: (result) => void this.finished(result),
       },
     });
-    void this.loadLeaderboard();
   }
 
   unmount() {

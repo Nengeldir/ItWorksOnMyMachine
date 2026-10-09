@@ -34,7 +34,9 @@ export class RoomSession {
   private game: Game | null = null;
   private sendTimer = 0;
   private messageTimer = 0;
-  private raceId = -1; // the race we were put on the start line for
+  // The race we were put on the start line for, by its start time: unlike race ids,
+  // start times stay unique when the backend restarts and the room starts over
+  private raceStart: number | null = null;
   private inRace = false;
 
   constructor(code: string, identity: Identity, settings: Settings) {
@@ -66,7 +68,7 @@ export class RoomSession {
     this.game?.dispose();
     this.game = null;
     this.container = null;
-    this.raceId = -1;
+    this.raceStart = null;
     this.inRace = false;
   }
 
@@ -108,11 +110,11 @@ export class RoomSession {
     );
 
     const raceOn = info.phase === "countdown" || info.phase === "racing";
-    if (raceOn && me?.racing && info.start_at !== null && this.raceId !== info.race_id) {
-      this.raceId = info.race_id;
+    if (raceOn && me?.racing && info.start_at !== null && this.raceStart !== info.start_at) {
+      this.raceStart = info.start_at;
       this.inRace = true;
       const slot = info.players.filter((p) => p.racing).findIndex((p) => p.id === selfId);
-      game.startCountdown(info.start_at, slot + 1);
+      game.startCountdown(info.start_at, Math.max(0, slot));
       this.store.set({ lastPlace: null });
     } else if (!raceOn && this.inRace) {
       // Race over (everyone finished or time ran out): back to free flight where you are

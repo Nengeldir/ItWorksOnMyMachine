@@ -117,3 +117,30 @@ def test_listener_wakes_on_events():
         return await asyncio.wait_for(waiter, 1)
 
     assert asyncio.run(scenario()) == ["a", "s2"]
+
+
+def test_finish_must_match_the_race_clock():
+    room = Room("ABC", now=T0)
+    alice = room.join("u1", "Alice", now=T0)
+    room.start(now=T0)
+    room.tick(T0 + COUNTDOWN_MS)
+
+    # Claiming to have taken longer than the server saw is rejected too
+    with pytest.raises(RoomError):
+        room.finish(alice, 60_000, now=room.start_at + 40_000)
+    # And nobody flies a course in 10 s, even if they wait 10 s to say so
+    with pytest.raises(RoomError):
+        room.finish(alice, 10_000, now=room.start_at + 10_000)
+
+
+def test_rejoin_resumes_a_disconnected_player():
+    room = Room("ABC", now=T0)
+    first = room.join("u1", "Alice", now=T0)
+    again = room.join("u1", "Alice B.", now=T0 + 1000)
+    assert again is first and again.name == "Alice B."
+
+    # A second tab that is still connected gets its own pilot
+    first.listeners.add(Listener())
+    other_tab = room.join("u1", "Alice", now=T0 + 2000)
+    assert other_tab is not first
+    assert len(room.players) == 2

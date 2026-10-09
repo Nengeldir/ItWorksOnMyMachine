@@ -64,7 +64,10 @@ export class Input {
   private onKeyDown = (event: KeyboardEvent) => {
     if (isTyping(event)) return;
     this.keys.add(event.code);
-    if (event.code.startsWith("Arrow") || event.code === "Space") event.preventDefault();
+    // Arrow keys would scroll the page; leave them alone on buttons and panels
+    const target = event.target as HTMLElement | null;
+    const atGame = !target || target === document.body || target === this.element;
+    if (atGame && event.code.startsWith("Arrow")) event.preventDefault();
     if (event.repeat) return;
     if (event.code === "KeyR") this.onAction?.("respawn");
     if (event.code === "KeyM") this.onAction?.("mute");

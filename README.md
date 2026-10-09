@@ -112,8 +112,10 @@ banking turns you. Physics runs at a fixed 120 Hz. Open the game with `?tune`
 
 **Leaderboards and ghosts:** a finished run is uploaded with a 15 Hz recording
 of the flight. Each player's best run per seed keeps its ghost; the top three
-fly along in time trials. The server times runs and races too, and rejects a
-finish that claims to be faster than its own clock allows.
+fly along in time trials. The server times runs and races too: a reported
+finish time has to match its own clock within 3 s, and nothing under 25 s
+counts. That stops casual cheating, not a determined cheater, since the server
+doesn't fly the course itself.
 
 ## Project Structure
 

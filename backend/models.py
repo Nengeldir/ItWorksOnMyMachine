@@ -10,7 +10,7 @@ Seed = Annotated[int, Field(ge=1, le=2_147_483_647)]
 RaceTime = Annotated[int, Field(ge=1_000, le=3_600_000)]
 
 GHOST_HZ_MAX = 30
-GHOST_SAMPLES_MAX = 15 * 600  # 10 minutes at 15 Hz
+GHOST_SAMPLES_MAX = 15 * 600  # 10 minutes at 15 Hz; clients thin out longer recordings
 
 
 class User(BaseModel):
