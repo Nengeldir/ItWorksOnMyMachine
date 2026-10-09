@@ -4,12 +4,11 @@ export interface Palette {
   name: string;
   horizon: string; // sky at the horizon, also the fog color
   zenith: string; // sky straight up
-  grass: string; // meadows on the valley floor
+  grass: string; // the islands' grassy tops
   forest: string; // pine needles, and the darker ground under them
   trunk: string;
   rock: string; // steep faces and the bare slopes below the snow
   snow: string;
-  water: string;
   cloud: string;
   accent: string; // the next ring
   sun: string;
@@ -28,7 +27,6 @@ export const PALETTES: readonly Palette[] = [
     trunk: "#6b4a2f",
     rock: "#93694a",
     snow: "#f4f6f8",
-    water: "#9fe2f0",
     cloud: "#ffffff",
     accent: "#ff4f9a",
     sun: "#fffaf0",
@@ -44,7 +42,6 @@ export const PALETTES: readonly Palette[] = [
     trunk: "#5a4634",
     rock: "#b3ab8e",
     snow: "#eeeee2",
-    water: "#a6dccb",
     cloud: "#f4f6ee",
     accent: "#ff7a3d",
     sun: "#fff8e8",
@@ -60,7 +57,6 @@ export const PALETTES: readonly Palette[] = [
     trunk: "#5a3b25",
     rock: "#8a6b58",
     snow: "#fffaf2",
-    water: "#95d4e6",
     cloud: "#fff8ee",
     accent: "#2b7fff",
     sun: "#fff1d6",
@@ -76,7 +72,6 @@ export const PALETTES: readonly Palette[] = [
     trunk: "#4a3530",
     rock: "#8a5c5e",
     snow: "#ffe8e2",
-    water: "#a9b8f0",
     cloud: "#ffd6cc",
     accent: "#00f0ff",
     sun: "#ffe0c8",
@@ -92,7 +87,6 @@ export const PALETTES: readonly Palette[] = [
     trunk: "#4d3b30",
     rock: "#7a8594",
     snow: "#ffffff",
-    water: "#86c2e6",
     cloud: "#ffffff",
     accent: "#ff3d5a",
     sun: "#ffffff",

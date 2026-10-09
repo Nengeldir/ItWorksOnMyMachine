@@ -183,3 +183,14 @@
 .ring-marker.finish::before {
   color: #ffd23f;
 }
+
+.hud-loading {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--panel);
+  padding: 0.5rem 1.2rem;
+  border-radius: 999px;
+  font-weight: 600;
+}

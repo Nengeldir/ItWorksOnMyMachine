@@ -1,11 +1,11 @@
 import { PerspectiveCamera, Vector3 } from "three";
-import type { Terrain } from "./world/terrain";
-import { clamp } from "./world/terrain";
+import { clamp } from "./math";
 
 const WORLD_UP = new Vector3(0, 1, 0);
 const desired = new Vector3();
 const blendedUp = new Vector3();
 const target = new Vector3();
+const pulled = new Vector3();
 
 /** Third-person chase camera: trails behind, banks with you, widens with speed */
 export class CameraRig {
@@ -40,7 +40,7 @@ export class CameraRig {
     up: Vector3,
     speed: number,
     proximity: number,
-    terrain: Terrain | null,
+    clearance: ((x: number, y: number, z: number) => number) | null,
   ) {
     const k = 1 - Math.exp(-dt * 7);
     this.offset.lerp(this.desiredOffset(forward, up, speed), k);
@@ -53,9 +53,17 @@ export class CameraRig {
       this.camera.position.y += (Math.random() - 0.5) * shake;
     }
 
-    if (terrain) {
-      const floor = terrain.height(this.camera.position.x, this.camera.position.z) + 1.5;
-      if (this.camera.position.y < floor) this.camera.position.y = floor;
+    // Behind rock? Pull in towards the pilot until the view is clear
+    if (clearance && clearance(this.camera.position.x, this.camera.position.y, this.camera.position.z) < 1.5) {
+      let clear = 0;
+      let blocked = 1;
+      for (let i = 0; i < 6; i++) {
+        const mid = (clear + blocked) / 2;
+        pulled.lerpVectors(position, this.camera.position, mid);
+        if (clearance(pulled.x, pulled.y, pulled.z) >= 1.5) clear = mid;
+        else blocked = mid;
+      }
+      this.camera.position.lerpVectors(position, this.camera.position, clear);
     }
 
     // Roll the horizon with the pilot, but only partly

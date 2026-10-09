@@ -1,10 +1,11 @@
 # Wingrace
 
 A Superflight-style wingsuit game for the browser, with multiplayer races.
-Every course is a low-poly mountain valley generated from a seed: a river,
-pine forests, snow-capped peaks, rock arches and the rings, the same for
-everyone on the same seed. Dive for speed, skim the trees and the water for
-style points and a boost, and beat your friends to the last ring.
+Every course is a field of low-poly floating islands generated from a seed:
+the same islands, tunnels, rock walls, needles and rings for everyone on the
+same seed. Every couple of seconds the racing line threads a gate. Dive for
+speed, skim the rock for style points and a boost, and beat your friends to
+the last ring.
 
 - **Race friends:** create a room, share the link, everyone flies the same map
   at the same time and sees each other live.
@@ -58,10 +59,11 @@ docker compose up -d --build
 | `Esc`                     | Free the mouse                                     |
 
 Pitch can be inverted in the menu. Diving turns height into speed, climbing
-turns speed back into height. Flying within a few metres of the terrain fills
+turns speed back into height. Flying within a few metres of rock or trees fills
 the proximity bar: you get style points with a growing multiplier and extra
-acceleration, so risky lines are faster. Crash and you respawn at your last
-ring, with the clock still running.
+acceleration, so risky lines are faster. Crash, or drop into the sea of clouds
+below the islands, and you respawn at your last ring, with the clock still
+running.
 
 ## How It Works
 
@@ -98,17 +100,23 @@ Trackmania. That keeps the backend small, and it works over plain HTTP:
   route can hold back SSE events; Caddy streams `text/event-stream` by itself.
 
 **Seeded worlds** ([`frontend/src/game/world/`](frontend/src/game/world)): the
-terrain is a heightmap function: a river valley that keeps dropping, foothills,
-and ridged-noise mountains, built from simplex noise and a seeded PRNG. Chunks
-are meshed on a 10 m grid around the camera with one flat color per triangle
-(grass, forest floor, rock, snow by height and steepness), which gives the
-low-poly look. Each chunk also gets its pine trees, placed from the seed and the
-chunk's position alone, so every client grows the same forest. Collisions use
-the same grid as the meshes, and trees, rocks and arches are simple shapes with
-signed distance functions, so crash checks and proximity scoring are a few lines
-of math. The racing line follows the valley through every ring, and trees and
-obstacles keep clear of it. Each seed also picks a palette: Alpine, Misty
-pines, Autumn, Dusk or Winter.
+racing line is a 3D curve that always descends (a wingsuit can't climb for
+long), with a gate every 95 to 130 m: an island to tunnel through, a wall with a
+hole, a slot between two islands, a squeeze between one above and one below, a
+slalom of rock needles, or a ring of stone. More islands float all around.
+
+All the rock is one signed distance field: simple shapes (flattened domes with a
+cone below, ellipsoids, needles, tori) melted together and roughened with 3D
+noise. A tube of 11 m around the racing line is carved out of everything, so
+every course can be flown, and wherever an island crosses the line you get a
+tunnel. Collisions and proximity scoring read the distance field directly.
+
+The meshes are cut from the same field with surface nets, in 96 m chunks on a
+6 m grid, by web workers (`mesher.worker.ts`) so the game never stutters. Every
+triangle gets one flat color (grass on top, rock on the sides, darker
+undersides, snow on the highest islands), which gives the low-poly look. Pines
+grow on flat grass, picked from the mesh itself. Each seed also picks a palette:
+Alpine, Misty pines, Autumn, Dusk or Winter.
 
 **Flight model** ([`frontend/src/game/flight.ts`](frontend/src/game/flight.ts)):
 an arcade, energy-based wingsuit. The nose points where you go, gravity along
@@ -133,7 +141,7 @@ doesn't fly the course itself.
 | `backend/models.py`                    | Request and response models (Pydantic)                   |
 | `backend/tests/`                       | pytest tests for rooms and the API                       |
 | `frontend/src/game/Game.ts`            | The game: loop, physics steps, race state, HUD data      |
-| `frontend/src/game/world/`             | Terrain, course, obstacles, palettes, and their meshes   |
+| `frontend/src/game/world/`             | Racing line, rock field, meshing workers, palettes, view |
 | `frontend/src/game/flight.ts`          | Flight model                                             |
 | `frontend/src/game/pilots.ts`          | Remote players and ghosts, with interpolation            |
 | `frontend/src/net/`                    | Server clock and the room connection (SSE + POST)        |
@@ -200,7 +208,7 @@ browser console, handy for teleporting around or poking at the race state.
 ## Ideas for Next Steps
 
 - Touch and tilt controls for phones
-- Floating islands: a 3D density function meshed with surface nets
+- More gate types (spirals, crumbling bridges) and difficulty settings for the tube radius
 - AI race commentary or course names through the hackathon's LLM proxy
 - Spectator camera that follows the race leader
 - Daily challenge history and per-ring split times
