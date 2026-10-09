@@ -1,107 +1,118 @@
+import type { GhostData, GhostRun } from "./game/ghost";
+
 export interface User {
   id: string;
   name: string;
+  verified: boolean; // logged in through the VIScon portal
 }
 
-export interface TodoItem {
-  id: number;
-  title: string;
-  description: string;
-  deadline: Date;
+export interface LeaderboardEntry {
+  rank: number;
+  name: string;
+  time_ms: number;
+  is_me: boolean;
 }
 
-export interface TodoItemForCreate {
-  title: string;
-  description: string;
-  deadline: Date;
+export interface RunResult {
+  rank: number;
+  personal_best_ms: number;
+  leaderboard: LeaderboardEntry[];
+}
+
+export interface RoomPlayer {
+  id: string;
+  name: string;
+  color: string;
+  racing: boolean;
+  finish_ms: number | null;
+}
+
+export interface RaceResult {
+  id: string;
+  name: string;
+  color: string;
+  time_ms: number;
+}
+
+export type RoomPhase = "lobby" | "countdown" | "racing";
+
+export interface RoomInfo {
+  type: "room";
+  code: string;
+  seed: number;
+  phase: RoomPhase;
+  start_at: number | null;
+  race_id: number;
+  players: RoomPlayer[];
+  results: RaceResult[];
+  server_time: number;
+}
+
+/** Positions of everyone in the room: [id, x, y, z, qx, qy, qz, qw, speed, checkpoints, t] */
+export interface Snapshot {
+  type: "snap";
+  t: number;
+  players: [string, number, number, number, number, number, number, number, number, number, number][];
+}
+
+export interface Joined {
+  id: string;
+  token: string;
+  room: RoomInfo;
 }
 
 export class ApiError extends Error {
+  readonly status: number;
+
   constructor(status: number, message: string) {
-    super(`${status} / ${message}`);
+    super(message);
     this.name = "ApiError";
+    this.status = status;
   }
 }
 
-async function request<T>(
-  endpoint: string,
-  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
-  body?: unknown,
-): Promise<T> {
-  const headers = {
-    "Content-Type": "application/json",
-  };
-
-  const config: RequestInit = {
+export async function request<T>(endpoint: string, method: "GET" | "POST" = "GET", body?: unknown): Promise<T> {
+  const response = await fetch(endpoint, {
     method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  };
-
-  const response = await fetch(endpoint, config);
-
-  // If the response is not OK (e.g., 404, 500), throw a custom error.
+    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
   if (!response.ok) {
-    const error = new ApiError(response.status, response.statusText);
-    alert(`${error.name}: ${error.message}`);
-    throw error;
+    let message = response.statusText;
+    try {
+      const detail = (await response.json()).detail;
+      if (typeof detail === "string") message = detail;
+    } catch {
+      // Not JSON
+    }
+    throw new ApiError(response.status, message);
   }
-
-  // For 204 No Content, there's no body to parse
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
+  if (response.status === 204) return undefined as T;
   return response.json();
 }
 
-// JSON has no date type, so the backend sends deadlines as strings
-function parseDeadline<T extends { deadline: Date }>(todo: T): T {
-  return { ...todo, deadline: new Date(todo.deadline) };
-}
-
 export function getMe(): Promise<User> {
-  return request(`/api/me`, "GET");
+  return request("/api/me");
 }
 
-export function getTodos(): Promise<TodoItem[]> {
-  return request<TodoItem[]>(`/api/todos`, "GET").then((todos) =>
-    todos.map(parseDeadline),
-  );
+export function getLeaderboard(seed: number, clientId: string): Promise<LeaderboardEntry[]> {
+  return request(`/api/leaderboard?seed=${seed}&client_id=${encodeURIComponent(clientId)}`);
 }
 
-export function createTodo(
-  title: string,
-  description: string,
-  deadline: Date,
-): Promise<TodoItem> {
-  return request<TodoItem>(`/api/todos`, "POST", {
-    title,
-    description,
-    deadline,
-  }).then(parseDeadline);
+export function getGhosts(seed: number, limit = 3): Promise<GhostRun[]> {
+  return request(`/api/ghosts?seed=${seed}&limit=${limit}`);
 }
 
-export function generateTodo(prompt: string): Promise<TodoItemForCreate> {
-  return request<TodoItemForCreate>(
-    `/api/todos/generate?prompt=${encodeURIComponent(prompt)}`,
-    "GET",
-  ).then(parseDeadline);
+export function startRun(seed: number): Promise<{ run_token: string }> {
+  return request("/api/runs/start", "POST", { seed });
 }
 
-export function deleteTodo(id: number): Promise<void> {
-  return request(`/api/todos/${id}`, "DELETE");
-}
-
-// Calls onChange whenever the todos change, e.g. in another tab.
-// Returns a function that stops listening (use it as the useEffect cleanup).
-export function subscribeToTodoChanges(onChange: () => void): () => void {
-  // Server-Sent Events: the browser keeps the request open and reconnects by itself
-  const events = new EventSource("/api/todos/events");
-  events.onmessage = (event) => {
-    if (JSON.parse(event.data).type === "todos_changed") {
-      onChange();
-    }
-  };
-  return () => events.close();
+export function finishRun(body: {
+  run_token: string;
+  time_ms: number;
+  client_id: string;
+  nickname: string;
+  ghost: GhostData;
+}): Promise<RunResult> {
+  return request("/api/runs/finish", "POST", body);
 }

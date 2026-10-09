@@ -1,0 +1,90 @@
+.menu {
+  min-height: 100vh;
+  padding: 3rem 1rem 4rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 1rem;
+  max-width: 1100px;
+  margin: 0 auto;
+  align-content: start;
+}
+
+body:has(.menu) {
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(255, 79, 154, 0.35), transparent 55%),
+    radial-gradient(ellipse at 90% 30%, rgba(0, 224, 255, 0.25), transparent 50%),
+    linear-gradient(180deg, #2a1a4a 0%, var(--bg) 70%);
+  background-attachment: fixed;
+}
+
+.menu-title {
+  grid-column: 1 / -1;
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.menu-title h1 {
+  font-size: clamp(3rem, 9vw, 5.5rem);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  font-style: italic;
+}
+
+.menu-title h1 span {
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  padding-right: 0.1em;
+}
+
+.menu-title p {
+  color: var(--muted);
+  font-size: 1.1rem;
+  margin: 0.5rem auto 0;
+  max-width: 34em;
+}
+
+.menu-card {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  backdrop-filter: blur(8px);
+}
+
+.menu-card.highlight {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 224, 255, 0.25);
+}
+
+.menu-card h2 {
+  font-size: 1.3rem;
+}
+
+.menu-card h3 {
+  font-size: 1rem;
+  margin-top: 0.6rem;
+  color: var(--muted);
+}
+
+.menu-card .row input {
+  flex: 1;
+}
+
+.menu-card .row form {
+  flex: 1;
+  min-width: 0;
+}
+
+.menu-card button {
+  white-space: nowrap;
+}
+
+.menu-card small {
+  opacity: 0.7;
+  font-weight: 500;
+}

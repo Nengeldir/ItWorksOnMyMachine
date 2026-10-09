@@ -2,7 +2,12 @@ services:
   backend:
     build: ./backend
     env_file:
-      - .env
+      - path: .env
+        required: false
+    environment:
+      DATA_DIR: /app/data # leaderboards and ghost runs, kept in the volume below
+    volumes:
+      - game-data:/app/data
     restart: unless-stopped
 
   frontend:
@@ -12,3 +17,6 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+
+volumes:
+  game-data:

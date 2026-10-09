@@ -1,105 +1,93 @@
 import asyncio
-from collections import defaultdict
-from datetime import datetime, timedelta
+import os
+import re
+import secrets
+from contextlib import asynccontextmanager
+from typing import Annotated
 from urllib.parse import unquote
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
-import ai
-from models import TodoItem, TodoItemForCreate, User
+from models import (
+    FinishRequest,
+    GhostRun,
+    JoinRequest,
+    LeaderboardEntry,
+    RunFinishRequest,
+    RunFinishResponse,
+    RunStartRequest,
+    RunStartResponse,
+    Seed,
+    StateRequest,
+    TokenRequest,
+    User,
+)
+from rooms import FINISH_TOLERANCE_MS, Listener, Player, Room, RoomError, RoomManager, encode, now_ms
+from store import Store
 
 # Load the .env file from the project root (Docker passes the variables in directly)
 load_dotenv()
 
-# Requests without login headers (public access, local development) share this user
-GUEST_USER = User(id="guest", name="Guest")
+ROOM_CODE = re.compile(r"^[A-Z0-9]{3,8}$")
+RUN_TOKEN_TTL_MS = 60 * 60 * 1000
+
+rooms = RoomManager()
+store = Store(os.path.join(os.getenv("DATA_DIR", "data"), "game.db"))
+# Solo time trials in progress: run token -> (seed, server time the clock started)
+solo_runs: dict[str, tuple[int, int]] = {}
 
 
-def default_todos() -> list[TodoItem]:
-    now = datetime.now()
-    return [
-        TodoItem(
-            id=1,
-            title="Find a great team",
-            description="Find a great team to work with",
-            deadline=now,
-        ),
-        TodoItem(
-            id=2,
-            title="Choose a project",
-            description="Choose a project to work on",
-            deadline=now + timedelta(hours=1),
-        ),
-        TodoItem(
-            id=3,
-            title="Interview people for need-finding",
-            description="Interview people for need-finding",
-            deadline=now + timedelta(hours=2),
-        ),
-        TodoItem(
-            id=4,
-            title="Come up with a lo-fi prototype",
-            description="Come up with a lo-fi prototype",
-            deadline=now + timedelta(hours=3),
-        ),
-    ]
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    # The tick loop moves races along and relays positions ~15 times a second
+    ticker = asyncio.create_task(rooms.run())
+    yield
+    ticker.cancel()
 
 
-class State:
-    def __init__(self):
-        # Mapping from user id to their todo items (in memory, lost on restart)
-        self.todos_by_user_id: dict[str, list[TodoItem]] = {}
-
-    def get_todos(self, user_id: str) -> list[TodoItem]:
-        # When a new user id is seen, initialize with the default todos
-        return self.todos_by_user_id.setdefault(user_id, default_todos())
-
-    def create_todo(self, user_id: str, item: TodoItemForCreate) -> TodoItem:
-        todos = self.get_todos(user_id)
-        next_id = max((todo.id for todo in todos), default=0) + 1
-        new_todo = TodoItem(
-            id=next_id,
-            title=item.title,
-            description=item.description,
-            deadline=item.deadline,
-        )
-        todos.append(new_todo)
-        return new_todo
-
-    def delete_todo(self, user_id: str, todo_id: int):
-        todos = self.get_todos(user_id)
-        self.todos_by_user_id[user_id] = [todo for todo in todos if todo.id != todo_id]
+app = FastAPI(lifespan=lifespan, docs_url="/api/docs", openapi_url="/api/openapi.json")
 
 
-state = State()
-
-# Open live update streams per user id (one queue per open tab)
-listeners: dict[str, set[asyncio.Queue]] = defaultdict(set)
-
-
-# Only call this from async endpoints: asyncio queues are not thread-safe
-def notify_todos_changed(user_id: str):
-    for queue in listeners[user_id]:
-        queue.put_nowait({"type": "todos_changed"})
-
-
-app = FastAPI(docs_url="/api/docs", openapi_url="/api/openapi.json")
+def clean_name(name: str) -> str:
+    return " ".join(name.split())[:24]
 
 
 # Every endpoint that needs the current user calls this with its request
-def extract_user(request: Request) -> User:
+def extract_user(request: Request, client_id: str = "", nickname: str = "") -> User:
     id = request.headers.get("X-User-Id", "").strip()
-    if not id:
-        return GUEST_USER
+    if id:
+        name = request.headers.get("X-User-Name")
+        # The VIScon proxy percent-encodes non-ASCII characters (e.g. "Zo%C3%AB" -> "Zoë")
+        name = unquote(name) if name else id
+        return User(id=id, name=clean_name(name) or id, verified=True)
 
-    name = request.headers.get("X-User-Name")
-    # The VIScon proxy percent-encodes non-ASCII characters (e.g. "Zo%C3%AB" -> "Zoë")
-    name = unquote(name) if name else id
+    # No portal login (local development, or access control disabled): trust the
+    # browser's own id and nickname. Good enough for a leaderboard among friends.
+    if client_id:
+        return User(id=f"guest:{client_id}", name=clean_name(nickname) or "Guest")
+    return User(id="guest", name="Guest")
 
-    return User(id=id, name=name)
+
+def room_code(code: str) -> str:
+    code = code.upper()
+    if not ROOM_CODE.match(code):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Room codes are 3 to 8 letters or digits")
+    return code
+
+
+def room_player(code: str, token: str) -> tuple[Room, Player]:
+    found = rooms.find(room_code(code), token)
+    if found is None:
+        # The room or player is gone (e.g. the backend restarted): the client rejoins
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not in this room, join again")
+    return found
+
+
+def room_error(e: RoomError) -> HTTPException:
+    return HTTPException(status.HTTP_409_CONFLICT, str(e))
 
 
 @app.get("/api/me", response_model=User)
@@ -107,53 +95,147 @@ def auth_me(request: Request):
     return extract_user(request)
 
 
-@app.get("/api/todos", response_model=list[TodoItem])
-def get_todos(request: Request):
-    user = extract_user(request)
-    return state.get_todos(user.id)
+@app.get("/api/time")
+def server_time():
+    """The server clock, so clients can agree on when a race starts."""
+    return {"t": now_ms()}
 
 
-@app.post("/api/todos", response_model=TodoItem, status_code=status.HTTP_201_CREATED)
-async def create_todo(request: Request, item: TodoItemForCreate):
-    user = extract_user(request)
-    todo = state.create_todo(user.id, item)
-    notify_todos_changed(user.id)
-    return todo
+# --- Race rooms ---------------------------------------------------------------
 
 
-@app.delete("/api/todos/{todo_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_todo(request: Request, todo_id: int):
-    user = extract_user(request)
-    state.delete_todo(user.id, todo_id)
-    notify_todos_changed(user.id)
+@app.post("/api/rooms/{code}/join")
+async def join_room(code: str, body: JoinRequest, request: Request):
+    user = extract_user(request, body.client_id, body.nickname)
+    room = rooms.get_or_create(room_code(code))
+    try:
+        player = room.join(user.id, user.name)
+    except RoomError as e:
+        raise room_error(e)
+    return {"id": player.id, "token": player.token, "room": room.info()}
+
+
+@app.get("/api/rooms/{code}")
+async def get_room(code: str):
+    room = rooms.rooms.get(room_code(code))
+    if room is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such room")
+    return room.info()
+
+
+def stream_player(code: str, token: Annotated[str, Query()]) -> tuple[Room, Player]:
+    # Runs before the stream opens, so a stale token gets a proper 404
+    return room_player(code, token)
 
 
 # Server-Sent Events: the response stays open and every yield sends an event to the browser.
-@app.get("/api/todos/events", response_class=EventSourceResponse)
-async def todo_events(request: Request):
-    user = extract_user(request)
-    queue = asyncio.Queue()
-    listeners[user.id].add(queue)
+@app.get("/api/rooms/{code}/stream", response_class=EventSourceResponse)
+async def room_stream(found: Annotated[tuple[Room, Player], Depends(stream_player)]):
+    room, player = found
+    listener = Listener()
+    player.listeners.add(listener)
+    listener.push_event(encode(room.info()))
     try:
         # Send something right away, as some proxies (like Vite's) hold the response until then
         yield ServerSentEvent(comment="connected")
         while True:
-            yield await queue.get()
+            for message in await listener.next():
+                yield ServerSentEvent(raw_data=message)
     finally:
-        listeners[user.id].discard(queue)
+        player.listeners.discard(listener)
+        player.last_seen = now_ms()
 
 
-@app.get("/api/todos/generate", response_model=TodoItemForCreate)
-def generate_todo(prompt: str):
+@app.post("/api/rooms/{code}/state", status_code=status.HTTP_204_NO_CONTENT)
+async def post_state(code: str, body: StateRequest):
+    room, player = room_player(code, body.token)
+    room.update_state(player, body.t, body.p, body.q, body.v, body.cp)
+
+
+@app.post("/api/rooms/{code}/start", status_code=status.HTTP_204_NO_CONTENT)
+async def start_race(code: str, body: TokenRequest):
+    room, _ = room_player(code, body.token)
     try:
-        todo = ai.generate_todo(prompt)
-        if todo is not None:
-            return todo
-    except Exception as e:
-        print(f"AI todo generation failed: {e!r}")
+        room.start()
+    except RoomError as e:
+        raise room_error(e)
 
-    # Fail gracefully: return a prefilled todo the user can complete by hand
-    return TodoItemForCreate(title=prompt, description="", deadline=datetime.now())
+
+@app.post("/api/rooms/{code}/map", status_code=status.HTTP_204_NO_CONTENT)
+async def new_map(code: str, body: TokenRequest):
+    room, _ = room_player(code, body.token)
+    try:
+        room.new_map()
+    except RoomError as e:
+        raise room_error(e)
+
+
+@app.post("/api/rooms/{code}/finish")
+async def finish_race(code: str, body: FinishRequest):
+    room, player = room_player(code, body.token)
+    try:
+        place = room.finish(player, body.time_ms)
+    except RoomError as e:
+        raise room_error(e)
+    best = store.add_run(room.seed, player.user_id, player.name, player.finish_ms or body.time_ms, body.ghost)
+    return {"place": place, "personal_best_ms": best}
+
+
+@app.post("/api/rooms/{code}/leave", status_code=status.HTTP_204_NO_CONTENT)
+async def leave_room(code: str, body: TokenRequest):
+    found = rooms.find(room_code(code), body.token)
+    if found:
+        room, player = found
+        room.leave(player)
+
+
+# --- Solo time trials and leaderboards ------------------------------------------
+
+
+@app.post("/api/runs/start", response_model=RunStartResponse)
+async def start_run(body: RunStartRequest):
+    """Called when a solo run's clock starts, so the server can check the finish time."""
+    now = now_ms()
+    for token, (_, started) in list(solo_runs.items()):
+        if now - started > RUN_TOKEN_TTL_MS:
+            del solo_runs[token]
+    token = secrets.token_urlsafe(16)
+    solo_runs[token] = (body.seed, now)
+    return RunStartResponse(run_token=token)
+
+
+@app.post("/api/runs/finish", response_model=RunFinishResponse)
+async def finish_run(body: RunFinishRequest, request: Request):
+    run = solo_runs.pop(body.run_token, None)
+    if run is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown or already finished run")
+    seed, started = run
+    if body.time_ms < now_ms() - started - FINISH_TOLERANCE_MS:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Finish time doesn't match the server clock")
+
+    user = extract_user(request, body.client_id, body.nickname)
+    best = store.add_run(seed, user.id, user.name, body.time_ms, body.ghost)
+    return RunFinishResponse(
+        rank=store.rank(seed, body.time_ms),
+        personal_best_ms=best,
+        leaderboard=store.leaderboard(seed, me=user.id),
+    )
+
+
+@app.get("/api/leaderboard", response_model=list[LeaderboardEntry])
+async def leaderboard(
+    request: Request,
+    seed: Seed,
+    client_id: str = "",
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+):
+    user = extract_user(request, client_id)
+    return store.leaderboard(seed, limit, me=user.id)
+
+
+@app.get("/api/ghosts", response_model=list[GhostRun])
+async def ghosts(seed: Seed, limit: Annotated[int, Query(ge=1, le=5)] = 3):
+    return store.ghosts(seed, limit)
 
 
 if __name__ == "__main__":

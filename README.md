@@ -1,83 +1,174 @@
-# VIScon Hackathon Template
+# Wingrace
 
-Welcome, hackers, to the VIScon Hackathon!
+A Superflight-style wingsuit game for the browser, with multiplayer races.
+Every course is a canyon generated from a seed: same seed, same canyon,
+rings, pillars, floating rocks and arches for everyone. Dive for speed, skim
+the rock for style points and a boost, and beat your friends to the last ring.
 
-This repository is a small but complete example app: a React frontend, a
-Python (FastAPI) backend with an AI-powered endpoint, and a web server (Caddy)
-that ties them together. It's meant to show you all the moving parts, so
-read it, change it, or yeet it completely :)
+- **Race friends:** create a room, share the link, everyone flies the same map
+  at the same time and sees each other live.
+- **Time trial:** race the clock on today's course, a random one or any seed,
+  against the ghosts of the fastest runs. Leaderboards per seed.
+
+Built on the VIScon hackathon template: React + Three.js in the browser,
+FastAPI behind Caddy on the team VM.
 
 ## Quick Start
 
 ```bash
-cp .env.sample .env
-# In .env: add your team's API key
 docker compose up --build
 ```
 
-Then open:
+Then open http://localhost:8080. API docs are at http://localhost:8080/api/docs.
 
-- **App:** http://localhost:8080
-- **API docs:** http://localhost:8080/api/docs
+No configuration is needed. A `.env` file is optional (see
+[`.env.sample`](.env.sample)); it only matters if you add LLM features.
 
 ## On Your Team VM
 
-The template is already running on your team VM, in `~/template`, at your
-team's address (see your team page in the portal). Its `.env` is prefilled,
-including a shared LLM key.
-
-> [!IMPORTANT]
-> The shared LLM key is only for trying out the demo and has a very limited
-> quota. For development and for your deployed app, use your team's own key:
-> set it as `LLM_API_KEY` in `.env`.
-
-After changing code or `.env`, redeploy with:
+Deploy or redeploy from the repository on the VM with:
 
 ```bash
-cd ~/template
 docker compose up -d --build
 ```
 
-- The portal forwards your team's address to port 8080 on the VM. If you
-  change the port, change it in the portal's network configuration too.
-- If you set the portal's access control to "Disabled", your app is public
-  and receives no user headers, so all visitors share one "Guest" user and
-  its todo list. Change `extract_user()` in [`backend/app.py`](backend/app.py)
-  if you want something else.
+- The portal forwards your team's address to port 8080 on the VM, where Caddy
+  listens.
+- Leaderboards and ghost runs live in SQLite on the `game-data` Docker volume,
+  so they survive redeploys. `docker compose down -v` wipes them.
+- With the portal's access control on, players are logged in and their portal
+  name shows up in rooms and on leaderboards. With it disabled, anyone can play
+  and picks a nickname; the browser remembers a random id for them.
 - Dev servers on the VM aren't reachable from outside. Forward the port over
-  SSH, e.g. `ssh -L 5173:localhost:5173 viscon@<your VM>` (VS Code Remote-SSH
-  does this automatically).
+  SSH, e.g. `ssh -L 5173:localhost:5173 viscon@<your VM>`.
 
-The portal's documentation covers the network configuration in more detail.
+## How to Play
 
-## Configuration
+| Input                     | Action                                             |
+| :------------------------ | :------------------------------------------------- |
+| Mouse (click the view)    | Pitch and roll. The mouse acts like a stick.       |
+| `W` `S` / `↑` `↓`         | Dive / pull up (flight-stick style)                |
+| `A` `D` / `←` `→`         | Roll left / right. Banking turns you.              |
+| Gamepad left stick        | Pitch and roll. `Y` respawns.                      |
+| `R`                       | Respawn at the last ring                           |
+| `M`                       | Mute                                               |
+| `Enter`                   | Start the run / the race, fly again                |
+| `N`                       | New map (in a room's lobby)                        |
+| `Esc`                     | Free the mouse                                     |
 
-All configuration lives in the `.env` file in the project root (see [`.env.sample`](.env.sample)).
+Pitch can be inverted in the menu. Diving turns height into speed, climbing
+turns speed back into height. Flying within a few metres of the terrain fills
+the proximity bar: you get style points with a growing multiplier and extra
+acceleration, so risky lines are faster. Crash and you respawn at your last
+ring, with the clock still running.
 
-| Variable       | Description                                                             |
-| :------------- | :---------------------------------------------------------------------- |
-| `LLM_API_BASE` | URL of an OpenAI-compatible API. Defaults to the hackathon's LLM proxy. |
-| `LLM_API_KEY`  | Your team's API key. The prefilled shared key is for the demo only.     |
-| `LLM_MODEL`    | The model id to use.                                                    |
+## How It Works
 
-Want to use OpenAI (or any other OpenAI-compatible provider) directly? Set
-`LLM_API_BASE=https://api.openai.com/v1` and use your own key.
+```
+Browser (each player)                         Team VM (docker compose)
+┌──────────────────────────────┐            ┌───────────────────────────────────┐
+│ Three.js game loop           │ POST state │ Caddy :8080                       │
+│  flight model, seeded world, │ ─15 Hz───▶ │  /        built game (compressed) │
+│  collisions, rings, ghosts   │            │  /api/*   ──▶ FastAPI :8000       │
+│ React: menu, lobby, HUD      │ ◀──SSE──── │           rooms, 15 Hz relay,     │
+└──────────────────────────────┘ snapshots  │           leaderboards (SQLite)   │
+                                            └───────────────────────────────────┘
+```
+
+**Players never collide**, so the server never simulates physics. Each browser
+flies its own pilot, and the server only relays positions, like the ghosts in
+Trackmania. That keeps the backend small, and it works over plain HTTP:
+
+- **Why not WebSockets?** They don't make it through the hackathon's network
+  (`502 Bad Gateway` when deployed). Server-Sent Events do.
+- **Down:** each client keeps one SSE stream open
+  (`GET /api/rooms/{code}/stream`). A tick loop in the backend pushes a
+  snapshot of the whole room 15 times a second, plus room events (joins,
+  countdown, finishes). A slow client never builds a backlog: newer snapshots
+  replace unsent ones.
+- **Up:** each client POSTs its position, rotation, speed and ring count every
+  66 ms, skipping a send while the previous one is still in flight.
+- **Smooth remote players:** clients draw others 120 ms in the past and
+  interpolate between snapshots, extrapolating briefly when one is late.
+- **Same start for everyone:** clients estimate the server clock from a few
+  `GET /api/time` round trips, and the server sends the race start as a server
+  timestamp.
+- **Caddy:** compression is only on for static files. `encode` on the `/api`
+  route can hold back SSE events; Caddy streams `text/event-stream` by itself.
+
+**Seeded worlds** ([`frontend/src/game/world/`](frontend/src/game/world)): the
+terrain is a heightmap function, a meandering canyon that keeps dropping, built
+from simplex noise and a seeded PRNG. Chunks are meshed on an 8 m grid around
+the camera. Collisions use the same grid, and the obstacles are simple shapes
+with signed distance functions, so crash checks and proximity scoring are a
+few lines of math. The racing line follows the canyon through every ring, and
+obstacles keep clear of it.
+
+**Flight model** ([`frontend/src/game/flight.ts`](frontend/src/game/flight.ts)):
+an arcade, energy-based wingsuit. The nose points where you go, gravity along
+the flight path speeds you up or slows you down, drag caps the speed, and
+banking turns you. Physics runs at a fixed 120 Hz. Open the game with `?tune`
+(e.g. `http://localhost:5173/?seed=42&tune`) to tune every constant live.
+
+**Leaderboards and ghosts:** a finished run is uploaded with a 15 Hz recording
+of the flight. Each player's best run per seed keeps its ghost; the top three
+fly along in time trials. The server times runs and races too, and rejects a
+finish that claims to be faster than its own clock allows.
+
+## Project Structure
+
+| Path                                   | Purpose                                                  |
+| :------------------------------------- | :------------------------------------------------------- |
+| `backend/app.py`                       | API endpoints, login headers, solo runs                  |
+| `backend/rooms.py`                     | Rooms, race state machine, SSE listeners, tick loop      |
+| `backend/store.py`                     | SQLite runs, leaderboards and ghosts                     |
+| `backend/models.py`                    | Request and response models (Pydantic)                   |
+| `backend/tests/`                       | pytest tests for rooms and the API                       |
+| `frontend/src/game/Game.ts`            | The game: loop, physics steps, race state, HUD data      |
+| `frontend/src/game/world/`             | Terrain, course, obstacles, palettes, and their meshes   |
+| `frontend/src/game/flight.ts`          | Flight model                                             |
+| `frontend/src/game/pilots.ts`          | Remote players and ghosts, with interpolation            |
+| `frontend/src/net/`                    | Server clock and the room connection (SSE + POST)        |
+| `frontend/src/session/`                | Solo and room sessions: wire a Game to the network and UI |
+| `frontend/src/components/`             | React screens: menu, HUD, lobby and result panels        |
+| `frontend/Caddyfile`                   | Static files, compression, `/api` to the backend         |
+
+## API
+
+All routes start with `/api`; interactive docs are at `/api/docs`.
+
+| Method | Path                       | Description                                              |
+| :----- | :------------------------- | :------------------------------------------------------- |
+| `GET`  | `/api/me`                  | The current user (portal login or guest)                 |
+| `GET`  | `/api/time`                | Server clock in ms, for clock sync                       |
+| `POST` | `/api/rooms/{code}/join`   | Join (or create) a room; returns your id and token       |
+| `GET`  | `/api/rooms/{code}/stream` | SSE: room events and position snapshots                  |
+| `POST` | `/api/rooms/{code}/state`  | Your position, rotation, speed and rings passed          |
+| `POST` | `/api/rooms/{code}/start`  | Start a race (5 s countdown)                             |
+| `POST` | `/api/rooms/{code}/map`    | New random seed (lobby only)                             |
+| `POST` | `/api/rooms/{code}/finish` | Report your finish time and ghost                        |
+| `POST` | `/api/rooms/{code}/leave`  | Leave the room                                           |
+| `GET`  | `/api/rooms/{code}`        | Room state, for debugging                                |
+| `POST` | `/api/runs/start`          | Start the server's clock for a time trial                |
+| `POST` | `/api/runs/finish`         | Submit a time trial with its ghost                       |
+| `GET`  | `/api/leaderboard?seed=`   | Best time per player on a seed                           |
+| `GET`  | `/api/ghosts?seed=`        | Ghosts of the fastest runs on a seed                     |
 
 ## Local Development (without Docker)
 
-For fast iteration with hot reloading, run the backend and frontend directly
-in two terminals. The team VMs come with the right versions (Python 3.14,
-Node 24).
+For hot reloading, run the backend and frontend in two terminals. The team VMs
+come with the right versions (Python 3.14, Node 24).
 
-**Backend** (reads the root `.env` automatically):
+**Backend:**
 
 ```bash
 cd backend
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-dev.txt
 
-python app.py
+python app.py      # serves on :8000, SQLite in backend/data/
+pytest             # runs the tests
 ```
 
 **Frontend:**
@@ -85,156 +176,23 @@ python app.py
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev        # http://localhost:5173, forwards /api to :8000
+npm run lint
+npm run build
 ```
 
-Then open http://localhost:5173. The dev server forwards all `/api` requests
-to the backend on port 8000 (see [`vite.config.ts`](frontend/vite.config.ts)).
+To test multiplayer on one machine, open the room in two different browsers
+(or one on `localhost` and one on `127.0.0.1`). Without HTTP/2, a browser
+allows only 6 connections per host, and several tabs with live streams use
+them up. Deployed, HTTP/2 lifts the limit.
 
-No authentication headers are added locally, so you're logged in as "Guest".
-To test as a specific user, send `X-User-Id` and `X-User-Name` yourself, e.g.
-`curl localhost:8000/api/me -H 'X-User-Id: einstein@ethz.ch' -H 'X-User-Name: Albert Einstein'`.
+In development, the running game is available as `window.__game` in the
+browser console, handy for teleporting around or poking at the race state.
 
-## Backend
+## Ideas for Next Steps
 
-A Python [FastAPI](https://fastapi.tiangolo.com/) app that provides a REST API
-for a multi-user todo list. Todos are stored in memory, so they're gone after a
-restart. Plug in a database when you need one.
-
-| File                             | Purpose                                     |
-| :------------------------------- | :------------------------------------------ |
-| [`app.py`](backend/app.py)       | API endpoints, authentication and app state |
-| [`models.py`](backend/models.py) | Data models (Pydantic)                      |
-| [`ai.py`](backend/ai.py)         | LLM call that turns a prompt into a todo    |
-
-### API Endpoints
-
-All backend routes start with `/api`. Interactive docs are available at `/api/docs`.
-
-| Method   | Path                   | Description                                         |
-| :------- | :--------------------- | :-------------------------------------------------- |
-| `GET`    | `/api/me`              | Get the current user.                               |
-| `GET`    | `/api/todos`           | Get all todos for the current user.                 |
-| `POST`   | `/api/todos`           | Create a new todo for the current user.             |
-| `DELETE` | `/api/todos/{todo_id}` | Delete a specific todo by its ID.                   |
-| `GET`    | `/api/todos/generate`  | Suggests a new todo from a natural language prompt. |
-| `GET`    | `/api/todos/events`    | Event stream that tells you when your todos change. |
-
-### Authentication
-
-When deployed, authentication is handled by the VIScon portal. When a user
-logs in, the portal adds these headers to every request forwarded to your app:
-
-- `X-User-Id`: The user's email address, which uniquely identifies them.
-- `X-User-Name`: The user's full name, with non-ASCII characters
-  percent-encoded (`Zo%C3%AB` for "Zoë").
-
-The backend reads and decodes them in `extract_user()` and uses `X-User-Id`
-to keep a separate todo list for each user. Requests without these headers
-(locally, or with the portal's access control disabled) all share one "Guest"
-user.
-
-Only trust these headers while port 8080 is reachable through the portal
-alone, which is the default. If you open the port in your VM's firewall,
-anyone can call your app directly and send fake headers.
-
-### AI-Powered Todo Generation
-
-`GET /api/todos/generate` sends your prompt to an LLM using the
-[`openai`](https://github.com/openai/openai-python) Python package and asks for
-an answer in the shape of a todo item (structured output). The prompt includes
-a few examples to show the model what we expect ("few-shot prompting").
-
-If the LLM can't be reached (e.g. the API key is missing), the endpoint logs
-the error and returns a todo prefilled with your prompt, so the app keeps
-working.
-
-### Live Updates (Server-Sent Events)
-
-Open the app in two tabs side by side and add a todo in one: it shows up in
-the other right away. Each tab keeps a request to `/api/todos/events` open.
-When a todo is created or deleted, the backend sends
-`{"type": "todos_changed"}` to all open streams of that user, and the tabs
-reload their todos over the normal REST API.
-
-- Backend: `todo_events()` and `notify_todos_changed()` in
-  [`app.py`](backend/app.py), using FastAPI's `EventSourceResponse`. FastAPI
-  also sends a keep-alive ping every 15 seconds so proxies don't close idle
-  streams.
-- Frontend: `subscribeToTodoChanges()` in
-  [`api.ts`](frontend/src/api.ts) uses the browser's
-  `EventSource`, which reconnects by itself (e.g. when the backend restarts).
-
-Why not WebSockets? Server-Sent Events are plain HTTP, so they pass every
-proxy between the browser and your VM. WebSockets currently don't make it
-through the hackathon's network (you get a `502 Bad Gateway` when deployed),
-even though they work locally. For server-to-browser updates like these, you
-don't need them: send data the other way with normal `fetch` requests.
-
-Prefer a library? [Socket.IO](https://socket.io/) works too, e.g. for chat
-rooms. When deployed, it automatically uses its built-in HTTP long-polling
-transport. A few tips to get it running:
-
-- **Keep the default transports**, so Socket.IO can pick long-polling by
-  itself. Many tutorials set `transports: ["websocket"]`; just leave that out.
-- **Mount it under `/api`**, so its requests reach the backend:
-  `socketio_path="/api/socket.io"` on the server and
-  `path: "/api/socket.io"` on the client.
-- **Run a single backend process**, as the template already does, so all
-  requests of a connection reach the same process.
-- Each message is a regular HTTP request, which is plenty for chats,
-  notifications and similar features.
-
-Open streams live in memory in the backend process, like the todos. With
-several workers or replicas, each only knows its own streams. Locally, browsers
-allow only 6 open connections per host, so with many tabs open on the dev
-server, requests start to hang (deployed, HTTP/2 lifts this limit).
-
-## Frontend
-
-A [React](https://react.dev/) app written in TypeScript and built with
-[Vite](https://vite.dev/). It talks to the backend with the browser's `fetch`
-API and gets live updates with `EventSource`.
-
-| File                                         | Purpose                                   |
-| :------------------------------------------- | :---------------------------------------- |
-| [`src/App.tsx`](frontend/src/App.tsx)        | Main component, loads the current user    |
-| [`src/api.ts`](frontend/src/api.ts)          | All backend requests and their types      |
-| [`src/components/`](frontend/src/components) | UI components (header, todo form & table) |
-| [`public/`](frontend/public)                 | Static files like images, served as-is    |
-
-Useful commands (run in `frontend/`):
-
-- `npm run dev`: start the dev server with hot reloading
-- `npm run build`: type-check and build for production into `dist/`
-- `npm run lint`: check the code with ESLint
-
-## Project Structure
-
-```
-.
-├── docker-compose.yml   # The two services: backend and frontend
-├── .env.sample          # Configuration template, copy to .env
-├── backend/             # FastAPI app (see "Backend")
-│   └── Dockerfile
-└── frontend/            # React app (see "Frontend")
-    ├── Caddyfile        # Routing: /api to the backend, the rest to the React app
-    └── Dockerfile       # Builds the app, then serves it with Caddy
-```
-
-## Adding a Service
-
-All traffic enters through Caddy on port 8080, configured in
-[`frontend/Caddyfile`](frontend/Caddyfile). To add a service (say, a second
-API under `/ml`), add it to [`docker-compose.yml`](docker-compose.yml) and
-give it its own `handle` block in the Caddyfile, next to the `/api` one:
-
-```
-handle /ml/* {
-	reverse_proxy ml:5000
-}
-```
-
-Containers reach each other by their service name (`backend`, `ml`, …).
-Rebuild with `docker compose up --build`. For local development, add the
-same prefix to the proxy in [`vite.config.ts`](frontend/vite.config.ts).
+- Touch and tilt controls for phones
+- Floating islands: a 3D density function meshed with surface nets
+- AI race commentary or course names through the hackathon's LLM proxy
+- Spectator camera that follows the race leader
+- Daily challenge history and per-ring split times

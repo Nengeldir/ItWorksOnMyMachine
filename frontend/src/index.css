@@ -1,25 +1,191 @@
 :root {
-  /* Shared colors and sizes, used as var(--accent) etc. in the component styles */
-  --accent: #007bff;
-  --accent-hover: #0056b3;
-  --text: #212529;
-  --muted: #495057;
-  --border: #dee2e6;
-  --surface: #f8f9fa;
-  --radius: 8px;
+  --bg: #0b0d1a;
+  --panel: rgba(12, 14, 30, 0.78);
+  --panel-border: rgba(255, 255, 255, 0.12);
+  --text: #f3f4ff;
+  --muted: #a6abc9;
+  --accent: #00e0ff;
+  --accent-2: #ff4f9a;
+  --good: #5dffa8;
+  --bad: #ff6b6b;
+  --radius: 12px;
 
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+  font-family:
+    "Inter",
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  line-height: 1.45;
   color: var(--text);
-
+  background: var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
-  background-color: var(--surface);
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.15;
+}
+
+button {
+  font: inherit;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 0.5em 1.1em;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    transform 0.1s;
+}
+
+button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+button.primary {
+  background: linear-gradient(135deg, var(--accent), #6c7bff);
+  color: #071018;
+  font-weight: 700;
+  border: none;
+}
+
+button.primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #5cefff, #8a96ff);
+}
+
+input {
+  font: inherit;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 0.5em 0.75em;
+  min-width: 0;
+}
+
+input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+kbd {
+  font: inherit;
+  font-size: 0.8em;
+  padding: 0.05em 0.45em;
+  border-radius: 5px;
+  border: 1px solid currentColor;
+  opacity: 0.8;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.9em;
+  margin: 0.2em 0 0.6em;
+}
+
+.error {
+  color: var(--bad);
+}
+
+.row {
+  display: flex;
+  gap: 0.5em;
+  align-items: center;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+  margin: 0.6em 0;
+}
+
+.field > span {
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
+.check {
+  display: flex;
+  gap: 0.5em;
+  align-items: center;
+  margin: 0.6em 0;
+}
+
+.dot {
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  border-radius: 50%;
+  flex: none;
+}
+
+.leaderboard {
+  list-style: none;
+  padding: 0;
+  margin: 0.4em 0;
+}
+
+.leaderboard li {
+  display: grid;
+  grid-template-columns: 2em 1fr auto;
+  gap: 0.5em;
+  padding: 0.3em 0.5em;
+  border-radius: 6px;
+}
+
+.leaderboard li:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.leaderboard li.me {
+  background: rgba(0, 224, 255, 0.16);
+}
+
+.leaderboard .rank {
+  color: var(--muted);
+}
+
+.leaderboard .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard .time {
+  font-variant-numeric: tabular-nums;
+}
+
+.controls .keys {
+  padding-left: 1.1em;
+  margin: 0.4em 0;
+  color: var(--muted);
+  font-size: 0.9em;
 }
