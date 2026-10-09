@@ -42,7 +42,7 @@ export class GameAudio {
     this.windGain.gain.value = 0;
     this.loop().connect(this.windFilter).connect(this.windGain).connect(this.master);
 
-    // Rush: a hiss when skimming the terrain
+    // Rush: a hiss when skimming the rock
     const rushFilter = ctx.createBiquadFilter();
     rushFilter.type = "bandpass";
     rushFilter.frequency.value = 2400;

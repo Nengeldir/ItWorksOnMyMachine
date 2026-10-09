@@ -1,5 +1,5 @@
 import type { FlightInput } from "./flight";
-import { clamp } from "./world/terrain";
+import { clamp } from "./math";
 
 export interface ControlSettings {
   invertPitch: boolean;

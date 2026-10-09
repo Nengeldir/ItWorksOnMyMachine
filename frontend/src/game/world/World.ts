@@ -1,41 +1,38 @@
 import { Vector3 } from "three";
-import { buildCourse, buildObstacles, type Course } from "./course";
-import { Forest } from "./forest";
-import { type Obstacle, ObstacleGrid } from "./obstacles";
+import { Course } from "./course";
+import { RockField } from "./islands";
 import { type Palette, paletteFor } from "./palette";
-import { Terrain } from "./terrain";
+import { TreeIndex } from "./trees";
 
-// Distances beyond this don't matter for scoring, so obstacle lookups can stop there
+// Distances beyond this don't matter for scoring, so lookups can stop there
 export const PROXIMITY_RANGE = 12;
+/** Fall this far below the racing line and you're lost in the clouds */
+const ABYSS = 240;
 
-/** Everything a seed decides: terrain, river, forests, course, obstacles, colors. No rendering. */
+/** Everything a seed decides: the line, the islands, the colors. No rendering. */
 export class World {
   readonly seed: number;
-  readonly terrain: Terrain;
   readonly course: Course;
-  readonly obstacles: Obstacle[];
-  readonly forest: Forest;
+  readonly rock: RockField;
   readonly palette: Palette;
-  private readonly grid: ObstacleGrid;
+  /** Trees grow on the island tops; chunks add them as they are meshed */
+  readonly trees = new TreeIndex(PROXIMITY_RANGE);
 
   constructor(seed: number) {
     this.seed = seed;
-    this.terrain = new Terrain(seed);
-    this.course = buildCourse(seed, this.terrain);
-    this.obstacles = buildObstacles(seed, this.terrain, this.course);
-    this.grid = new ObstacleGrid(this.obstacles, PROXIMITY_RANGE);
-    this.forest = new Forest(seed, this.terrain, this.course, PROXIMITY_RANGE);
+    this.course = new Course(seed);
+    this.rock = new RockField(seed, this.course);
     this.palette = paletteFor(seed);
   }
 
-  /** Distance from a point to the nearest surface: ground, water, rock or tree (negative inside) */
+  /** Distance from a point to the nearest rock or tree (negative inside) */
   distance(x: number, y: number, z: number): number {
-    return Math.min(
-      this.terrain.distance(x, y, z),
-      this.terrain.waterDistance(x, y, z),
-      this.grid.distance(x, y, z),
-      this.forest.distance(x, y, z),
-    );
+    return Math.min(this.rock.distance(x, y, z), this.trees.distance(x, y, z));
+  }
+
+  /** Below the islands, there is only the sea of clouds */
+  lost(y: number, z: number): boolean {
+    return y < this.course.y(z) - ABYSS;
   }
 
   /** Where to put a pilot who has passed `checkpoints` rings */
@@ -45,8 +42,6 @@ export class World {
       return { position: start.clone(), direction: startDirection.clone() };
     }
     const ring = rings[Math.min(checkpoints, rings.length) - 1];
-    const next = rings[checkpoints];
-    const direction = next ? next.position.clone().sub(ring.position).normalize() : ring.normal.clone();
-    return { position: ring.position.clone().addScaledVector(ring.normal, 4), direction };
+    return { position: ring.position.clone().addScaledVector(ring.normal, 4), direction: ring.normal.clone() };
   }
 }

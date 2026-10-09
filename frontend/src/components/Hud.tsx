@@ -26,6 +26,7 @@ const Hud = ({ hud }: { hud: HudState }) => {
       )}
       {go && <div className="hud-big go">GO!</div>}
       {hud.crashed && <div className="hud-big crashed">Crashed!</div>}
+      {hud.loading && hud.raceState === "free" && <div className="hud-loading">Building islands…</div>}
 
       {hud.standings.length > 1 && (
         <ol className="hud-standings">
@@ -51,7 +52,7 @@ const Hud = ({ hud }: { hud: HudState }) => {
         <div className="hud-style">
           Style {hud.style.toLocaleString()} {hud.multiplier > 1 && <b>×{hud.multiplier}</b>}
         </div>
-        <div className="hud-altitude">{hud.altitude} m above ground</div>
+        <div className="hud-altitude">{hud.clearance < 40 ? `${hud.clearance} m to the rock` : "\u00a0"}</div>
       </div>
 
       {!hud.locked && (

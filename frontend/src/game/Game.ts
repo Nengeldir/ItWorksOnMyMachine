@@ -8,7 +8,7 @@ import { type ControlSettings, Input } from "./input";
 import { INTERPOLATION_DELAY_MS, Pilot, type PilotSample } from "./pilots";
 import { Trail } from "./trail";
 import { WINGTIPS, createWingsuit } from "./wingsuit";
-import { clamp } from "./world/terrain";
+import { clamp } from "./math";
 import { World } from "./world/World";
 import { WorldView } from "./world/WorldView";
 
@@ -38,7 +38,8 @@ export interface HudState {
   seed: number;
   paletteName: string;
   speedKmh: number;
-  altitude: number;
+  clearance: number; // metres to the nearest rock or tree
+  loading: boolean; // the islands near you are still being built
   raceState: RaceState;
   raceTimeMs: number | null;
   countdown: number | null; // whole seconds left
@@ -184,6 +185,9 @@ export class Game {
 
   private startAudio = () => this.audio.start();
 
+  /** Keeps the camera out of the rock */
+  private clearance = (x: number, y: number, z: number) => this.world.rock.distance(x, y, z);
+
   get seed(): number {
     return this.world.seed;
   }
@@ -198,8 +202,6 @@ export class Game {
     this.world = new World(seed);
     this.view = new WorldView(this.world, this.scene);
     this.scene.add(this.view.group);
-    const { start } = this.world.course;
-    this.view.updateChunks(start.x, start.z, Infinity);
     this.setGhosts([]);
     this.style = 0;
     this.freeFlight(true);
@@ -355,7 +357,7 @@ export class Game {
 
     const { x, y, z } = this.flight.position;
     const distance = this.world.distance(x, y, z);
-    if (distance < CRASH_DISTANCE) {
+    if (distance < CRASH_DISTANCE || this.world.lost(y, z)) {
       this.crash();
       return;
     }
@@ -427,9 +429,11 @@ export class Game {
     }
 
     this.input0 = this.input.sample(dt);
+    // Before a race, wait for the islands around you to show up: no flying into invisible rock
+    const waiting = !this.view.ready && this.raceState === "free";
     if (this.crashedAt !== null) {
       if (this.elapsed - this.crashedAt > RESPAWN_DELAY) this.respawnNow();
-    } else if (this.raceState !== "countdown") {
+    } else if (this.raceState !== "countdown" && !waiting) {
       this.accumulator += dt;
       let steps = 0;
       while (this.accumulator >= STEP && steps++ < MAX_STEPS_PER_FRAME) {
@@ -460,7 +464,7 @@ export class Game {
         this.flight.up,
         this.flight.speed,
         this.smoothProximity,
-        this.world.terrain,
+        this.clearance,
       );
     } else {
       this.rig.watch(this.crashPoint, dt);
@@ -468,7 +472,6 @@ export class Game {
     this.debris.update(dt);
 
     const camera = this.rig.camera;
-    this.view.updateChunks(camera.position.x, camera.position.z, 4);
     this.view.update(camera, this.elapsed);
 
     const liveTime = t - INTERPOLATION_DELAY_MS;
@@ -498,7 +501,8 @@ export class Game {
       seed: this.world.seed,
       paletteName: this.world.palette.name,
       speedKmh: Math.round(this.flight.speed * 3.6),
-      altitude: Math.round(y - this.world.terrain.height(x, z)),
+      clearance: Math.max(0, Math.round(this.world.distance(x, y, z))),
+      loading: !this.view.ready,
       raceState: this.raceState,
       raceTimeMs,
       countdown: this.raceState === "countdown" ? Math.max(0, Math.ceil((this.startAt - t) / 1000)) : null,

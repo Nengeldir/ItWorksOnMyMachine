@@ -13,7 +13,7 @@ const Controls = ({ settings, onSettings }: ControlsProps) => (
         <kbd>Mouse</kbd> or <kbd>WASD</kbd> / arrows or a gamepad stick: pitch and roll
       </li>
       <li>Bank to turn. Dive for speed, pull up to trade it for height.</li>
-      <li>Skim the trees, rocks and water for style points and a speed boost.</li>
+      <li>Skim the rock and trees for style points and a speed boost.</li>
       <li>
         <kbd>R</kbd> respawn · <kbd>M</kbd> mute · <kbd>Esc</kbd> free the mouse
       </li>
