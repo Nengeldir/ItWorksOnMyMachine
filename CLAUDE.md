@@ -160,6 +160,18 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Upright recovery and 80° steering bank
+
+- `flight.ts`: raised the bank cap to 80°. The unbanked pitch frame now
+  gradually rolls toward world-up when pitch is released, fixing the case
+  where a half loop leaves the pilot stuck on its back despite zero bank.
+  Recovery preserves the nose direction, is rate-limited, and fades at the
+  vertical poles. Held pitch still allows deliberate loops.
+- Updated README and controls text. Added regression coverage for half loops
+  in both directions at 30/60/120 Hz and neutral recovery at both poles.
+- Verified frontend build, lint and all 17 tests. No browser playtest this
+  session; upright recovery feel remains part of the Next up playtest.
+
 ### 2026-10-10: Increase steering bank to 75°
 
 - Raised `FLIGHT.maxBank` from 50° to 75° so held steering can produce
