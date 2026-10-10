@@ -11,6 +11,7 @@ import { debugModeRequested, type DebugSettings } from "./debugMode";
 import type { DebugPanel } from "./debug/panel";
 import type { DebugAction } from "./debug/actions";
 import { FLIGHT, Flight, type FlightInput } from "./flight";
+import { GlideIn } from "./glidein";
 import { type GhostData, GhostRecorder, type GhostRun, ghostSamples } from "./ghost";
 import { type ControlSettings, Input } from "./input";
 import { FX_LIGHT, Kind, Particles, fx, fxTime } from "./particles";
@@ -203,6 +204,8 @@ export class Game implements RunHost {
   /** The pilot's tumble after a crash (looks only) */
   private readonly death = new DeathFall();
   private dissolved = false;
+  /** Gliding in on rails while the land loads: no control, no physics, no scoring */
+  private readonly glide = new GlideIn();
   private deathDebt = 0;
   private proximity = 0;
   private smoothProximity = 0;
@@ -246,7 +249,7 @@ export class Game implements RunHost {
       if (action === "respawn") this.respawnNow();
       if (action === "mute") this.audio.toggleMute();
       if (action === "barrelLeft" || action === "barrelRight") this.barrelRoll(action === "barrelLeft" ? -1 : 1);
-      if (action === "flap" && this.crashedAt === null) this.run?.ability(action);
+      if (action === "flap" && this.crashedAt === null && !this.glide.active) this.run?.ability(action);
     };
     if (!this.attract) {
       this.renderer.domElement.addEventListener("click", this.engage);
@@ -569,6 +572,7 @@ export class Game implements RunHost {
     this.input.reset();
     this.avatar.resetMotion();
     this.flight.reset(position, direction, START_SPEED);
+    this.glide.stop();
     if (import.meta.env.DEV) this.debug?.telemetry.idle(this.flight);
     this.prevPosition.copy(this.flight.position);
     this.prevQuaternion.copy(this.flight.quaternion);
@@ -661,6 +665,26 @@ export class Game implements RunHost {
     if (before >= 0 || after < 0) return false;
     const hit = tmp.lerpVectors(this.prevPosition, this.flight.position, before / (before - after));
     return hit.distanceTo(ring.position) <= ring.radius + 1;
+  }
+
+  /** One frame of the glide-in: the pilot moves on rails, nothing scores, the run's clock keeps going */
+  private glideIn(dt: number) {
+    if (!this.glide.active) this.glide.start(this.flight, this.world.course.rings);
+    this.glide.update(dt, this.flight, this.field);
+    this.prevPosition.copy(this.flight.position);
+    this.prevQuaternion.copy(this.flight.quaternion);
+    this.accumulator = 0;
+    this.proximity = 0;
+    this.run?.wait(dt);
+  }
+
+  /** The land has arrived: the player flies from where the glide got to, at the start speed */
+  private handOver() {
+    this.glide.stop();
+    this.flight.reset(this.flight.position, this.glide.heading, START_SPEED);
+    this.prevPosition.copy(this.flight.position);
+    this.prevQuaternion.copy(this.flight.quaternion);
+    this.accumulator = 0;
   }
 
   /** Steers along the racing line, like a player who never misses */
@@ -971,13 +995,18 @@ export class Game implements RunHost {
     this.adaptQuality(dt);
 
     this.input0 = this.attract === "chase" ? this.autopilot() : this.input.sample(dt);
-    // Before a race, wait for the islands around you to show up: no flying into invisible rock
-    // In a run, also while held in the tunnel between biomes
-    const waiting = (!this.view.ready && this.raceState === "free") || this.frozen;
-    if (waiting || this.raceState === "countdown") this.flight.releaseControls();
+    // Outside races, the land around you must be on screen before you fly: no flying into
+    // invisible rock. Until it is, the pilot glides in on rails, without control (glidein.ts)
+    const loading = !this.view.ready && this.raceState === "free" && this.attract !== "drift";
+    // Held still: a run's start line, the tunnel between biomes
+    const waiting = this.frozen;
+    if (waiting || loading || this.raceState === "countdown") this.flight.releaseControls();
     if (this.crashedAt !== null) {
       if (this.elapsed - this.crashedAt > RESPAWN_DELAY) this.respawnNow();
+    } else if (loading && !waiting) {
+      this.glideIn(dt);
     } else if (this.raceState !== "countdown" && !waiting && this.attract !== "drift") {
+      if (this.glide.active) this.handOver();
       this.accumulator += dt;
       let steps = 0;
       while (this.accumulator >= STEP && steps < MAX_STEPS_PER_FRAME) {
@@ -1006,7 +1035,7 @@ export class Game implements RunHost {
       this.avatar.setDodge(this.flight.dodgePhase);
       this.avatar.setSpeedControls(this.flight.boost, this.flight.brake);
       this.avatar.update(dt, this.flight.speed, this.smoothProximity);
-      // Frozen on the start line or while islands load: no motes, or they pile up into a glowing ball
+      // Frozen on the start line or in the tunnel: no motes, or they pile up into a glowing ball
       const moving = this.raceState !== "countdown" && !waiting;
       this.fx.update(dt, this.flight.speed, this.flight.velocity, this.smoothProximity, moving);
       this.skimSpray(dt);

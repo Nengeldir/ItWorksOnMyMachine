@@ -85,6 +85,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/input.ts` | Keyboard, pointer-lock mouse and gamepad, merged into pitch and roll, plus actions (respawn, mute, barrel rolls) |
 | `game/pilots.ts` | Remote players and ghosts: interpolated samples driving an `Avatar` and `PilotFx` |
 | `game/ghost.ts` | Recording and decoding ghost runs (15 Hz) |
+| `game/glidein.ts` | `GlideIn`: while the land near you is loading (free flight, runs, explore; never races), the pilot glides in on rails instead of hanging frozen: no input, no physics step, no scoring; at most 70 m and never within 30 m of the next gate, slowing before rock; control comes back at `START_SPEED` when the land is ready, and a run's level clock keeps running meanwhile |
 | `game/death.ts` | Crash animations, looks only: `classifyCrash` picks headfirst (into a wall: bounce and tumble), slide (glancing ground: roll down the slope), wing (a wing clipped: spin down) or fall (below the islands); `DeathFall` is a small rigid-body tumble kept out of the rock by the distance field. The avatar plays `die(kind)`, the camera `follow`s, the body dissolves into light at `DISSOLVE_AT`, all inside `RESPAWN_DELAY` |
 | `game/effects.ts` | Crash debris: feathers knocked loose that flutter down (instanced) |
 | `game/audio.ts` | Synthesized wind and event sounds, run stingers (portal, upgrade, dash; sidequest and item are unused for now), the wingbeat sample (`public/audio/sfx/wingbeat.mp3`, pitch-randomized, played on each of your downstrokes and on the Wingbeat ability) and the `MusicPlayer` |
@@ -161,6 +162,29 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Glide in while the land loads (Claude)
+
+Asked for: instead of freezing the pilot until the map has loaded, fly
+forward a bit, avoiding collisions, and give control only once it has
+loaded; the mechanism must not be exploitable. A deliberate gameplay change
+(rule 6), outside races only.
+- `Game.loop`: when the land isn't ready in free flight (`raceState`
+  "free": time-trial warm-up, explore, runs, the menu's chase), `glideIn`
+  runs instead of the physics step; the first ready frame calls `handOver`.
+  Frozen states (a run's start panel, the tunnel) still hold the pilot.
+- Not exploitable, by construction: input is ignored (abilities too), the
+  flight model never runs (no crash, proximity, style, gates, portal, ghost
+  recording), the glide is capped at 70 m and stops 30 m short of the next
+  gate ahead, it slows and stops before rock, control is handed back at
+  `START_SPEED` whatever the speed before, and `RunController.wait` keeps a
+  run's level clock (par bonus) running. Races keep their countdown, so the
+  race clock and ghosts are untouched. (The client is not authoritative
+  anyway: the server's timing checks remain the only real guard.)
+- The HUD label now reads "Gliding in while the land loads…".
+- Verified: build and lint pass. In Chrome, Verdant seed 2 and Glacier seed 1
+  from a fresh load: the pilot glides 70 m at 18 m/s, hovers until the land
+  is ready, then flies on at 32 m/s under control, no crash; no console errors.
 
 ### 2026-10-10: Crash animations (Claude)
 

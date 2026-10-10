@@ -77,7 +77,8 @@ turns speed back into height. Flying within a few metres of rock or trees fills
 the proximity bar: you get style points with a growing multiplier and extra
 acceleration, so risky lines are faster. Crash, or drop into the sea of clouds
 below the islands, and you respawn at your last ring, with the clock still
-running.
+running. While the land around you is still loading (outside races), the
+pilot glides in slowly by itself and you get control once it has arrived.
 
 Press `P` to pause and press it again to resume. Flight, effects and adventure
 timers freeze, and gameplay audio is silenced. In time trials and multiplayer,
