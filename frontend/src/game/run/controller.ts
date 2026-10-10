@@ -147,7 +147,8 @@ export class RunController {
   private toast: RunHud["toast"] = null;
   private toastTime = 0;
   private toastId = 0;
-  private through: { next: BiomeId | null } | null = null;
+  /** Through a portal: where to, the upgrades on offer, and whether the next biome is built yet */
+  private through: { next: BiomeId; offers: Upgrade[]; built: boolean } | null = null;
   private skyFrom: Sky | null = null;
   private skyTo: Sky | null = null;
   private readonly skyNow: Sky;
@@ -354,27 +355,42 @@ export class RunController {
       this.finish();
       return;
     }
-    this.through = { next: destination(this.seed, this.level, this.path) };
+    // The offer is drawn now, from this level, so building the next one early doesn't change it
+    this.through = { next: destination(this.seed, this.level, this.path), offers: offer(this.seed, this.level, this.picked), built: false };
     this.phase = "portal";
     this.phaseTime = 0;
     this.sparkled = false;
     this.host.freeze(true);
-    this.wormhole.colors(this.host.world.palette.accent, BIOMES[this.through.next!].portals.color);
+    this.wormhole.colors(this.host.world.palette.accent, BIOMES[this.through.next].portals.color);
     this.skyFrom = captureSky(this.host.scene, this.skyFrom ?? undefined);
   }
 
-  /** The player chose an upgrade: on to the next biome */
+  /**
+   * Builds the next biome as soon as the wormhole hides everything, before the
+   * upgrade pick (which doesn't change the level), so its land streams in
+   * while the player chooses
+   */
+  private buildNext() {
+    const through = this.through!;
+    through.built = true;
+    this.level++;
+    this.loadLevel(through.next);
+    this.host.respawnAt(0);
+    this.host.freeze(true);
+    this.skyTo = captureSky(this.host.scene, this.skyTo ?? undefined);
+    // The new level's lights went up with it: keep the old sky until the way out
+    this.blendSky(0);
+    // loadLevel started the new level's phases; we're still in the wormhole
+    this.phase = "portal";
+  }
+
+  /** The player chose an upgrade: out to the next biome (already built, maybe still streaming) */
   pick(id: UpgradeId) {
     if (this.phase !== "pick" || !this.through) return;
     this.picked.push(id);
     this.stats = statsFor(this.picked);
     this.host.stinger("upgrade");
-    this.level++;
-    // Build the next biome while the wormhole hides everything
-    this.loadLevel(this.through.next!);
-    this.host.respawnAt(0);
-    this.host.freeze(true);
-    this.skyTo = captureSky(this.host.scene, this.skyTo ?? undefined);
+    if (!this.through.built) this.buildNext();
     this.phase = "portal";
     this.phaseTime = 0;
     this.through = null;
@@ -428,10 +444,15 @@ export class RunController {
       }
       veil = t < BLUR_IN ? ease(t / BLUR_IN) : 1 - ease((t - BLUR_IN - 0.1) / BLUR_CLEAR);
       inside = t >= BLUR_IN;
+      // Fully blurred and inside: build the next biome now (a hitch here is hidden by the blur)
+      if (t >= BLUR_IN + 0.03 && !this.through.built) {
+        this.buildNext();
+        this.phaseTime = t;
+      }
       if (t >= BLUR_IN + 0.1 + BLUR_CLEAR * 0.6) {
         this.phase = "pick";
         this.phaseTime = 0;
-        this.events.offer?.(offer(this.seed, this.level, this.picked), this.through.next);
+        this.events.offer?.(this.through.offers, this.through.next);
       }
     } else if (this.phase === "pick") {
       inside = true;
