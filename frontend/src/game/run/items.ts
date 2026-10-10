@@ -28,6 +28,8 @@ export const ITEM = {
   lightEnergy: 0.15,
   bootTime: 0.4,
   bootLift: 32,
+  kiteTime: 5,
+  kiteLift: 18,
   bag: 3, // items carried at once
   // Anemo Catcher: a bottled updraft
   updraftTime: 1.6, // seconds
@@ -51,7 +53,7 @@ export const ITEM = {
   fireWobble: 0.45, // how hard it yanks the controls about
 };
 
-export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots";
+export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite";
 
 /** How an item saved the pilot from a hit */
 export type ItemSave = "starflake";
@@ -90,12 +92,14 @@ export const RUN_ITEMS: readonly RunItemInfo[] = [
   { id: "silkRibbon", model: "silkRibbon", name: "Cloud-Spun Silk Ribbon", icon: "🎀", rarity: 1, charges: 1, description: "Ten seconds of much tighter turns for threading narrow canyons." },
   { id: "vortexGeode", model: "vortexGeode", name: "Vortex Geode", icon: "💎", rarity: 1, charges: 1, description: "For six seconds, a gentle vortex draws nearby loose light and energy into you." },
   { id: "aeroBoots", model: "aeroBoots", name: "Aero-Boots of the Adepti", icon: "🥾", rarity: 2, charges: 3, description: "Three steps on the air. Each press gives a quick upward correction." },
+  { id: "stormKite", model: "stormKite", name: "Stormcaller's Kite", icon: "🪁", rarity: 1, charges: 1, description: "An enchanted kite catches the high wind and tows you upward for five seconds." },
 ];
 
 export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.id === id)!;
 
 /** How long each item's effect lasts once used (seconds) */
 const DURATION: Record<RunItemId, () => number> = {
+  stormKite: () => ITEM.kiteTime,
   aeroBoots: () => ITEM.bootTime,
   vortexGeode: () => ITEM.vortexTime,
   silkRibbon: () => ITEM.ribbonTime,
@@ -109,7 +113,7 @@ const DURATION: Record<RunItemId, () => number> = {
 };
 
 /** Effects that move the pilot: they end on a crash or a respawn */
-const FLIGHT_EFFECTS: RunItemId[] = ["anemoCatcher", "cometFirework", "silkRibbon", "aeroBoots"];
+const FLIGHT_EFFECTS: RunItemId[] = ["anemoCatcher", "cometFirework", "silkRibbon", "aeroBoots", "stormKite"];
 
 /** A push along the path, fading out as the speed nears its own top speed */
 const push = (amount: number, top: number, speed: number) => amount * clamp((top - speed) / 15, 0, 1);
@@ -324,6 +328,7 @@ export class Items {
     this.previous.copy(flight.position); this.sampled = true;
     if(this.active.has("silkRibbon")) mods.turn *= ITEM.ribbonTurn;
     if(this.active.has("aeroBoots")) { mods.lift += ITEM.bootLift; mods.hover = Math.max(mods.hover,0.8); }
+    if(this.active.has("stormKite")){ mods.lift+=ITEM.kiteLift; mods.hover=Math.max(mods.hover,0.7); mods.turn*=0.8; }
     // ITEM RULES
     // Anemo Catcher: the bottled updraft lifts the path and holds the speed while it lasts
     const updraft = this.time("anemoCatcher");

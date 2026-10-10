@@ -2945,7 +2945,7 @@ Status: **done** = mechanics, models and animations in the game.
 | 8 | Cloud-Spun Silk Ribbon | 10 s of much tighter turns and sharper handling, for threading canyons | done |
 | 9 | Vortex Geode | Pulls nearby loose collectibles (points, energy) towards you for a short time | done |
 | 10 | Aero-Boots of the Adepti | Three "mid-air jumps" (stepping on the air) to correct your altitude quickly | done |
-| 11 | Stormcaller's Kite | A kite that catches high winds and tows you upward for 5 s | planned |
+| 11 | Stormcaller's Kite | A kite that catches high winds and tows you upward for 5 s | done |
 | 12 | Glacial Prism | Freezes the timer or the combo's decay for a few seconds | planned |
 | 13 | Sun-Kissed Nectar | Fills the boost reserve (and stamina) at once | planned |
 | 14 | Tether of the Wind Spirit | A grappling hook of light to a nearby hoop or cliff, swinging you round it for a sharp turn | planned |

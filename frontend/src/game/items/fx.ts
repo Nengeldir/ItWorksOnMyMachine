@@ -63,6 +63,7 @@ const USE_STYLE: Partial<Record<RunItemId, "eat" | "raise" | "toss">> = {
   echoConch: "raise",
   silkRibbon: "raise",
   vortexGeode: "raise",
+  stormKite: "raise",
   anemoCatcher: "raise",
   starflakeShield: "raise",
   gliderWax: "raise",
@@ -133,6 +134,7 @@ export class ItemFx {
     const st = this.avatar.stance;
     // Riding the updraft, the pilot reaches for the sky
     const climbing = items && items.time("anemoCatcher") >= 0 ? 1 : 0;
+    if (items && items.time("stormKite") >= 0) this.equipment.lift = 1;
     if (climbing) st.climb = Math.max(st.climb, ease(st.climb, 1, 8, dt));
   }
 
