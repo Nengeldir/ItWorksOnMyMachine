@@ -7,7 +7,7 @@ import { Builder, GOLD, GOLD_DEEP, blend, cyl, lathe, leaf, sphere, star } from 
 // is a hand's length or two); `y` is up, `-z` the front. The giant firework
 // (the Comet Tail Firework) is in models.ts.
 
-export type RelicId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "spiritLantern" | "echoConch";
+export type RelicId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "spiritLantern" | "echoConch" | "phoenixFeather";
 
 const ANEMO = "#5fe6c6";
 const ANEMO_LIGHT = "#c8fff1";
@@ -94,7 +94,15 @@ function echoConch(): THREE.BufferGeometry {
  b.add(star(0.012,0.005,0.006,4),GOLD,0.8,[0.06,0.08,0.03]);return b.build();
 }
 
+function phoenixFeather(): THREE.BufferGeometry {
+ const b=new Builder();
+ b.add(cyl(0.004,0.003,0.24,6),GOLD,0.4,[0,0.1,0],[0,0,-0.15]);
+ for(let i=0;i<7;i++)for(const side of [-1,1])b.add(leaf(0.09-i*0.006,0.024,0.006),i>4 ? "#fff3ac" : side<0 ? "#ff945e":"#ffcf69",0.7,[0,0.01+i*0.028,0],[0,side*0.2,side*-0.9]);
+ b.add(star(0.026,0.009,0.01,4),"#fff3c5",1,[0.03,0.2,0]);return b.build();
+}
+
 export const RELIC_BUILDERS: Record<RelicId, () => THREE.BufferGeometry> = {
+  phoenixFeather,
   echoConch,
   spiritLantern,
   anemoCatcher,

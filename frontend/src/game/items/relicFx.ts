@@ -17,6 +17,7 @@ export class RelicFx {
   readonly group = new THREE.Group();
   private readonly markers = new RingQuads(64, false);
   private debt = 0;
+  private phoenix = 0;
   private readonly avatar: Avatar;
   private readonly equipment: Equipment;
   private readonly particles: Particles;
@@ -27,6 +28,15 @@ export class RelicFx {
   used(id: RunItemId) { void id; }
   update(dt: number, items: Items, flight: Flight, flying: boolean) {
     this.markers.begin();
+    if(this.phoenix !== items.cue.phoenix){
+      this.phoenix=items.cue.phoenix;
+      const flame=new THREE.Color("#ffc274");
+      for(let k=0;k<Math.round(65*this.particles.budget);k++){
+        vel.set(Math.sin(k*2.4)*5,3+(k%5),Math.cos(k*2.4)*5);
+        this.particles.emit(flight.position,vel,fx(1.2,0.35,flame,k%3 ? Kind.Wisp:Kind.Star,-2,1,1.4));
+      }
+    }
+    if(items.invulnerable) this.markers.add(this.avatar.group.position,null,2.5,0.7 * ITEMS_FX.relics,0.09,2,GOLD);
     const lantern = items.time("spiritLantern") >= 0;
     if (lantern) for (const gate of items.ghostGates) {
       if (!gate.collected && gate.position.distanceToSquared(flight.position) < 500 * 500) {
