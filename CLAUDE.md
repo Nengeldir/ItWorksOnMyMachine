@@ -160,6 +160,25 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Wingbeat sample was inaudible and late (Claude)
+
+Reported: the wingbeat sound doesn't play, and should follow the pilot's wings.
+
+- It is played from the avatar's `onDownstroke` (the same event as the feather
+  puffs), so it was already tied to the flap cycle. I could not find a logic
+  bug; the likely causes were level and timing, so `audio.ts` now:
+  - peak-normalizes the sample on load and plays it much louder (0.5 to 0.9 of
+    the sample's peak, by effort; the Wingbeat ability plays at full),
+    where before it sat at about 0.1 to 0.3 under the wind and music;
+  - skips the sample's leading silence (`trimmed()`), so the sound starts with
+    the stroke instead of late;
+  - logs a console warning if the file can't be fetched or decoded (it used to
+    fail silently and fall back to the synthesized whoosh).
+- Verified: `npm run build` and `npm run lint` pass. **Not heard in a
+  browser.** If it is still silent, look for the "Wingbeat sample not loaded"
+  warning in the console, and check `sfx` in `?tune` (Audio).
+- Branch `fix-wingbeat-sound`, from `main`.
+
 ### 2026-10-10: Biome music and the wingbeat sample (Claude)
 
 Asked for: an audio controller for the generated ElevenLabs tracks, files moved

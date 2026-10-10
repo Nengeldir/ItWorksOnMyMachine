@@ -8,10 +8,37 @@ import type { BiomeId } from "./world/biomes/types";
 
 const WINGBEAT = "audio/sfx/wingbeat.mp3";
 
+/** A sample with where its sound really starts and how loud it is, so it lands on the beat at a known level */
+interface Sample {
+  buffer: AudioBuffer;
+  offset: number; // seconds of leading silence to skip
+  gain: number; // brings the loudest peak to 0.9
+}
+
+/** Finds the first audible moment (a recording usually starts with silence, which would delay the sound) and the peak */
+function trimmed(buffer: AudioBuffer): Sample {
+  let peak = 0;
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    for (const v of buffer.getChannelData(c)) peak = Math.max(peak, Math.abs(v));
+  }
+  if (peak <= 0) return { buffer, offset: 0, gain: 1 };
+  let first = buffer.length;
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const data = buffer.getChannelData(c);
+    for (let i = 0; i < first; i++) {
+      if (Math.abs(data[i]) > peak * 0.08) {
+        first = i;
+        break;
+      }
+    }
+  }
+  return { buffer, offset: Math.max(0, first / buffer.sampleRate - 0.005), gain: 0.9 / peak };
+}
+
 export class GameAudio {
   private ctx: AudioContext | null = null;
   private music: MusicPlayer | null = null;
-  private wingbeat: AudioBuffer | null = null;
+  private wingbeat: Sample | null = null;
   private biome: { id: BiomeId; night: number } | null = null;
   private master: GainNode | null = null;
   private windGain: GainNode | null = null;
@@ -74,8 +101,8 @@ export class GameAudio {
     fetch(import.meta.env.BASE_URL + WINGBEAT)
       .then((res) => (res.ok ? res.arrayBuffer() : Promise.reject(new Error(res.statusText))))
       .then((data) => ctx.decodeAudioData(data))
-      .then((buffer) => (this.wingbeat = buffer))
-      .catch(() => {}); // the synthesized whoosh stays
+      .then((buffer) => (this.wingbeat = trimmed(buffer)))
+      .catch((e) => console.warn("Wingbeat sample not loaded, using the synthesized whoosh:", e));
   }
 
   /** The music file playing right now (null before audio starts or while it loads) */
@@ -89,20 +116,23 @@ export class GameAudio {
     this.music?.setBiome(id, night);
   }
 
-  /** One wing downstroke of the pilot, `strength` 0..1: a soft feathery flap, never the same twice */
+  /**
+   * One wing downstroke of the pilot, `strength` 0..1, called on the beat of the
+   * animation. A soft feathery flap, never the same twice; harder effort is louder.
+   */
   wing(strength: number) {
-    this.sample(this.wingbeat, 0.12 + 0.3 * strength);
+    this.sample(this.wingbeat, 0.5 + 0.4 * strength);
   }
 
-  private sample(buffer: AudioBuffer | null, volume: number) {
-    if (!this.ctx || !this.master || !buffer) return;
+  private sample(sample: Sample | null, volume: number) {
+    if (!this.ctx || !this.master || !sample) return;
     const source = this.ctx.createBufferSource();
-    source.buffer = buffer;
-    source.playbackRate.value = 0.92 + Math.random() * 0.16;
+    source.buffer = sample.buffer;
+    source.playbackRate.value = 0.94 + Math.random() * 0.12;
     const gain = this.ctx.createGain();
-    gain.gain.value = volume * AUDIO.sfx;
+    gain.gain.value = volume * sample.gain * AUDIO.sfx;
     source.connect(gain).connect(this.master);
-    source.start();
+    source.start(0, sample.offset); // from the first audible moment, so it lands with the stroke
   }
 
   private loop(): AudioBufferSourceNode {
@@ -170,7 +200,7 @@ export class GameAudio {
 
   /** The Wingbeat ability: a strong flap (the synthesized whoosh if the sample hasn't loaded) */
   flap() {
-    if (this.wingbeat) return this.sample(this.wingbeat, 0.8);
+    if (this.wingbeat) return this.sample(this.wingbeat, 1);
     if (!this.ctx || !this.master || !this.noise) return;
     const now = this.ctx.currentTime;
     const source = this.ctx.createBufferSource();
