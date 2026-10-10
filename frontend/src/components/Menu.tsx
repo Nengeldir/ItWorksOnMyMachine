@@ -13,9 +13,6 @@ import MenuBackdrop from "./MenuBackdrop";
 import TodaysBest from "./TodaysBest";
 import "./Menu.css";
 
-// Prototype switch: ?backdrop=chase follows an autopiloted pilot, anything else drifts over the course
-const BACKDROP_MODE = new URLSearchParams(location.search).get("backdrop") === "chase" ? "chase" : "drift";
-
 interface MenuProps {
   me: User | null;
   settings: Settings;
@@ -80,7 +77,7 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
 
   return (
     <main className="menu">
-      <MenuBackdrop seed={daily} mode={BACKDROP_MODE} />
+      <MenuBackdrop seed={daily} mode="drift" />
 
       <button
         className="menu-icon glass settings-button"
