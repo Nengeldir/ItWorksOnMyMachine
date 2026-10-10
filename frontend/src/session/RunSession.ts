@@ -77,7 +77,8 @@ export class RunSession {
         clock: () => performance.now(),
         controls: this.settings,
         color: COLOR,
-        events: { hud: (hud) => this.store.set({ hud }) },
+        // Steering during the opening autopilot takes the controls where the pilot is
+        events: { hud: (hud) => this.store.set({ hud }), takeOver: () => this.begin(false) },
       });
       this.game.startRun(this.seed, {
         rewards: adventure.rewards,
@@ -86,7 +87,7 @@ export class RunSession {
         arrived: (level, biome) => this.store.set({ arrived: { level, biome, at: performance.now() } }),
         ended: (summary) => this.ended(summary),
       });
-      // Hold still on the start line until take-off
+      // The opening autopilot glides the level until the player steers or takes off
       if (this.store.get().stage === "intro") this.game.holdRun(true);
     } catch (e) {
       if (generation !== this.generation) return;
@@ -113,12 +114,12 @@ export class RunSession {
     this.game?.engage();
   }
 
-  /** Off the intro panel and into the air */
-  begin() {
+  /** Off the intro panel: the controls are yours. `engage`: lock the mouse (needs a click or key event) */
+  begin(engage = true) {
     if (this.store.get().stage !== "intro" || !this.game) return;
     this.store.set({ stage: "flying" });
     this.game?.holdRun(false);
-    this.game?.engage();
+    if (engage) this.game?.engage();
   }
 
   /** Enter during the finale: skip to the white light */

@@ -22,6 +22,10 @@ the last ring.
   Gale Force, a spirit manta to draft behind, Resonance, Ascension and the
   falcon and butterfly gliding stances). Today's run has its own seed,
   apart from today's course.
+  A run opens with your pilot gliding the first level on its own, with no
+  gates yet: steer, boost, brake, click the view or press Take off (`Enter`)
+  and the controls are yours where you are, and the gates ahead grow in. The
+  level's clock starts then; gates the glide already flew past are skipped.
 
 All three modes share one pool of maps: a seed stands for one of the nine
 biomes, its layout and its light, the same in a time trial, a room and an
@@ -138,6 +142,10 @@ Mouse, keyboard and gamepad pitch can be inverted independently. Default mouse
 sensitivity is now 2× (range 0.3–6); existing saved sensitivity is preserved.
 Settings also include gamepad stick dead zone, music and effects/wind levels,
 mute, automatic or fixed graphics quality, and reduced camera shake/FOV effects.
+Under **Pilot**, choose the character's look: Style 1 (ponytail, lashed eyes)
+or Style 2 (short tousled hair, straighter brows); looks only. Under
+**Adventure**, "Crystal pickups only" hides item and treasure pickups so a run
+keeps only the crystals (hidden ones are not collected).
 Preferences are saved per browser; if storage is unavailable they still work for
 this visit. Gamepad buttons retain their standard layout.
 
@@ -352,6 +360,13 @@ Cosmetics exposes `wingParticleSize` for the decorated wings' tiny accents.
 Collection pickups exposes crystal size, mote rate and mote distance; Run
 exposes `portalFlash` for crossing sparkles and screen brightening. Crystal
 pickups have a fixed 5.2 m collection radius (treasures: 3.2 m).
+Companions exposes `sparkle`, the rate of each pet's own trail of light
+(the swallow's wind wisps, the owl's moon motes, the crane's jade petals, the
+phoenix's embers, the dragon's cloud breath, the kirin's stars, the fox's
+foxfire, the griffin's sun flecks), `lead` (how far ahead the pet flies its
+rail), `hoopRange` (how near a hoop the pilot must be before the pet takes the
+rail through it), `guideBlend` (how fast it switches) and `gallop`/`stride`
+for the wingless pets' running legs.
 
 **Looks** ([`frontend/src/game/avatar.ts`](frontend/src/game/avatar.ts) and
 friends): the pilot is a cel-shaded little flyer with outlines, a cape, a scarf
@@ -391,7 +406,9 @@ describes spawn rates, the XP curve, duplicate conversion and persistence.
 In test mode (`/?test`), **Try items, pets & cosmetics** opens an unsaved fitting
 room for every model, with front/back previews, flight trials, item animations
 and firework controls. All eight existing pets are included; no-companion is an
-unequip action. Equipped pets lead through hoops along the autopilot rail.
+unequip action. Equipped pets fly right beside you; when you near a hoop they
+take the autopilot rail through its centre, then come back. The dragon, kirin
+and fox have no wings: they gallop on thin air.
 Wings include feather, wind, ocean, ice, phoenix, storm and constellation designs;
 capes have distinct embroidered hems.
 

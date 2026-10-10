@@ -485,6 +485,12 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onT
           </button>
         </ReadyCard>
       )}
+      {stage === "intro" && !error && hud && (
+        <p className="ready-hint">
+          <span className="no-touch">Gliding on its own: steer, boost or click to take the wings</span>
+          <span className="touch-only">Gliding on its own: drag to take the wings</span>
+        </p>
+      )}
 
       {stage === "pick" && !hud?.paused && <UpgradePicker offers={offers} next={next} onPick={(id) => session.pick(id)} />}
 
