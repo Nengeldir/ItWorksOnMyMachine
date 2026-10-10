@@ -13,6 +13,8 @@ import type { Course } from "../world/course";
 
 /** Item physics and scoring. Shown in ?tune as "Run items", not saved (like FLIGHT) */
 export const ITEM = {
+  lanternTime: 15,
+  ghostBonus: 500,
   bag: 3, // items carried at once
   // Anemo Catcher: a bottled updraft
   updraftTime: 1.6, // seconds
@@ -36,7 +38,7 @@ export const ITEM = {
   fireWobble: 0.45, // how hard it yanks the controls about
 };
 
-export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework";
+export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern";
 
 /** How an item saved the pilot from a hit */
 export type ItemSave = "starflake";
@@ -69,12 +71,14 @@ export const RUN_ITEMS: readonly RunItemInfo[] = [
   { id: "starflakeShield", model: "starflakeShield", name: "Starflake Shield", icon: "❄️", rarity: 2, charges: 1, description: "A shimmering, fragile aura of ice: it shatters on the first thing you hit, and you glance off instead of crashing." },
   { id: "gliderWax", model: "gliderWax", name: "Luminescent Glider Wax", icon: "🍯", rarity: 1, charges: 1, description: "Wax your wings with sunlight: for eight seconds there is no drag and no sink. Hold your top speed without losing height." },
   { id: "cometFirework", model: "firework", name: "Comet Tail Firework", icon: "🎆", rarity: 2, charges: 1, description: "A giant rocket strapped to your back: a terrifying, barely steerable burst of speed and a tail of sparks." },
+  { id: "spiritLantern", model: "spiritLantern", name: "Spirit Lantern", icon: "🏮", rarity: 1, charges: 1, description: "Light the lantern for 15 seconds to reveal and collect hidden ghost gates worth 500 points." },
 ];
 
 export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.id === id)!;
 
 /** How long each item's effect lasts once used (seconds) */
 const DURATION: Record<RunItemId, () => number> = {
+  spiritLantern: () => ITEM.lanternTime,
   anemoCatcher: () => ITEM.updraftTime,
   starflakeShield: () => ITEM.shieldTime,
   gliderWax: () => ITEM.waxTime,
@@ -125,6 +129,11 @@ export class Items {
   /** Where the last save happened, and the surface's normal there */
   readonly savePoint = new THREE.Vector3();
   readonly saveNormal = new THREE.Vector3(0, 1, 0);
+  readonly ghostGates: { position: THREE.Vector3; normal: THREE.Vector3; radius: number; collected: boolean }[] = [];
+  readonly path: THREE.Vector3[] = [];
+  readonly previous = new THREE.Vector3();
+  private sampled = false;
+  private readonly crossing = new THREE.Vector3();
   private readonly steered: FlightInput = { pitch: 0, roll: 0 };
   /** The level the items are in */
   world: ItemWorld | null = null;
@@ -133,6 +142,14 @@ export class Items {
     this.world = world;
     this.active.clear();
     this.version++;
+    this.sampled = false;
+    this.ghostGates.length = 0;
+    for (let i = 2; i < world.course.rings.length - 1; i += 4) {
+      const ring = world.course.rings[i];
+      const position = ring.position.clone().add(new THREE.Vector3(i % 2 ? -6 : 6, 2, 0));
+      if (world.distance(position.x, position.y, position.z) >= 4)
+        this.ghostGates.push({ position, normal: ring.normal.clone(), radius: 3, collected: false });
+    }
   }
 
   /** The item the use key would use */
@@ -181,7 +198,7 @@ export class Items {
 
   /** Starts an item's effect; false if it can't be used right now */
   private start(id: RunItemId, flight: Flight): boolean {
-    void flight;
+    // ITEM STARTS
     // A shield already up would be wasted
     if (id === "starflakeShield" && this.active.has(id)) return false;
     this.active.set(id, 0);
@@ -213,6 +230,7 @@ export class Items {
 
   /** After a crash or a respawn: whatever was moving the pilot stops */
   reset() {
+    this.sampled = false;
     for (const id of FLIGHT_EFFECTS) this.active.delete(id);
   }
 
@@ -227,6 +245,18 @@ export class Items {
       else this.active.set(id, next);
     }
 
+    if (this.sampled && this.active.has("spiritLantern")) {
+      for (const gate of this.ghostGates) {
+        if (gate.collected) continue;
+        const before = this.crossing.subVectors(this.previous, gate.position).dot(gate.normal);
+        const after = this.crossing.subVectors(flight.position, gate.position).dot(gate.normal);
+        if (before < 0 && after >= 0 && this.crossing.lerpVectors(this.previous, flight.position, before / (before - after)).distanceTo(gate.position) <= gate.radius) {
+          gate.collected = true; this.points += ITEM.ghostBonus;
+        }
+      }
+    }
+    this.previous.copy(flight.position); this.sampled = true;
+    // ITEM RULES
     // Anemo Catcher: the bottled updraft lifts the path and holds the speed while it lasts
     const updraft = this.time("anemoCatcher");
     if (updraft >= 0) {

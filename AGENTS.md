@@ -2158,7 +2158,7 @@ Status: **done** = mechanics, models and animations in the game.
 | 2 | Starflake Shield | A shimmering, fragile aura that shatters on impact: protects you from one collision with terrain | done |
 | 3 | Luminescent Glider Wax | For a while, no drag: hold top speed without losing altitude | done |
 | 4 | Comet Tail Firework | A massive rocket strapped to your back: a terrifying, uncontrollable burst of forward speed and a trail of sparks (the giant firework model exists) | done |
-| 5 | Spirit Lantern | Shows hidden, high-value "ghost hoops" that are invisible in dark or foggy areas | planned |
+| 5 | Spirit Lantern | Shows hidden, high-value "ghost hoops" that are invisible in dark or foggy areas | done |
 | 6 | Echoing Conch | A sonar pulse that highlights the best path through the next three hoops | planned |
 | 7 | Feather of the Great Phoenix | A single-use revive: on a crash you burst into flames and respawn in mid-air, briefly invulnerable | planned |
 | 8 | Cloud-Spun Silk Ribbon | 10 s of much tighter turns and sharper handling, for threading canyons | planned |
