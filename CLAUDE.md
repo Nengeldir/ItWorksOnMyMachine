@@ -114,9 +114,10 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/ghost.ts` | Recording and decoding ghost runs (15 Hz) |
 | `game/glidein.ts` | `GlideIn`: while the land near you is loading (free flight, runs, explore; never races), the pilot glides in on rails instead of hanging frozen: no input, no physics step, no scoring; at most 70 m and never within 30 m of the next gate, slowing before rock; control comes back at `START_SPEED` when the land is ready, and a run's level clock keeps running meanwhile |
 | `game/items/` | Items, models and animations only (what they do comes later). `models.ts`: `ITEMS` (id, name, kind, slot) and `buildItem(id)`: the giant firework (worn on the back like a jetpack, with `fireworkFlame`), three candies, the golden feather, two helmets, five fruits, all primitives painted per vertex with the toon material and ink. `equip.ts`: `Equipment` (pull an item out with a sparkle; the firework from the hand over the shoulder onto the back, helmets drop onto the head, hand items are held up; `use()` eats; `setThrust()` lights the firework) and `ItemDisplay` (a floating pickup). `gallery.ts`: the `/?gallery` scene. `Game.equip/unequip/useItem/thrust` drive it on your pilot; `Avatar.slots` and `Avatar.armPose` are the hooks |
-| `game/death.ts` | Crash animations, looks only: `classifyCrash` picks headfirst (into a wall: bounce and tumble), slide (glancing ground: roll down the slope), wing (a wing clipped: spin down) or fall (below the islands); `DeathFall` is a small rigid-body tumble (impulses at contact points: balls for head, hips and feet, five points per wing from the live pose via `Avatar.wingPoints`) kept out of the rock by the distance field. The avatar plays `die(kind)`, the camera `follow`s, the body dissolves into light at `DISSOLVE_AT`, all inside `RESPAWN_DELAY` |
+| `game/death.ts` | Crash animations, looks only: `classifyCrash` picks headfirst (into a wall: bounce and tumble), slide (glancing ground: roll down the slope), wing (a wing clipped: spin down) or fall (below the islands); `DeathFall` is a small rigid-body tumble (impulses at contact points: balls for head, hips and feet, five points per wing from the live pose via `Avatar.wingPoints`) kept out of the rock by the distance field. The avatar plays `die(kind)`, the camera arcs up overhead (`startFall`, `fall`), the body dissolves into light at `DISSOLVE_AT`, all inside `RESPAWN_DELAY` |
 | `game/effects.ts` | Crash debris: feathers knocked loose that flutter down (instanced) |
-| `game/audio.ts` | Synthesized wind and event sounds, run stingers (portal, upgrade, dash; sidequest and item are unused for now) and the wingbeat whoosh |
+| `game/audio.ts` | Synthesized wind and event sounds, run stingers (portal, upgrade, dash; sidequest and item are unused for now), the wingbeat sample (`public/audio/sfx/wingbeat.mp3`, pitch-randomized, played on each of your downstrokes and on the Wingbeat ability) and the `MusicPlayer` |
+| `game/music.ts` | `MusicPlayer`: one looping track per biome from `public/audio/music/<biome>_<title>.mp3`, crossfaded on biome change (`TRACK_OF` maps biomes to tracks; similar biomes share one). Night dims and muffles the same track. Loaded lazily, decoded with Web Audio, no music if a file fails |
 | `game/webgl.ts` | WebGL 2 availability check; `GameScreen` shows help if it's missing |
 | `game/run/` | The roguelike run. `run.ts`: run length, biome order from the run seed, portal destinations, scoring constants, `RunHud`. `upgrades.ts`: nine data-defined upgrades and the 3-of-N offer. `controller.ts`: `RunController` (levels, gates and chains, abilities as `FlightMods`, the portal transition: blur in, the next level built under the blur (`buildNext`), wormhole and upgrade pick while it streams, blur out with the palette cross-fade; HUD data). `finale.ts`: `Finale`, the last portal's cutscene (space under a world-fixed Milky Way with dust lanes and its core overhead, the camera's scripted pan beneath the pilot and back, then white light; Enter skips). `portal.ts`: the portal (ring, a flat disk like a window onto night, beam), the `Wormhole` (a camera-centred shell mapping the view onto an endless twisting tube of lensed stars and nebula with the exit glowing ahead, spirit motes, its own lights) and `screenSparkle`. Game's `veil(k)` (the `.portal-veil` DOM blur and sparkles) and `insideWormhole(on)` (hides the level: land, sky, soft particles, speed lines, ambient, gate effects) serve it |
 | `game/devtools.ts` | Dev builds only: `__shot(view)` (freeze, stream the land around a fixed camera, render once), `__raceHashes()` (the race map's determinism check), `__run(s)`, `__bench(q)` and `__crash(kind, after)` (flies into rock near the start and stops `after` s into the crash animation) on `window` |
@@ -245,8 +246,50 @@ gameplay change (rule 6): what crashes you changed, in races too.
   `Hud.tsx` (pause panel plus "Gliding in…"), `GameScreen.tsx` (the HUD
   shows while paused, otherwise hidden in portals, the finale and after),
   `Game.ts` (pause before the autopilot and glide-in logic; no pointer lock
-  while paused or on autopilot). Rechecked after the merge: build, lint,
-  race hashes, the three crash kinds, pause; no console errors.
+  while paused or on autopilot). Then `e20b112` (biome music, the
+  wingbeat sample, the explore debug panel): `App.tsx`, `GameScreen.css`,
+  `Game.ts` and this file, all kept from both sides. Rechecked after the
+  merges: build, lint, race hashes, the three crash kinds, pause; no
+  console errors.
+
+### 2026-10-10: Biome music and the wingbeat sample (Claude)
+
+Asked for: an audio controller for the generated ElevenLabs tracks, files moved
+out of the repo root into a sensible place.
+
+- **Files** moved to `frontend/public/audio/`: `music/sky-isles_soaring-above-the-clouds.mp3`,
+  `music/glacier_blue-shadows-over-cold-peaks.mp3`, `music/verdant_dewdrop-stream.mp3`,
+  `music/twilight_blue-hour-fireflies.mp3`, `music/ember_red-orange-embers.mp3`,
+  `sfx/wingbeat.mp3`.
+- **`music.ts`** (new): `MusicPlayer` crossfades between tracks when the biome
+  changes. Mapping: Sky Isles and Archipelago share the Sky Isles track;
+  Glacier and Aurora Summit share the Glacier track (until the finale gets
+  its own); Verdant and Lagoon share Dewdrop Stream; Twilight and Ember have
+  their own. A biome change that keeps the track doesn't restart it. Night
+  (`palette.night`) lowers the volume and rolls off the highs of the same track.
+- **`audio.ts`**: owns the player, remembers the biome until the first user
+  gesture starts audio, plays the wingbeat sample (random pitch ±8%) on your
+  downstrokes (quiet, scaled by effort) and for the Wingbeat ability (loud).
+  Falls back to the synthesized whoosh if the sample hasn't loaded.
+- **`Game.ts`**: `setLevel` calls `audio.setBiome`; your avatar's
+  `onDownstroke` also plays the flap (not for the menu backdrop, which has
+  no audio).
+- **`tuning.ts`**: new `AUDIO` group in `?tune`: `music`, `sfx`, `crossfade`,
+  `nightDim`, `nightMuffle`.
+- **Explore debug mode** (`ExploreSession.ts`, `GameScreen.tsx`, `App.tsx`,
+  `Menu.tsx`): open `/?explore` (or `/?explore=ember&seed=7`; in dev builds
+  also "Debug: explore worlds" on the Adventure tab). A panel lists every
+  world and its lighting moods; click, or press **N** next world, **B**
+  previous, **V** next light. Switching rebuilds the level in place (no
+  reload) and the URL follows. The panel shows the music file the world should
+  play and the one actually playing, so a mismatch is visible at a glance.
+  `/?explore` with no or an unknown biome starts in Sky Isles.
+- Looks and sounds only: no gameplay code touched.
+- Verified: `npm run build` and `npm run lint` pass. **Not run in a
+  browser**: the debug panel, level switching, crossfades, loop points and mix
+  levels against the wind are unchecked. A reported "world and music don't
+  match" was not reproduced or diagnosed yet; the panel is there to find it.
+- Branch `audio-music`, cut from `main`.
 
 ### 2026-10-10: Victory lap and the finish screen (Claude)
 
@@ -864,6 +907,12 @@ finale and the finish screen. What's open:
 - The finale can only be reached by flying all eight levels (dev:
   `__game.run.level = 8` then `__portal()`). Not watched end to end in a
   real run.
+
+- **Music follow-ups**: listen in a browser and set the mix (music vs wind,
+  `AUDIO` in `?tune`); check the loop points; the menu backdrop is silent (no
+  menu music yet); Aurora Summit needs its own finale track; the portal tunnel
+  and results screen could use stingers; the music doesn't duck under fast wind.
+  The tracks are ~2.9 MB each, so consider lowering the bitrate if load time matters.
 
 - **Measure in a focused window**: `__bench(2/1/0)` after `__shot(0)` in a
   dev build. Bloom at High was 30 to 70 ms of GPU on an M2 in a hidden tab

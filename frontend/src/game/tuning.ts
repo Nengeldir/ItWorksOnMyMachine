@@ -113,7 +113,16 @@ export const RUN = {
   toasts: true, // pop-ups for points and run events
 };
 
-const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, WATER, RUN } as const;
+/** Music and sound levels */
+export const AUDIO = {
+  music: 0.45, // volume of the background music
+  sfx: 1, // volume of the wingbeat samples
+  crossfade: 3, // seconds to blend into the next biome's track
+  nightDim: 0.25, // how much quieter the music gets at night
+  nightMuffle: 0.55, // how much the highs are rolled off at night
+};
+
+const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, WATER, RUN, AUDIO } as const;
 const DEFAULTS = JSON.parse(JSON.stringify(GROUPS)) as typeof GROUPS;
 const STORAGE_KEY = "wingrace.tuning";
 
@@ -225,6 +234,11 @@ export const RANGES: Record<string, [number, number, number?]> = {
   tunnelFade: [0.3, 4],
   compass: [0.5, 2],
   grassDistance: [40, 300, 5],
+  music: [0, 1],
+  sfx: [0, 2],
+  crossfade: [0.5, 10],
+  nightDim: [0, 0.6],
+  nightMuffle: [0, 1],
 };
 
 export const TUNING_GROUPS: [string, Group][] = [
@@ -236,4 +250,5 @@ export const TUNING_GROUPS: [string, Group][] = [
   ["Plants", FLORA],
   ["Water", WATER],
   ["Run", RUN],
+  ["Audio", AUDIO],
 ];
