@@ -1,10 +1,11 @@
 // Cuts rock meshes off the main thread. Every worker builds the same World from
-// the seed (it's deterministic), then meshes whichever chunks it is asked for.
+// the level's key (it's deterministic), then meshes whichever chunks it is asked for.
+import { type LevelKey, levelId, makeLevel } from "./biomes";
 import { meshChunk } from "./mesher";
 import { World } from "./World";
 
 export interface MeshRequest {
-  seed: number;
+  level: LevelKey;
   key: number;
   ix: number;
   iy: number;
@@ -12,13 +13,18 @@ export interface MeshRequest {
 }
 
 let world: World | null = null;
+let worldId = "";
 
 self.onmessage = (event: MessageEvent<MeshRequest>) => {
-  const { seed, key, ix, iy, iz } = event.data;
-  if (!world || world.seed !== seed) world = new World(seed);
+  const { level, key, ix, iy, iz } = event.data;
+  const id = levelId(level);
+  if (!world || worldId !== id) {
+    world = new World(makeLevel(level));
+    worldId = id;
+  }
   const mesh = meshChunk(world, ix, iy, iz);
   self.postMessage(
-    { seed, key, ...mesh },
+    { level: id, key, ...mesh },
     { transfer: [mesh.positions.buffer, mesh.colors.buffer, mesh.trees.buffer] },
   );
 };

@@ -15,6 +15,7 @@ import { clamp } from "./math";
 import { SpeedLines } from "./speedlines";
 import { TOON_LIGHT } from "./toon";
 import { FX, RANGES, RINGS, TUNING_GROUPS, loadTuning, resetTuning, saveTuning } from "./tuning";
+import { type Level, raceLevel } from "./world/biomes";
 import { World } from "./world/World";
 import { WorldView } from "./world/WorldView";
 
@@ -54,6 +55,7 @@ export interface Standing extends Participant {
 
 export interface HudState {
   seed: number;
+  biomeName: string;
   paletteName: string;
   speedKmh: number;
   clearance: number; // metres to the nearest rock or tree
@@ -84,7 +86,9 @@ export interface GameEvents {
 }
 
 export interface GameOptions {
+  /** A race or time trial on this seed (Sky Isles), unless `level` is given */
   seed: number;
+  level?: Level;
   /** Milliseconds; the server clock in rooms, so everyone starts together */
   clock: () => number;
   controls: ControlSettings;
@@ -210,7 +214,7 @@ export class Game {
     this.marker.className = "ring-marker";
     container.appendChild(this.marker);
 
-    this.setSeed(options.seed);
+    this.setLevel(options.level ?? raceLevel(options.seed));
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
@@ -239,14 +243,23 @@ export class Game {
     return this.world.seed;
   }
 
-  /** Builds the world for a seed and puts you at the start, flying freely */
+  get level(): Level {
+    return this.world.level;
+  }
+
+  /** A race or time trial on `seed`: Sky Isles, the race map */
   setSeed(seed: number) {
-    if (this.world?.seed === seed) return;
+    if (this.world?.seed === seed && !this.world.level.run) return;
+    this.setLevel(raceLevel(seed));
+  }
+
+  /** Builds the world for a level and puts you at the start, flying freely */
+  setLevel(level: Level) {
     if (this.view) {
       this.scene.remove(this.view.group);
       this.view.dispose();
     }
-    this.world = new World(seed);
+    this.world = new World(level);
     this.view = new WorldView(this.world, this.scene);
     this.scene.add(this.view.group);
     this.particles.clear();
@@ -757,6 +770,7 @@ export class Game {
           : null;
     return {
       seed: this.world.seed,
+      biomeName: this.world.biome.name,
       paletteName: this.world.palette.name,
       speedKmh: Math.round(this.flight.speed * 3.6),
       clearance: Math.max(0, Math.round(this.world.distance(x, y, z))),

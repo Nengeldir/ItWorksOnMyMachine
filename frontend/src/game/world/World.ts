@@ -1,7 +1,8 @@
 import { Vector3 } from "three";
 import { Course } from "./course";
+import type { Biome, Level } from "./biomes";
 import { RockField } from "./islands";
-import { type Palette, paletteFor } from "./palette";
+import type { Palette } from "./palette";
 import { TreeIndex } from "./trees";
 
 // Distances beyond this don't matter for scoring, so lookups can stop there
@@ -9,8 +10,10 @@ export const PROXIMITY_RANGE = 12;
 /** Fall this far below the racing line and you're lost in the clouds */
 const ABYSS = 240;
 
-/** Everything a seed decides: the line, the islands, the colors. No rendering. */
+/** Everything a level decides: the line, the islands, the colors. No rendering. */
 export class World {
+  readonly level: Level;
+  readonly biome: Biome;
   readonly seed: number;
   readonly course: Course;
   readonly rock: RockField;
@@ -18,11 +21,13 @@ export class World {
   /** Trees grow on the island tops; chunks add them as they are meshed */
   readonly trees = new TreeIndex(PROXIMITY_RANGE);
 
-  constructor(seed: number) {
-    this.seed = seed;
-    this.course = new Course(seed);
-    this.rock = new RockField(seed, this.course);
-    this.palette = paletteFor(seed);
+  constructor(level: Level) {
+    this.level = level;
+    this.biome = level.biome;
+    this.seed = level.seed;
+    this.palette = level.palette;
+    this.course = new Course(this.seed);
+    this.rock = new RockField(this.seed, this.course);
   }
 
   /** Distance from a point to the nearest rock or tree (negative inside) */

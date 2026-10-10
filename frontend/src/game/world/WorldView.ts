@@ -5,6 +5,7 @@ import { ATMOSPHERE, atmospheric, skyMaterial } from "./atmosphere";
 import { CrystalGates, type RingMode } from "./crystals";
 import { type ChunkMesh, CHUNK_SIZE, rockChunks } from "./mesher";
 import type { MeshRequest } from "./mesher.worker";
+import { levelId } from "./biomes";
 import { Tree } from "./trees";
 import { sunDirection } from "./palette";
 import type { World } from "./World";
@@ -15,9 +16,6 @@ const FOG_FAR = 1300;
 /** The game waits until the rock this close to the camera is on screen */
 const READY_RADIUS = 260;
 const REQUESTS_PER_WORKER = 4;
-const CLOUDS = 70;
-/** The sea of clouds lies this far below the racing line */
-const CLOUD_SEA_DEPTH = 260;
 
 export type { RingMode };
 
@@ -32,7 +30,7 @@ interface RockChunk {
   trees: THREE.InstancedMesh | null;
 }
 
-type MeshResult = ChunkMesh & { seed: number; key: number };
+type MeshResult = ChunkMesh & { level: string; key: number };
 
 /** Moves a geometry's vertices a little, the same way for vertices that share a spot */
 function roughen(geometry: THREE.BufferGeometry, amount: number, salt: string) {
@@ -71,14 +69,16 @@ function pineGeometry(foliage: THREE.Color, trunk: THREE.Color): THREE.BufferGeo
 }
 
 /**
- * All the meshes for one World: floating islands streamed in around the camera
- * (cut in web workers), their pines, the sea of clouds, crystal gates and sky.
+ * All the meshes for one World, as its biome describes them: land streamed in
+ * around the camera (cut in web workers), what grows on it, mist and clouds,
+ * crystal gates and sky.
  */
 export class WorldView {
   readonly group = new THREE.Group();
   /** False until the rock near the camera has arrived */
   ready = false;
   private readonly world: World;
+  private readonly levelId: string;
   private readonly chunks: RockChunk[];
   private readonly byKey = new Map<number, RockChunk>();
   private readonly workers: Worker[] = [];
@@ -96,6 +96,7 @@ export class WorldView {
 
   constructor(world: World, scene: THREE.Scene) {
     this.world = world;
+    this.levelId = levelId(world.level.key);
     const palette = world.palette;
     const accent = new THREE.Color(palette.accent);
 
@@ -131,8 +132,9 @@ export class WorldView {
     this.sky = new THREE.Mesh(this.geometry(new THREE.SphereGeometry(4000, 32, 16)), this.material(skyMaterial()));
     this.sky.renderOrder = -2;
     this.group.add(this.sky);
-    this.buildCloudSea();
-    this.buildClouds();
+    const { cloudSea, puffs } = world.biome.sky;
+    if (cloudSea) this.buildCloudSea(cloudSea.depth);
+    if (puffs > 0) this.buildClouds(puffs);
     this.gates = new CrystalGates(
       world.seed,
       world.course.rings,
@@ -176,7 +178,7 @@ export class WorldView {
   // --- clouds ------------------------------------------------------------------
 
   /** A lumpy, faceted floor of clouds far below the islands, sloping down with the course */
-  private buildCloudSea() {
+  private buildCloudSea(depth: number) {
     const { course, palette } = this.world;
     const step = 50;
     const columns = 80;
@@ -185,7 +187,7 @@ export class WorldView {
     const point = (row: number, column: number) => {
       const z = z0 + row * step;
       const bump = (hash3(row, column, 11) - 0.5) * 14;
-      return [course.x(z) + (column - columns / 2) * step, course.y(z) - CLOUD_SEA_DEPTH + bump, z];
+      return [course.x(z) + (column - columns / 2) * step, course.y(z) - depth + bump, z];
     };
     const positions: number[] = [];
     const colors: number[] = [];
@@ -215,7 +217,7 @@ export class WorldView {
   }
 
   /** Puffy clouds drifting between the islands and the sea of clouds */
-  private buildClouds() {
+  private buildClouds(count: number) {
     const { course, seed, palette } = this.world;
     const rng = makeRng(seed, "clouds");
     const geometry = this.geometry(new THREE.IcosahedronGeometry(1, 1));
@@ -223,10 +225,10 @@ export class WorldView {
     // Partly self-lit, so they stay white from every side
     const material = new THREE.MeshLambertMaterial({ color: palette.cloud, flatShading: true });
     material.emissive.set(palette.cloud).multiplyScalar(0.55);
-    const mesh = new THREE.InstancedMesh(geometry, this.material(material), CLOUDS);
+    const mesh = new THREE.InstancedMesh(geometry, this.material(material), count);
     const matrix = new THREE.Matrix4();
     const rotation = new THREE.Quaternion();
-    for (let i = 0; i < CLOUDS; i++) {
+    for (let i = 0; i < count; i++) {
       const z = range(rng, course.start.z - 400, course.endZ + 1200);
       const low = rng() < 0.6;
       const position = new THREE.Vector3(
@@ -267,14 +269,14 @@ export class WorldView {
       if (this.busy[worker] >= REQUESTS_PER_WORKER) break;
       this.busy[worker]++;
       chunk.state = "pending";
-      const request: MeshRequest = { seed: this.world.seed, key: chunk.key, ix: chunk.ix, iy: chunk.iy, iz: chunk.iz };
+      const request: MeshRequest = { level: this.world.level.key, key: chunk.key, ix: chunk.ix, iy: chunk.iy, iz: chunk.iz };
       this.workers[worker].postMessage(request);
     }
   }
 
   private receive(result: MeshResult) {
     const chunk = this.byKey.get(result.key);
-    if (this.disposed || result.seed !== this.world.seed || !chunk) return;
+    if (this.disposed || result.level !== this.levelId || !chunk) return;
     chunk.state = "loaded";
     if (result.positions.length) {
       const geometry = new THREE.BufferGeometry();

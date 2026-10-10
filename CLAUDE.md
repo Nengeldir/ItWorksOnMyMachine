@@ -56,6 +56,11 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 ```
 
 - `/?seed=42` opens a time trial on seed 42. Add `&tune` for the tuning panel.
+- Races and time trials always fly **Sky Isles** (`raceLevel(seed)`). Its
+  generator is frozen: recorded ghosts and leaderboards depend on every
+  collision surface staying put. `docs/dev-snippets.js` has `__raceHashes()`,
+  which must keep returning the hashes listed there for trees, distances and
+  rings. New biomes are for the roguelike run only.
 - In dev, `window.__game`, `window.__fxTime` and `window.__tuning` are exposed
   for poking at the game from the console.
 - Node 22+ works locally (the VM uses 24). Python 3.14 on the VM.
@@ -81,14 +86,15 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/audio.ts` | Synthesized wind and event sounds |
 | `game/webgl.ts` | WebGL 2 availability check; `GameScreen` shows help if it's missing |
 | `game/math.ts` | `clamp`, `smoothstep`, `smin` (smooth minimum for distance fields) |
-| `game/world/World.ts` | Everything a seed decides: course, rock field, trees, palette; `distance()` for collisions, `lost()` below the islands. No rendering |
+| `game/world/biomes/` | Biomes as data (`types.ts`: `Biome`, `Level`, `LevelKey`). `index.ts`: the registry, `raceLevel(seed)` (races and time trials: always Sky Isles) and `runLevel(runSeed, index, biome)` (roguelike levels, deterministic from the run seed and level number). `skyIsles.ts`: the race map, frozen |
+| `game/world/World.ts` | Everything a level decides: course, rock field, trees, palette; built from a `Level` (biome + seed + mood). `distance()` for collisions, `lost()` below the islands. No rendering |
 | `game/world/islands.ts` | `RockField`: the floating islands as one signed distance field (shapes melted with `smin`, roughened, a tube carved along the racing line) |
-| `game/world/mesher.ts`, `mesher.worker.ts` | Cuts chunks of the rock field into flat-shaded meshes in Web Workers, and places trees |
+| `game/world/mesher.ts`, `mesher.worker.ts` | Cuts chunks of the rock field into flat-shaded meshes in Web Workers, and places trees. Workers rebuild the World from a `LevelKey` |
 | `game/world/trees.ts` | Tree colliders and their lookup index |
 | `game/world/course.ts` | The racing line (a descending curve in z) and the gates along it |
-| `game/world/palette.ts` | Six biome moods (Alpine, Misty pines, Autumn, Dusk, Winter, Starlight): colors plus lighting (sun elevation and azimuth, night factor, mist below you, effect glow). `sunDirection(palette)` |
+| `game/world/palette.ts` | The `Palette` type: a lighting mood (colors, sun elevation and azimuth, night factor, mist, effect glow), and `sunDirection(palette)`. Each biome lists its moods |
 | `game/world/atmosphere.ts` | `ATMOSPHERE` light uniforms shared per biome; `atmospheric()` patches Lambert materials (sun-tinted haze matching the sky, valley mist, backlit rims, rock strata); `skyMaterial()` (gradient, HDR sun or moon disc and halo, painted clouds, twinkling stars at night) |
-| `game/world/WorldView.ts` | Meshes for a World: island chunks streamed from the workers, pines, the sea of clouds and cloud puffs, sky, gates. `ready` is false until the rock near you has arrived |
+| `game/world/WorldView.ts` | Meshes for a World, as its biome describes them: island chunks streamed from the workers, pines, the sea of clouds and cloud puffs, sky, gates. `ready` is false until the rock near you has arrived |
 | `game/world/crystals.ts` | Crystal gates: instanced crystals (bob, spin, pass flare and burst in the shader), veil discs with the pass shockwave, light pillars over the next gate and the finish |
 | `session/` | Solo and room sessions wiring a `Game` to the network and UI |
 | `net/` | Server clock sync and the room connection (SSE down, POST up) |
@@ -137,7 +143,40 @@ g.render();
 Frame rates measured in a background or automated browser tab are throttled
 and meaningless. Measure in a focused window.
 
+The automation tab is usually hidden, so `requestAnimationFrame` doesn't run
+and timers fire about once a second. `docs/dev-snippets.js` has `__shot(view)`,
+which freezes the loop, streams the land around a fixed camera (yielding
+through `MessageChannel`, which isn't throttled), and renders once, for
+reproducible screenshots.
+
 ## Change log
+
+### 2026-10-10: Milestone 1, the biome format (Claude)
+
+Asked for: the first playable slice of the roguelike (see "Roguelike
+milestones" below). Milestone 1: a data-driven biome format, levels
+deterministic from (runSeed, level), today's islands ported as Sky Isles with
+no visible change, World and WorldView driven by a biome.
+
+- **`world/biomes/`**: `Biome` (moods, terrain recipe, vegetation, mist and
+  clouds, particle style, sidequests, portals), `LevelKey` (small enough to
+  post to workers) and `Level`. `raceLevel(seed)` is what races and time trials
+  use; `runLevel(runSeed, index, biome)` derives the world seed and mood from
+  the run seed and level number.
+- **Sky Isles** (`skyIsles.ts`): the six palettes moved here as its moods, and
+  the mood is still picked from the seed's `palette` stream. Its terrain
+  (`legacyIslands`) and vegetation (`legacyPines`) recipes select the existing
+  code paths unchanged. Cloud sea depth and puff count now come from the
+  biome's `sky`.
+- `World` takes a `Level`; workers take a `LevelKey` and drop results for
+  another level by id; `Game.setLevel(level)` builds any level, `setSeed(seed)`
+  is `setLevel(raceLevel(seed))`. The HUD gets `biomeName`.
+- Verified: `tsc`, lint and build pass. **No visible change**: screenshots of
+  seeds 42 and 1 from two fixed camera poses are byte-identical before and
+  after (`docs/screenshots/m1-sky-isles-port/`, same MD5s). The race maps are
+  bit-identical too: hashes of rock meshes, colors, tree colliders, 4000
+  collision distances and the rings of seeds 1, 7 and 42 match the pre-port
+  build (`__raceHashes()` in `docs/dev-snippets.js`).
 
 ### 2026-10-10: Genshin / Sky style pilot, crystal gates, particles (Claude)
 
@@ -255,6 +294,11 @@ ported to the islands world:
 
 ## Next up
 
+**Resume here:** the roguelike milestones below. Milestone 1 (biome format) is
+done. Next is milestone 2, the terrain generator v2. A draft of new distance
+field primitives (mesas, spires between two points, caps, rings with AABBs,
+surface ids, grain) was written during planning; it will land with milestone 2.
+
 - Measure real frame times at High quality on an integrated GPU, in a focused
   window. If bloom is too costly, lower `COMPOSER_PIXEL_RATIO` or MSAA samples.
 - The free-flight respawn and the start grid don't do any pilot entrance
@@ -269,6 +313,37 @@ ported to the islands world:
   world).
 - The ponytail and hair are hand-placed; a proper hair cap mesh would look
   better from the front.
+
+## Roguelike milestones (the current plan)
+
+The first playable slice of the roguelike, in order. After each: commit to
+`Pengyue`, update this file, keep the game building and running.
+
+1. **Biome format** (done): `world/biomes/`, levels from (runSeed, level),
+   Sky Isles ported with no visible change, World and WorldView take a biome.
+2. **Terrain generator v2**: a composable distance field (domain-warped ridged
+   mountains, terraced mesas, carved river channels, overhangs, arches),
+   meshing in workers with LOD rings, analytic deterministic collisions, a
+   terrain shader blending grass, rock, snow and sand by slope and height
+   (triplanar on cliffs, on top of `atmospheric()`, flat-shaded look).
+3. **Verdant Highlands** and the reusable systems it needs: stylized water
+   (depth tint, foam, sky reflection, sun glitter, skim spray), procedural
+   trees (3+ species, wind sway, instanced, impostors far away), GPU grass and
+   flowers near the camera, fireflies in shade. Then every other planned biome.
+4. **Run loop**: biome → portal → upgrade pick → next biome; portals (swirling
+   veil, beam, tunnel transition cross-fading palettes); an upgrade picker (3
+   of at least 6 data-defined upgrades: dash, hover, glide-lock, stamina flap,
+   proximity boost, gate magnet; abilities go through the flight model behind
+   a run-mode flag, so races are unaffected); run score from gates, style and
+   sidequests; a sidequest framework with 2 per biome; objectives HUD and a
+   compass to the portal.
+5. **Polish and performance**: knobs in `tuning.ts` and `?tune`, audio
+   stingers, frame times per quality level in a focused window, screenshots
+   of every biome by day and night, README and this file.
+
+Constraints: never break races, ghosts or leaderboards (Sky Isles stays
+frozen); no per-frame allocations; clamp `pow()` and divisions in every
+shader; no backend API changes; no deleting branches or force-pushing.
 
 ## Roadmap
 
