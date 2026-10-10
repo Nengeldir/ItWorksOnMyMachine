@@ -81,7 +81,7 @@ def test_xp_boundaries_multiple_levels_and_cap():
 def test_plan_is_seeded_balanced_and_catalog_complete():
     assert reward_plan(42) == reward_plan(42)
     assert reward_plan(42) != reward_plan(43)
-    assert len(BY_KEY) == len(CATALOG) == 46
+    assert len(BY_KEY) == len(CATALOG) == 65
     plans = [r for seed in range(1, 101) for r in reward_plan(seed)]
     treasures = [r for r in plans if r["kind"] != "crystal"]
     assert len(treasures) == 4800
