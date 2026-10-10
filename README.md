@@ -14,7 +14,7 @@ the last ring.
 - **Adventure:** a roguelike run through eight biomes linked by portals:
   Sky Isles, Verdant Highlands, Glacier Peaks, Sky Archipelago, Coral Lagoon,
   Twilight Forest, Ember Wastes and the Aurora Summit. Chain gates, skim for
-  style, and pick an upgrade at every portal (dash, wingbeats, hover, glide lock and more).
+  style, and pick an upgrade at every portal (stronger boost, wingbeats, hover, glide lock and more).
 
 Races and time trials always fly Sky Isles, so recorded ghosts and
 leaderboards stay valid; the other biomes are for the adventure.
@@ -58,13 +58,14 @@ docker compose up -d --build
 | Mouse (click the view)    | Pitch and roll. The mouse acts like a stick.       |
 | `W` `S` / `↑` `↓`         | Dive / pull up (flight-stick style)                |
 | `A` `D` / `←` `→`         | Roll left / right. Banking turns you.              |
-| `Q` `E`, double-tap `A` `D` | Barrel roll (just for show; gamepad: `LB` `RB`)  |
+| `Q` `E` | Barrel roll (just for show; gamepad: `LB` `RB`)  |
 | Gamepad left stick        | Pitch and roll. `Y` respawns.                      |
 | `R`                       | Respawn at the last ring                           |
 | `M`                       | Mute                                               |
 | `P`                       | Pause / resume local gameplay                      |
-| `Shift` / gamepad `X`     | Dash (adventure, with the upgrade)                 |
-| `Space` / gamepad `A`     | Wingbeat (adventure, with the upgrade)             |
+| Hold `Shift` / gamepad `RT` | Boost (all modes; release to recharge)          |
+| Hold `Space` / gamepad `LT` | Air brake (all modes; takes priority over boost) |
+| `C` / gamepad `A`         | Wingbeat (adventure, with the upgrade)             |
 | Hold `F` / gamepad `B`    | Hover (adventure, with the upgrade)                |
 | `1` to `4`                | Choose an upgrade at a portal                      |
 | `Enter`                   | Start the run / the race, fly again                |
@@ -90,6 +91,16 @@ In an adventure there is no clock. Gates score more in a chain without a
 crash, and skimming earns style points. The arrow at the top of the screen
 points to the portal. A crash puts you back at the last gate and breaks your
 gate chain.
+
+Boost starts with a 2.5-second reserve and recharges in roughly 4.5 seconds
+when released. The HUD shows charge. Gamepad triggers are analog. Braking adds
+drag that fades near 22 m/s, while climbing can still cause a stall. Braking
+wins when both controls are held. The Gale boost upgrade strengthens the same
+held boost by 25% per stack; it no longer adds a separate dash action.
+
+The camera follows a blend of the nose and travel direction with restrained
+bank and FOV, and checks the whole player-to-camera segment for rock. Automatic
+and double-tap barrel rolls are disabled; use Q/E or LB/RB explicitly.
 
 ## How It Works
 
@@ -176,8 +187,8 @@ friends): the pilot is a cel-shaded little flyer with outlines, a cape, a scarf
 and feathered wings, all built from primitives at runtime. Its animation sits on
 top of the flight model and never changes it: the body leans into turns ahead
 of the physics, the wings flap harder when climbing, turning or slow and fold
-back in a dive, the cloth ripples with speed, and hard turns throw a barrel
-roll. Gates are cohorts of floating crystals that flare and burst when you fly
+back in a dive, the cloth ripples with speed, and Q/E trigger deliberate barrel rolls. Boost sweeps the wings back;
+braking spreads them into the airflow. Gates are cohorts of floating crystals that flare and burst when you fly
 through. One GPU particle system draws every mote, star and shard, and bright
 things bloom (High quality). Each palette is a lighting mood as well: sun
 position, valley mist, painted clouds, stars at night, and how brightly trims
@@ -211,6 +222,13 @@ doesn't fly the course itself.
 | `frontend/src/session/`                | Solo and room sessions: wire a Game to the network and UI |
 | `frontend/src/components/`             | React screens: menu, HUD, lobby and result panels        |
 | `frontend/Caddyfile`                   | Static files, compression, `/api` to the backend         |
+
+Race results now use the `speed-control-v1` flight rules. SQLite migration
+preserves existing rows and ghosts as `legacy`; current leaderboards, personal
+bests and ghost queries exclude them. Deploy frontend and backend together.
+Gameplay POSTs carry `X-Flight-Rules: speed-control-v1`; stale clients receive
+409 and a reload message. Ghost playback accepts both the old eight-number
+samples and new ten-number samples carrying boost/brake intensity.
 
 ## API
 
@@ -258,6 +276,7 @@ npm install
 npm run dev        # http://localhost:5173, forwards /api to :8000
 npm run lint
 npm run build
+npm test       # Node 22.18+; flight, camera, controls and ghost regressions
 ```
 
 To test multiplayer on one machine, open the room in two different browsers
