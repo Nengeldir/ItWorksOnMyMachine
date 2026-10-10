@@ -121,6 +121,9 @@ below the islands, and you respawn at your last ring, with the clock still
 running. While the land around you is still loading (outside races), the
 pilot glides in slowly by itself and you get control once it has arrived.
 
+In flight the glass panels (top bar, flight panel, score, abilities, messages)
+stay hidden until you move the mouse or tap the screen, and fade again a moment
+later; the lives, objectives and the way to the next gate or portal stay.
 Press `P` to pause and press it again to resume. Flight, effects and adventure
 timers freeze, and gameplay audio is silenced. In time trials and multiplayer,
 the official race clock keeps running during a pause; other players keep racing.
