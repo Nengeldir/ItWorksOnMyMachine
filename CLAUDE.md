@@ -2935,7 +2935,7 @@ Status: **done** = mechanics, models and animations in the game.
 | 6 | Echoing Conch | A sonar pulse that highlights the best path through the next three hoops | done |
 | 7 | Feather of the Great Phoenix | A single-use revive: on a crash you burst into flames and respawn in mid-air, briefly invulnerable | done |
 | 8 | Cloud-Spun Silk Ribbon | 10 s of much tighter turns and sharper handling, for threading canyons | done |
-| 9 | Vortex Geode | Pulls nearby loose collectibles (points, energy) towards you for a short time | planned |
+| 9 | Vortex Geode | Pulls nearby loose collectibles (points, energy) towards you for a short time | done |
 | 10 | Aero-Boots of the Adepti | Three "mid-air jumps" (stepping on the air) to correct your altitude quickly | planned |
 | 11 | Stormcaller's Kite | A kite that catches high winds and tows you upward for 5 s | planned |
 | 12 | Glacial Prism | Freezes the timer or the combo's decay for a few seconds | planned |

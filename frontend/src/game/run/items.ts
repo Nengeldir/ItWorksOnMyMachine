@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { Flight, FlightInput, FlightMods, HitPart } from "../flight";
 import type { ItemId } from "../items/models";
 import { clamp, smoothstep } from "../math";
+import { segmentDistanceSq } from "./segments";
 import type { Course } from "../world/course";
 
 // The design list's items (CLAUDE.md, "Items and abilities"), for runs only:
@@ -20,6 +21,11 @@ export const ITEM = {
   phoenixSpeed: 36,
   ribbonTime: 10,
   ribbonTurn: 2.1,
+  vortexTime: 6,
+  vortexRange: 28,
+  vortexPull: 22,
+  lightBonus: 40,
+  lightEnergy: 0.15,
   bag: 3, // items carried at once
   // Anemo Catcher: a bottled updraft
   updraftTime: 1.6, // seconds
@@ -43,7 +49,7 @@ export const ITEM = {
   fireWobble: 0.45, // how hard it yanks the controls about
 };
 
-export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon";
+export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode";
 
 /** How an item saved the pilot from a hit */
 export type ItemSave = "starflake";
@@ -80,12 +86,14 @@ export const RUN_ITEMS: readonly RunItemInfo[] = [
   { id: "echoConch", model: "echoConch", name: "Echoing Conch", icon: "🐚", rarity: 0, charges: 1, description: "A sonar song highlights a safe route through the next three gates." },
   { id: "phoenixFeather", model: "phoenixFeather", name: "Feather of the Great Phoenix", icon: "🔥", rarity: 3, charges: 1, auto: true, description: "Carried charm: a crash consumes the feather and revives you in mid-air with two seconds of protection." },
   { id: "silkRibbon", model: "silkRibbon", name: "Cloud-Spun Silk Ribbon", icon: "🎀", rarity: 1, charges: 1, description: "Ten seconds of much tighter turns for threading narrow canyons." },
+  { id: "vortexGeode", model: "vortexGeode", name: "Vortex Geode", icon: "💎", rarity: 1, charges: 1, description: "For six seconds, a gentle vortex draws nearby loose light and energy into you." },
 ];
 
 export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.id === id)!;
 
 /** How long each item's effect lasts once used (seconds) */
 const DURATION: Record<RunItemId, () => number> = {
+  vortexGeode: () => ITEM.vortexTime,
   silkRibbon: () => ITEM.ribbonTime,
   phoenixFeather: () => ITEM.phoenixGrace,
   echoConch: () => ITEM.conchTime,
@@ -140,6 +148,7 @@ export class Items {
   /** Where the last save happened, and the surface's normal there */
   readonly savePoint = new THREE.Vector3();
   readonly saveNormal = new THREE.Vector3(0, 1, 0);
+  readonly lights: { position: THREE.Vector3; energy: boolean; collected: boolean }[] = [];
   readonly ghostGates: { position: THREE.Vector3; normal: THREE.Vector3; radius: number; collected: boolean }[] = [];
   readonly path: THREE.Vector3[] = [];
   readonly previous = new THREE.Vector3();
@@ -155,6 +164,11 @@ export class Items {
     this.version++;
     this.sampled = false;
     this.ghostGates.length = 0;
+    this.lights.length = 0;
+    for(const ring of world.course.rings) for(let j=0;j<3;j++){
+      const position=world.course.pointAt(ring.position.z-30+j*8).add(new THREE.Vector3((j-1)*3,1,0));
+      if(world.distance(position.x,position.y,position.z)>3) this.lights.push({position,energy:j===1,collected:false});
+    }
     for (let i = 2; i < world.course.rings.length - 1; i += 4) {
       const ring = world.course.rings[i];
       const position = ring.position.clone().add(new THREE.Vector3(i % 2 ? -6 : 6, 2, 0));
@@ -288,6 +302,18 @@ export class Items {
         if (before < 0 && after >= 0 && this.crossing.lerpVectors(this.previous, flight.position, before / (before - after)).distanceTo(gate.position) <= gate.radius) {
           gate.collected = true; this.points += ITEM.ghostBonus;
         }
+      }
+    }
+    for(const light of this.lights){
+      if(light.collected) continue;
+      if(this.active.has("vortexGeode") && light.position.distanceToSquared(flight.position)<ITEM.vortexRange**2){
+        const next = this.crossing.copy(light.position).lerp(flight.position,Math.min(1,ITEM.vortexPull*dt/Math.max(1,light.position.distanceTo(flight.position))));
+        if(!this.world || this.world.distance(next.x,next.y,next.z)>2) light.position.copy(next);
+      }
+      if((this.sampled ? segmentDistanceSq(light.position,this.previous,flight.position) : light.position.distanceToSquared(flight.position))<2.5**2){
+        light.collected=true;
+        if(light.energy) flight.boostCharge=Math.min(1,flight.boostCharge+ITEM.lightEnergy);
+        else this.points+=ITEM.lightBonus;
       }
     }
     this.previous.copy(flight.position); this.sampled = true;

@@ -16,6 +16,11 @@ const UP = new THREE.Vector3(0, 1, 0);
 /** Relic effects only read run state; collision, scoring and collection live in run/. */
 export class RelicFx {
   readonly group = new THREE.Group();
+  private readonly lights = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.3), new THREE.MeshBasicMaterial({color:"#ffe5a0"}),128);
+  private readonly lightMatrix = new THREE.Matrix4();
+  private readonly lightScale = new THREE.Vector3(1,1,1);
+  private readonly lightQuat = new THREE.Quaternion();
+  private readonly lightColor = new THREE.Color();
   private readonly markers = new RingQuads(64, false);
   private readonly ribbon = new Trail("#d6c5fa", { width: 0.3, shimmer: 0.5, length: 1.2 });
   private debt = 0;
@@ -25,11 +30,25 @@ export class RelicFx {
   private readonly particles: Particles;
   constructor(avatar: Avatar, equipment: Equipment, particles: Particles) {
     this.avatar = avatar; this.equipment = equipment; this.particles = particles;
-    this.group.add(this.markers.mesh, this.ribbon.mesh);
+    this.group.add(this.markers.mesh, this.ribbon.mesh, this.lights);
   }
   used(id: RunItemId) { void id; }
   update(dt: number, items: Items, flight: Flight, flying: boolean) {
     this.markers.begin();
+    let count=0;
+    this.lightQuat.setFromAxisAngle(UP,flight.position.z*0.02);
+    for(const light of items.lights){
+      if(light.collected || light.position.distanceToSquared(flight.position)>500**2 || count>=128)continue;
+      this.lightMatrix.compose(light.position,this.lightQuat,this.lightScale);
+      this.lights.setMatrixAt(count,this.lightMatrix);
+      this.lights.setColorAt(count++,this.lightColor.set(light.energy ? "#90dfef":"#ffda80"));
+    }
+    this.lights.count=count;this.lights.instanceMatrix.needsUpdate=true;
+    if(this.lights.instanceColor)this.lights.instanceColor.needsUpdate=true;
+    this.lights.frustumCulled=false;
+    if(items.time("vortexGeode")>=0){
+      for(let j=0;j<3;j++)this.markers.add(this.avatar.group.position,UP,1.4+j*0.5,0.35 * ITEMS_FX.relics,0.03,2,GOLD);
+    }
     if(this.phoenix !== items.cue.phoenix){
       this.phoenix=items.cue.phoenix;
       const flame=new THREE.Color("#ffc274");
@@ -71,5 +90,5 @@ export class RelicFx {
     this.markers.end();
   }
   hide() { this.group.visible = false; }
-  dispose() { this.ribbon.dispose(); this.markers.dispose(); this.group.removeFromParent(); }
+  dispose() { this.lights.geometry.dispose(); this.lights.material.dispose(); this.ribbon.dispose(); this.markers.dispose(); this.group.removeFromParent(); }
 }
