@@ -1,10 +1,12 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { hash3, hashToUnit, makeRng, range } from "../rng";
-import type { Ring } from "./course";
+import { ATMOSPHERE, atmospheric, skyMaterial } from "./atmosphere";
+import { CrystalGates, type RingMode } from "./crystals";
 import { type ChunkMesh, CHUNK_SIZE, rockChunks } from "./mesher";
 import type { MeshRequest } from "./mesher.worker";
 import { Tree } from "./trees";
+import { sunDirection } from "./palette";
 import type { World } from "./World";
 
 export const VIEW_DISTANCE = 1400;
@@ -13,13 +15,11 @@ const FOG_FAR = 1300;
 /** The game waits until the rock this close to the camera is on screen */
 const READY_RADIUS = 260;
 const REQUESTS_PER_WORKER = 4;
-const SUN_DIRECTION = new THREE.Vector3(-0.45, 0.55, 0.7).normalize();
-const FINISH_COLOR = new THREE.Color("#ffd23f");
 const CLOUDS = 70;
 /** The sea of clouds lies this far below the racing line */
 const CLOUD_SEA_DEPTH = 260;
 
-export type RingMode = "race" | "free" | "hidden";
+export type { RingMode };
 
 interface RockChunk {
   ix: number;
@@ -72,7 +72,7 @@ function pineGeometry(foliage: THREE.Color, trunk: THREE.Color): THREE.BufferGeo
 
 /**
  * All the meshes for one World: floating islands streamed in around the camera
- * (cut in web workers), their pines, the sea of clouds, rings and sky.
+ * (cut in web workers), their pines, the sea of clouds, crystal gates and sky.
  */
 export class WorldView {
   readonly group = new THREE.Group();
@@ -89,42 +89,58 @@ export class WorldView {
   private readonly materials: THREE.Material[] = [];
   private readonly geometries: THREE.BufferGeometry[] = [];
   private readonly instanced: THREE.InstancedMesh[] = [];
-  private readonly ringMeshes: THREE.Mesh<THREE.TorusGeometry, THREE.MeshBasicMaterial>[] = [];
+  readonly gates: CrystalGates;
   private readonly sky: THREE.Mesh;
-  private readonly sun: THREE.Mesh;
-  private readonly accent: THREE.Color;
   private readonly lastStream = new THREE.Vector3(Infinity, 0, 0);
-  private ringMode: RingMode = "free";
-  private nextRing = 0;
   private disposed = false;
 
   constructor(world: World, scene: THREE.Scene) {
     this.world = world;
     const palette = world.palette;
-    this.accent = new THREE.Color(palette.accent);
+    const accent = new THREE.Color(palette.accent);
+
+    // One set of light uniforms for the sky and the rock: this biome's mood
+    const sun = sunDirection(palette);
+    ATMOSPHERE.sunDirection.value.copy(sun);
+    ATMOSPHERE.sunColor.value.set(palette.sun);
+    ATMOSPHERE.mistColor.value.set(palette.mist);
+    ATMOSPHERE.mistDensity.value = palette.mistDensity;
+    ATMOSPHERE.horizon.value.set(palette.horizon);
+    ATMOSPHERE.zenith.value.set(palette.zenith);
+    ATMOSPHERE.clouds.value.set(palette.cloud);
+    ATMOSPHERE.night.value = palette.night;
 
     scene.background = new THREE.Color(palette.horizon);
     scene.fog = new THREE.Fog(palette.horizon, FOG_NEAR, FOG_FAR);
-    const hemi = new THREE.HemisphereLight(palette.horizon, palette.cloud, palette.ambient);
+    // The sky lights the shadows from above, the sea of clouds bounces light from below
+    const hemi = new THREE.HemisphereLight(
+      new THREE.Color(palette.horizon).lerp(new THREE.Color(palette.zenith), 0.25),
+      palette.cloud,
+      palette.ambient,
+    );
     const sunLight = new THREE.DirectionalLight(palette.sun, palette.sunIntensity);
-    sunLight.position.copy(SUN_DIRECTION);
+    sunLight.position.copy(sun);
     this.group.add(hemi, sunLight);
 
-    // Meshes arrive with one color and normal per triangle: flat, low-poly faces
-    this.rockMaterial = this.material(new THREE.MeshLambertMaterial({ vertexColors: true }));
+    // Meshes arrive with one color and normal per triangle: flat, low-poly faces.
+    // The rock gets the haze, mist, backlit rims and strata.
+    this.rockMaterial = this.material(atmospheric(new THREE.MeshLambertMaterial({ vertexColors: true }), 1));
     this.treeMaterial = this.material(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
     this.treeGeometry = this.geometry(pineGeometry(new THREE.Color(palette.forest), new THREE.Color(palette.trunk)));
 
-    this.sky = this.buildSky();
-    this.sun = new THREE.Mesh(
-      this.geometry(new THREE.CircleGeometry(110, 24)),
-      this.material(new THREE.MeshBasicMaterial({ color: palette.sun, fog: false, depthWrite: false })),
-    );
-    this.sun.renderOrder = -1;
-    this.group.add(this.sky, this.sun);
+    this.sky = new THREE.Mesh(this.geometry(new THREE.SphereGeometry(4000, 32, 16)), this.material(skyMaterial()));
+    this.sky.renderOrder = -2;
+    this.group.add(this.sky);
     this.buildCloudSea();
     this.buildClouds();
-    this.buildRings();
+    this.gates = new CrystalGates(
+      world.seed,
+      world.course.rings,
+      { ice: new THREE.Color("#e6f7ff").lerp(accent, 0.12), accent },
+      sun,
+    );
+    this.group.add(this.gates.group);
+    this.setRings("free", 0);
 
     this.chunks = rockChunks(world).map((c) => ({
       ...c,
@@ -157,30 +173,7 @@ export class WorldView {
     return geometry;
   }
 
-  // --- sky and clouds ----------------------------------------------------------
-
-  private buildSky(): THREE.Mesh {
-    const geometry = this.geometry(new THREE.SphereGeometry(4000, 32, 16));
-    const horizon = new THREE.Color(this.world.palette.horizon);
-    const zenith = new THREE.Color(this.world.palette.zenith);
-    const position = geometry.getAttribute("position");
-    const colors = new Float32Array(position.count * 3);
-    const color = new THREE.Color();
-    for (let i = 0; i < position.count; i++) {
-      const t = Math.pow(Math.max(0, position.getY(i) / 4000), 0.6);
-      color.copy(horizon).lerp(zenith, t);
-      color.toArray(colors, i * 3);
-    }
-    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    const sky = new THREE.Mesh(
-      geometry,
-      this.material(
-        new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }),
-      ),
-    );
-    sky.renderOrder = -2;
-    return sky;
-  }
+  // --- clouds ------------------------------------------------------------------
 
   /** A lumpy, faceted floor of clouds far below the islands, sloping down with the course */
   private buildCloudSea() {
@@ -340,49 +333,21 @@ export class WorldView {
 
   // --- rings -------------------------------------------------------------------
 
-  private buildRings() {
-    const forward = new THREE.Vector3(0, 0, 1);
-    for (const ring of this.world.course.rings) {
-      const mesh = new THREE.Mesh(
-        this.geometry(new THREE.TorusGeometry(ring.radius, ring.finish ? 1.4 : 0.8, 8, 48)),
-        this.material(new THREE.MeshBasicMaterial({ transparent: true })),
-      );
-      mesh.position.copy(ring.position);
-      mesh.quaternion.setFromUnitVectors(forward, ring.normal);
-      this.ringMeshes.push(mesh);
-      this.group.add(mesh);
-    }
-    this.setRings("free", 0);
-  }
-
-  /** "race": the next ring glows, passed rings disappear. "free": all rings shown quietly. */
+  /** "race": the next gate glows, passed ones are gone. "free": all shown quietly. */
   setRings(mode: RingMode, next: number) {
-    this.ringMode = mode;
-    this.nextRing = next;
-    this.ringMeshes.forEach((mesh, i) => {
-      const ring: Ring = this.world.course.rings[i];
-      const material = mesh.material;
-      mesh.visible = mode !== "hidden" && (mode === "free" || i >= next);
-      mesh.scale.setScalar(1);
-      const isNext = mode === "race" && i === next;
-      material.color.copy(ring.finish ? FINISH_COLOR : isNext ? this.accent : new THREE.Color("#ffffff"));
-      material.opacity = isNext || ring.finish ? 1 : mode === "race" ? 0.55 : 0.35;
-      // The next ring shows through the fog, so you always know where to go
-      material.fog = !isNext;
-      material.needsUpdate = true;
-    });
+    this.gates.setMode(mode, next);
   }
 
-  /** Per frame: stream rock around the camera, sky and sun follow it, the next ring pulses */
-  update(camera: THREE.Camera, time: number) {
+  /** Plays a gate's pass animation: the crystals flare, burst and dissolve */
+  passRing(index: number) {
+    this.gates.pass(index);
+  }
+
+  /** Per frame: stream rock around the camera, the sky follows it, the gates animate */
+  update(camera: THREE.Camera, dt: number) {
     this.stream(camera.position);
     this.sky.position.copy(camera.position);
-    this.sun.position.copy(camera.position).addScaledVector(SUN_DIRECTION, 3500);
-    this.sun.lookAt(camera.position);
-    if (this.ringMode === "race") {
-      const mesh = this.ringMeshes[this.nextRing];
-      mesh?.scale.setScalar(1 + 0.06 * Math.sin(time * 6));
-    }
+    this.gates.update(dt, camera);
   }
 
   dispose() {
@@ -392,6 +357,7 @@ export class WorldView {
     this.instanced.forEach((m) => m.dispose());
     this.geometries.forEach((g) => g.dispose());
     this.materials.forEach((m) => m.dispose());
+    this.gates.dispose();
     this.group.clear();
   }
 }

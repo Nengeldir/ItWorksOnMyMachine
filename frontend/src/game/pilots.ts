@@ -1,6 +1,7 @@
 import * as THREE from "three";
-import { Trail } from "./trail";
-import { WINGTIPS, createLabel, createWingsuit, disposeObject } from "./wingsuit";
+import { Avatar, createLabel, disposeLabel } from "./avatar";
+import type { Particles } from "./particles";
+import { PilotFx } from "./pilotfx";
 
 export interface PilotSample {
   t: number; // ms: server time for live players, race time for ghosts
@@ -17,7 +18,6 @@ const STALE_MS = 3000;
 const MAX_LIVE_SAMPLES = 60;
 
 const tmp = new THREE.Vector3();
-const side = new THREE.Vector3();
 
 /** Another pilot drawn from timed samples: a live player or a recorded ghost */
 export class Pilot {
@@ -26,35 +26,38 @@ export class Pilot {
   readonly name: string;
   readonly color: string;
   readonly ghost: boolean;
-  private readonly body: THREE.Mesh;
+  private readonly avatar: Avatar;
   private readonly label: THREE.Sprite;
-  private readonly trails: Trail[];
+  private readonly fx: PilotFx;
   private readonly samples: PilotSample[] = [];
+  private readonly lastPosition = new THREE.Vector3();
+  private readonly velocity = new THREE.Vector3();
   /** Latest drawn state, for standings and the HUD */
   readonly position = new THREE.Vector3();
   get quaternion(): THREE.Quaternion {
-    return this.body.quaternion;
+    return this.avatar.group.quaternion;
   }
   checkpoints = 0;
   speed = 0;
   visible = false;
 
-  constructor(id: string, name: string, color: string, ghost: boolean) {
+  constructor(id: string, name: string, color: string, ghost: boolean, particles: Particles | null) {
     this.id = id;
     this.name = name;
     this.color = color;
     this.ghost = ghost;
-    this.body = createWingsuit(color, ghost);
+    this.avatar = new Avatar(ghost ? "#dfe9ff" : color, { ghost });
     this.label = createLabel(ghost ? `${name} (ghost)` : name, color);
     this.label.position.set(0, 2.6, 0);
-    this.trails = WINGTIPS.map(() => new Trail(ghost ? "#ffffff" : color, 0.12));
-    this.group.add(this.body, this.label);
+    // Ghosts are quieter: thinner trails, fewer motes
+    this.fx = new PilotFx(this.avatar, ghost ? "#ffffff" : color, particles, { share: ghost ? 0.25 : 0.5, ghost });
+    this.group.add(this.avatar.group, this.label);
     this.group.visible = false;
   }
 
   /** Trails live in world space, so they are added to the scene separately */
   get trailMeshes(): THREE.Object3D[] {
-    return this.trails.map((t) => t.mesh);
+    return this.fx.meshes;
   }
 
   push(sample: PilotSample) {
@@ -82,7 +85,8 @@ export class Pilot {
     return lo;
   }
 
-  update(time: number) {
+  /** Draws the pilot at `time`; `dt` and the camera position drive its animation */
+  update(time: number, dt: number, camera: THREE.Vector3) {
     const i = this.indexAt(time);
     const last = this.samples[this.samples.length - 1];
     const stale = !last || (!this.ghost && time - last.t > STALE_MS) || (this.ghost && time > last.t + 1500);
@@ -96,7 +100,7 @@ export class Pilot {
     if (b) {
       const f = (time - a.t) / (b.t - a.t);
       this.group.position.lerpVectors(a.p, b.p, f);
-      this.body.quaternion.slerpQuaternions(a.q, b.q, f);
+      this.avatar.group.quaternion.slerpQuaternions(a.q, b.q, f);
       this.speed = a.v + (b.v - a.v) * f;
     } else {
       // No newer sample yet: keep going in the same direction for a moment
@@ -107,18 +111,24 @@ export class Pilot {
         tmp.subVectors(a.p, prev.p).multiplyScalar(ahead / (a.t - prev.t));
         this.group.position.add(tmp);
       }
-      this.body.quaternion.copy(a.q);
+      this.avatar.group.quaternion.copy(a.q);
       this.speed = a.v;
     }
     this.checkpoints = a.cp;
+    const appeared = !this.visible;
     this.position.copy(this.group.position);
     this.setVisible(true);
 
-    side.set(0, 1, 0).applyQuaternion(this.body.quaternion);
-    this.trails.forEach((trail, k) => {
-      trail.push(tmp.copy(WINGTIPS[k]).applyQuaternion(this.body.quaternion).add(this.group.position), side);
-      trail.opacity = THREE.MathUtils.clamp((this.speed - 35) / 30, 0, 0.6);
-    });
+    // Velocity from how far we moved, smoothed (samples only come 15 times a second)
+    if (appeared || dt <= 0) {
+      this.velocity.set(0, 0, 0);
+    } else {
+      tmp.subVectors(this.position, this.lastPosition).divideScalar(dt);
+      if (tmp.lengthSq() < 200 * 200) this.velocity.lerp(tmp, 1 - Math.exp(-dt * 8));
+    }
+    this.lastPosition.copy(this.position);
+    this.avatar.update(dt, this.speed, 0, camera.distanceTo(this.position));
+    this.fx.update(dt, this.speed, this.velocity, 0);
   }
 
   private setVisible(visible: boolean) {
@@ -126,15 +136,14 @@ export class Pilot {
     this.visible = visible;
     this.group.visible = visible;
     if (!visible) {
-      this.trails.forEach((t) => {
-        t.reset();
-        t.opacity = 0;
-      });
+      this.fx.reset();
+      this.fx.hide();
     }
   }
 
   dispose() {
-    disposeObject(this.group);
-    this.trails.forEach((t) => t.dispose());
+    this.avatar.dispose();
+    disposeLabel(this.label);
+    this.fx.dispose();
   }
 }

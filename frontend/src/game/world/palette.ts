@@ -1,3 +1,4 @@
+import { MathUtils, Vector3 } from "three";
 import { makeRng, pick } from "../rng";
 
 export interface Palette {
@@ -14,6 +15,13 @@ export interface Palette {
   sun: string;
   sunIntensity: number;
   ambient: number;
+  // Lighting mood
+  sunElevation: number; // degrees above the horizon
+  sunAzimuth: number; // degrees; 0 = straight down the course (ahead of you), so low suns backlight the run
+  night: number; // 0 = day … 1 = night: stars, glowing trims, stronger bloom
+  mist: string; // haze that thickens below you, towards the sea of clouds
+  mistDensity: number; // 0..1
+  glow: number; // brightness of particles and trails; bright scenes need more to read
 }
 
 // Each map picks one from its seed
@@ -32,6 +40,12 @@ export const PALETTES: readonly Palette[] = [
     sun: "#fffaf0",
     sunIntensity: 2.4,
     ambient: 1.5,
+    sunElevation: 32,
+    sunAzimuth: 30,
+    night: 0,
+    mist: "#e6f4fb",
+    mistDensity: 0.45,
+    glow: 1.25,
   },
   {
     name: "Misty pines",
@@ -47,6 +61,12 @@ export const PALETTES: readonly Palette[] = [
     sun: "#fff8e8",
     sunIntensity: 2.0,
     ambient: 1.7,
+    sunElevation: 22,
+    sunAzimuth: -35,
+    night: 0,
+    mist: "#e9eee0",
+    mistDensity: 0.75,
+    glow: 1.2,
   },
   {
     name: "Autumn",
@@ -62,6 +82,12 @@ export const PALETTES: readonly Palette[] = [
     sun: "#fff1d6",
     sunIntensity: 2.3,
     ambient: 1.5,
+    sunElevation: 26,
+    sunAzimuth: 40,
+    night: 0,
+    mist: "#ffe8cc",
+    mistDensity: 0.45,
+    glow: 1.2,
   },
   {
     name: "Dusk",
@@ -77,6 +103,12 @@ export const PALETTES: readonly Palette[] = [
     sun: "#ffe0c8",
     sunIntensity: 2.0,
     ambient: 1.5,
+    sunElevation: 11,
+    sunAzimuth: -28,
+    night: 0.2,
+    mist: "#ffc4a3",
+    mistDensity: 0.55,
+    glow: 1.1,
   },
   {
     name: "Winter",
@@ -92,8 +124,42 @@ export const PALETTES: readonly Palette[] = [
     sun: "#ffffff",
     sunIntensity: 2.3,
     ambient: 1.6,
+    sunElevation: 28,
+    sunAzimuth: 20,
+    night: 0,
+    mist: "#eef4fb",
+    mistDensity: 0.55,
+    glow: 1.3,
+  },
+  {
+    name: "Starlight",
+    horizon: "#4a2f6e",
+    zenith: "#0e0b28",
+    grass: "#3f5a6e",
+    forest: "#1f3a44",
+    trunk: "#3a2c3c",
+    rock: "#4b3f6a",
+    snow: "#cfd8ff",
+    cloud: "#6a5aa0",
+    accent: "#b4ff6a",
+    sun: "#d8c6ff",
+    sunIntensity: 1.6,
+    ambient: 1.7,
+    sunElevation: 26,
+    sunAzimuth: -18,
+    night: 1,
+    mist: "#5c3f8f",
+    mistDensity: 0.6,
+    glow: 0.9,
   },
 ];
+
+/** Unit vector towards the sun (or moon) */
+export function sunDirection(palette: Palette): Vector3 {
+  const el = MathUtils.degToRad(palette.sunElevation);
+  const az = MathUtils.degToRad(palette.sunAzimuth);
+  return new Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
+}
 
 export function paletteFor(seed: number): Palette {
   return pick(makeRng(seed, "palette"), PALETTES);

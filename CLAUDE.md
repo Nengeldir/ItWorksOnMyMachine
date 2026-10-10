@@ -1,0 +1,420 @@
+# CLAUDE.md: read this first, every session
+
+This file is Claude's memory for Wingrace. Claude Code loads it automatically
+at the start of every session in this repository. Read all of it before
+touching code, and keep it true.
+
+## Rules for working on this project
+
+1. **Read this file first.** Before planning or editing, read this file, then
+   the files the task touches. The README covers players and deployment; this
+   file covers how the code fits together and where it's going.
+2. **Always record what you changed.** Every session that changes code adds a
+   dated entry to the [Change log](#change-log): what changed, why, which files,
+   and how it was verified (build, lint, tests, browser). Note anything you
+   could not verify.
+3. **Always record what is still to do.** Unfinished work, known bugs, ideas
+   you postponed and follow-ups go into [Next up](#next-up), the
+   [Roadmap](#roadmap) or the biome plan. Remove an item when it's done, and
+   mention that in the change log.
+4. **Keep the docs in step with the code.** When you add a module, a control,
+   a tuning knob or an endpoint, update the README tables and this file's
+   architecture map in the same change.
+5. **Verify before you claim.** Run `npm run build` and `npm run lint` in
+   `frontend/`, and `pytest` in `backend/` when the backend changes. For
+   anything visual, look at it in a browser (see [Checking visuals](#checking-visuals)).
+   Report results as they are, including failures.
+6. **Looks never change gameplay.** Animation, particles, shaders and camera
+   effects must not change the flight model, collisions, ring checks or
+   timing. Leaderboards and ghosts depend on that. Gameplay changes go through
+   `flight.ts`, `World` and `Game.step`, and need a deliberate decision.
+7. **Performance budget.** Target 60 fps on an integrated laptop GPU at High
+   quality. Prefer instancing, one draw call per effect family, work done in
+   shaders, and no allocations in per-frame code. Anything heavy needs a
+   quality level (see `QUALITY` in `Game.ts`) and should respect
+   `particles.budget`.
+8. **Everything tunable goes in `tuning.ts`** (looks) or `FLIGHT` in
+   `flight.ts` (physics), so it shows up in the `?tune` panel.
+9. Don't add Claude as a co-author or contributor on commits.
+
+## The project
+
+Wingrace is a browser wingsuit racer in the style of Superflight, with
+multiplayer races. Every course is a seeded racing line through floating
+islands (same seed, same map) with crystal gates, pine forests and a sea of
+clouds below. Built for the VIScon
+hackathon: React + Three.js frontend, FastAPI backend behind Caddy, everything
+in `docker compose`.
+
+### Running it
+
+```bash
+docker compose up --build            # http://localhost:8080
+# or, for development:
+cd backend && python app.py           # :8000
+cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /api
+```
+
+- `/?seed=42` opens a time trial on seed 42. Add `&tune` for the tuning panel.
+- In dev, `window.__game`, `window.__fxTime` and `window.__tuning` are exposed
+  for poking at the game from the console.
+- Node 22+ works locally (the VM uses 24). Python 3.14 on the VM.
+
+### Architecture map (frontend/src)
+
+| Path | What it does |
+| :--- | :--- |
+| `game/Game.ts` | The game: frame loop, fixed 120 Hz physics steps, race state, ring checks, HUD data, effects wiring (gate bursts, skim spray, gate motes), rendering with optional bloom, adaptive quality, the `?tune` panel |
+| `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only |
+| `game/avatar.ts` | The pilot: a cel-shaded chibi flyer built from primitives (merged per body part, vertex-colored), a procedural cape and scarf (`Cloth`), two-segment feathered wings, and all its animation: bank lead spring, barrel rolls, flapping driven by effort, bobbing, cloth ripples, limb reactions. Also `createLabel` and `glowTexture` |
+| `game/toon.ts` | Toon material (3-band gradient, rim light tinted by the biome's sun, self-lit `glow` vertex attribute for trims and wingtips) and the inverted-hull ink outline. `TOON_LIGHT` is set per biome |
+| `game/pilotfx.ts` | Per-pilot effects: wingtip and cape ribbons, light motes, downstroke puffs, barrel-roll star spiral. Shared by you, other players and ghosts |
+| `game/particles.ts` | One GPU particle system (ring buffer, physics in the vertex shader). Kinds: Glow, Star, Shard, Wisp. `fxTime` is the shared shader clock; `FX_LIGHT.boost` scales all glowing effects per biome |
+| `game/trail.ts` | Glowing additive ribbon (shader: soft edges, light pulses, fades near the camera) |
+| `game/speedlines.ts` | Wind streaks that hang in the air and rush past at speed |
+| `game/camera.ts` | Chase camera (`CAMERA` tuning): lag, partial horizon roll, FOV with speed, FOV kick on gates, shake when skimming |
+| `game/tuning.ts` | `ANIM`, `FX`, `RINGS`, `CAMERA`: every look constant, slider ranges, localStorage persistence |
+| `game/input.ts` | Keyboard, pointer-lock mouse and gamepad, merged into pitch and roll, plus actions (respawn, mute, barrel rolls) |
+| `game/pilots.ts` | Remote players and ghosts: interpolated samples driving an `Avatar` and `PilotFx` |
+| `game/ghost.ts` | Recording and decoding ghost runs (15 Hz) |
+| `game/effects.ts` | Crash debris (instanced tetrahedra) |
+| `game/audio.ts` | Synthesized wind and event sounds |
+| `game/webgl.ts` | WebGL 2 availability check; `GameScreen` shows help if it's missing |
+| `game/math.ts` | `clamp`, `smoothstep`, `smin` (smooth minimum for distance fields) |
+| `game/world/World.ts` | Everything a seed decides: course, rock field, trees, palette; `distance()` for collisions, `lost()` below the islands. No rendering |
+| `game/world/islands.ts` | `RockField`: the floating islands as one signed distance field (shapes melted with `smin`, roughened, a tube carved along the racing line) |
+| `game/world/mesher.ts`, `mesher.worker.ts` | Cuts chunks of the rock field into flat-shaded meshes in Web Workers, and places trees |
+| `game/world/trees.ts` | Tree colliders and their lookup index |
+| `game/world/course.ts` | The racing line (a descending curve in z) and the gates along it |
+| `game/world/palette.ts` | Six biome moods (Alpine, Misty pines, Autumn, Dusk, Winter, Starlight): colors plus lighting (sun elevation and azimuth, night factor, mist below you, effect glow). `sunDirection(palette)` |
+| `game/world/atmosphere.ts` | `ATMOSPHERE` light uniforms shared per biome; `atmospheric()` patches Lambert materials (sun-tinted haze matching the sky, valley mist, backlit rims, rock strata); `skyMaterial()` (gradient, HDR sun or moon disc and halo, painted clouds, twinkling stars at night) |
+| `game/world/WorldView.ts` | Meshes for a World: island chunks streamed from the workers, pines, the sea of clouds and cloud puffs, sky, gates. `ready` is false until the rock near you has arrived |
+| `game/world/crystals.ts` | Crystal gates: instanced crystals (bob, spin, pass flare and burst in the shader), veil discs with the pass shockwave, light pillars over the next gate and the finish |
+| `session/` | Solo and room sessions wiring a `Game` to the network and UI |
+| `net/` | Server clock sync and the room connection (SSE down, POST up) |
+| `components/` | React screens: menu, HUD, lobby, results, controls |
+
+Backend (`backend/`): `app.py` endpoints, `rooms.py` race state machine and
+15 Hz SSE relay, `store.py` SQLite runs and ghosts, `models.py` Pydantic models.
+Players never collide, so the server only relays positions.
+
+### Key mechanics
+
+- **Flight:** the nose points where you go. Gravity along the flight path
+  speeds you up or slows you down, drag caps speed, bank turns you, too slow
+  and the nose drops. Skimming rock (proximity) adds style points, a
+  multiplier and acceleration. Crash means respawn at the last ring, with the
+  clock still running.
+- **Rendering:** `Game.loop` interpolates between physics states, animates
+  the avatar on top, updates effects, then renders. High quality uses an
+  `EffectComposer` (RenderPass → UnrealBloomPass → OutputPass) with HDR
+  half-float targets. Only colors above `FX.bloomThreshold` (1.3) bloom, so
+  effects that should glow write colors above 1.
+- **Biome light:** `WorldView` sets `ATMOSPHERE` from the palette, and
+  `Game.setSeed` sets `TOON_LIGHT` (rim color, trim glow: 0.15 by day up to
+  1.45 at night) and `FX_LIGHT.boost` (`palette.glow`). Bloom strength scales
+  with `1 + night * 0.6`. When you add a lit material, hook it into these
+  instead of hard-coding colors.
+- **Shader safety:** never call `pow()` on something that can go negative
+  (clamp first), and never divide by something that can reach zero. One NaN
+  pixel turns the whole bloomed frame black. This happened with the light
+  pillars; see the change log.
+- **Quality levels:** 2 = bloom at up to 2× DPR (composer capped at 1.5×),
+  1 = no bloom, 0 = 1× DPR and 40% particles. `adaptQuality` steps down after
+  sustained frames over 25 ms, and never back up.
+
+### Checking visuals
+
+There are no visual tests. Run the dev server and look:
+
+```js
+// In the console (dev build): freeze the loop and orbit the camera around the pilot
+const g = __game; cancelAnimationFrame(g.frame);
+const cam = g.rig.camera; /* position cam, cam.lookAt(g.avatar.group.position) */
+g.render();
+```
+
+Frame rates measured in a background or automated browser tab are throttled
+and meaningless. Measure in a focused window.
+
+## Change log
+
+### 2026-10-10: Genshin / Sky style pilot, crystal gates, particles (Claude)
+
+Asked for: Genshin Impact and Sky-style flight visuals, barrel-roll turns with
+flapping wings, lots of particles and trails, tunable looks, crystal gates
+that bob and shine when passed, and a cartoon humanoid pilot.
+
+- **New pilot** (`avatar.ts`, `toon.ts`; deleted `wingsuit.ts`): chibi
+  proportions (big head, slim limbs), cel shading with rim light and ink
+  outlines, face (eyes with highlights, blush), bangs, side locks, cowlick,
+  swinging ponytail, a tunic in the player's color, boots, a Sky-like cape with
+  a gold hem and emblem, two scarf tails, and two-segment feathered wings. The
+  player color recolors the cloth, wings and trails (`setColor`). Ghosts are
+  translucent with no outlines. Outlines and cloth stop updating beyond 110 m.
+- **Animation**: angular velocity is derived from the rotation each frame, so
+  the same code animates you, other players and ghosts. A spring lean leads the
+  bank. Barrel rolls (Q/E, double-tap A/D, gamepad LB/RB, or automatic when
+  snapping hard into a steep turn) do a 360° visual roll on a corkscrew path.
+  Wing effort rises with climbing, turning, rolling and low speed and drops in
+  dives; flapping uses an asymmetric stroke with a lagging outer wing, and
+  wings sweep back with speed. Also: gentle bob and sway, head looking into
+  turns, rudder legs, squash and stretch at speed. Cape and scarf ripples scale
+  with speed.
+- **Effects**: GPU particle system (`particles.ts`); `PilotFx` (ribbons from
+  both wingtips and the cape, light motes, downstroke puffs, barrel-roll star
+  spiral); aura glow; wind streaks (`speedlines.ts`); ground spray and sparks
+  when skimming; glitter around the next gate; a crash burst; a speed vignette
+  and gate flash (CSS `.speed-vignette`); FOV kick on gates; a breathing camera
+  at low speed.
+- **Crystal gates** (`world/crystals.ts`, replaces the tori in
+  `WorldView`): per gate, a crown of large crystals plus small satellites
+  that bob, orbit and spin. The next gate glows in the accent color and shows
+  through fog; the finish is gold. Passing a gate makes the crystals flare
+  white, burst outward and dissolve, sends a shockwave across the veil, and
+  bursts shards, stars and light. Gates you pass in free flight shine too, then
+  regrow.
+- **Rendering**: optional bloom with HDR targets, adaptive quality, the sun
+  brightened so it glares.
+- **Tuning**: `tuning.ts` and a reworked `?tune` panel (quality, physics,
+  animation, FX, gates, camera, barrel-roll buttons, copy as JSON, reset).
+  Look tweaks persist in localStorage; physics tweaks don't.
+- **WebGL check** (`webgl.ts`, `GameScreen.tsx`): browsers with WebGL off
+  (hardware acceleration disabled, GPU process crashed, blocklisted GPU) now
+  get instructions instead of a crash. That was the "A WebGL context could
+  not be created" report; it was never a hosting problem.
+- Verified: `npm run build` and `npm run lint` pass. Checked in Chrome: pilot
+  from behind, front and side; gate idle, highlight and pass animation;
+  barrel roll; no console errors. CPU cost of avatar and FX is about 0.7 ms a
+  frame per pilot. GPU frame time not reliably measured (the automation tab was
+  throttled).
+
+### 2026-10-10: Lighting and shaders per biome (Claude)
+
+Asked for: shaders and lighting that make every biome stunning, effects that
+behave well in different light, shiny catchy things, bright standouts.
+
+- **Biome lighting profiles** (`palette.ts`): each palette now has sun
+  elevation and azimuth (low suns sit ahead of the run, so Dusk is backlit),
+  a night factor, valley mist color and density, cloud color, and an effect
+  glow factor.
+- **Sky shader** (`atmosphere.ts`): replaces the vertex-colored dome and the
+  flat sun disc. Gradient, HDR sun (or moon) disc and halo that bloom, two
+  layers of drifting painted clouds lit from the sun's side with silver
+  linings, twinkling stars at night.
+- **Atmosphere patch** for terrain and rocks: haze that
+  takes the sun's glow towards the sun (matching the sky, so distant terrain
+  melts into it), mist pooling on the canyon floor, backlit rims on edges seen
+  against the sun, wavering rock strata. The hemisphere light now mixes in
+  the zenith color.
+- **Pilot light**: the toon rim takes the sun's color; gold trims, the cape
+  emblem and hem, and the wingtips carry a `glow` vertex attribute that
+  shimmers by day and blooms at night. The aura grows at night.
+- **Effects follow the light**: `FX_LIGHT.boost` scales particles and
+  trails per biome; bloom is stronger at night.
+- **Catchy things shine**: light pillars rise from the next gate (accent
+  color) and the finish (gold), with a flare running up the pillar on a pass.
+  Random star glints flash on crystals of gates near you.
+- **Bug fixed during the pass**: the pillar shader took `pow()` of a slightly
+  negative number at the cylinder's top edge; the NaN made every bloomed frame
+  black. Clamped there and in the crystal fresnel and the trail shader.
+- Verified: build and lint pass. Looked at Glacier, Nightshade, Dusk and
+  Lagoon in Chrome (stepping the loop by hand because the automation tab was
+  hidden), no console errors. Jungle and Desert not looked at.
+
+### 2026-10-10: Fixed the broken merge of the visuals onto the islands (Claude)
+
+What went wrong: `main` gained the floating-islands rewrite (`ca3c53c`,
+deleting `terrain.ts` and `obstacles.ts`) while the visuals work was written
+against the old canyon. Both were then copied onto each other by hand
+(`5768877` on `Pengyue`, `41c96f2` on `main`) instead of merged, so
+`WorldView.ts` and `palette.ts` ended up half one version and half the other,
+and the new modules still imported `world/terrain`. Neither branch compiled.
+Also, `HEAD` pointed at `pengyue` (lowercase) while the branch is `Pengyue`;
+macOS's case-insensitive file system hides that, but git then shows no current
+branch.
+
+The fix: a real merge of the visuals commits onto `ca3c53c`, with my code
+ported to the islands world:
+- `WorldView`: the islands version, plus the shader sky, the atmosphere patch
+  on the rock, crystal gates instead of tori, and per-biome light uniforms.
+- `palette.ts`: the islands palettes, each given a lighting mood, plus a night
+  palette, **Starlight**, so stars and glowing trims show up somewhere. Adding
+  a palette changes which palette a seed gets (colors only, not the map).
+- `atmosphere.ts`: the mist used the canyon floor's height. It's now a haze
+  that thickens below the camera, towards the sea of clouds.
+- `Game.skimSpray`: sprays off the nearest rock surface (the distance field's
+  gradient) instead of the canyon floor, so walls and overhangs spray too.
+- Crystals scale with the ring radius (islands gates are 8 m, not 13 m), so
+  the crowns stay clear of the rock tube.
+- `PilotFx`: no motes while the pilot is frozen (countdown, waiting for
+  islands), where they piled up into a glowing ball.
+- Imports moved from `world/terrain` to `math`.
+- Verified: `tsc`, lint and build pass; raced seed 42 (Misty pines) in Chrome
+  through islands and gates, no console errors.
+
+## Next up
+
+- Measure real frame times at High quality on an integrated GPU, in a focused
+  window. If bloom is too costly, lower `COMPOSER_PIXEL_RATIO` or MSAA samples.
+- The free-flight respawn and the start grid don't do any pilot entrance
+  animation; a "wings unfold" intro would be nice.
+- Remote pilots each cost about 0.7 ms of CPU for animation. With many
+  players, animate distant pilots every other frame.
+- Look at every palette in a browser (only Misty pines was checked after the
+  islands merge), and tune mist density per biome.
+- Day/night or time-of-day as a continuous parameter instead of a fixed
+  night factor per palette.
+- `RINGS.crystals` only applies to the next map (gates are built once per
+  world).
+- The ponytail and hair are hand-placed; a proper hair cap mesh would look
+  better from the front.
+
+## Roadmap
+
+The long-term direction: turn Wingrace from a single-map racer into a
+**roguelike flying adventure across procedurally generated biomes**, while
+keeping races and time trials on top of the same world generator.
+Everything has to be aesthetically excellent: a coherent painted look
+(Genshin / Sky / Journey), readable silhouettes, light and color that tell you
+where to go.
+
+### Terrain: procedural worlds
+
+Today: floating islands from one signed distance field (meshed in workers),
+pines, a sea of clouds, palettes with lighting moods. Goal:
+varied, layered, living landscapes generated from a seed.
+
+- **Landforms:** grow the islands' distance field into a composable generator:
+  mountain ranges (ridged multifractal), valleys carved along splines, plateaus
+  and mesas (terraced noise), cliffs, arches and floating islands (a 3D density
+  field meshed with surface nets or marching cubes in a worker).
+- **Water:** rivers following the flow downhill (carve channels from a
+  drainage map), lakes in basins, waterfalls where rivers cross cliffs, and
+  sea in coastal biomes. Shaded water: depth color, foam at the shore, sky
+  reflection, animated normals.
+- **Vegetation:** forests placed with Poisson-disk sampling over slope,
+  height and moisture maps. Detailed stylized trees (L-system or space
+  colonization trunks, clustered leaf cards with wind-sway shaders), several
+  species per biome, instanced, with LODs and impostors for distance. Grass
+  and flowers near the ground with a GPU sway shader.
+- **Snow, ice, rock and sand:** material layers driven by slope, height and
+  biome, blended in a terrain shader (triplanar on cliffs) instead of vertex
+  colors alone. Snow caps by height and normal.
+- **Clouds and atmosphere:** volumetric-looking clouds you can fly through
+  (instanced soft billboards or raymarched low-resolution layers), a sea of
+  clouds below high biomes, height fog, god rays, and a sky with sun, moon,
+  stars and aurora per biome.
+- **Streaming:** chunks generated in Web Workers, with LOD rings (fine near,
+  coarse far) and collision queries kept analytic or on a coarse grid so
+  physics stays cheap and deterministic.
+- **Determinism:** every generator takes the seed and its own named stream
+  (`makeRng(seed, "rivers")`), so multiplayer and ghosts keep matching.
+
+### Flight: feel and depth
+
+- Keep the arcade core (nose points where you go, energy trade), and add
+  depth: updrafts and thermals (visible as rising motes), wind currents to
+  ride (ribbons of light like Sky's wind walls), boost rings, slipstream
+  behind other players, and a controllable flare or dive-tuck.
+- Abilities as upgrades (see below): dash, short hover, glide-lock, a
+  grapple to swing around pillars, a wing-flap climb with stamina (Sky-style
+  wing energy, recharged by light sources).
+- Feel: camera tuned per speed band, haptics on gamepad, audio layers (wind
+  pitch with speed, whoosh on near-miss, chime on gates).
+- Every flight constant stays in `FLIGHT`, every look constant in
+  `tuning.ts`, and both appear in `?tune`.
+
+### User experience: roguelike gameplay
+
+The core loop:
+
+1. **Arrive in a biome** (a level) generated from the run seed and the level
+   number.
+2. **Explore and score:** fly through crystal gates for points and combos,
+   skim terrain for style, and do sidequests: light shrines, chase spirit
+   birds, collect scattered stars, rescue a lost glider, race a rival through
+   a canyon, pop beacons in time.
+3. **Find the portal(s):** each level hides one or more portals (a main
+   portal and secret ones behind sidequests). Hints come from light beams,
+   birds, wind currents and gates leading toward them.
+4. **Choose an upgrade:** flying into a portal offers two or three
+   selectable upgrades, tools or abilities, roguelike style (passive stat
+   boosts, actives like dash or hover, cosmetic trail colors earned by
+   challenges). The portal's color hints at the next biome.
+5. **Next biome:** harder, faster, more vertical; points carry over. The run
+   ends on a crash streak or a timer, depending on the mode. Score, biomes
+   reached and upgrades go to a leaderboard per daily seed.
+
+Things to build: a run state machine (biome → portal → upgrade pick → next),
+an upgrade system with data-driven definitions, sidequest framework (spawn,
+track, reward, HUD), portal visuals and transitions (a light tunnel, the
+palette cross-fading), HUD for score, objectives and a minimap or compass,
+and a meta layer (unlocks between runs). Races and time trials stay as modes
+that reuse a fixed biome.
+
+## Biome proposals and construction plan
+
+Each biome is a **level** in the roguelike run: a generator recipe (landforms,
+water, vegetation, props), a lighting mood (a palette with the fields above,
+extended), signature particles and set pieces, its own sidequests, and the
+portals out. Biomes share one engine. A biome is data plus a few biome-specific
+modules, never a fork of the renderer.
+
+### The biomes
+
+| # | Biome | Landforms and set pieces | Light and mood | Signature effects | Sidequests |
+| :- | :- | :- | :- | :- | :- |
+| 1 | **Sky Isles** (start; today's map) | Floating islands with pine forests, rock tunnels, a sea of clouds | Clear alpine day or backlit dusk (Alpine, Dusk palettes) | Light motes, cloud wisps, pollen in the sun | Light the three cairns; thread the needle tunnels |
+| 2 | **Verdant Highlands** | Rolling hills, terraced cliffs, rivers with waterfalls, dense forest with tall pines and broadleaf canopies | Soft morning sun, humid mist in valleys (Jungle) | Pollen and fireflies in shade, waterfall spray and rainbows, leaves blown off trees by your wake | Chase the spirit birds; collect seeds and plant a glowing tree |
+| 3 | **Glacier Peaks** | Jagged ridges, ice cliffs, crevasses, frozen lakes, snowfields; cloud sea below | Crisp, high sun, blue shadows (Glacier) | Snow blown off ridges, ice sparkle, breath-like frost on wingtips, aurora at the summit | Ring the ice bells; rescue a stranded glider in a blizzard |
+| 4 | **Sky Archipelago** | Floating islands (3D density), waterfalls into the void, vine bridges, cloud banks to dive through | Golden hour above the clouds, god rays through gaps | Cloud wisps parting around you, light motes like Sky's Isle of Dawn | Gather scattered stars; ride the wind walls between islands |
+| 5 | **Coral Lagoon** | Sea stacks, shallow turquoise water, sandbars, coral arches, palm groves | Bright tropical noon, caustics (Lagoon) | Sea spray when skimming water, flying fish, gull flocks | Skim the water for a combo; race the manta through the arches |
+| 6 | **Twilight Forest** | Giant mushroom and redwood forest, roots forming tunnels, glowing ponds | Blue hour, bioluminescence (Nightshade) | Fireflies, glowing spores reacting to your wingbeats, light trails brighter | Relight the lanterns; follow the spirit fox |
+| 7 | **Ember Wastes** | Volcanic ridges, lava rivers, obsidian spires, ash plumes | Red-orange, underlit by lava, dark sky | Embers rising on thermals, heat haze, sparks off obsidian | Ride the thermals to the caldera; outrun the eruption |
+| 8 | **Aurora Summit** (finale) | A spire above the clouds, ring of ancient crystal gates | Night, aurora, stars, moon glare | Aurora ribbons, starfall, every gate a light pillar | The final ascent: a gauntlet of every gate type |
+
+### Shared systems to build (in this order)
+
+1. **Biome definition format** (`world/biomes/*.ts`): `{ name, palette,
+   landforms, water, vegetation, props, particles, sidequests, portals }`, all
+   deterministic from `(runSeed, level)`. Today's `World` becomes the
+   "Sky Isles" recipe.
+2. **Terrain generator v2**: a composable height function (domain-warped
+   ridged noise, terraces, carved river splines), plus an optional 3D density
+   field for islands and overhangs. Generate chunks in a Web Worker, with LOD
+   rings. Collisions stay analytic (distance fields, as `RockField` does now).
+3. **Terrain shader v2**: slope- and height-blended layers (grass, rock,
+   snow, sand) with triplanar sampling on cliffs, building on `atmospheric()`.
+   Keep the flat-shaded painted look; textures are subtle noise, not photos.
+4. **Water**: a plane or river mesh with a stylized shader (depth tint, foam
+   lines, sky reflection, sun glitter that blooms), plus spray particles when
+   skimming.
+5. **Vegetation**: instanced stylized trees (generated trunk and branches,
+   leaf clusters as alpha cards or low-poly blobs with toon shading), placed by
+   Poisson disk over moisture, slope and height; wind sway in the vertex
+   shader; impostors far away. Grass and flowers as GPU-instanced blades near
+   the camera.
+6. **Sky and weather**: extend `skyMaterial` with layered cloud volumes you
+   can fly through (soft instanced billboards), god rays (a screen-space pass
+   at High quality), weather particles (snow, rain, embers, spores).
+7. **Run structure**: portals (a gate variant: swirling veil, beam, a tunnel
+   transition that cross-fades palettes), the upgrade picker UI, run score,
+   sidequest framework, and biome order from the run seed.
+8. **Per-biome audio beds** and music stingers for gates, sidequests and
+   portals.
+
+### What Claude should focus on
+
+- **First:** the biome definition format and the terrain generator v2,
+  because everything else hangs off them. Port the current islands into the
+  format without changing how it looks, verify, then add Verdant Highlands
+  (the first new one: it exercises rivers, forests and mist).
+- **Second:** vegetation and water, as reusable systems.
+- **Third:** the run loop (portals, upgrades, sidequests) on two biomes,
+  before building more biomes.
+- Keep every biome **beautiful at Medium quality without bloom**. Bloom is
+  the cherry, not the cake.
+- For every new visual system: add knobs to `tuning.ts`, make it react to the
+  biome light (`ATMOSPHERE`, `TOON_LIGHT`, `FX_LIGHT`), check it in the
+  browser in at least a day and a night biome, and log it here.

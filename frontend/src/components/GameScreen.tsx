@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from "react";
 import type { Screen } from "../App";
 import { formatTime, ordinal } from "../format";
+import { webglAvailable } from "../game/webgl";
 import { RoomSession } from "../session/RoomSession";
 import { SoloSession } from "../session/SoloSession";
 import { type Settings, clientId } from "../storage";
@@ -228,7 +229,44 @@ const RoomScreen = ({ code, settings, onExit }: ScreenProps & { code: string }) 
   );
 };
 
-const GameScreen = ({ screen, ...props }: ScreenProps & { screen: Exclude<Screen, { kind: "menu" }> }) =>
-  screen.kind === "solo" ? <SoloScreen seed={screen.seed} {...props} /> : <RoomScreen code={screen.code} {...props} />;
+/** Shown instead of the game when the browser can't create a WebGL context */
+const NoWebGL = ({ onExit }: { onExit: () => void }) => (
+  <div className="game">
+    <TopBar title="Wingrace" onExit={onExit} />
+    <aside className="panel no-webgl">
+      <h2>Your browser has 3D graphics turned off</h2>
+      <p>
+        Wingrace needs WebGL 2, and this browser won't create a WebGL context. That's a browser setting, not a
+        problem with the server. Usually one of these fixes it:
+      </p>
+      <ol>
+        <li>
+          Turn on hardware acceleration. In Chrome or Edge it's under Settings → System → "Use graphics
+          acceleration when available". Then relaunch the browser.
+        </li>
+        <li>
+          Restart the browser completely. After its GPU process crashes a few times, Chrome turns WebGL off until
+          the next restart.
+        </li>
+        <li>
+          Open <code>chrome://gpu</code> and check that WebGL says "Hardware accelerated". If your GPU is
+          blocklisted, try enabling <code>chrome://flags/#ignore-gpu-blocklist</code>, or use another browser.
+        </li>
+      </ol>
+      <button className="primary" onClick={() => location.reload()}>
+        Try again
+      </button>
+    </aside>
+  </div>
+);
+
+const GameScreen = ({ screen, ...props }: ScreenProps & { screen: Exclude<Screen, { kind: "menu" }> }) => {
+  if (!webglAvailable()) return <NoWebGL onExit={props.onExit} />;
+  return screen.kind === "solo" ? (
+    <SoloScreen seed={screen.seed} {...props} />
+  ) : (
+    <RoomScreen code={screen.code} {...props} />
+  );
+};
 
 export default GameScreen;
