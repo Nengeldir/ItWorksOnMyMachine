@@ -1,26 +1,31 @@
 import type { FlightInput } from "./flight";
 import { clamp } from "./math";
+import { DEFAULT_BINDINGS, type Bindings, type BindingAction } from "./bindings";
+export { keyLabel } from "./bindings";
 
 export interface ControlSettings {
   invertPitch: boolean;
-  mouseSensitivity: number; // 0.25..3, 1 = default
+  mouseSensitivity: number; // 0.3..6, 2 = default
+  invertMouse?: boolean;
+  invertGamepad?: boolean;
+  bindings?: Bindings;
+  deadZone?: number;
+  reducedMotion?: boolean;
+  quality?: "auto" | "high" | "medium" | "low";
+  musicVolume?: number;
+  effectsVolume?: number;
+  muted?: boolean;
 }
 
 /** One-off presses. Wingbeat needs its adventure upgrade. */
 export type InputAction = "pause" | "respawn" | "mute" | "barrelLeft" | "barrelRight" | "flap";
 
-/** KeyboardEvent.code bindings. Change these here; control hints use the same values. */
-export const KEY_BINDINGS = { pause: "KeyP" } as const;
-
-export function keyLabel(code: string): string {
-  return code.replace(/^(Key|Digit)/, "");
+export function controlsBlocked(): boolean {
+  return !!document.querySelector?.("dialog[open]");
 }
-
-const DEAD_ZONE = 0.12;
-
-function deadZone(value: number): number {
-  if (Math.abs(value) < DEAD_ZONE) return 0;
-  return (value - Math.sign(value) * DEAD_ZONE) / (1 - DEAD_ZONE);
+function deadZone(value: number, threshold = 0.12): number {
+  if (Math.abs(value) < threshold) return 0;
+  return (value - Math.sign(value) * threshold) / (1 - threshold);
 }
 
 function isTyping(event: KeyboardEvent): boolean {
@@ -74,7 +79,7 @@ export class Input {
   }
 
   private onKeyDown = (event: KeyboardEvent) => {
-    if (isTyping(event)) return;
+    if (event.defaultPrevented || controlsBlocked() || isTyping(event)) return;
     if (event.repeat && !this.keys.has(event.code)) return;
     this.keys.add(event.code);
     // Arrow keys would scroll the page; leave them alone on buttons and panels
@@ -82,20 +87,13 @@ export class Input {
     const atGame = !target || target === document.body || target === this.element;
     if (atGame && (event.code.startsWith("Arrow") || event.code === "Space")) event.preventDefault();
     if (event.repeat) return;
-    if (event.code === KEY_BINDINGS.pause) {
-      event.preventDefault();
-      this.onAction?.("pause");
-      return;
-    }
-    if (event.code === "KeyR") this.onAction?.("respawn");
-    if (event.code === "KeyM") this.onAction?.("mute");
-    // Explicit barrel rolls only: steering taps should never trigger a stunt.
-    if (event.code === "KeyQ") this.onAction?.("barrelLeft");
-    if (event.code === "KeyE") this.onAction?.("barrelRight");
-
-    if (event.code === "KeyC") {
-      if (atGame) event.preventDefault();
-      this.onAction?.("flap");
+    const actions: InputAction[] = ["pause", "respawn", "mute", "barrelLeft", "barrelRight", "flap"];
+    for (const action of actions) {
+      if (this.binding(action).includes(event.code)) {
+        if (atGame || action === "pause") event.preventDefault();
+        this.onAction?.(action);
+        break;
+      }
     }
   };
 
@@ -114,7 +112,7 @@ export class Input {
   }
 
   private onMouseMove = (event: MouseEvent) => {
-    if (!this.locked) return;
+    if (!this.locked || controlsBlocked()) return;
     const sensitivity = 0.0045 * this.settings.mouseSensitivity;
     this.stickX = clamp(this.stickX + event.movementX * sensitivity, -1, 1);
     this.stickY = clamp(this.stickY + event.movementY * sensitivity, -1, 1);
@@ -130,30 +128,35 @@ export class Input {
 
   /** Is the hover button held? (F, or the gamepad's B / circle) */
   get hovering(): boolean {
-    return this.keys.has("KeyF") || !!this.padButtons[1];
+    return !!this.key("hover") || !!this.padButtons[1];
   }
 
-  private key(...codes: string[]): number {
-    return codes.some((code) => this.keys.has(code)) ? 1 : 0;
+  private binding(action: BindingAction): string[] {
+    return (this.settings.bindings ?? DEFAULT_BINDINGS)[action];
+  }
+
+  private key(action: BindingAction): number {
+    return this.binding(action).some((code) => this.keys.has(code)) ? 1 : 0;
   }
 
   sample(dt: number): FlightInput {
-    if (!document.hasFocus()) { this.reset(); return { pitch: 0, roll: 0, boost: 0, brake: 0 }; }
+    if (controlsBlocked() || !document.hasFocus()) { this.reset(); return { pitch: 0, roll: 0, boost: 0, brake: 0 }; }
     const recenter = Math.exp(-dt * 3.5);
     this.stickX *= recenter;
     this.stickY *= recenter;
 
     // Positive pitch = nose up. Forward on keys, mouse and stick dives.
     // (Moving the mouse up gives a negative movementY, like pushing a stick forward.)
-    let pitch = this.key("KeyS", "ArrowDown") - this.key("KeyW", "ArrowUp") + this.stickY;
-    let roll = this.key("KeyD", "ArrowRight") - this.key("KeyA", "ArrowLeft") + this.stickX;
+    let pitch = (this.key("pitchUp") - this.key("pitchDown")) * (this.settings.invertPitch ? -1 : 1)
+      + this.stickY * ((this.settings.invertMouse ?? this.settings.invertPitch) ? -1 : 1);
+    let roll = this.key("turnRight") - this.key("turnLeft") + this.stickX;
 
-    let boost = this.key("ShiftLeft", "ShiftRight");
-    let brake = this.key("Space");
+    let boost = this.key("boost");
+    let brake = this.key("brake");
     const pad = navigator.getGamepads?.().find((p) => p?.connected);
     if (pad) {
-      roll += deadZone(pad.axes[0] ?? 0);
-      pitch += deadZone(pad.axes[1] ?? 0);
+      roll += deadZone(pad.axes[0] ?? 0, this.settings.deadZone);
+      pitch += deadZone(pad.axes[1] ?? 0, this.settings.deadZone) * ((this.settings.invertGamepad ?? this.settings.invertPitch) ? -1 : 1);
       // Y / triangle respawns, the shoulder buttons barrel roll
       const pressed = pad.buttons.map((b) => b.pressed);
       if (pressed[3] && !this.padButtons[3]) this.onAction?.("respawn");
@@ -168,7 +171,6 @@ export class Input {
       this.padButtons = [];
     }
 
-    if (this.settings.invertPitch) pitch = -pitch;
     return { pitch: clamp(pitch, -1, 1), roll: clamp(roll, -1, 1), boost, brake };
   }
 }

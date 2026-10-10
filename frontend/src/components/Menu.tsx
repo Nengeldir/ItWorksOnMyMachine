@@ -9,7 +9,7 @@ import { Course } from "../game/world/course";
 import { bestRun } from "../session/RunSession";
 import { type Settings, clientId } from "../storage";
 import { useUiTheme } from "../theme";
-import Controls from "./Controls";
+import SettingsPanel from "./SettingsPanel";
 import CourseSelect from "./CourseSelect";
 import MenuBackdrop from "./MenuBackdrop";
 import TodaysBest from "./TodaysBest";
@@ -91,7 +91,7 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
 
   return (
     <main className="menu">
-      <MenuBackdrop seed={shown} mode="drift" onSnapshot={keepArt} />
+      <MenuBackdrop seed={shown} mode="drift" onSnapshot={keepArt} settings={settings} />
 
       <button
         className="menu-icon glass settings-button"
@@ -100,17 +100,7 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
       >
         <IconSettings size={22} />
       </button>
-      {panel === "settings" && (
-        <section className="menu-popover glass settings-panel">
-          <header>
-            <h2>Controls</h2>
-            <button className="menu-icon" aria-label="Close" onClick={() => setPanel("none")}>
-              <IconX size={18} />
-            </button>
-          </header>
-          <Controls settings={settings} onSettings={onSettings} />
-        </section>
-      )}
+      {panel === "settings" && <SettingsPanel settings={settings} onSettings={onSettings} onClose={() => setPanel("none")} />}
 
       {picking ? (
         <CourseSelect

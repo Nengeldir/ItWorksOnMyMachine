@@ -116,7 +116,7 @@ const ReadyCard = ({ note, children }: { note: ReactNode; children: ReactNode })
 
 // --- Time trial ------------------------------------------------------------------
 
-const SoloScreen = ({ seed, settings, onExit }: ScreenProps & { seed: number }) => {
+const SoloScreen = ({ seed, settings, onSettings, onExit }: ScreenProps & { seed: number }) => {
   const [session] = useState(() => new SoloSession(seed, clientId(), settings));
   const ref = useMountedSession(session, settings);
   const { hud, stage, result, leaderboard, ghosts, error } = useSyncExternalStore(
@@ -133,7 +133,7 @@ const SoloScreen = ({ seed, settings, onExit }: ScreenProps & { seed: number }) 
   return (
     <div className="game">
       <div ref={ref} className="game-view" />
-      {hud && <Hud hud={hud} />}
+      {hud && <Hud hud={hud} settings={settings} onSettings={onSettings} />}
       <TopBar title={`Time trial · #${seed}${hud ? ` · ${hud.paletteName}` : ""}`} onExit={onExit} />
       {error && <div className="banner glass">{error}</div>}
 
@@ -189,7 +189,7 @@ const SoloScreen = ({ seed, settings, onExit }: ScreenProps & { seed: number }) 
 
 // --- Race room -------------------------------------------------------------------
 
-const RoomScreen = ({ code, settings, onExit }: ScreenProps & { code: string }) => {
+const RoomScreen = ({ code, settings, onSettings, onExit }: ScreenProps & { code: string }) => {
   const [session] = useState(
     () => new RoomSession(code, { clientId: clientId(), nickname: settings.nickname }, settings),
   );
@@ -210,7 +210,7 @@ const RoomScreen = ({ code, settings, onExit }: ScreenProps & { code: string }) 
   return (
     <div className="game">
       <div ref={ref} className="game-view" />
-      {hud && <Hud hud={hud} />}
+      {hud && <Hud hud={hud} settings={settings} onSettings={onSettings} />}
       <TopBar title={`Room ${code}${hud ? ` · course #${hud.seed} · ${hud.paletteName}` : ""}`} onExit={onExit}>
         <span className={`connection glass ${connection}`}>
           <span className="dot" />
@@ -263,7 +263,7 @@ const RoomScreen = ({ code, settings, onExit }: ScreenProps & { code: string }) 
 
 // --- Explore ---------------------------------------------------------------------
 
-const ExploreScreen = ({ biome, seed, settings, onExit }: ScreenProps & { biome: BiomeId; seed: number }) => {
+const ExploreScreen = ({ biome, seed, settings, onSettings, onExit }: ScreenProps & { biome: BiomeId; seed: number }) => {
   const [session] = useState(() => new ExploreSession(biome, seed, settings));
   const ref = useMountedSession(session, settings);
   const { hud, error, biome: current, mood, track, playing } = useSyncExternalStore(session.store.subscribe, session.store.get);
@@ -279,7 +279,7 @@ const ExploreScreen = ({ biome, seed, settings, onExit }: ScreenProps & { biome:
   return (
     <div className="game">
       <div ref={ref} className="game-view" />
-      {hud && <Hud hud={hud} />}
+      {hud && <Hud hud={hud} settings={settings} onSettings={onSettings} />}
       <TopBar title={`Explore · ${hud ? `${hud.biomeName} · ${hud.paletteName}` : ""} · #${seed}`} onExit={onExit} />
       {error && <div className="banner">{error}</div>}
       <aside className="debug-panel glass">
@@ -337,7 +337,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
     <div className="game">
       <div ref={ref} className="game-view" />
       {/* Nothing but the wormhole while passing through a portal */}
-      {hud && (hud.paused || (stage !== "pick" && stage !== "summary" && run?.phase !== "portal" && run?.phase !== "finale" && run?.phase !== "won")) && <Hud hud={hud} showStyle />}
+      {hud && (hud.paused || (stage !== "pick" && stage !== "summary" && run?.phase !== "portal" && run?.phase !== "finale" && run?.phase !== "won")) && <Hud hud={hud} settings={settings} onSettings={onSettings} showStyle />}
       {run && stage !== "intro" && stage !== "summary" && stage !== "pick" && run.phase !== "finale" && run.phase !== "won" && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
       {run?.phase === "finale" && (
         <div className="finale-skip">

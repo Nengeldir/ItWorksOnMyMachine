@@ -88,10 +88,18 @@ pilot glides in slowly by itself and you get control once it has arrived.
 Press `P` to pause and press it again to resume. Flight, effects and adventure
 timers freeze, and gameplay audio is silenced. In time trials and multiplayer,
 the official race clock keeps running during a pause; other players keep racing.
-To change the pause key, edit `KEY_BINDINGS.pause` in
-[`frontend/src/game/input.ts`](frontend/src/game/input.ts) using a
-`KeyboardEvent.code` (for example, `KeyO`). The in-game controls and resume hint
-automatically use that binding.
+Open **Settings** from the main menu or the paused screen to change controls.
+Keyboard actions support a primary and an alternate key, with conflict detection
+and reset-to-default controls. Escape cancels rebinding or closes Settings;
+closing Settings returns to the paused screen. HUD hints reflect your bindings.
+Menu/navigation keys, upgrade keys 1–4 and world-switching keys N/B/V are reserved.
+
+Mouse, keyboard and gamepad pitch can be inverted independently. Default mouse
+sensitivity is now 2× (range 0.3–6); existing saved sensitivity is preserved.
+Settings also include gamepad stick dead zone, music and effects/wind levels,
+mute, automatic or fixed graphics quality, and reduced camera shake/FOV effects.
+Preferences are saved per browser; if storage is unavailable they still work for
+this visit. Gamepad buttons retain their standard layout.
 
 Flying into a portal blurs the view into sparkles and drops you into a
 wormhole: a dark tube of twisting stars and drifting spirits, where you pick
