@@ -75,11 +75,11 @@ test("touch stick and buttons, and tilt angles from the direction of gravity", a
   const input = new Input({}, {invertPitch:false, mouseSensitivity:1});
   try {
     input.touchX = 0.5; input.touchY = -1; input.touchBoost = true;
-    assert.deepEqual(input.sample(0), {pitch:-1, roll:0.5, boost:1, brake:0}, "thumb up dives, like a stick pushed forward");
+    assert.deepEqual(input.sample(0), {pitch:-1, roll:0.5, boost:1, brake:0, use:0}, "thumb up dives, like a stick pushed forward");
     input.settings.invertTouch = true;
     assert.equal(input.sample(0).pitch, 1);
     input.reset();
-    assert.deepEqual(input.sample(0), {pitch:0, roll:0, boost:0, brake:0});
+    assert.deepEqual(input.sample(0), {pitch:0, roll:0, boost:0, brake:0, use:0});
   } finally {
     input.dispose(); delete globalThis.window; delete globalThis.document;
   }
