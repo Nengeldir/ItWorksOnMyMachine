@@ -82,6 +82,22 @@ export class CameraRig {
     this.setFov(CAMERA.fov + clamp((speed - 30) * CAMERA.fovPerSpeed, 0, CAMERA.fovMax), dt);
   }
 
+  /**
+   * After a crash: keep the tumbling pilot in view from 7 to 15 m away, out of
+   * the rock, without the chase camera's roll
+   */
+  follow(point: Vector3, dt: number, clearance: (x: number, y: number, z: number) => number) {
+    pulled.subVectors(this.camera.position, point);
+    const length = pulled.length();
+    if (length > 1e-3) {
+      target.copy(point).addScaledVector(pulled, clamp(length, 7, 15) / length);
+      this.camera.position.lerp(target, 1 - Math.exp(-dt * 3));
+    }
+    const gap = clearance(this.camera.position.x, this.camera.position.y, this.camera.position.z);
+    if (gap < 1.5) this.camera.position.y += Math.min(1.5 - gap, 20 * dt + 0.1);
+    this.watch(point, dt);
+  }
+
   /** After a crash: stay put and look at the wreck */
   watch(point: Vector3, dt: number) {
     this.up.lerp(WORLD_UP, 1 - Math.exp(-dt * 3)).normalize();

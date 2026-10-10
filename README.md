@@ -168,7 +168,10 @@ and feathered wings, all built from primitives at runtime. Its animation sits on
 top of the flight model and never changes it: the body leans into turns ahead
 of the physics, the wings flap harder when climbing, turning or slow and fold
 back in a dive, the cloth ripples with speed, and hard turns throw a barrel
-roll. Gates are cohorts of floating crystals that flare and burst when you fly
+roll. A crash plays out on screen before you respawn: hit a wall head-on and
+the pilot bounces off and tumbles head over heels; graze a slope and they roll
+down it in a trail of dust; clip a wing and they spin down like a seed; then
+they dissolve into light. Gates are cohorts of floating crystals that flare and burst when you fly
 through. One GPU particle system draws every mote, star and shard, and bright
 things bloom (High quality). Each palette is a lighting mood as well: sun
 position, valley mist, painted clouds, stars at night, and how brightly trims
@@ -195,6 +198,7 @@ doesn't fly the course itself.
 | `frontend/src/game/world/`             | Racing line, rock field, meshing workers, palettes, view |
 | `frontend/src/game/flight.ts`          | Flight model                                             |
 | `frontend/src/game/avatar.ts`          | The pilot's model and animation                          |
+| `frontend/src/game/death.ts`           | Crash animations: how a crash plays out (looks only)     |
 | `frontend/src/game/tuning.ts`          | Every look-and-feel constant, for the `?tune` panel      |
 | `frontend/src/game/pilots.ts`          | Remote players and ghosts, with interpolation            |
 | `frontend/src/net/`                    | Server clock and the room connection (SSE + POST)        |

@@ -85,11 +85,12 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/input.ts` | Keyboard, pointer-lock mouse and gamepad, merged into pitch and roll, plus actions (respawn, mute, barrel rolls) |
 | `game/pilots.ts` | Remote players and ghosts: interpolated samples driving an `Avatar` and `PilotFx` |
 | `game/ghost.ts` | Recording and decoding ghost runs (15 Hz) |
-| `game/effects.ts` | Crash debris (instanced tetrahedra) |
+| `game/death.ts` | Crash animations, looks only: `classifyCrash` picks headfirst (into a wall: bounce and tumble), slide (glancing ground: roll down the slope), wing (a wing clipped: spin down) or fall (below the islands); `DeathFall` is a small rigid-body tumble kept out of the rock by the distance field. The avatar plays `die(kind)`, the camera `follow`s, the body dissolves into light at `DISSOLVE_AT`, all inside `RESPAWN_DELAY` |
+| `game/effects.ts` | Crash debris: feathers knocked loose that flutter down (instanced) |
 | `game/audio.ts` | Synthesized wind and event sounds, run stingers (portal, upgrade, dash; sidequest and item are unused for now) and the wingbeat whoosh |
 | `game/webgl.ts` | WebGL 2 availability check; `GameScreen` shows help if it's missing |
 | `game/run/` | The roguelike run. `run.ts`: run length, biome order from the run seed, portal destinations, scoring constants, `RunHud`. `upgrades.ts`: nine data-defined upgrades and the 3-of-N offer. `controller.ts`: `RunController` (levels, gates and chains, abilities as `FlightMods`, the portal, upgrade pick, tunnel and palette cross-fade, HUD data). `portal.ts`: portal (ring, swirling veil, beam) and the tunnel |
-| `game/devtools.ts` | Dev builds only: `__shot(view)` (freeze, stream the land around a fixed camera, render once) and `__raceHashes()` (the race map's determinism check) on `window` |
+| `game/devtools.ts` | Dev builds only: `__shot(view)` (freeze, stream the land around a fixed camera, render once), `__raceHashes()` (the race map's determinism check), `__run(s)`, `__bench(q)` and `__crash(kind, after)` (flies into rock near the start and stops `after` s into the crash animation) on `window` |
 | `game/math.ts` | `clamp`, `smoothstep`, `smin` (smooth minimum for distance fields) |
 | `game/world/terrain/` | Generator v2 (every biome but Sky Isles). `noise.ts`: seeded fbm, ridged multifractal, domain-warped ridges, terraces. `shapes.ts`: distance-field primitives with boxes, surface ids and grain (Island, NoiseIsland from 3D noise with tunnels, Mesa with ledges, Spire between two points, Slab, RockRing, Cap). `ground.ts`: the heightfield following the line (valley, hills, warped ridged mountains, terraces, crevasses, carved river channel, overhang noise on cliffs). `river.ts`: `Steps`, a valley floor stepping down in pools and falls, and the river in it (water distance for collisions). `field.ts`: `TerrainField`, ground + shapes as one field, `fill()` for whole blocks (same arithmetic as `distance()`). `recipes.ts`: gates and scenery from a biome's `LandRecipe`. `mesh.ts`: surface nets per LOD node, faces painted for the shader. `streamer.ts`: `LandStreamer`, the LOD octree (384/192/96 m nodes, 16 cells each). `material.ts`: the terrain shader |
 | `game/world/biomes/` | Biomes as data (`types.ts`: `Biome`, `Level`, `LevelKey`). `index.ts`: the registry, `raceLevel(seed)` (races and time trials: always Sky Isles) and `runLevel(runSeed, index, biome)` (roguelike levels, deterministic from the run seed and level number). `skyIsles.ts`: the race map, frozen |
@@ -159,6 +160,29 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Crash animations (Claude)
+
+Asked for: a death animation per kind of crash, keeping the particles.
+- **`death.ts`**: at the crash, the surface normal (from the distance
+  field, sampled at the last step outside the rock) and the flight
+  direction pick the kind: **headfirst** (bounces back off the wall,
+  tumbles head over heels; a squash on impact and a ring of "seeing stars"),
+  **slide** (keeps sliding along the slope and rolls down it, kicking up
+  dust), **wing** (a wing clipped the rock: thrown off balance into a flat
+  spin, the hit wing bent), **fall** (below the islands: a slow tumble).
+  `DeathFall` simulates the body (gravity, drag, bouncing and rolling on the
+  distance field) and the avatar's `die()` pose flails, then goes limp, with
+  wings crumpling and the cloth whipping. At 1.1 s the body shrinks into a
+  burst of light; the respawn still comes at `RESPAWN_DELAY` (1.4 s).
+- The pilot no longer vanishes on a crash. The crash burst is smaller (the
+  body stays visible), debris are now feathers that flutter down, and the
+  camera follows the tumble from 7 to 15 m, kept out of the rock.
+- Looks only: the crash test, the respawn delay, the respawn point and the
+  scoring are unchanged.
+- Verified: build and lint pass. In Chrome (Sky Isles seed 42, `__crash`):
+  headfirst, slide and wing each play out and are classified as aimed in most
+  test spots; no console errors. Not played with a mouse in a focused window.
 
 ### 2026-10-10: Stale builds after a rebuild (Claude)
 
