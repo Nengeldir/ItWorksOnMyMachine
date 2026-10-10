@@ -250,6 +250,30 @@ focused browser window. Headless checks validate behavior and layout, not
 the project's 60 fps target. Production administrator testing would need a
 separately protected deployment; a client-side secret would not provide
 access control.
+### 2026-10-10: Bounded steering, sideways dodge and vertical camera continuity
+
+- `flight.ts`: A/D, mouse and stick now choose a bank target capped at 50°;
+  release levels the wings. Pitch uses the unbanked frame and remains unrestricted.
+  Q/E and LB/RB trigger a 5 m dodge over 0.6 s, with a 1 s start-to-start cooldown.
+  Its smooth displacement is integrated in the fixed step before collision/gate
+  checks; dodge never changes the base orientation. Respawn clears dodge state.
+- `avatar.ts`, `Game.ts`, `tuning.ts`: visual roll follows physics dodge progress;
+  removed cosmetic corkscrew displacement and extra visual bank. Removed obsolete
+  auto-roll/time/radius knobs; dodge timing and distance belong to `FLIGHT`.
+- `camera.ts`: transport the previous view/up frame through vertical flight,
+  suppress horizon correction near the poles, and bound recovery away from them.
+- `Hud.tsx`, `Hud.css`: fixed panel/status/bar dimensions, stable key hint line,
+  Ready/Boosting/Recharging/Braking labels, and moved the mouse hint above the panel.
+- Room snapshots and ghosts carry signed dodge progress. Older ghost formats
+  remain readable; v2 result filtering preserves legacy and v1 scores separately.
+  Frontend and backend must deploy together.
+- Verification: 15 frontend tests and 22 backend tests pass, including exact
+  dodge displacement at multiple speeds/timesteps, steering limits, cooldown,
+  reset, and camera continuity over loops in both directions at 30/60/144 fps.
+  Production build and lint pass. In the live browser preview, Ready, Boosting,
+  Braking and Recharging retain the same 245 x 50 px boost block; the mouse hint
+  no longer overlaps it. Real-gamepad and two-client visual playtesting remain
+  outstanding; loop continuity is covered by numeric camera tests.
 
 
 ### 2026-10-10: Biome music and the wingbeat sample (Claude)

@@ -11,14 +11,14 @@ const Controls = ({ settings, onSettings }: ControlsProps) => (
   <div className="controls">
     <ul className="keys">
       <li>
-        <kbd>Mouse</kbd> or <kbd>WASD</kbd> / arrows or a gamepad stick: pitch and roll
+        <kbd>Mouse</kbd> or <kbd>WASD</kbd> / arrows or a gamepad stick: pitch and turn
       </li>
       <li><kbd>Shift</kbd> boost · <kbd>Space</kbd> brake (gamepad RT / LT). Release boost to recharge.</li>
       <li>Adventure wingbeat: <kbd>C</kbd> / gamepad A.</li>
-      <li>Bank to turn. Dive for speed, pull up to trade it for height.</li>
+      <li>Steering banks up to 50°. Dive for speed, pull up to trade it for height.</li>
       <li>Skim the rock and trees for style points and a speed boost.</li>
       <li>
-        <kbd>Q</kbd> / <kbd>E</kbd>: barrel roll
+        <kbd>Q</kbd> / <kbd>E</kbd>: 5 m sideways dodge with a barrel roll
       </li>
       <li>
         <kbd>R</kbd> respawn · <kbd>M</kbd> mute · <kbd>Esc</kbd> free the mouse

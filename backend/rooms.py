@@ -218,7 +218,7 @@ class Room:
         self.check_race_over(now)
         self.notify(now)
 
-    def update_state(self, player: Player, t: float, p: list[float], q: list[float], v: float, cp: int, now: int | None = None, boost: float = 0, brake: float = 0):
+    def update_state(self, player: Player, t: float, p: list[float], q: list[float], v: float, cp: int, now: int | None = None, boost: float = 0, brake: float = 0, dodge: float = 0):
         player.state = [
             round(p[0], 2),
             round(p[1], 2),
@@ -232,6 +232,7 @@ class Room:
             round(t),
             round(boost, 2),
             round(brake, 2),
+            round(dodge, 4),
         ]
         player.moved = True
         player.last_seen = now if now is not None else now_ms()

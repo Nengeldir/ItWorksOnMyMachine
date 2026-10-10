@@ -244,7 +244,6 @@ const localOmega = new THREE.Vector3();
 const dq = new THREE.Quaternion();
 const prevInverse = new THREE.Quaternion();
 const forwardTmp = new THREE.Vector3();
-const rightTmp = new THREE.Vector3();
 
 function springStep(value: number, velocity: number, target: number, stiffness: number, damping: number, dt: number) {
   const c = 2 * damping * Math.sqrt(stiffness);
@@ -290,7 +289,6 @@ export class Avatar {
   private flapPhase = 0;
   private lastFlap = 0;
   private barrel = { t: -1, dir: 1 };
-  private barrelCooldown = 0;
   private speed = 30;
   boost = 0;
   brake = 0;
@@ -309,7 +307,6 @@ export class Avatar {
     this.lean = this.leanVelocity = 0;
     this.barrel.t = -1;
     this.barrelProgress = -1;
-    this.barrelCooldown = 0;
     this.boost = this.brake = 0;
     this.boostOn = false;
   }
@@ -624,11 +621,11 @@ export class Avatar {
     this.effort = 1;
   }
 
-  /** Spins a full barrel roll: 1 = right, -1 = left. */
-  barrelRoll(dir: 1 | -1) {
-    if (this.barrel.t >= 0) return;
-    this.barrel = { t: 0, dir };
-    this.barrelCooldown = ANIM.barrelCooldown;
+  /** The roll is visual; flight physics supplies its timing and displacement. */
+  setDodge(phase: number) {
+    this.barrel.t = phase === 0 ? -1 : Math.min(1, Math.abs(phase));
+    this.barrel.dir = phase < 0 ? -1 : 1;
+    this.barrelProgress = this.barrel.t;
   }
 
   /**
@@ -662,25 +659,6 @@ export class Avatar {
     const target = clamp(this.rollRate * ANIM.bankLead + this.yawRate * 0.35, -1.1, 1.1);
     [this.lean, this.leanVelocity] = springStep(this.lean, this.leanVelocity, target, ANIM.bankSpring, ANIM.bankDamping, dt);
 
-    // Barrel rolls: on demand, or when snapping hard into a steep turn
-    this.barrelCooldown -= dt;
-    const bank = Math.asin(clamp(-rightTmp.set(1, 0, 0).applyQuaternion(this.group.quaternion).y, -1, 1));
-    if (
-      ANIM.autoBarrel &&
-      this.barrel.t < 0 &&
-      this.barrelCooldown <= 0 &&
-      Math.abs(this.rollRate) > 2.4 &&
-      Math.abs(bank) > 0.9 &&
-      Math.sign(bank) === Math.sign(this.rollRate)
-    ) {
-      this.barrelRoll(this.rollRate > 0 ? 1 : -1);
-    }
-    if (this.barrel.t >= 0) {
-      this.barrel.t += dt / Math.max(0.1, ANIM.barrelTime);
-      if (this.barrel.t >= 1) this.barrel.t = -1;
-    }
-    this.barrelProgress = this.barrel.t;
-
     // Effort decides how hard the wings flap: climbing, turning, rolling or slow
     const slow = clamp((32 - speed) / 18, 0, 1);
     const diving = smoothstep(-0.15, -0.6, this.climb);
@@ -712,26 +690,21 @@ export class Avatar {
     const speedK = smoothstep(25, 95, this.speed);
     const turn = clamp(this.yawRate, -1.5, 1.5);
 
-    // Rig: lean, barrel roll, bobbing, a corkscrew offset during rolls, squash and stretch
-    let roll = -this.lean;
-    let ox = 0;
-    let oy = 0;
+    // Rig: physics-timed barrel roll, gentle bobbing, squash and stretch
+    let roll = 0; // steering bank is already in group; never visually exceed its limit
     if (this.barrel.t >= 0) {
       const p = smoother(clamp(this.barrel.t, 0, 1));
       const angle = p * TAU * this.barrel.dir;
-      const envelope = Math.sin(Math.PI * clamp(this.barrel.t, 0, 1));
       roll -= angle;
-      ox = Math.sin(angle) * A.barrelRadius * envelope;
-      oy = (1 - Math.cos(angle)) * 0.5 * A.barrelRadius * envelope;
     }
     const calm = 1 - speedK * 0.65;
     const bob = Math.sin(t * TAU * A.bobRate) * A.bobAmount * calm;
     const flapLift = Math.sin(this.flapPhase + Math.PI / 2) * 0.05 * this.effort;
-    this.rig.position.set(ox + Math.sin(t * TAU * A.bobRate * 0.5) * A.bobAmount * 0.4 * calm, oy + bob + flapLift, 0);
+    this.rig.position.set(Math.sin(t * TAU * A.bobRate * 0.5) * A.bobAmount * 0.4 * calm, bob + flapLift, 0);
     this.rig.rotation.set(
       Math.cos(t * TAU * A.bobRate) * 0.04 * calm - this.pitchRate * 0.05,
       0,
-      roll + Math.sin(t * TAU * A.bobRate * 0.5) * 0.05 * calm,
+      roll,
     );
     const stretch = 1 + clamp((this.speed - 55) / 60, 0, 1) * 0.06;
     this.rig.scale.set(SCALE / Math.sqrt(stretch), SCALE / Math.sqrt(stretch), SCALE * stretch);

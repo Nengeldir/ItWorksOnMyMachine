@@ -71,3 +71,45 @@ test("overspeed is dissipated rather than clamped instantly", () => {
   const f = make(150); f.step(1/120, {pitch:0, roll:0}, 0);
   assert.ok(f.speed > FLIGHT.maxSpeed && f.speed < 150);
 });
+
+
+test("held steering never exceeds 50 degrees, turns continuously, and levels on release", () => {
+  for (const dir of [-1,1]) {
+    const f = make();
+    for (let i=0;i<1200;i++) {
+      f.step(1/120, {pitch:0, roll:dir}, 0);
+      assert.ok(Math.abs(f.bank) <= 50 * Math.PI/180 + 1e-10);
+      assert.ok(f.up.y > 0);
+    }
+    assert.ok(Math.abs(f.forward.x) > 0.1);
+    fly(f,2); assert.ok(Math.abs(f.bank) < 0.01);
+  }
+});
+
+test("Q/E dodge moves exactly 5 metres at different speeds and step sizes without changing heading", () => {
+  for (const dir of [-1,1]) for (const speed of [20,80]) for (const dt of [1/120,1/60,0.013]) {
+    const f=make(speed), normal=make(speed);
+    assert.equal(f.dodge(dir), true); assert.equal(f.dodge(-dir), false);
+    for (let t=0;t<0.8;t+=dt) {
+      f.step(dt,{pitch:0,roll:0},0); normal.step(dt,{pitch:0,roll:0},0);
+    }
+    const displacement=f.position.clone().sub(normal.position);
+    assert.ok(Math.abs(displacement.x-dir*5)<1e-9);
+    assert.ok(Math.abs(displacement.y)+Math.abs(displacement.z)<1e-9);
+    assert.ok(f.quaternion.angleTo(normal.quaternion)<1e-7);
+    assert.equal(f.dodgePhase,0); assert.equal(f.dodge(dir),false);
+    fly(f,0.3); assert.equal(f.dodge(dir),true);
+  }
+});
+
+test("dodge displacement passes through obstacles incrementally and resets on respawn", () => {
+  const f=make(); f.dodge(1); let crossedWall=false; let before=0;
+  for(let i=0;i<72;i++) {
+    f.step(1/120,{pitch:0,roll:0},0);
+    if(before<2.5 && f.position.x>=2.5) crossedWall=true;
+    assert.ok(f.position.x-before < 0.11); before=f.position.x;
+  }
+  assert.equal(crossedWall,true);
+  f.reset(new Vector3(),new Vector3(0,0,-1),40);
+  assert.equal(f.dodgePhase,0); assert.equal(f.dodge(-1),true);
+});

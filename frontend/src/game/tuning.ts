@@ -9,13 +9,9 @@ import type { DebugSettings } from "./debugMode";
 export const ANIM = {
   boostSweep: 0.25,
   brakeSweep: 0.7,
-  bankLead: 0.55, // extra visual bank, as a share of the roll rate (rad per rad/s)
+  bankLead: 0.55, // limb/pelvis lean response to the bank rate
   bankSpring: 14, // stiffness of the lean spring; lower = floatier
   bankDamping: 0.42, // 1 = no overshoot, lower = a little wobble after a turn
-  autoBarrel: false, // snapping hard into a turn throws a full barrel roll
-  barrelTime: 0.7, // seconds for one barrel roll
-  barrelRadius: 0.9, // metres the pilot corkscrews around the flight path
-  barrelCooldown: 1.1,
   flapRate: 1.6, // flaps per second while gliding slowly
   flapBoost: 2.6, // extra flaps per second when climbing, turning or rolling
   flapAngle: 0.5, // radians of wing travel at full effort
@@ -79,6 +75,7 @@ export const CAMERA = {
   boostFov: 4,
   boostDistance: 1.2,
   pathFollow: 0.6,
+  horizonRecovery: 1.5, // max camera roll correction in rad/s away from vertical
   ringPunch: 3, // FOV kick when passing a gate (degrees)
 };
 
@@ -182,12 +179,10 @@ export const RANGES: Record<string, [number, number, number?]> = {
   boostFov: [0, 8],
   boostDistance: [0, 3],
   pathFollow: [0, 0.8],
+  horizonRecovery: [0.1, 3],
   bankLead: [0, 1.5],
   bankSpring: [2, 40],
   bankDamping: [0.1, 1],
-  barrelTime: [0.3, 1.5],
-  barrelRadius: [0, 3],
-  barrelCooldown: [0.2, 3],
   flapRate: [0, 4],
   flapBoost: [0, 6],
   flapAngle: [0, 1.2],

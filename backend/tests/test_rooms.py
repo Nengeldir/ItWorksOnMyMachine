@@ -45,7 +45,7 @@ def test_snapshots_coalesce_for_slow_clients():
 
     [snap] = messages(listener)  # only the newest snapshot is kept
     assert snap["type"] == "snap"
-    assert snap["players"] == [[alice.id, 4, 2, 3, 0, 0, 0, 1, 40, 0, T0 + 4, 0, 0]]
+    assert snap["players"] == [[alice.id, 4, 2, 3, 0, 0, 0, 1, 40, 0, T0 + 4, 0, 0, 0]]
 
 
 def test_race_runs_from_countdown_to_results():
