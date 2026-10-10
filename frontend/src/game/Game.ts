@@ -240,6 +240,14 @@ export class Game implements RunHost {
     this.ambient = new Ambient(this.particles, this.softParticles);
     this.avatar = new Avatar(options.color);
     this.fx = new PilotFx(this.avatar, options.color, this.particles);
+    if (!this.attract) {
+      // Your own wings make a sound on each downstroke (the effects keep their own hook)
+      const puff = this.avatar.onDownstroke;
+      this.avatar.onDownstroke = (strength) => {
+        puff?.(strength);
+        if (!this.frozen && this.crashedAt === null) this.audio.wing(strength);
+      };
+    }
     this.speedLines = new SpeedLines();
     this.debris = new Debris(options.color);
     this.scene.add(this.avatar.group, this.debris.mesh, this.particles.points, this.softParticles.points, this.speedLines.mesh, ...this.fx.meshes);
@@ -355,6 +363,11 @@ export class Game implements RunHost {
     return this.world.seed;
   }
 
+  /** The music file playing right now (debug panel) */
+  get musicTrack(): string | null {
+    return this.audio.track;
+  }
+
   get level(): Level {
     return this.world.level;
   }
@@ -392,6 +405,7 @@ export class Game implements RunHost {
     FX_LIGHT.boost.value = palette.glow;
     TOON_LIGHT.rimColor.value.set(palette.sun).lerp(WHITE, 0.35);
     TOON_LIGHT.glow.value = 0.15 + palette.night * 1.3;
+    this.audio.setBiome(level.biome.id, palette.night);
     this.setGhosts([]);
     this.style = 0;
     this.freeFlight(true);

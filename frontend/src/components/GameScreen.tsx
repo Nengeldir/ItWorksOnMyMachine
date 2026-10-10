@@ -270,13 +270,48 @@ const RoomScreen = ({ code, settings, onExit }: ScreenProps & { code: string }) 
 const ExploreScreen = ({ biome, seed, settings, onExit }: ScreenProps & { biome: BiomeId; seed: number }) => {
   const [session] = useState(() => new ExploreSession(biome, seed, settings));
   const ref = useMountedSession(session, settings);
-  const { hud, error } = useSyncExternalStore(session.store.subscribe, session.store.get);
+  const { hud, error, biome: current, mood, track, playing } = useSyncExternalStore(session.store.subscribe, session.store.get);
+
+  // The mouse is often locked to the game, so everything has a key
+  useHotkeys({
+    KeyN: () => session.step(1),
+    KeyB: () => session.step(-1),
+    KeyV: () => session.stepMood(1),
+  });
+
+  const moods = BIOMES[current].moods;
   return (
     <div className="game">
       <div ref={ref} className="game-view" />
       {hud && <Hud hud={hud} />}
       <TopBar title={`Explore · ${hud ? `${hud.biomeName} · ${hud.paletteName}` : ""} · #${seed}`} onExit={onExit} />
       {error && <div className="banner">{error}</div>}
+      <aside className="debug-panel glass">
+        <h3>Worlds</h3>
+        <div className="debug-row">
+          {(Object.keys(BIOMES) as BiomeId[]).map((id) => (
+            <button key={id} className={id === current ? "on" : ""} onClick={() => session.show(id)}>
+              {BIOMES[id].name}
+            </button>
+          ))}
+        </div>
+        <h3>Light</h3>
+        <div className="debug-row">
+          {moods.map((m, i) => (
+            <button key={m.name} className={i === mood ? "on" : ""} onClick={() => session.show(current, i)}>
+              {m.name}
+            </button>
+          ))}
+        </div>
+        <p>
+          Music for this world: <strong>{track}</strong>
+          <br />
+          Playing: <strong>{playing ?? "nothing yet (click the game, or still loading)"}</strong>
+        </p>
+        <p className="debug-keys">
+          <kbd>N</kbd> next world · <kbd>B</kbd> previous · <kbd>V</kbd> next light
+        </p>
+      </aside>
     </div>
   );
 };
