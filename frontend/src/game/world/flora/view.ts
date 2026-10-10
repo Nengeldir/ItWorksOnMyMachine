@@ -376,19 +376,23 @@ export class FloraView {
     const { plants } = node;
     const count = plants.length / PLANT_STRIDE;
     if (!count) return;
-    // Group by species
-    const per = this.species.map(() => ({ m: [] as number[], c: [] as number[] }));
+    // Count per species, then write straight into typed arrays (no garbage)
+    const counts = new Array<number>(this.species.length).fill(0);
+    for (let i = 0; i < count; i++) counts[plants[i * PLANT_STRIDE]]++;
+    const matrices = counts.map((n) => new Float32Array(n * 16));
+    const colors = counts.map((n) => new Float32Array(n * 3));
+    const filled = new Array<number>(this.species.length).fill(0);
     for (let i = 0; i < count; i++) {
       const o = i * PLANT_STRIDE;
       const s = plants[o];
+      const k = filled[s]++;
       rotation.setFromAxisAngle(YAXIS, plants[o + 6]);
       matrix.compose(position.set(plants[o + 1], plants[o + 2], plants[o + 3]), rotation, scale.set(plants[o + 5], plants[o + 4], plants[o + 5]));
-      per[s].m.push(...matrix.elements);
-      this.plantColor(s, plants[o + 7], color);
-      per[s].c.push(color.r, color.g, color.b);
+      matrix.toArray(matrices[s], k * 16);
+      this.plantColor(s, plants[o + 7], color).toArray(colors[s], k * 3);
     }
-    per.forEach((p, s) => {
-      if (p.c.length) this.full[s].add(key, new Float32Array(p.m), new Float32Array(p.c));
+    counts.forEach((n, s) => {
+      if (n) this.full[s].add(key, matrices[s], colors[s]);
     });
     node.full = true;
   }
@@ -419,10 +423,14 @@ export class FloraView {
     const { tufts } = node;
     const count = tufts.length / TUFT_STRIDE;
     if (!count || !this.grass || !this.flowers) return;
-    const gm: number[] = [];
-    const gc: number[] = [];
-    const fm: number[] = [];
-    const fc: number[] = [];
+    let flowerCount = 0;
+    for (let i = 0; i < count; i++) if (tufts[i * TUFT_STRIDE + 5] > 0) flowerCount++;
+    const gm = new Float32Array((count - flowerCount) * 16);
+    const gc = new Float32Array((count - flowerCount) * 3);
+    const fm = new Float32Array(flowerCount * 16);
+    const fc = new Float32Array(flowerCount * 3);
+    let g = 0;
+    let f = 0;
     for (let i = 0; i < count; i++) {
       const o = i * TUFT_STRIDE;
       const kind = tufts[o + 5];
@@ -431,17 +439,17 @@ export class FloraView {
       const size = tufts[o + 3];
       matrix.compose(position.set(tufts[o], tufts[o + 1], tufts[o + 2]), rotation, scale.set(size * 1.3, size, size * 1.3));
       if (kind > 0) {
-        fm.push(...matrix.elements);
-        color.copy(this.flowerColors[(kind - 1) % this.flowerColors.length]).multiplyScalar(0.9 + 0.2 * shade);
-        fc.push(color.r, color.g, color.b);
+        matrix.toArray(fm, f * 16);
+        color.copy(this.flowerColors[(kind - 1) % this.flowerColors.length]).multiplyScalar(0.9 + 0.2 * shade).toArray(fc, f * 3);
+        f++;
       } else {
-        gm.push(...matrix.elements);
-        color.copy(this.grassBase).lerp(this.grassTip, shade * 0.8).multiplyScalar(0.9 + 0.25 * shade);
-        gc.push(color.r, color.g, color.b);
+        matrix.toArray(gm, g * 16);
+        color.copy(this.grassBase).lerp(this.grassTip, shade * 0.8).multiplyScalar(0.9 + 0.25 * shade).toArray(gc, g * 3);
+        g++;
       }
     }
-    if (gc.length) this.grass.add(key, new Float32Array(gm), new Float32Array(gc));
-    if (fc.length) this.flowers.add(key, new Float32Array(fm), new Float32Array(fc));
+    if (g) this.grass.add(key, gm, gc);
+    if (f) this.flowers.add(key, fm, fc);
     node.grass = true;
   }
 

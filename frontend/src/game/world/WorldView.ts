@@ -263,9 +263,16 @@ export class WorldView {
     const rng = makeRng(seed, "clouds");
     const geometry = this.geometry(new THREE.IcosahedronGeometry(1, 1));
     roughen(geometry, 0.15, `cloud${seed}`);
-    // Partly self-lit, so they stay white from every side
+    // Partly self-lit, so they stay white from every side; by night, moonlit veils
+    // close to the sky's color rather than dark discs
     const material = new THREE.MeshLambertMaterial({ color: palette.cloud, flatShading: true });
-    material.emissive.set(palette.cloud).multiplyScalar(0.55);
+    material.color.lerp(new THREE.Color(palette.horizon), palette.night * 0.5);
+    material.emissive.set(palette.cloud).lerp(new THREE.Color(palette.horizon), palette.night * 0.6).multiplyScalar(0.55 + palette.night * 0.35);
+    if (palette.night > 0.5) {
+      material.transparent = true;
+      material.opacity = 1 - palette.night * 0.45;
+      material.depthWrite = false;
+    }
     const mesh = new THREE.InstancedMesh(geometry, this.material(material), count);
     const matrix = new THREE.Matrix4();
     const rotation = new THREE.Quaternion();

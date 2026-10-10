@@ -11,6 +11,14 @@ the last ring.
   at the same time and sees each other live.
 - **Time trial:** race the clock on today's course, a random one or any seed,
   against the ghosts of the fastest runs. Leaderboards per seed.
+- **Adventure:** a roguelike run through eight biomes linked by portals:
+  Sky Isles, Verdant Highlands, Glacier Peaks, Sky Archipelago, Coral Lagoon,
+  Twilight Forest, Ember Wastes and the Aurora Summit. Chain gates, skim for
+  style, do two sidequests per biome, find the secret portals, and pick an
+  upgrade at every portal (dash, wingbeats, hover, glide lock and more).
+
+Races and time trials always fly Sky Isles, so recorded ghosts and
+leaderboards stay valid; the other biomes are for the adventure.
 
 Built on the VIScon hackathon template: React + Three.js in the browser,
 FastAPI behind Caddy on the team VM.
@@ -55,6 +63,10 @@ docker compose up -d --build
 | Gamepad left stick        | Pitch and roll. `Y` respawns.                      |
 | `R`                       | Respawn at the last ring                           |
 | `M`                       | Mute                                               |
+| `Shift` / gamepad `X`     | Dash (adventure, with the upgrade)                 |
+| `Space` / gamepad `A`     | Wingbeat (adventure, with the upgrade)             |
+| Hold `F` / gamepad `B`    | Hover (adventure, with the upgrade)                |
+| `1` to `4`                | Choose an upgrade at a portal                      |
 | `Enter`                   | Start the run / the race, fly again                |
 | `N`                       | New map (in a room's lobby)                        |
 | `Esc`                     | Free the mouse                                     |
@@ -65,6 +77,14 @@ the proximity bar: you get style points with a growing multiplier and extra
 acceleration, so risky lines are faster. Crash, or drop into the sea of clouds
 below the islands, and you respawn at your last ring, with the clock still
 running.
+
+In an adventure there is no clock. Gates score more in a chain without a
+crash, skimming earns style points, and each biome's two sidequests (light
+the cairns, chase the spirit birds, skim the lagoon, ride the thermals…) pay
+out big. The arrow at the top of the screen points to the portal. You have
+three feathers: each crash costs one, and when they're gone the run ends.
+Finishing a sidequest opens a secret portal to another biome with rarer
+upgrades.
 
 ## How It Works
 
@@ -118,6 +138,24 @@ triangle gets one flat color (grass on top, rock on the sides, darker
 undersides, snow on the highest islands), which gives the low-poly look. Pines
 grow on flat grass, picked from the mesh itself. Each seed also picks a palette:
 Alpine, Misty pines, Autumn, Dusk or Winter.
+
+**Biomes** ([`frontend/src/game/world/biomes/`](frontend/src/game/world/biomes)):
+every biome is data: lighting moods (a day and a night one), a terrain
+recipe, surfaces, plants, water, mist and clouds, particles, sidequests and
+portals. Sky Isles is the islands above; every other biome comes from the
+second terrain generator ([`world/terrain/`](frontend/src/game/world/terrain)):
+a heightfield valley that follows the racing line and steps down in pools
+and waterfalls, hills, domain-warped ridged mountains, terraces, crevasses,
+carved river channels and overhangs, melted together with rock shapes
+(arches, pillars, sea stacks, mesas, giant trees and mushrooms, a volcano).
+It is meshed in workers at three levels of detail, painted by a terrain
+shader that blends grass, rock, sand and snow by slope and height, and
+dressed with procedural trees (instanced, swaying, impostors far away),
+grass and flowers near you, stylized water (rivers, falls, seas, lava, ice,
+glowing ponds), soft clouds, valley mist, auroras and ambient particles
+(fireflies, snow, embers, spores). Fly any biome freely at
+`/?explore=<id>&seed=<n>` (ids: `verdant`, `glacier`, `archipelago`,
+`lagoon`, `twilight`, `ember`, `aurora`).
 
 **Flight model** ([`frontend/src/game/flight.ts`](frontend/src/game/flight.ts)):
 an arcade, energy-based wingsuit. The nose points where you go, gravity along

@@ -159,6 +159,36 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Milestone 5, polish and performance (Claude)
+
+- **Frame times** on an Apple M2 (integrated GPU), Verdant Highlands near
+  the start, measured with `__bench(quality)` (`game/devtools.ts`): the loop
+  stepped by hand, CPU per frame, and GPU per frame from
+  `EXT_disjoint_timer_query_webgl2`. Medium: CPU ~5 ms, GPU ~4 ms. Low: CPU
+  ~4.5 ms, GPU ~3 ms. High (bloom): GPU 30 to 70 ms depending on the bloom's
+  resolution and MSAA, and noisy. **Caveat:** measured in the automation tab,
+  which is hidden; not in a focused window as the plan asks. Run
+  `__bench(2)`, `__bench(1)`, `__bench(0)` in a focused window to confirm.
+- **Hotspots fixed**: the bloom (its render target was 1.5× the pixel ratio
+  with 4× MSAA; now `FX.bloomResolution` 1 and `FX.bloomMsaa` 2, tunable, the
+  composer rebuilt when they change; auto quality still steps a slow machine
+  down to Medium); instance pools re-uploaded their whole buffers on every
+  change (now only the changed range); finished land meshes all landed in one
+  frame (now `TERRAIN.uploadsPerFrame`, 4, once flying); plants and grass were
+  copied with array spreads (now straight into typed arrays); shaders compiled
+  mid-flight (now `renderer.compile` when a level is built).
+- **Knobs**: new `FX.bloomResolution`, `FX.bloomMsaa`,
+  `TERRAIN.uploadsPerFrame`; `RUN.toasts` now hides the pop-ups. Every group
+  (`TERRAIN`, `FLORA`, `WATER`, `RUN`) is in `?tune`.
+- **Sky Isles at night**: its faceted puffs were dark discs; now moonlit,
+  semi-transparent veils (looks only; the race map's colliders are the same).
+- **Screenshots** of every biome by day and by night:
+  `docs/screenshots/m5-biomes/` (Sky Isles seeds 2 and 8; the others
+  `/?explore=<id>&seed=` 1 to 3).
+- README: the adventure mode, its controls, how biomes are built.
+- Verified: build and lint pass; race hashes unchanged; no console errors
+  across all biomes and a run.
+
 ### 2026-10-10: Milestone 4, the run loop (Claude)
 
 - **Runs** (`/?run=<seed>`, menu card "Adventure", daily run seed): eight
@@ -474,32 +504,30 @@ ported to the islands world:
 
 ## Next up
 
-**Resume here:** milestones 1 to 4 are done. Next is milestone 5: polish and
-performance (knobs, audio, frame times per quality level in a focused window,
-day and night screenshots of every biome, README and this file).
+**Resume here:** the five roguelike milestones are done. What's open:
 
-- Runs have only been driven by scripts in a hidden tab. Play one with a
-  mouse: check the chase pace, the secret portal's placement, and that every
-  sidequest is reachable in every biome.
-- The title card's CSS animation doesn't play in a hidden tab (screenshots
-  miss it); fine in a real window.
-- Sky Isles' faceted cloud puffs look like dark discs at night (Starlight
-  mood). The race map's looks may change, but its colliders mustn't.
+- **Measure in a focused window**: `__bench(2/1/0)` after `__shot(0)` in a
+  dev build. Bloom at High was 30 to 70 ms of GPU on an M2 in a hidden tab
+  (noisy); if a focused window agrees, replace the composer's full-resolution
+  scene pass (render the scene to the screen and bloom a half-resolution
+  copy of only the bright parts).
+- Play a run by hand with a mouse: the chase pace, the secret portal's spot,
+  every sidequest reachable in every biome, the title card animation.
+- Runs keep scores in this browser only (`RunSession`, localStorage); a
+  daily-run leaderboard needs backend endpoints (not changed, by request).
 - Giant mushrooms, trunks and rings are rock: they collide, as they should,
   but plants can grow on mushroom caps only if their surface isn't `bare`.
 - The sea grid's depth and the island falls are computed on the main thread
   at level load (about 100 ms for the lagoon). Could move to a worker.
 - Far ridged mountains are spiky at 24 m voxels; maybe smooth the ridges with
   distance or lower `sharpness`.
-
-- Measure real frame times at High quality on an integrated GPU, in a focused
-  window. If bloom is too costly, lower `COMPOSER_PIXEL_RATIO` or MSAA samples.
 - The free-flight respawn and the start grid don't do any pilot entrance
   animation; a "wings unfold" intro would be nice.
 - Remote pilots each cost about 0.7 ms of CPU for animation. With many
   players, animate distant pilots every other frame.
-- Look at every palette in a browser (only Misty pines was checked after the
-  islands merge), and tune mist density per biome.
+- Sky Isles' Autumn and Dusk moods haven't been looked at since the islands
+  merge (Alpine, Misty pines, Winter and Starlight have). Mist density per
+  biome could use a tuning pass in a real window.
 - Day/night or time-of-day as a continuous parameter instead of a fixed
   night factor per palette.
 - `RINGS.crystals` only applies to the next map (gates are built once per
@@ -530,7 +558,8 @@ The first playable slice of the roguelike, in order. After each: commit to
    a run-mode flag, so races are unaffected); run score from gates, style and
    sidequests; a sidequest framework with 2 per biome; objectives HUD and a
    compass to the portal.
-5. **Polish and performance**: knobs in `tuning.ts` and `?tune`, audio
+5. **Polish and performance** (done, frame times measured in a hidden tab
+   only): knobs in `tuning.ts` and `?tune`, audio
    stingers, frame times per quality level in a focused window, screenshots
    of every biome by day and night, README and this file.
 

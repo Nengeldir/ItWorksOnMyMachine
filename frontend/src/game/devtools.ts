@@ -93,7 +93,67 @@ export function installDevtools() {
     }
     return { position: g.flight.position.toArray().map(Math.round), speed: Math.round(g.flight.speed) };
   };
-  Object.assign(window, { __shot: shot, __raceHashes: raceHashes, __run: run });
+  /**
+   * Frame cost at a quality level: steps the loop by hand for `frames` frames
+   * (flying on) and measures the CPU time of each frame and, with
+   * EXT_disjoint_timer_query_webgl2, the GPU time of its rendering (bloom
+   * passes included). Hidden tabs don't throttle this, unlike
+   * requestAnimationFrame. Stream the land first (__shot).
+   */
+  const bench = async (quality: 0 | 1 | 2 = 2, frames = 240) => {
+    const g = (window as unknown as { __game: Game }).__game as unknown as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    cancelAnimationFrame(g.frame);
+    const fx = (window as unknown as { __tuning: Record<string, Record<string, unknown>> }).__tuning["Trails & particles"];
+    const wasAuto = fx.autoQuality;
+    fx.autoQuality = false;
+    if (g.quality !== quality) g.setQuality(quality);
+    const gl = g.renderer.getContext() as WebGL2RenderingContext;
+    const ext = gl.getExtension("EXT_disjoint_timer_query_webgl2") as { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number } | null;
+    const render = g.render.bind(g);
+    const queries: WebGLQuery[] = [];
+    // Time the rendering on the GPU: wrap render() in a query
+    g.render = () => {
+      if (!ext) return render();
+      const q = gl.createQuery()!;
+      gl.beginQuery(ext.TIME_ELAPSED_EXT, q);
+      render();
+      gl.endQuery(ext.TIME_ELAPSED_EXT);
+      queries.push(q);
+    };
+    let t = performance.now();
+    const cpu: number[] = [];
+    for (let i = 0; i < 30 + frames; i++) {
+      t += 1000 / 60;
+      const start = performance.now();
+      g.loop(t);
+      if (i >= 30) cpu.push(performance.now() - start);
+      cancelAnimationFrame(g.frame);
+      if (i % 4 === 0) await settle();
+    }
+    g.render = render;
+    // Collect the GPU times as they become available
+    const gpu: number[] = [];
+    const deadline = performance.now() + 3000;
+    for (const [i, q] of queries.entries()) {
+      while (!gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE) && performance.now() < deadline) await settle();
+      if (i >= 30 && gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE) && !gl.getParameter(ext!.GPU_DISJOINT_EXT)) gpu.push(gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6);
+      gl.deleteQuery(q);
+    }
+    fx.autoQuality = wasAuto;
+    const summary = (a: number[]) => {
+      if (!a.length) return null;
+      const sorted = [...a].sort((x, y) => x - y);
+      return { mean: +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(2), p50: +sorted[Math.floor(a.length / 2)].toFixed(2), p95: +sorted[Math.floor(a.length * 0.95)].toFixed(2) };
+    };
+    g.renderer.info.autoReset = false;
+    g.renderer.info.reset();
+    render();
+    const info = { calls: g.renderer.info.render.calls, triangles: g.renderer.info.render.triangles };
+    g.renderer.info.autoReset = true;
+    return { quality, cpu: summary(cpu), gpu: summary(gpu), ...info, pixels: `${g.renderer.domElement.width}x${g.renderer.domElement.height}` };
+  };
+
+  Object.assign(window, { __shot: shot, __raceHashes: raceHashes, __run: run, __bench: bench });
 }
 
 /**

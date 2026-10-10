@@ -41,6 +41,8 @@ export const FX = {
   bloom: 0.6, // glow strength (0 turns post-processing off)
   bloomRadius: 0.55,
   bloomThreshold: 1.3,
+  bloomResolution: 1, // the bloom renders at most at this pixel ratio (its cost grows fast with it)
+  bloomMsaa: 2, // antialiasing samples of the bloom's render target
   autoQuality: true, // drop effects if the frame rate can't keep up
 };
 
@@ -77,6 +79,7 @@ export const TERRAIN = {
   lodFar: 700, // closer than this at half detail (12 m), further at quarter (24 m)
   viewDistance: 1500,
   readyRadius: 260, // the start waits until the land this close has arrived
+  uploadsPerFrame: 4, // arrived land meshes taken in per frame once you're flying (smooths frame times)
   snowLine: 0, // metres added to the biome's snow line
   coverSlope: 0, // added to the slope where grass (moss, sand…) gives way to rock
   texture: 1, // strength of the painted noise on cliffs
@@ -177,6 +180,8 @@ export const RANGES: Record<string, [number, number, number?]> = {
   bloom: [0, 2.5],
   bloomRadius: [0, 1.5],
   bloomThreshold: [0.5, 1.5],
+  bloomResolution: [0.5, 2, 0.05],
+  bloomMsaa: [0, 4, 1],
   crystals: [6, 32, 1],
   drift: [0, 3],
   driftRate: [0, 3],
@@ -200,6 +205,7 @@ export const RANGES: Record<string, [number, number, number?]> = {
   lodFar: [300, 1400, 10],
   viewDistance: [600, 2500, 10],
   readyRadius: [100, 500, 10],
+  uploadsPerFrame: [1, 16, 1],
   snowLine: [-300, 300],
   coverSlope: [-0.4, 0.25],
   texture: [0, 3],

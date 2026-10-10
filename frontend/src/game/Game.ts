@@ -37,8 +37,6 @@ const LAVA_SPARK = new THREE.Color("#ff9a3c");
 
 /** 2: bloom and full resolution, 1: no bloom, 0: lower resolution and fewer particles */
 type Quality = 0 | 1 | 2;
-// Post-processing renders at most at this pixel ratio: bloom targets are big on retina screens
-const COMPOSER_PIXEL_RATIO = 1.5;
 const QUALITY = [
   { pixelRatio: 1, particles: 0.4 },
   { pixelRatio: 1.5, particles: 0.75 },
@@ -347,6 +345,8 @@ export class Game implements RunHost {
     this.view = new WorldView(this.world, this.scene);
     this.view.prepare(this.renderer);
     this.scene.add(this.view.group);
+    // Compile the level's shaders now (behind the loading wait or the tunnel), not mid-flight
+    this.renderer.compile(this.scene, this.rig.camera);
     this.particles.clear();
     this.softParticles.clear();
     this.ambient.setWorld(this.world);
@@ -988,15 +988,24 @@ export class Game implements RunHost {
     if (!this.bloomOn || this.composer) return;
     const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
     // Half floats keep colors above 1, so only really bright things bloom; 4× MSAA keeps edges clean
-    const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
+    // Half floats keep colors above 1 for the bloom; FX.bloomMsaa sets the antialiasing samples
+    const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: FX.bloomMsaa });
     const composer = new EffectComposer(this.renderer, target);
-    composer.setPixelRatio(Math.min(this.renderer.getPixelRatio(), COMPOSER_PIXEL_RATIO));
+    composer.setPixelRatio(Math.min(this.renderer.getPixelRatio(), FX.bloomResolution));
     composer.setSize(this.container.clientWidth || 1, this.container.clientHeight || 1);
     composer.addPass(new RenderPass(this.scene, this.rig.camera));
     this.bloomPass = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), FX.bloom, FX.bloomRadius, FX.bloomThreshold);
     composer.addPass(this.bloomPass);
     composer.addPass(new OutputPass());
     this.composer = composer;
+  }
+
+  /** Drops the bloom composer so it is rebuilt with the current FX settings */
+  rebuildBloom() {
+    this.composer?.dispose();
+    this.bloomPass?.dispose();
+    this.composer = null;
+    this.bloomPass = null;
   }
 
   private setQuality(quality: Quality) {
@@ -1029,7 +1038,7 @@ export class Game implements RunHost {
     const width = this.container.clientWidth || 1;
     const height = this.container.clientHeight || 1;
     this.renderer.setSize(width, height, false);
-    this.composer?.setPixelRatio(Math.min(this.renderer.getPixelRatio(), COMPOSER_PIXEL_RATIO));
+    this.composer?.setPixelRatio(Math.min(this.renderer.getPixelRatio(), FX.bloomResolution));
     this.composer?.setSize(width, height);
     this.rig.resize(width / height);
     this.particles.setViewport(height * this.renderer.getPixelRatio(), this.rig.camera.fov);
@@ -1065,7 +1074,11 @@ export class Game implements RunHost {
           typeof group[key] === "boolean" || !range
             ? folder.add(group, key)
             : folder.add(group, key, range[0], range[1], range[2] ?? (range[1] - range[0]) / 200);
-        controller.onChange(save);
+        controller.onChange(() => {
+          save();
+          // The bloom's render targets are built with these: rebuild them
+          if (key === "bloomResolution" || key === "bloomMsaa") this.rebuildBloom();
+        });
       }
       folder.close();
     }

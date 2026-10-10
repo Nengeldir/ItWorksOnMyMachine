@@ -16,6 +16,7 @@ export class InstancePool {
   private readonly material: THREE.Material;
   private readonly group: THREE.Group;
   private dirty = false;
+  private dirtyFrom = Infinity; // lowest slot changed since the last upload
 
   constructor(geometry: THREE.BufferGeometry, material: THREE.Material, group: THREE.Group, capacity = 512) {
     this.geometry = geometry;
@@ -56,6 +57,7 @@ export class InstancePool {
     this.mesh = next;
     this.group.add(next);
     this.capacity = capacity;
+    this.dirtyFrom = 0;
   }
 
   /** Adds `n` instances for an owner: 16 floats of matrix and 3 of color each */
@@ -76,6 +78,7 @@ export class InstancePool {
     }
     this.slots.set(owner, list);
     this.dirty = true;
+    this.dirtyFrom = Math.min(this.dirtyFrom, list[0]);
   }
 
   remove(owner: number) {
@@ -86,6 +89,7 @@ export class InstancePool {
     const c = this.mesh.instanceColor!.array as Float32Array;
     // Highest slots first, so a moved instance is never one we're about to remove
     list.sort((a, b) => b - a);
+    this.dirtyFrom = Math.min(this.dirtyFrom, list[list.length - 1]);
     for (const slot of list) {
       const last = --this.count;
       if (slot !== last) {
@@ -104,13 +108,24 @@ export class InstancePool {
     return this.slots.has(owner);
   }
 
-  /** Uploads changes, once per frame at most */
+  /** Uploads changes, once per frame at most: only the slots from the lowest one changed to the end */
   flush() {
     if (!this.dirty) return;
     this.dirty = false;
     this.mesh.count = this.count;
-    this.mesh.instanceMatrix.needsUpdate = true;
-    this.mesh.instanceColor!.needsUpdate = true;
+    const from = Math.min(this.dirtyFrom, this.count);
+    this.dirtyFrom = Infinity;
+    const length = this.count - from;
+    const matrix = this.mesh.instanceMatrix;
+    const color = this.mesh.instanceColor!;
+    matrix.clearUpdateRanges();
+    color.clearUpdateRanges();
+    if (length > 0) {
+      matrix.addUpdateRange(from * 16, length * 16);
+      color.addUpdateRange(from * 3, length * 3);
+      matrix.needsUpdate = true;
+      color.needsUpdate = true;
+    }
   }
 
   dispose() {

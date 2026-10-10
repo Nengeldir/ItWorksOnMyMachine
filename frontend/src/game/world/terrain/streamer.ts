@@ -152,6 +152,12 @@ export class LandStreamer {
 
   /** Which nodes should be on screen from here, and which to ask the workers for next */
   update(at: THREE.Vector3, request: (r: NodeRequest) => boolean) {
+    // Take in a few of the arrived meshes (all of them while nothing is on screen yet)
+    if (this.arrived.length) {
+      const budget = this.ready ? TERRAIN.uploadsPerFrame : this.arrived.length;
+      for (const result of this.arrived.splice(0, budget)) this.take(result);
+      this.settle();
+    }
     if (this.lastUpdate.distanceToSquared(at) > 8 * 8 || this.stamp === 0) {
       this.lastUpdate.copy(at);
       this.stamp++;
@@ -191,7 +197,14 @@ export class LandStreamer {
     }
   }
 
+  /** Results wait here and are taken in a few per frame, so uploads don't pile into one frame */
+  private readonly arrived: NodeResult[] = [];
+
   receive(result: NodeResult) {
+    this.arrived.push(result);
+  }
+
+  private take(result: NodeResult) {
     const node = this.byKey.get(result.key);
     if (!node || node.state !== "pending") return;
     node.state = "loaded";
@@ -209,7 +222,6 @@ export class LandStreamer {
     node.tufts = result.tufts;
     // Full-detail nodes are the ones near you: their plants collide from now on
     if (node.lod === 0) this.world.trees.add(node.key, this.colliders(result.plants));
-    this.settle();
   }
 
   private colliders(plants: Float32Array): Plant[] {

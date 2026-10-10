@@ -7,7 +7,7 @@ import "./RunHud.css";
 const icon = (id: UpgradeId) => UPGRADES.find((u) => u.id === id)?.icon ?? "•";
 
 /** The run on top of the flight HUD: score, feathers, objectives, the portal compass, abilities */
-export const RunHud = ({ run, compassScale }: { run: RunHudState; compassScale: number }) => (
+export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compassScale: number; toasts: boolean }) => (
   <div className="run-hud">
     <div className="run-score">
       <strong>{run.score.toLocaleString()}</strong>
@@ -70,7 +70,7 @@ export const RunHud = ({ run, compassScale }: { run: RunHudState; compassScale: 
       </div>
     )}
 
-    {run.toast && (
+    {toasts && run.toast && (
       <div className="run-toast" key={run.toast.id}>
         {run.toast.text}
         {run.toast.points > 0 && <b> +{run.toast.points.toLocaleString()}</b>}
