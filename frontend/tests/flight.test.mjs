@@ -73,12 +73,12 @@ test("overspeed is dissipated rather than clamped instantly", () => {
 });
 
 
-test("held steering never exceeds 75 degrees, turns continuously, and levels on release", () => {
+test("held steering never exceeds 80 degrees, turns continuously, and levels on release", () => {
   for (const dir of [-1,1]) {
     const f = make();
     for (let i=0;i<1200;i++) {
       f.step(1/120, {pitch:0, roll:dir}, 0);
-      assert.ok(Math.abs(f.bank) <= 75 * Math.PI/180 + 1e-10);
+      assert.ok(Math.abs(f.bank) <= 80 * Math.PI/180 + 1e-10);
       assert.ok(f.up.y > 0);
     }
     assert.ok(Math.abs(f.forward.x) > 0.1);
@@ -112,4 +112,35 @@ test("dodge displacement passes through obstacles incrementally and resets on re
   assert.equal(crossedWall,true);
   f.reset(new Vector3(),new Vector3(0,0,-1),40);
   assert.equal(f.dodgePhase,0); assert.equal(f.dodge(-1),true);
+});
+
+
+test("released pitch recovers from a half loop smoothly without changing the nose direction", () => {
+  const p = {...FLIGHT, gravity: 0, drag: 0, sink: 0};
+  for (const direction of [-1, 1]) for (const dt of [1/30, 1/60, 1/120]) {
+    const f = make();
+    const steps = 120;
+    for (let i=0; i<steps; i++) f.step(Math.PI / p.pitchRate / steps, {pitch:direction, roll:0}, 0, p);
+    assert.ok(f.up.y < -0.999, "held pitch must permit a half loop");
+    const nose = f.forward.clone();
+    for (let i=0; i<5/dt; i++) {
+      const before = f.quaternion.clone();
+      f.step(dt, {pitch:0, roll:0}, 0, p);
+      assert.ok(before.angleTo(f.quaternion) <= p.rollRate * dt + 1e-7, "no instant upright flip");
+      assert.ok(f.forward.distanceTo(nose) < 1e-8, "recovery preserves heading and pitch");
+    }
+    assert.ok(f.up.y > 0.999, "pilot must finish right side up");
+  }
+});
+
+test("upright recovery stays finite and continuous at both vertical poles", () => {
+  const p = {...FLIGHT, gravity:0, drag:0, sink:0};
+  for (const direction of [-1, 1]) {
+    const f = make();
+    f.step(Math.PI / (2*p.pitchRate), {pitch:direction, roll:0}, 0, p);
+    const before = f.quaternion.clone();
+    fly(f, 2, {}, p);
+    assert.ok(f.quaternion.toArray().every(Number.isFinite));
+    assert.ok(before.angleTo(f.quaternion) < 1e-7);
+  }
 });

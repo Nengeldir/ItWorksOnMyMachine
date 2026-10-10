@@ -9,12 +9,12 @@ export const FLIGHT = {
   drag: 0.0013, // vertical terminal speed ≈ 87 m/s
   pitchRate: 2.4, // rad/s at full input
   rollRate: 4.2, // maximum bank response, rad/s
-  maxBank: 75, // degrees: steering cannot roll past this
+  maxBank: 80, // degrees: steering cannot roll past this
   dodgeDistance: 5, // metres along the unbanked right axis at activation
   dodgeDuration: 0.6,
   dodgeCooldown: 1, // seconds between starts
   turnRate: 1.4, // gameplay multiplier on coordinated turning
-  autoLevel: 2, // bank-target response; releasing steering always levels the wings
+  autoLevel: 2, // bank-target and upright recovery response, 1/s
   pathResponse: 14, // flight-path response, 1/s (about 70 ms)
   maxLoad: 8, // maximum steering acceleration in g; tuned for arcade handling
   stallSpeed: 16, // below this the nose drops
@@ -186,6 +186,19 @@ export class Flight {
     this.quaternion.multiply(turn);
     turn.setFromAxisAngle(LOCAL_RIGHT, clamp(input.pitch, -1, 1) * p.pitchRate * liftAuthority * dt);
     this.quaternion.multiply(turn);
+    // Pitch loops can leave the underlying frame upside down even when the
+    // steering bank is zero. Recover that frame around the nose when pitch is
+    // released, preserving heading and allowing deliberate loops while held.
+    // Fade recovery at the poles, where world-up has no unique roll direction.
+    this.updateAxes();
+    if (Math.abs(input.pitch) < 0.05) {
+      const horizontalSq = this.forward.x ** 2 + this.forward.z ** 2;
+      const uprightAngle = Math.abs(this.right.y) < 1e-8 && this.up.y < 0
+        ? Math.PI : Math.atan2(-this.right.y, this.up.y);
+      const recovery = uprightAngle * (1 - Math.exp(-p.autoLevel * horizontalSq * dt));
+      turn.setFromAxisAngle(LOCAL_BACK, clamp(recovery, -p.rollRate * dt, p.rollRate * dt));
+      this.quaternion.multiply(turn);
+    }
     const limit = p.maxBank * Math.PI / 180;
     const bankTarget = clamp(input.roll, -1, 1) * limit;
     const bankChange = (bankTarget - this.steeringBank) * (1 - Math.exp(-Math.max(2, p.autoLevel * 2) * dt));
