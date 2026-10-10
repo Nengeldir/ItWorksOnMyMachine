@@ -10,7 +10,13 @@ import "./RunHud.css";
 const icon = (id: UpgradeId) => UPGRADES.find((u) => u.id === id)?.icon ?? "•";
 
 // Abilities use the keys the player bound in the settings, not the defaults written in the upgrades
-const ABILITY_ACTIONS: Partial<Record<UpgradeId, BindingAction>> = { dash: "boost", flap: "flap", hover: "hover" };
+const ABILITY_ACTIONS: Partial<Record<UpgradeId, BindingAction>> = {
+  dash: "boost",
+  flap: "flap",
+  hoverStall: "hover",
+  plunge: "plunge",
+  galeForce: "burst",
+};
 
 /** The ability's key as bound now, else the upgrade's own label */
 function abilityKey(id: UpgradeId, fallback: string): string {
@@ -201,7 +207,7 @@ export const UpgradePicker = ({
           <button key={u.id} className={`card ${u.kind}`} onClick={() => onPick(u.id)}>
             <span className="icon">{u.icon}</span>
             <strong>{u.name}</strong>
-            <span className="kind">{u.kind === "ability" ? `ability · ${u.id === "hover" ? "hold " : ""}${abilityKey(u.id, u.key ?? "")}` : "passive"}</span>
+            <span className="kind">{u.kind === "ability" ? `ability · ${u.id === "hoverStall" ? "hold " : ""}${abilityKey(u.id, u.key ?? "")}` : "passive"}</span>
             <span className="text">{u.description}</span>
             <kbd>{i + 1}</kbd>
           </button>
