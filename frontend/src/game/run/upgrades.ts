@@ -15,6 +15,7 @@ export interface RunStats {
   magnet: number; // metres added to gate rings and pickups
   multiplier: number; // added to the style multiplier's cap
   gateBonus: number; // points added to every gate
+  lives: number; // lives gained (the run adds each one as it's picked)
   // The abilities of the design list (run/abilities.ts has their rules)
   featherfalling: number; // passive: less sink and drag (the multipliers above), a halo of down
   skimBooster: number; // passive: skimming the land refills the boost
@@ -46,6 +47,7 @@ export type UpgradeId =
   | "magnet"
   | "streamline"
   | "showoff"
+  | "secondWind"
   | "featherfalling"
   | "skimBooster"
   | "cloudSurf"
@@ -87,6 +89,7 @@ export const UPGRADES: readonly Upgrade[] = [
   { id: "magnet", name: "Gate magnet", icon: "🧲", kind: "passive", max: 3, effect: { magnet: 5 }, description: "Gates and portals count from further away." },
   { id: "streamline", name: "Streamline", icon: "🏹", kind: "passive", max: 3, effect: { drag: 0.86 }, description: "Less drag: a higher top speed in every dive." },
   { id: "showoff", name: "Showoff", icon: "✨", kind: "passive", max: 3, effect: { multiplier: 2, gateBonus: 50 }, description: "Bigger style multipliers and more points for every gate." },
+  { id: "secondWind", name: "Second wind", icon: "💖", kind: "passive", max: 3, effect: { lives: 1 }, description: "One more life: the run survives one more crash." },
   // The design list's abilities (CLAUDE.md, "Items and abilities")
   { id: "featherfalling", name: "Featherfalling", icon: "🪶", kind: "passive", max: 2, effect: { featherfalling: 1, sink: 0.55, stall: 0.8, drag: 0.92 }, description: "Gravity lets go a little: you sink far less, stall later and slip through the air." },
   { id: "skimBooster", name: "Skim-Booster", icon: "⚡", kind: "passive", max: 2, effect: { skimBooster: 1 }, description: "Skimming the land fills you with thrill: your boost refills as long as you stay dangerously close." },
@@ -114,7 +117,7 @@ const MULTIPLIED: (keyof RunStats)[] = ["drag", "sink", "stall", "proximity"];
 
 export function baseStats(): RunStats {
   return {
-    dash: 0, flap: 0, glideLock: 0, drag: 1, sink: 1, stall: 1, proximity: 1, magnet: 0, multiplier: 0, gateBonus: 0,
+    dash: 0, flap: 0, glideLock: 0, drag: 1, sink: 1, stall: 1, proximity: 1, magnet: 0, multiplier: 0, gateBonus: 0, lives: 0,
     featherfalling: 0, skimBooster: 0, cloudSurf: 0, plunge: 0, windShear: 0, thermalVision: 0, slipstream: 0, galeForce: 0, acrobatic: 0, hoverStall: 0,
     moth: 0, zenith: 0, resonance: 0, leyLine: 0, aeroBrake: 0, draftWeave: 0, ascension: 0, falcon: 0, butterfly: 0, echoTrail: 0,
   };

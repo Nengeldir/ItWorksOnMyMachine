@@ -46,8 +46,9 @@ finale and the finish screen.
 
 - `route.ts`: `screenFromSearch` gives a `{ kind: "test", biome, seed }` screen.
 - `ExploreSession` (with `testMode`) starts a `RunController` on the chosen
-  level (`Game.startRun(seed, events, level)`). Its `ended` event never
-  reaches `RunSession`'s bests or the server.
+  level (`Game.startRun(seed, events, level, Infinity)`: the sandbox never
+  runs out of lives). Its `ended` event never reaches `RunSession`'s bests or
+  the server.
 - `Input.onTestAction` (installed only by `Game` in test mode) and
   `RunController.spawnTestPortal` / `testWin`.
 - `testPlayback.ts`: the playback rate. `Game.loop` scales its frame delta

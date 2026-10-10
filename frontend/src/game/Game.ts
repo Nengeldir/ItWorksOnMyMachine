@@ -429,14 +429,14 @@ export class Game implements RunHost {
   // --- the roguelike run (RunHost) ---------------------------------------------------
 
   /** Turns this game into a roguelike run: levels, upgrades, portals (never used for races) */
-  startRun(seed: number, events: RunEvents, initial?: Level) {
+  startRun(seed: number, events: RunEvents, initial?: Level, lives?: number) {
     this.run?.dispose();
     this.autopiloting = false;
     this.clearWhiteFrom = null;
     this.whiteOut(0);
     if (this.paused) this.togglePause();
     this.freeze(false);
-    this.run = new RunController(seed, this, events);
+    this.run = new RunController(seed, this, events, lives);
     this.run.start(initial);
   }
 
