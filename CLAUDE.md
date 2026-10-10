@@ -139,7 +139,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/audio.ts` | Synthesized wind and event sounds, run stingers (portal, upgrade, dash; sidequest and item are unused for now), the wingbeat sample (`public/audio/sfx/wingbeat.mp3`, pitch-randomized, played on each of your downstrokes and on the Wingbeat ability) and the `MusicPlayer` |
 | `game/music.ts` | `MusicPlayer`: one looping track per biome from `public/audio/music/<biome>_<title>.mp3`, crossfaded on biome change (`TRACK_OF` maps biomes to tracks; similar biomes share one). Night dims and muffles the same track. Loaded lazily, decoded with Web Audio, no music if a file fails |
 | `game/webgl.ts` | WebGL 2 availability check; `GameScreen` shows help if it's missing |
-| `game/run/` | The roguelike run. `run.ts`: run length, the run's eight maps (`runOrder`: the run seed's own map first, then seven of the other eight shuffled by the seed), portal destinations (`destination`: the first map of the order not flown yet), scoring constants, `RunHud`. `START_LIVES` (3). `upgrades.ts`: twenty-eight data-defined upgrades (seven of the original, Second wind for a life, the design list's twenty abilities) and the 3-of-N offer. `abilities.ts`: `Abilities`, the twenty abilities' rules (`ABILITY` constants, in `?tune` as "Run abilities", not saved): cooldowns, Gale Force's energy and tunnel, cloud lanes (`laneAt`), the spirit manta's path, the slipstream, Wind-Shear's dodge params, Resonance's turned gates (`attuned`, `gateNormal`), the ley line's chain, the stances' multipliers, Draft-Weaving's tornado and the saves (`save`, `saved`: Acrobatic Recovery or the tornado), Ascension, the Echo-Trail's ribbon samples and wind ring; it answers each step with `FlightMods` and boost refills, and counts one-off moments (`cue`) for the looks. `controller.ts`: `RunController` (levels, gates and chains, lives: a crash costs one and the last one's crash ends the run in phase `lost`, abilities as `FlightMods`, the portal transition: blur in, the next level built under the blur (`buildNext`), wormhole and upgrade pick while it streams, blur out with the palette cross-fade; HUD data). `finale.ts`: `Finale`, the last portal's cutscene (space under a world-fixed Milky Way with dust lanes and its core overhead, the camera's scripted pan beneath the pilot and back, then white light; Enter skips). `portal.ts`: the portal (ring, a flat disk like a window onto night, beam), the `Wormhole` (a camera-centred shell mapping the view onto an endless twisting tube of lensed stars and nebula with the exit glowing ahead, spirit motes, its own lights) and `screenSparkle`. Game's `veil(k)` (the `.portal-veil` DOM blur and sparkles) and `insideWormhole(on)` (hides the level: land, sky, soft particles, speed lines, ambient, gate effects) serve it |
+| `game/run/` | The roguelike run. `run.ts`: run length, the run's eight maps (`runOrder`: the run seed's own map first, then seven of the other eight shuffled by the seed), portal destinations (`destination`: the first map of the order not flown yet), scoring constants, `RunHud`. `START_LIVES` (3). `upgrades.ts`: twenty-eight data-defined upgrades (seven of the original, Spare feather for a life, the design list's twenty abilities) and the 3-of-N offer. `abilities.ts`: `Abilities`, the twenty abilities' rules (`ABILITY` constants, in `?tune` as "Run abilities", not saved): cooldowns, Gale Force's energy and tunnel, cloud lanes (`laneAt`), the spirit manta's path, the slipstream, Wind-Shear's dodge params, Resonance's turned gates (`attuned`, `gateNormal`), the ley line's chain, the stances' multipliers, Draft-Weaving's tornado and the saves (`save`, `saved`: Acrobatic Recovery or the tornado), Ascension, the Echo-Trail's ribbon samples and wind ring; it answers each step with `FlightMods` and boost refills, and counts one-off moments (`cue`) for the looks. `controller.ts`: `RunController` (levels, gates and chains, lives: a crash costs one and the last one's crash ends the run in phase `lost`, abilities as `FlightMods`, the portal transition: blur in, the next level built under the blur (`buildNext`), wormhole and upgrade pick while it streams, blur out with the palette cross-fade; HUD data). `finale.ts`: `Finale`, the last portal's cutscene (space under a world-fixed Milky Way with dust lanes and its core overhead, the camera's scripted pan beneath the pilot and back, then white light; Enter skips). `portal.ts`: the portal (ring, a flat disk like a window onto night, beam), the `Wormhole` (a camera-centred shell mapping the view onto an endless twisting tube of lensed stars and nebula with the exit glowing ahead, spirit motes, its own lights) and `screenSparkle`. Game's `veil(k)` (the `.portal-veil` DOM blur and sparkles) and `insideWormhole(on)` (hides the level: land, sky, soft particles, speed lines, ambient, gate effects) serve it |
 | `game/devtools.ts` | Dev builds only: `__shot(view)` (freeze, stream the land around a fixed camera, render once), `__raceHashes()` (the race map's determinism check), `__run(s)`, `__bench(q)` and `__crash(kind, after)` (flies into rock near the start and stops `after` s into the crash animation) on `window` |
 | `game/math.ts` | `clamp`, `smoothstep`, `smin` (smooth minimum for distance fields) |
 | `game/world/terrain/` | Generator v2 (every biome but Sky Isles). `noise.ts`: seeded fbm, ridged multifractal, domain-warped ridges, terraces. `shapes.ts`: distance-field primitives (spires and rock rings never thinner than `MIN_RADIUS`, 4.5 m, what the 6 m meshing grid always holds) with boxes, surface ids and grain (Island, NoiseIsland from 3D noise with tunnels, Mesa with ledges, Spire between two points, Slab, RockRing, Cap, Bridge: a humped stone bridge with one arch). `ground.ts`: the heightfield following the line (valley, hills, warped ridged mountains, terraces, crevasses, carved river channel, overhang noise on cliffs). `river.ts`: `Steps`, a valley floor stepping down in pools and falls, and the river in it (water distance for collisions). `field.ts`: `TerrainField`, ground + shapes as one field, `fill()` for whole blocks (same arithmetic as `distance()`). `recipes.ts`: gates and scenery from a biome's `LandRecipe`. `mesh.ts`: surface nets per LOD node, faces painted for the shader. `streamer.ts`: `LandStreamer`, the LOD octree (384/192/96 m nodes, 16 cells each), with 48 m merge hysteresis and a bounded 48 MiB hidden-mesh cache (estimated CPU + GPU buffers, at most 256 entries). `material.ts`: the terrain shader |
@@ -163,6 +163,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `net/` | Server clock sync and the room connection (SSE down, POST up) |
 | `staleBuild.ts` | After a redeploy, an open tab's lazy chunks (bloom, `?tune`) and mesher worker are 404s: `reloadForNewBuild` reloads the page once (at most every 30 s, production only) |
 | `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, controls, and the run's HUD, title card and upgrade picker (`RunHud.tsx`). The menu's live course behind the glass is `MenuBackdrop` (a `Game` in `drift` attract mode, which switches courses with `setSeed`, keeps a few it showed parked (`ATTRACT_KEEP` besides its own) so going back is instant, snapshots each one for card art and reports when one is all in (`onShown`)); today's best folds into a flag (`TodaysBest`). `MapSelect` is the map select of every mode (`solo`, `run`, `room`: a carousel of today's card, one per map (`featuredSeed`) and a random one, art in `public/maps/`; a run's card shows your best on it, never the maps after the first; over a room's lobby it opens as `RoomMapSelect`, holding the game; on the landing page, a course the backdrop is still building is covered by its picture (`.map-veil`), which fades into the live view once it's in). Before a race, `GameScreen`'s `ReadyCard` sits where the timer will be; its `Panel` (results) folds to its heading and main buttons on narrow screens. `Help` is the "?" with its How to fly card and the newcomer's "First flight?" (`keys.ts`: the keys as the player bound them). `Coach` is the tutorial: one control at a time, watched on keys, mouse and gamepad |
+| `components/Feather.tsx` | The golden feather (inline SVG: cream-to-gold vane, ink outline, glint; `spent` for an outline only): the run's lives on the HUD and the Spare feather upgrade's icon |
 | `theme.ts` | The UI's colors per map: `useUiTheme(seed)` sets `--ink` (picked per palette name, else derived from the sky) and `--tint` (the horizon); every other shade comes from those two with `color-mix()`; `usePaletteTheme(palette)` does the same for any level (runs, explore, the map select) |
 | `route.ts` | The URL ↔ screen mapping (`screenFromSearch`, `urlFor`, `Screen`), pure so it's tested; `test` is honored on every single-player URL |
 | `media.ts` | `useMediaToggle(query)`: an open/closed toggle that starts open where a media query matches and follows the screen when it changes |
@@ -236,20 +237,25 @@ screen's stats to match. A deliberate gameplay change in **runs only**
 (rule 6): races, time trials and ghosts never see it.
 - **Rules** (`run/run.ts`, `run/controller.ts`): `START_LIVES` = 3. A crash
   costs a life, respawns you at the last gate and breaks the chain, with a
-  toast ("2 lives left", "Last life!"). The crash on the last life ends the
+  toast ("2 feathers left", "Last feather!"). The crash on the last life ends the
   run: phase `lost`, no respawn, the crash animation plays, the view fades
   into white light from 1 s to 1.9 s, then the summary and the same autopilot
   lap as after a win. That level's style and flying time still count; there is
   no level bonus. A lost run's score is saved as a best like any other.
-- **Second wind** (`run/upgrades.ts`, 💖, passive, up to three): one more
-  life, added when it is picked (also through `__game.grant("secondWind")`).
+- **Spare feather** (`run/upgrades.ts`, passive, up to three): one more
+  life, added when it is picked (also through `__game.grant("spareFeather")`).
   It joins the pool the portals draw from, so the offers per run seed changed.
-- **HUD** (`RunHud.tsx`, `RunHud.css`, `Hud.tsx`): hearts at the top left
-  that pop when the count changes, "last life" beside the last one. The
-  crash note reads "Out of lives · The journey ends here" on the last crash.
+- **HUD** (`RunHud.tsx`, `RunHud.css`, `Hud.tsx`): lives are golden
+  feathers in the pilot's style (`Feather.tsx`, asked for in review instead
+  of heart emoji: a drawn SVG with a cream-to-gold vane, ink outline, gold
+  quill and a glint, glowing), on a glass pill at the top left. Feathers
+  lost stay as ink outlines (`RunHud.maxLives`), the pill pops when the count
+  changes, the last feather breathes with "last feather" beside it. The
+  upgrade's card and icons use the same drawing. The crash note reads "Out
+  of feathers · The journey ends here" on the last crash.
 - **Finish screen**: `RunSummary` has `completed` and `livesLeft`. A lost
-  run is headed "Out of lives", "fell in <biome>". Stats: Flying time, Biomes
-  cleared (levels behind you, of 8), Gates, Best chain, Style, and Lives left
+  run is headed "Out of feathers", "fell in <biome>". Stats: Flying time, Biomes
+  cleared (levels behind you, of 8), Gates, Best chain, Style, and Feathers left
   for a finished run or Crashes for a lost one.
 - **Test mode** has endless lives (`Game.startRun(…, Infinity)`): no hearts,
   the old "Gate chain lost" toast, Crashes on its finish screen.
@@ -262,8 +268,10 @@ screen's stats to match. A deliberate gameplay change in **runs only**
   one crash more (the run ended below zero) and came with sidequests.
 - Verified: build and lint pass; 68 frontend tests (4 new in
   `tests/lives.test.mjs`: three lives, the last crash ending the run after
-  its fade, Second wind, the sandbox's endless lives). **Not looked at in a
-  browser**: the hearts' place next to the top bar and objectives, the fade
+  its fade, the Spare feather, the sandbox's endless lives). The feather
+  drawing was rendered on its own in headless Chrome (day, night and dusk
+  backgrounds, full and spent). **Not looked at in the game**: the
+  feathers' place next to the top bar and objectives, the fade
   into white after the last crash, and the lost finish screen are unchecked.
   Backend untouched.
 
@@ -2523,11 +2531,13 @@ ported to the islands world:
 
 ## Next up
 
-- **Lives**: look at them in a browser (hearts at 4.2rem under the top bar,
-  narrow screens, the white fade after the last crash, the "Out of lives"
+- **Lives**: look at them in a browser (the feather pill at 4.2rem under the
+  top bar, narrow screens, the white fade after the last crash, the "Out of
+  feathers"
   finish screen), then balance: three lives over eight levels may be harsh,
-  and Second wind may need to come up more often than one card in eighteen.
-  Ideas: a life back for a perfect level, feathers instead of hearts.
+  and the Spare feather may need to come up more often than one card in
+  eighteen. Idea: a feather back for a perfect level. A spent feather's ink
+  outline is faint on night skies.
 - Extreme flare pose: the coat can still expose a body ink outline through
   its surface (also present before the ribbon fix). Ribbon/coat and leg/cloth
   clearance do not resolve all body/coat intersections; inspect the torso

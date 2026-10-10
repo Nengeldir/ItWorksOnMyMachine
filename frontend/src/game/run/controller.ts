@@ -144,6 +144,7 @@ export class RunController {
   private stats: RunStats = baseStats();
   private score = 0;
   private lives: number;
+  private maxLives: number; // the most held so far
   private chain = 0;
   // For the summary
   private totalTime = 0;
@@ -181,6 +182,7 @@ export class RunController {
   constructor(seed: number, host: RunHost, events: RunEvents, lives = START_LIVES) {
     this.seed = seed;
     this.lives = lives;
+    this.maxLives = lives;
     this.host = host;
     this.events = events;
     host.scene.add(this.group, this.wormhole.group);
@@ -360,7 +362,7 @@ export class RunController {
       this.phaseTime = 0;
       return;
     }
-    if (Number.isFinite(this.lives)) this.notify(this.lives === 1 ? "Last life!" : `${this.lives} lives left`, 0);
+    if (Number.isFinite(this.lives)) this.notify(this.lives === 1 ? "Last feather!" : `${this.lives} feathers left`, 0);
     else if (chain > 1) this.notify("Gate chain lost", 0);
   }
 
@@ -378,6 +380,7 @@ export class RunController {
     this.stats = statsFor(this.picked);
     this.abilities.setStats(this.stats);
     this.lives += UPGRADES.find((u) => u.id === id)?.effect.lives ?? 0;
+    this.maxLives = Math.max(this.maxLives, this.lives);
   }
 
   private notify(text: string, points: number) {
@@ -671,6 +674,7 @@ export class RunController {
       phase: this.phase,
       score: this.score + (this.styleBanked ? 0 : Math.round(this.host.style)),
       lives: this.lives,
+      maxLives: this.maxLives,
       chain: this.chain,
       objectives,
       compass,

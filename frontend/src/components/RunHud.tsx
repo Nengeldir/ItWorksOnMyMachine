@@ -4,10 +4,12 @@ import { RUN_LENGTH, type RunHud as RunHudState, type RunSummary } from "../game
 import { UPGRADES, type Upgrade, type UpgradeId } from "../game/run/upgrades";
 import type { BindingAction } from "../game/bindings";
 import { BIOMES, type BiomeId } from "../game/world/biomes";
+import { Feather } from "./Feather";
 import { boundKeys } from "./keys";
 import "./RunHud.css";
 
-const icon = (id: UpgradeId) => UPGRADES.find((u) => u.id === id)?.icon ?? "•";
+/** An upgrade's icon: its emoji, but the Spare feather is the same drawn feather as the lives */
+const icon = (id: UpgradeId) => (id === "spareFeather" ? <Feather /> : (UPGRADES.find((u) => u.id === id)?.icon ?? "•"));
 
 // Abilities use the keys the player bound in the settings, not the defaults written in the upgrades
 const TOUCH_ABILITY: Partial<Record<UpgradeId, string>> = {
@@ -35,7 +37,7 @@ function abilityKey(id: UpgradeId, fallback: string): string {
   return key ?? fallback;
 }
 
-/** The run on top of the flight HUD: score, lives, objectives, the portal compass, abilities */
+/** The run on top of the flight HUD: score, feathers (lives), objectives, the portal compass, abilities */
 export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compassScale: number; toasts: boolean }) => (
   <div className="run-hud">
     {/* Like the race timer: a glass pill at the top, the score big, where you are small */}
@@ -48,11 +50,15 @@ export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compas
     </div>
 
     {Number.isFinite(run.lives) && (
-      <div className={`run-lives${run.lives <= 1 ? " last" : ""}`} title="Lives: crashes left" key={run.lives}>
+      <div className={`run-lives glass${run.lives <= 1 ? " last" : ""}`} title="Feathers: crashes left" key={run.lives}>
         {Array.from({ length: run.lives }, (_, i) => (
-          <span key={i}>💖</span>
+          <Feather key={i} />
         ))}
-        {run.lives === 1 && <small>last life</small>}
+        {/* Those lost, as empty outlines */}
+        {Array.from({ length: run.maxLives - run.lives }, (_, i) => (
+          <Feather key={`spent${i}`} spent />
+        ))}
+        {run.lives === 1 && <small>last feather</small>}
       </div>
     )}
 
@@ -154,7 +160,7 @@ export const FinishScreen = ({
     ["Best chain", `×${summary.bestChain}`],
     ["Style", summary.style.toLocaleString()],
     // A finished run shows what it had to spare; a lost one, or the sandbox's endless lives, the crashes
-    won && Number.isFinite(summary.livesLeft) ? ["Lives left", `${summary.livesLeft} 💖`] : ["Crashes", summary.crashes.toLocaleString()],
+    won && Number.isFinite(summary.livesLeft) ? ["Feathers left", summary.livesLeft.toLocaleString()] : ["Crashes", summary.crashes.toLocaleString()],
   ];
   const last = summary.path[summary.path.length - 1];
   return (
@@ -163,7 +169,7 @@ export const FinishScreen = ({
         <small>
           {testMode ? "Test" : "Run"} #{summary.seed} · {won ? "complete" : `fell in ${BIOMES[last].name}`}
         </small>
-        <h2>{won ? "Journey's end" : "Out of lives"}</h2>
+        <h2>{won ? "Journey's end" : "Out of feathers"}</h2>
         <div className="finish-score">
           <strong>{summary.score.toLocaleString()}</strong>
           <span>{verdict}</span>
@@ -235,7 +241,7 @@ export const UpgradePicker = ({
       <div className="cards">
         {offers.map((u, i) => (
           <button key={u.id} className={`card ${u.kind}`} onClick={() => onPick(u.id)}>
-            <span className="icon">{u.icon}</span>
+            <span className="icon">{icon(u.id)}</span>
             <strong>{u.name}</strong>
             <span className="kind">{u.kind === "ability" ? <>
               ability <span className="no-touch">· {abilityKey(u.id, u.key ?? "")}</span>

@@ -47,7 +47,7 @@ export type UpgradeId =
   | "magnet"
   | "streamline"
   | "showoff"
-  | "secondWind"
+  | "spareFeather"
   | "featherfalling"
   | "skimBooster"
   | "cloudSurf"
@@ -89,7 +89,7 @@ export const UPGRADES: readonly Upgrade[] = [
   { id: "magnet", name: "Gate magnet", icon: "🧲", kind: "passive", max: 3, effect: { magnet: 5 }, description: "Gates and portals count from further away." },
   { id: "streamline", name: "Streamline", icon: "🏹", kind: "passive", max: 3, effect: { drag: 0.86 }, description: "Less drag: a higher top speed in every dive." },
   { id: "showoff", name: "Showoff", icon: "✨", kind: "passive", max: 3, effect: { multiplier: 2, gateBonus: 50 }, description: "Bigger style multipliers and more points for every gate." },
-  { id: "secondWind", name: "Second wind", icon: "💖", kind: "passive", max: 3, effect: { lives: 1 }, description: "One more life: the run survives one more crash." },
+  { id: "spareFeather", name: "Spare feather", icon: "🪶", kind: "passive", max: 3, effect: { lives: 1 }, description: "One more golden feather: the run survives one more crash." },
   // The design list's abilities (CLAUDE.md, "Items and abilities")
   { id: "featherfalling", name: "Featherfalling", icon: "🪶", kind: "passive", max: 2, effect: { featherfalling: 1, sink: 0.55, stall: 0.8, drag: 0.92 }, description: "Gravity lets go a little: you sink far less, stall later and slip through the air." },
   { id: "skimBooster", name: "Skim-Booster", icon: "⚡", kind: "passive", max: 2, effect: { skimBooster: 1 }, description: "Skimming the land fills you with thrill: your boost refills as long as you stay dangerously close." },

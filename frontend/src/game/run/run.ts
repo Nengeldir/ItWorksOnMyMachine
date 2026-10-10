@@ -8,7 +8,7 @@ import type { UpgradeId } from "./upgrades";
 // flies seven of the other eight in an order the seed draws; one sits out.
 // Every level ends in a portal to the next biome and a choice of upgrades,
 // the last one in the finale.
-// A crash costs a life; with none left the run is over where you fell.
+// A crash costs a life (a golden feather on screen); with none left the run is over where you fell.
 
 export const RUN_LENGTH = 8;
 export const START_LIVES = 3; // crashes a run survives, less one: the last life's crash ends it
@@ -59,6 +59,8 @@ export interface RunHud {
   score: number;
   /** Crashes left before the run ends (Infinity in the test sandbox) */
   lives: number;
+  /** The most lives held so far in this run */
+  maxLives: number;
   chain: number;
   /** Gates passed in this level: a crash puts you back after the last one */
   checkpoint: number;
