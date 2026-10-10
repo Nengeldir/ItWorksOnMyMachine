@@ -135,12 +135,12 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/run/` | The roguelike run. `run.ts`: run length, biome order from the run seed (Sky Isles, Verdant, then the Sunken Reef and four of the five other middle biomes shuffled, Aurora last), portal destinations, scoring constants, `RunHud`. `upgrades.ts`: seventeen data-defined upgrades (seven of the original, the design list's first ten abilities) and the 3-of-N offer. `abilities.ts`: `Abilities`, the ten abilities' rules (`ABILITY` constants, in `?tune` as "Run abilities", not saved): cooldowns, Gale Force's energy and tunnel, cloud lanes (`laneAt`), the spirit manta's path, the slipstream, Wind-Shear's dodge params; it answers each step with `FlightMods` and boost refills, and counts one-off moments (`cue`) for the looks. `controller.ts`: `RunController` (levels, gates and chains, abilities as `FlightMods`, the portal transition: blur in, the next level built under the blur (`buildNext`), wormhole and upgrade pick while it streams, blur out with the palette cross-fade; HUD data). `finale.ts`: `Finale`, the last portal's cutscene (space under a world-fixed Milky Way with dust lanes and its core overhead, the camera's scripted pan beneath the pilot and back, then white light; Enter skips). `portal.ts`: the portal (ring, a flat disk like a window onto night, beam), the `Wormhole` (a camera-centred shell mapping the view onto an endless twisting tube of lensed stars and nebula with the exit glowing ahead, spirit motes, its own lights) and `screenSparkle`. Game's `veil(k)` (the `.portal-veil` DOM blur and sparkles) and `insideWormhole(on)` (hides the level: land, sky, soft particles, speed lines, ambient, gate effects) serve it |
 | `game/devtools.ts` | Dev builds only: `__shot(view)` (freeze, stream the land around a fixed camera, render once), `__raceHashes()` (the race map's determinism check), `__run(s)`, `__bench(q)` and `__crash(kind, after)` (flies into rock near the start and stops `after` s into the crash animation) on `window` |
 | `game/math.ts` | `clamp`, `smoothstep`, `smin` (smooth minimum for distance fields) |
-| `game/world/terrain/` | Generator v2 (every biome but Sky Isles). `noise.ts`: seeded fbm, ridged multifractal, domain-warped ridges, terraces. `shapes.ts`: distance-field primitives (spires and rock rings never thinner than `MIN_RADIUS`, 4.5 m, what the 6 m meshing grid always holds) with boxes, surface ids and grain (Island, NoiseIsland from 3D noise with tunnels, Mesa with ledges, Spire between two points, Slab, RockRing, Cap, Bridge: a humped stone bridge with one arch). `ground.ts`: the heightfield following the line (valley, hills, warped ridged mountains, terraces, crevasses, carved river channel, overhang noise on cliffs). `river.ts`: `Steps`, a valley floor stepping down in pools and falls, and the river in it (water distance for collisions). `field.ts`: `TerrainField`, ground + shapes as one field, `fill()` for whole blocks (same arithmetic as `distance()`). `recipes.ts`: gates and scenery from a biome's `LandRecipe`. `mesh.ts`: surface nets per LOD node, faces painted for the shader. `streamer.ts`: `LandStreamer`, the LOD octree (384/192/96 m nodes, 16 cells each). `material.ts`: the terrain shader |
+| `game/world/terrain/` | Generator v2 (every biome but Sky Isles). `noise.ts`: seeded fbm, ridged multifractal, domain-warped ridges, terraces. `shapes.ts`: distance-field primitives (spires and rock rings never thinner than `MIN_RADIUS`, 4.5 m, what the 6 m meshing grid always holds) with boxes, surface ids and grain (Island, NoiseIsland from 3D noise with tunnels, Mesa with ledges, Spire between two points, Slab, RockRing, Cap, Bridge: a humped stone bridge with one arch). `ground.ts`: the heightfield following the line (valley, hills, warped ridged mountains, terraces, crevasses, carved river channel, overhang noise on cliffs). `river.ts`: `Steps`, a valley floor stepping down in pools and falls, and the river in it (water distance for collisions). `field.ts`: `TerrainField`, ground + shapes as one field, `fill()` for whole blocks (same arithmetic as `distance()`). `recipes.ts`: gates and scenery from a biome's `LandRecipe`. `mesh.ts`: surface nets per LOD node, faces painted for the shader. `streamer.ts`: `LandStreamer`, the LOD octree (384/192/96 m nodes, 16 cells each), with 48 m merge hysteresis and a bounded 48 MiB hidden-mesh cache (estimated CPU + GPU buffers, at most 256 entries). `material.ts`: the terrain shader |
 | `game/world/biomes/` | Biomes as data (`types.ts`: `Biome`, `Level`, `LevelKey`). `index.ts`: the registry, `raceLevel(seed)` (races and time trials: always Sky Isles) and `runLevel(runSeed, index, biome)` (roguelike levels, deterministic from the run seed and level number). `skyIsles.ts`: the race map, frozen. `reef.ts`: Sunken Reef, the level under the sea (`SkySpec.underwater`) |
 | `game/world/World.ts` | Everything a level decides: course, rock field, trees, palette; built from a `Level` (biome + seed + mood). `distance()` (rock, trees, water) for proximity, the camera and the fallback collisions; `otherDistance()` is everything but the rock (the rock collides as drawn, see `landCollider.ts`); `lost()` below the islands. No rendering |
 | `game/world/islands.ts` | `RockField`: the floating islands as one signed distance field (shapes melted with `smin`, roughened, a tube carved along the racing line) |
 | `game/world/mesher.ts`, `mesher.worker.ts` | Cuts chunks of the rock field into flat-shaded meshes in Web Workers, and places trees (from the grid's own vertices, so the race map's tree colliders never move; `treeSink` stretches a trunk down to snapped rock, drawn only). Workers rebuild the World from a `LevelKey` |
-| `game/world/snap.ts` | Brings the land drawn close to the distance field: `snapToSurface` moves surface-nets vertices onto the field's zero surface (Newton steps), each kept inside its own cell; `SurfaceCutter` splits faces whose edges or middles still stray more than 0.5 m (crack-free: an edge's split depends only on its ends; midpoints move only across their edge, a face's middle only along its normal) and drops pieces that end up facing into the rock (never drawn, so never hit). Used by both meshers (v2 at full detail only) |
+| `game/world/meshCleanup.ts` | Worker-side exact-welded component cleanup for both meshers: discard small closed thin shells, shorten narrow tips with per-face winding checks, subdivide compact stones once and retain their bounds. Open/non-manifold edges and a one-cell chunk collar are protected. Flat material attributes follow source faces. `MESH_CLEANUP` source constants in tuning.ts require worker reload; no per-frame work |
 | `game/world/landCollider.ts` | `LandCollider`: collisions with exactly the land drawn. Every land mesh on screen (Sky Isles chunks, shown v2 nodes, added and removed with them) as triangles in a lazily built grid per mesh; exact tests: ball, segment (sweeps between steps), convex quad (separating axes) and signed `nearest` (the crash tumble). Rock that is in the field but not drawn (thinner than the 6 m grid) is never hit |
 | `game/world/trees.ts` | Tree colliders and their lookup index. `Plant` is the collider of generator-v2 plants and structures: a tapered trunk, an optional canopy ellipsoid, an optional upright disc (a windmill's sails) an optional gate (two posts and a bar, open in between) and an optional hall (a long box: the ETH building's wings) |
 | `game/world/flora/` | Generator-v2 vegetation: `species.ts` (sizes, colliders), `meshes.ts` (models from primitives), `placement.ts` (`placeFlora`, run in the mesher workers: structures first, then plants keeping clear of them, then grass), `view.ts` (`FloraView`: one instanced pool per kind, impostor atlas, grass), `pool.ts` |
@@ -219,6 +219,124 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10 — Rebase mesh fixes for review
+
+- Rebased onto main at `9f3d70c`, preserving both sides of documentation
+  conflicts and the upstream biome, adventure and terrain changes.
+- Squashed the completed mesh-fixes work for review. Verified the combined
+  tree with frontend build, lint and all 64 tests; build reports a bundle-size
+  warning but succeeds.
+
+### 2026-10-10 — Approach detail and crystal facets (`mesh-fixes`)
+
+- Removed the new contour/vein shader lines. Glow now follows facets at a
+  restrained 0.18 multiplier, with bounded per-face variation in the mesher.
+  This applies to crystal and volcanic terrain; no random full-bright faces.
+- Added crystal-only optical shading via a per-vertex `crystal` tag, transferred
+  by workers, remapped through cleanup and bound by the streamer. Aurora's
+  crystal surface opts in; ordinary stone does not. Tinted cores, pale edges
+  and restrained view-dependent highlights fake translucency without alpha
+  blending, refraction passes or changed collision geometry.
+- Mountains gain bounded medium-scale heightfield relief (`TERRAIN_DETAIL`):
+  amplitude is biome roughness × 3, only within the mountain mask. This adjusts
+  local heights and ground-based placement by a few metres; large forms and
+  course parameters remain. Detail is attached to the heightfield at every LOD.
+- Selected coherent patches receive small tangential cell-vertex offsets,
+  capped at 0.8 m and contained in their source cells. Shared global cell
+  coordinates reproduce exact border positions. Comparable healthy quad
+  diagonals vary deterministically to break up the square lattice. No extra
+  triangles are added by this variation; calm patches remain calmer.
+- Added a fourth v2 LOD: 3 m voxels in 48 m nodes, then the previous 6/12/24 m
+  sampling in 96/192/384 m nodes. Root footprint is unchanged. `lodDetail=140`
+  requests finest terrain based on distance to node bounds in every direction,
+  including mountains off the course. `lodNear=300` and `lodFar=700` retain the
+  previous outer tiers. Finest-cell size is smaller than the 4.2 m collision
+  wingspan; it is not a 3 m activation distance.
+- Game passes flight velocity through WorldView to LandStreamer. Requests
+  consider both the camera and a two-second predicted position, capped at
+  240 m, retaining nearby terrain behind/to the sides. Prediction changes
+  trigger updates even without camera movement. Tunables are in TERRAIN and
+  the tuning panel. Nearby missing terrain retains priority; existing visible
+  meshes stay until replacement workers finish. Existing LOD hysteresis and
+  bounded cache remain. Full flora and tree colliders now use 48 m finest nodes.
+- Loading readiness now accepts visible ancestor or complete descendant coverage.
+  LOD upgrades/downgrades no longer trigger auto-gliding while usable terrain
+  remains; genuinely missing terrain retains the safety fallback. Regression
+  tests cover both replacements and incomplete coverage.
+- Kept bounded ground noise, shared sample coordinates, closed-fragment cleanup
+  and conservative border protection. Mixed-LOD joins retain overlapping cells;
+  this does not introduce true adaptive stitching or geometric crossfading.
+- Verified build, lint and 47 frontend tests, including finer sphere geometry
+  with scattered vertices and closed joins/collider hits, crystal-only tagging,
+  all four sampling levels, approaching a node
+  960 m off-axis, speed cap, turning away and nearby stationary detail. Aurora
+  dawn/night and a fixed side-mountain view inspected in browser: irregular facets,
+  crystal optics, no painted crystal lines or shader
+  errors. Performance on integrated GPUs and flight-speed transition playtests
+  remain open; additional close-range geometry costs more than the old finest tier.
+
+### 2026-10-10 — Fix glowing faces and floating mountain sheets (`mesh-fixes`)
+
+- Traced the mountain fragments to ground detail, not just LOD or mesh cleanup:
+  `(y - height)` was divided by the slope magnitude, then overhang and roughness
+  noise were added without that scale. At steep ridges, metre-sized noise could
+  create solid samples hundreds of metres above the ground. `Ground.sample`
+  now shares the slope scale with `TerrainField.distance`; `shape` applies it
+  to overhangs and `fill` applies identical arithmetic to cached-column roughness.
+  Mountain heights/recipes and explicit rock shapes are unchanged. Near-surface
+  geometry and v2 proximity distances do change; collisions follow drawn meshes.
+- Ground-only survey, seed 2, lateral 350..1000 m by 25, z 0..900 by 30,
+  height +24..240 by 12: stray solid samples Ember 170 -> 0, Glacier 227 -> 0,
+  Verdant 94 -> 0 (15,903 queries each). Old noise created rock up to 204 m
+  above Ember/Glacier height, 180 m in Verdant. Regression also checks below
+  the mountains and exact Float32 agreement between block/point queries at
+  voxel spacings 6/12/24 m. Shared coordinates remain deterministic across chunks.
+- Fixed terrain emission: the mesher previously chose near-full emission for
+  occasional whole faces from a centroid noise sample. `Surface.glow` is now
+  emission strength, and the material draws continuous world-space veins with
+  subpixel fading. This fixes the effect at all LODs, independent of crashes or
+  player distance. Terrain geometry, gate glow and lava material are unaffected
+  by this lighting change.
+- Validation: build, lint, 44 frontend tests; same-camera neutral-light mountain
+  comparison at near and distant detail, and Ember dusk gameplay shader check
+  with no logged errors. In the fixed 384 m mountain region, near triangles
+  79,614 -> 55,968 and distant triangles 20,734 -> 16,662. These are geometry
+  counts, not FPS. Base peaks remain sharp; mixed-LOD stitching, additional
+  seeds and integrated-GPU frame profiling remain follow-ups.
+
+### 2026-10-10 — Keep floating stones, remove shards (`mesh-fixes`)
+
+- Removed face-centre displacement/refinement (`snap.ts`) from both meshers:
+  it still produced small pyramids and amplified the appearance of fragments.
+  New `meshCleanup.ts` welds exact positions and measures closed components by
+  3V/A thickness and physical extent, rather than throwing away low-poly rocks.
+- Thin detached shells under 36 m are removed. Compact stones under 24 m with
+  at most 80 faces get one Loop subdivision at full detail, rescaled to preserve
+  their bounds. Most land is untouched. Narrow attached tips can shorten by up
+  to 3 m, with all incident triangle windings checked before moving a vertex.
+  These thresholds live in `MESH_CLEANUP` in `tuning.ts` (worker source settings).
+- Preserve every open/non-manifold edge and a one-cell chunk-border collar;
+  never remove individual triangles to fix a shard. Border-crossing fragments
+  deliberately remain. Mixed-LOD overlap/stitching remains as before. Paint is
+  remapped per original face; colliders consume the final output triangles.
+  Distant v2 nodes retain their previous geometry/cost; cleanup runs at full
+  detail. Race tree placement, density fields, course seeds and rings stay unchanged.
+- Survey: 105 fine chunks across seven biomes, seeds 2/7/42, at course-start
+  z + 100/250/400/650/900 and x + 100. Before/after triangle totals by biome:
+  Glacier 28,788/13,548; Verdant 32,806/16,708; Ember 32,942/16,178;
+  Archipelago 10,824/4,420; Lagoon 18,314/10,262; Twilight 27,678/14,624;
+  Aurora 31,924/15,572. Single local survey generation time was 1,027/794 ms;
+  order/JIT dependent, not a frame-rate benchmark. Stone refinement was rare
+  (three preserved components gained 36 faces each); closed slivers were removed
+  in nine sampled chunks. Most savings come from removing centre fans.
+- Validation: build, lint and 41 frontend tests; regression coverage includes
+  compact stone bounds/watertightness, sliver removal, border/open-shell
+  preservation, attached-tip winding, 105 seeded chunks, closed adjacent chunk
+  joins and collision rays. Race seeds 1/7/42 match documented tree/density/ring
+  hashes. Browser inspected before/after Verdant stone from two angles, Ember
+  cliff and Glacier fragments under neutral light, plus Verdant gameplay with
+  no rendering errors. Full seed coverage and integrated-GPU profiling remain.
 
 ### 2026-10-10: Rebased onto main's Pengyue adventure (Claude)
 
@@ -710,6 +828,40 @@ it are never seen.
   fades in over its first 60 m.
 - Verified: build and lint pass. Not heard or seen in a browser; the ring tilt
   was inferred from the code (the normal's y), so check it by eye.
+
+### 2026-10-10 — Mesh artefact repair and streaming performance (`mesh-fixes`)
+
+- Replaced aggressive surface snapping and recursive subdivision in `snap.ts`
+  with bounded, face-interior refinement. Shared net edges stay fixed; thin
+  faces cannot sprout tall centre fans, and failed refinement no longer deletes
+  triangles. This repairs measured internal gaps and same-resolution seams.
+- `terrain/mesh.ts` chooses the better-shaped quad diagonal when possible,
+  with an orientation check. Sky Isles retains its original diagonal, colors
+  and tree placement. No density fields, terrain recipes, shaders, palettes,
+  structure placement or flight controls changed. The repaired triangles are
+  also the collision surface, so local contact geometry does change.
+- `terrain/streamer.ts` retains hidden nodes in a bounded cache, adds LOD
+  hysteresis, discards obsolete worker results before uploads, and preserves
+  the existing visible terrain until its replacement is complete. New
+  `TERRAIN.cacheMiB` and `lodHysteresis` knobs live in the tuning panel.
+  `WorldView.ts` no longer rescans/sorts the legacy chunk queue every idle frame.
+- Before/after diagnostic: seed 2, three fine chunks per biome at course-start
+  z + 100/250/400, x = course.x(z) + 100, y = ground height. Glacier triangles
+  8,887 -> 6,252; Verdant 7,064 -> 5,836; Ember 11,024 -> 7,464. Open interior
+  edges (excluding a boundary margin) 128/179/465 -> 0/0/0. Refinement distance
+  calls 83,331/64,807/106,389 -> 7,901/7,234/9,443. These are deterministic
+  geometry/work counts, not an FPS benchmark. Narrow base-grid slivers can
+  still exist (Ember's extreme-aspect triangles fell from 5 to 3 in the sample).
+- Verified build, lint, 38 frontend tests, including seven new mesh/collision/
+  cache/transition regressions; exact closed joins on synthetic spheres across
+  chunks and negative coordinates; no open interior edges in 21 sampled chunks
+  across all seven v2 biomes. Sky Isles seeds 1/7/42 still match documented
+  tree, distance-field and ring hashes. Browser inspected Glacier day/night
+  and Ember with no logged rendering errors.
+- Remaining: mixed-resolution boundaries retain the old overlapping-cell
+  approach, not watertight adaptive stitching. Focused GPU/frame-time profiling,
+  all-seed visual coverage and a full race contact/ghost playtest remain open.
+
 
 ### 2026-10-10: Collisions with the land exactly as drawn (Claude)
 
@@ -1870,6 +2022,17 @@ ported to the islands world:
 
 ## Next up
 
+- Playtest the new 3 m tier and two-second look-ahead at boost/dive speeds on
+  integrated GPUs; tune the 140 m activation range against worker readiness.
+  Verify mixed-detail overlap at oblique angles and all crystal/volcano moods.
+
+- Mesh cleanup intentionally leaves fragments crossing chunk borders intact.
+  Ground-noise amplification at peaks is now fixed before meshing at every LOD.
+  If remaining shape fragments are distracting, build a deterministic halo/component ownership
+  pass before touching their topology. Check more seeds and integrated-GPU
+  frame times; the generation benchmark below is not an FPS measurement.
+
+
 - Wormhole camera: watch the orbit and the 0.4 s swing back to the chase
   view in a focused window and tune `RUN.orbit*` and `wormholeFlow`; the
   pilot is held still in the wormhole, so its ribbons and motes stay off.
@@ -1899,6 +2062,11 @@ ported to the islands world:
   them); impostors get no caustics; rays or turtles; its own music
   track; the wreck often lies on a slope with one end buried; brain-coral
   domes under about 6 m mesh as flat patches (the 6 m grid).
+- Mesh-fixes: implement and validate true adaptive stitching at mixed-LOD
+  boundaries if distant seams remain visible; the overlap approach remains.
+  Inspect residual thin base-grid features on more seeds without smoothing
+  whole landscapes. Profile focused gameplay and cache memory on integrated
+  GPUs; the measured refinement savings do not establish an FPS gain.
 
 - Playtest the settings dead zone with a real gamepad and listen to the separate
   audio levels; check mouse sensitivity 2× across different devices.
@@ -1928,11 +2096,10 @@ ported to the islands world:
   still give a few style points or a puff of spray (never a crash). The
   crash tumble can still clip for a few frames when wedged in a slot
   narrower than the body (2 of 10 test crashes, briefly). About 1.7% of
-  vertical rays through Sky Isles cross the mesh inconsistently (slivers
-  where snapped faces meet); harmless for flying, it can confuse the
-  tumble's inside test. Coarse v2 nodes (12 m and up) aren't snapped. The
-  extra rock triangles (about 4×) want a frame-time check in a focused
-  window; `SurfaceCutter`'s tolerance (0.5 m) is the knob. Remote pilots don't use the hitbox (they never crash).
+  vertical rays through Sky Isles previously crossed snapped meshes
+  inconsistently. The mesh-fixes pass removes that snapping and verifies closed
+  chunk joins; repeat the full tumble/inside-ray survey and focused frame-time
+  checks on real courses before considering this fully resolved. Remote pilots don't use the hitbox (they never crash).
 
 - Play through the integrated portal/finale and victory lap; check multiplayer
   and gamepad controls. Make the explore debug panel usable at narrow widths

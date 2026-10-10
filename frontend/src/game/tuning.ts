@@ -82,10 +82,29 @@ export const CAMERA = {
   fallTrack: 7, // how tightly it keeps up with the falling body
 };
 
-/** Generator-v2 land: level of detail and the terrain shader. Looks only; collisions never change */
+export const TERRAIN_DETAIL = { mountainRelief: 3, facetScatter: 0.16 }; // bounded relief × biome roughness; reload workers after edits
+
+// Worker geometry settings: changing these requires rebuilding/reloading workers.
+export const MESH_CLEANUP = {
+  fragmentMaxSize: 36, // only small closed fragments are removed (m)
+  fragmentMinThickness: 0.18, // 3 * enclosed volume / surface area (m)
+  fragmentThinRatio: 0.055, // thickness / longest extent: reject sheets and needles
+  stoneMaxSize: 24, // compact pebbles get one subdivision below this size (m)
+  stoneMaxFaces: 80, // cap refinement work; broad terrain stays coarse
+  tipMinHeight: 1.5, // minimum attached needle height (m)
+  tipWidthRatio: 0.3, // neighbour-ring radius / tip height
+  tipMaxTrim: 3, // maximum attached-tip shortening (m)
+};
+
+/** Generator-v2 terrain streaming and appearance. Collisions follow the visible meshes. */
 export const TERRAIN = {
-  lodNear: 300, // metres: land closer than this is meshed at full detail (6 m)
+  lodLookAheadSeconds: 2, // prepare approaching terrain two seconds ahead of current velocity
+  lodLookAheadMax: 240, // cap extra detail extent during fast dives (m)
+  lodDetail: 140, // metres from any terrain node: finest 3 m cells, including side mountains
+  lodNear: 300, // metres: 6 m cells before the finest approach tier
   lodFar: 700, // closer than this at half detail (12 m), further at quarter (24 m)
+  lodHysteresis: 48, // extra distance before merging fine detail again
+  cacheMiB: 48, // bounded cache of hidden terrain (estimated CPU + GPU buffers)
   viewDistance: 1500,
   readyRadius: 260, // the start waits until the land this close has arrived
   uploadsPerFrame: 4, // arrived land meshes taken in per frame once you're flying (smooths frame times)
@@ -262,6 +281,11 @@ export const RANGES: Record<string, [number, number, number?]> = {
   fallAngle: [20, 85],
   fallSwing: [0.5, 10],
   fallTrack: [1, 20],
+  lodHysteresis: [0, 120, 4],
+  cacheMiB: [0, 128, 8],
+  lodLookAheadSeconds: [0, 3, 0.25],
+  lodLookAheadMax: [0, 360, 20],
+  lodDetail: [60, 240, 10],
   lodNear: [120, 600, 10],
   lodFar: [300, 1400, 10],
   viewDistance: [600, 2500, 10],
