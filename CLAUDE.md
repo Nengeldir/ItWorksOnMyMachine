@@ -220,6 +220,22 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: PR #31 and #33 rebased onto `main` (Claude)
+
+The UX branches (`shiyu-tutorial`, #31, and `shiyu-unify-ui`, #33, stacked
+on it) were rebased onto `main` (`e374fef`: abilities, autopilot, test mode)
+on `ux-adventure-onto-main` for a rebase merge (main allows only that).
+- Conflicts: `App.tsx` takes main's `route.ts` with the tutorial's storage
+  imports; `GameScreen.tsx`'s explore/test screen keeps main's fields and
+  #33's `usePaletteTheme`; README and this file keep both sides (the "?"
+  key row and the `?test` rows; `route.ts` and the new `components/` notes).
+- `RunHud.tsx` (in the How to fly commit): main replaced the `hover` upgrade
+  with `hoverStall` (a press, not a hold), so the picker's bound-key labels
+  map `hoverStall`, `plunge` and `galeForce` to their bindings, without
+  "hold".
+- Verified: `tsc`, build and lint pass; 48 frontend tests (Node 22.14 with a
+  `module.register` resolver); 23 backend tests. Not looked at in a browser.
+
 ### 2026-10-10: Adventure in the Solo look, a map select for every biome (Claude)
 
 Asked for by the UX group, on `shiyu-unify-ui` (from `shiyu-tutorial`): the
