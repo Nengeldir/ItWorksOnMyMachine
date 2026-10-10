@@ -30,7 +30,7 @@ import { INTERPOLATION_DELAY_MS, Pilot, type PilotSample } from "./pilots";
 import { clamp } from "./math";
 import { SpeedLines } from "./speedlines";
 import { TOON_LIGHT } from "./toon";
-import { FX, RANGES, RINGS, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveTuning } from "./tuning";
+import { FX, RANGES, RINGS, RUN, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveTuning } from "./tuning";
 import { ABILITY } from "./run/abilities";
 import { RunController, type RunEvents, type RunHost } from "./run/controller";
 import type { UpgradeId } from "./run/upgrades";
@@ -212,6 +212,7 @@ export class Game implements RunHost {
   /** Blur and sparkles over the screen while passing through a portal */
   private readonly portalVeil: HTMLDivElement;
   private veilAmount = 0;
+  private veilFlash = -1;
   /** White light over everything (the end of a run's finale) */
   private readonly whiteLight: HTMLDivElement;
   private white = 0;
@@ -549,6 +550,10 @@ export class Game implements RunHost {
   }
 
   veil(amount: number) {
+    if (this.veilFlash !== RUN.portalFlash) {
+      this.veilFlash = RUN.portalFlash;
+      this.portalVeil.style.setProperty("--portal-flash", RUN.portalFlash.toFixed(3));
+    }
     if (Math.abs(amount - this.veilAmount) < 0.002) return;
     this.veilAmount = amount;
     this.portalVeil.style.setProperty("--veil", amount.toFixed(3));

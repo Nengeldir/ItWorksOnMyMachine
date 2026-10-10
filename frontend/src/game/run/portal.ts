@@ -459,13 +459,13 @@ export class Wormhole {
 
 /** Sparkles thrown across the view as you pass through a portal */
 export function screenSparkle(particles: Particles, camera: THREE.Camera, forward: THREE.Vector3, color: THREE.Color) {
-  const count = Math.round(110 * particles.budget);
+  const count = Math.round(110 * RUN.portalFlash * particles.budget);
   for (let k = 0; k < count; k++) {
     // In a cone in front of the camera, close enough to fill the screen
     at.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).normalize().multiplyScalar(2 + Math.random() * 3);
     at.addScaledVector(forward, 3 + Math.random() * 5).add(camera.position);
     vel.subVectors(at, camera.position).normalize().multiplyScalar(1 + Math.random() * 3);
-    particles.emit(at, vel, k % 3 ? fx(0.8 + Math.random() * 0.8, 0.1 + Math.random() * 0.15, WHITE, Kind.Star, 0, 1.5, 2.8) : fx(0.9 + Math.random() * 0.6, 0.15 + Math.random() * 0.2, color, Kind.Glow, 0, 1.2, 2.4));
+    particles.emit(at, vel, k % 3 ? fx(0.8 + Math.random() * 0.8, 0.1 + Math.random() * 0.15, WHITE, Kind.Star, 0, 1.5, 2.8 * RUN.portalFlash) : fx(0.9 + Math.random() * 0.6, 0.15 + Math.random() * 0.2, color, Kind.Glow, 0, 1.2, 2.4 * RUN.portalFlash));
   }
 }
 

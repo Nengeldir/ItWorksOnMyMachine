@@ -61,11 +61,12 @@ bands from the nearest ordinary hoop centre**:
 | Rare | 20 to under 29 m | 55 | 15 | Violet |
 | Legendary | 29 to under 45 m | 140 | 40 | Warm gold |
 
-Crystals sit just ahead of hoops. Treasure models sit to the side or above or
+Crystals sit just ahead of hoops, with larger 3.8 m models and nearby drifting
+star motes to make them easier to spot. Treasure models sit to the side or above or
 below them; rarer treasures require a larger detour. Distance uses a pickup's
 fixed centre, not its animated bob or the pilot's distance at collection. The
-3.2 m collection radius is checked along each real physics step so fast passes
-work. Teleports never sweep across rewards.
+collection radius is 5.2 m for crystals and 3.2 m for treasures, checked along
+each real physics step so fast passes work. Teleports never sweep across rewards.
 
 Placement tries 32 deterministic candidates within the chosen band, with 5 m
 terrain clearance and probes for wing room and a clear approach. Unsafe or

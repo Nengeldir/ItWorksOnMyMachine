@@ -309,12 +309,13 @@
 /* Passing through a portal: the view blurs, brightens a little and fills with sparkles (--veil 0..1) */
 .portal-veil {
   --veil: 0;
+  --portal-flash: 0.35;
   position: absolute;
   inset: 0;
   pointer-events: none;
   visibility: hidden;
-  backdrop-filter: blur(calc(var(--veil) * 22px)) saturate(calc(1 + var(--veil) * 0.4)) brightness(calc(1 + var(--veil) * 0.35));
-  background: radial-gradient(ellipse at center, rgba(255, 255, 255, calc(var(--veil) * 0.12)) 0%, rgba(190, 210, 255, calc(var(--veil) * 0.3)) 100%);
+  backdrop-filter: blur(calc(var(--veil) * 22px)) saturate(calc(1 + var(--veil) * 0.4)) brightness(calc(1 + var(--veil) * var(--portal-flash) * 0.2));
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, calc(var(--veil) * var(--portal-flash) * 0.12)) 0%, rgba(190, 210, 255, calc(var(--veil) * var(--portal-flash) * 0.3)) 100%);
 }
 
 .portal-veil.on {
@@ -326,7 +327,7 @@
   content: "";
   position: absolute;
   inset: -10%;
-  opacity: var(--veil);
+  opacity: calc(var(--veil) * var(--portal-flash));
   mix-blend-mode: screen;
   background-image:
     radial-gradient(circle, #fff 0 1.5px, rgba(255, 255, 255, 0.35) 3px, transparent 7px),

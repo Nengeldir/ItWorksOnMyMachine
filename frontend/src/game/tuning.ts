@@ -149,6 +149,7 @@ export const DEEP = {
 
 /** The roguelike run's looks (its rules live in run/run.ts and run/upgrades.ts) */
 export const RUN = {
+  portalFlash: 0.35, // intensity of the crossing sparkles and screen brightening
   tunnelFade: 1.4, // seconds to fade out of the tunnel into the next biome
   compass: 1, // size of the portal compass
   toasts: true, // pop-ups for points and run events
@@ -184,7 +185,7 @@ export const PET_LOOKS = { size: 1.8, spacing: 2.9, height: 0.7, trail: 0.8, fol
 /** Small ornaments and particle emission, never the pilot's hitbox. */
 export const COSMETIC_FX = { capeDetail: 1, wingParticles: 22, wingParticleSize: .22 };
 /** Collection models and motion; reward rules live on the server. */
-export const COLLECTION_FX = { bob: 0.5, spin: 0.65, size: 2.2, viewDistance: 240, burst: 1 };
+export const COLLECTION_FX = { bob: 0.5, spin: 0.65, size: 2.2, crystalSize: 3.8, crystalMotes: 10, moteDistance: 80, viewDistance: 240, burst: 1 };
 
 
 /** Music and sound levels */
@@ -333,6 +334,10 @@ export const RANGES: Record<string, [number, number, number?]> = {
   shafts: [0, 3],
   surface: [0, 2],
   life: [0, 3],
+  portalFlash: [0, 1],
+  crystalSize: [2, 6],
+  crystalMotes: [0, 30],
+  moteDistance: [20, 160],
   tunnelFade: [0.3, 4],
   compass: [0.5, 2],
   orbitLap: [8, 60],

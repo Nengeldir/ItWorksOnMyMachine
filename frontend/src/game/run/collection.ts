@@ -17,6 +17,8 @@ export const COLLECTION_DISTANCE: Record<Rarity, readonly [number, number]> = {
 };
 export const RARITY_COLOR: Record<Rarity, string> = { common: "#89d9de", uncommon: "#85c797", rare: "#9b8ce3", legendary: "#efba61" };
 export const COLLECTION_RADIUS = 3.2;
+/** Adventure crystals allow a wider fly-by; independent of their animated model size. */
+export const CRYSTAL_RADIUS = 5.2;
 export interface CollectionPickup { reward: Reward; position: THREE.Vector3; normal: THREE.Vector3; side: THREE.Vector3; up: THREE.Vector3; collected: boolean }
 const approach = new THREE.Vector3();
 const segment = new THREE.Vector3();
@@ -105,10 +107,11 @@ export function collectionModel(reward: Pick<Reward, "kind" | "asset" | "rarity"
 export class Collection {
   readonly group = new THREE.Group();
   readonly pickups: CollectionPickup[];
-  private readonly views: { pickup: CollectionPickup; model: ReturnType<typeof collectionModel>; root: THREE.Group }[];
+  private readonly views: { pickup: CollectionPickup; model: ReturnType<typeof collectionModel>; root: THREE.Group; moteDebt: number }[];
   private time = 0;
   private readonly color = new THREE.Color();
   private readonly velocity = new THREE.Vector3();
+  private readonly motePosition = new THREE.Vector3();
   private readonly world: World;
   constructor(world: World, rewards: Reward[], scene: THREE.Scene) {
     this.world = world;
@@ -124,7 +127,7 @@ export class Collection {
       // A gilded halo reads without bloom; geometry follows the same light as all toon models.
       const halo = paintedModel(new Builder().add(new THREE.TorusGeometry(.75, .025, 5, 24), RARITY_COLOR[pickup.reward.rarity], .35, [0, -.65, 0], [Math.PI / 2, 0, 0]));
       root.add(halo); this.group.add(root);
-      return { pickup, model, root };
+      return { pickup, model, root, moteDebt: 0 };
     });
     scene.add(this.group);
   }
@@ -133,29 +136,40 @@ export class Collection {
     if (before.distanceToSquared(after) > 20 ** 2) return;
     for (const view of this.views) {
       const { pickup } = view;
-      if (pickup.collected || !sweptPickup(before, after, pickup.position) || !collectionClear(this.world, pickup)) continue;
+      if (pickup.collected || !sweptPickup(before, after, pickup.position, pickup.reward.kind === "crystal" ? CRYSTAL_RADIUS : COLLECTION_RADIUS) || !collectionClear(this.world, pickup)) continue;
       collect(pickup.reward);
       pickup.collected = true; view.root.visible = false;
       this.color.set(RARITY_COLOR[pickup.reward.rarity]);
-      const count = Math.round(14 * COLLECTION_FX.burst * particles.budget);
+      const count = Math.round((pickup.reward.kind === "crystal" ? 26 : 14) * COLLECTION_FX.burst * particles.budget);
       for (let i = 0; i < count; i++) {
         const a = i * Math.PI * 2 / Math.max(1, count);
         particles.emit(pickup.position, this.velocity.set(Math.cos(a) * 3, 1 + Math.sin(a * 3), Math.sin(a) * 3), fx(.8, .32, this.color, Kind.Star, -1, 2, .8));
       }
     }
   }
-  frame(dt: number, camera: THREE.Vector3, visible: boolean) {
+  frame(dt: number, camera: THREE.Vector3, visible: boolean, particles?: Particles) {
     this.time += dt;
     this.group.visible = visible;
     if (!visible) return;
-    for (const { pickup, model, root } of this.views) {
+    for (const view of this.views) {
+      const { pickup, model, root } = view;
       root.visible = !pickup.collected && pickup.position.distanceToSquared(camera) < COLLECTION_FX.viewDistance ** 2;
       if (!root.visible) continue;
       root.visible = collectionClear(this.world, pickup);
       if (!root.visible) continue;
       root.position.y = pickup.position.y + Math.sin(this.time * 2 + pickup.reward.angle) * COLLECTION_FX.bob;
       root.rotation.y = this.time * COLLECTION_FX.spin;
-      root.scale.setScalar(COLLECTION_FX.size);
+      root.scale.setScalar(pickup.reward.kind === "crystal" ? COLLECTION_FX.crystalSize : COLLECTION_FX.size);
+      if (particles && pickup.reward.kind === "crystal" && pickup.position.distanceToSquared(camera) < COLLECTION_FX.moteDistance ** 2) {
+        view.moteDebt += dt * COLLECTION_FX.crystalMotes * particles.budget;
+        this.color.set(RARITY_COLOR[pickup.reward.rarity]);
+        for (; view.moteDebt >= 1; view.moteDebt--) {
+          const a = Math.random() * Math.PI * 2;
+          const radius = COLLECTION_FX.crystalSize * (.35 + Math.random() * .2);
+          this.motePosition.copy(root.position).add(this.velocity.set(Math.cos(a) * radius, (Math.random() - .5) * COLLECTION_FX.crystalSize, Math.sin(a) * radius));
+          particles.emit(this.motePosition, this.velocity.set(-Math.sin(a) * .5, .7, Math.cos(a) * .5), fx(1.2, .24, this.color, Kind.Star, 0, .5, .8));
+        }
+      }
       model.animate?.(dt);
     }
   }

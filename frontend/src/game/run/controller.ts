@@ -495,7 +495,7 @@ export class RunController {
 
   frame(dt: number) {
     const { camera, particles } = this.host;
-    this.collection?.frame(dt, camera.position, this.phase === "explore" || this.phase === "arrive");
+    this.collection?.frame(dt, camera.position, this.phase === "explore" || this.phase === "arrive", particles);
     this.phaseTime += dt;
     if (this.toast && (this.toastTime -= dt) <= 0) this.toast = null;
     if (this.stats.flap > 0) this.stamina = Math.min(2 + this.stats.flap, this.stamina + dt / 9);

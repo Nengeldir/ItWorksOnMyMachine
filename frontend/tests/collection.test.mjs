@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Vector3, Scene } from "three";
-import { COLLECTION_DISTANCE, Collection, collectionModel, placeCollection, sweptPickup } from "../src/game/run/collection.ts";
+import { COLLECTION_DISTANCE, CRYSTAL_RADIUS, Collection, collectionModel, placeCollection, sweptPickup } from "../src/game/run/collection.ts";
 import { World } from "../src/game/world/World.ts";
 import { runLevel } from "../src/game/world/biomes/index.ts";
 import { CAPES, HATS, SHOES, WINGS } from "../src/game/cosmetics/catalog.ts";
@@ -104,4 +104,35 @@ test("only manifest-bearing adventures collect; crashes keep claims and portal p
   run.phase="explore";run.step(1/120);assert.equal(found.length,1);
   run.crashed();run.step(1/120);assert.equal(found.length,1);
   run.dispose();
+});
+
+
+test("crystal fly-bys collect within the larger radius while treasures still need closer contact", () => {
+  for (const [kind, radius] of [["crystal", CRYSTAL_RADIUS], ["item", 3.2]]) {
+    const world = new World(runLevel(42, 1, "skyIsles"));
+    const collection = new Collection(world, [reward("uncommon", 0, kind, kind === "crystal" ? "crystal" : "goldenFeather")], new Scene());
+    assert.equal(collection.pickups.length, 1);
+    const p = collection.pickups[0].position, found = [];
+    const pass = y => collection.step(p.clone().add(new Vector3(-5,y,0)), p.clone().add(new Vector3(5,y,0)), r => found.push(r), {budget:1,emit:()=>{}});
+    pass(radius + .1); assert.equal(found.length, 0);
+    pass(4.5); assert.equal(found.length, kind === "crystal" ? 1 : 0);
+    pass(3); assert.equal(found.length, 1);
+    collection.dispose();
+  }
+});
+
+test("crystal cues respect particle budgets, distance, streamed clearance and transition visibility", () => {
+  const world = new World(runLevel(42, 1, "skyIsles"));
+  const collection = new Collection(world, [reward("common", 0, "crystal", "crystal")], new Scene());
+  const p = collection.pickups[0].position;
+  let emitted = 0;
+  const particles = {budget:1,emit:()=>{ emitted++; }};
+  collection.frame(1, p, true, particles); assert.equal(emitted, 10);
+  particles.budget = .4;
+  collection.frame(1, p, true, particles); assert.equal(emitted, 14);
+  collection.frame(1, p, false, particles); assert.equal(emitted, 14);
+  collection.frame(1, p.clone().add(new Vector3(100,0,0)), true, particles); assert.equal(emitted, 14);
+  world.distance = () => 0;
+  collection.frame(1, p, true, particles); assert.equal(emitted, 14);
+  collection.dispose();
 });
