@@ -34,7 +34,7 @@ const Hud = ({ hud }: { hud: HudState }) => {
           {racing && <small>The race clock keeps running</small>}
         </div>
       )}
-      {!hud.paused && hud.loading && hud.raceState === "free" && <div className="hud-loading glass">Building islands…</div>}
+      {!hud.paused && hud.loading && hud.raceState === "free" && <div className="hud-loading glass">Gliding in while the land loads…</div>}
 
       {hud.standings.length > 1 && (
         <ol className="hud-standings glass">
