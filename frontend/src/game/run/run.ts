@@ -3,8 +3,9 @@ import type { BiomeId } from "../world/biomes";
 import type { UpgradeId } from "./upgrades";
 
 // The shape of a roguelike run: which biome comes when, and how it scores.
-// A run is RUN_LENGTH levels: Sky Isles first, Verdant Highlands second, the
-// other biomes in an order shuffled by the run seed, and Aurora Summit last.
+// A run is RUN_LENGTH levels: Sky Isles first, Verdant Highlands second, then
+// five more in an order shuffled by the run seed (the Sunken Reef and four of
+// the other five: one sits out each run), and Aurora Summit last.
 // Every level ends in a portal to the next biome and a choice of upgrades.
 
 export const RUN_LENGTH = 8;
@@ -14,6 +15,8 @@ export const LEVEL_BONUS = 1000;
 export const PAR_POINTS = 20; // per second under par at the portal
 
 const MIDDLE: BiomeId[] = ["glacier", "archipelago", "lagoon", "twilight", "ember"];
+/** Always in a run, in place of one of MIDDLE */
+const DIVE: BiomeId = "reef";
 
 /** The biomes of a run, level by level (index 0 = level 1), when you always take the main portal */
 export function runOrder(runSeed: number): BiomeId[] {
@@ -23,6 +26,9 @@ export function runOrder(runSeed: number): BiomeId[] {
     const j = Math.floor(rng() * (i + 1));
     [middle[i], middle[j]] = [middle[j], middle[i]];
   }
+  // The reef takes the place of the last one drawn, somewhere among the others
+  middle.pop();
+  middle.splice(Math.floor(rng() * (middle.length + 1)), 0, DIVE);
   return ["skyIsles", "verdant", ...middle, "aurora"];
 }
 

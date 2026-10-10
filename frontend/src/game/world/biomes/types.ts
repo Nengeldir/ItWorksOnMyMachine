@@ -7,7 +7,7 @@ import type { GroundSpec } from "../terrain/ground";
 // the air, and what there is to do. One engine renders them all; nothing here
 // is code that runs per frame.
 
-export type BiomeId = "skyIsles" | "verdant" | "glacier" | "archipelago" | "lagoon" | "twilight" | "ember" | "aurora";
+export type BiomeId = "skyIsles" | "verdant" | "glacier" | "archipelago" | "lagoon" | "twilight" | "ember" | "aurora" | "reef";
 
 /**
  * How a kind of land is painted. The mesher picks the rock color per face
@@ -184,6 +184,15 @@ export interface StructureSpec {
   };
 }
 
+/** A level under the sea: looks only, the flight is the same as in the air */
+export interface UnderwaterSpec {
+  surface: number; // the water's surface, seen from below, this many metres above the racing line
+  shoals: number; // schools of fish along the course
+  fish: string[]; // their colors, one per school
+  jellyfish: number;
+  jelly: string[];
+}
+
 /** Mist and clouds around the land */
 export interface SkySpec {
   /** A faceted floor of clouds this far below the racing line (null: none) */
@@ -201,9 +210,13 @@ export interface SkySpec {
    * pooling `above` metres over the valley floor, fading out `thickness` metres higher
    */
   mist: { mode: "camera" } | { mode: "valley"; above: number; thickness: number };
+  /** Where the haze begins and where it hides everything, metres (250 and 1300 when left out) */
+  fog?: [number, number];
+  /** Under the sea: the sky is the water's surface, light ripples over the land, shafts of light slant down, sea life drifts by */
+  underwater?: UnderwaterSpec;
 }
 
-export type AmbientKind = "fireflies" | "motes" | "snow" | "leaves" | "embers" | "spores" | "ash" | "glitter" | "petals" | "starfall";
+export type AmbientKind = "fireflies" | "motes" | "snow" | "leaves" | "embers" | "spores" | "ash" | "glitter" | "petals" | "starfall" | "bubbles";
 
 /** One kind of particle drifting around the camera */
 export interface Ambient {

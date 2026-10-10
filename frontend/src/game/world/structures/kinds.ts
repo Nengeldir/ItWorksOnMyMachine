@@ -8,7 +8,10 @@ import { SPECIES, type SpeciesInfo } from "../flora/species";
 // true proportions (radius = height), so parts can turn without shearing.
 // No three.js geometry here.
 
-export type StructureId = "watchtower" | "stoneLantern" | "windmill" | "monastery" | "bellPavilion" | "stoneHut" | "prayerPole" | "lighthouse" | "stiltHut" | "ruinColumn" | "shrineGate" | "spiritStatue" | "forgeTemple" | "obelisk" | "brazier" | "observatory" | "pylon" | "starAltar" | "ethMainBuilding" | "einsteinBust";
+export type StructureId = "watchtower" | "stoneLantern" | "windmill" | "monastery" | "bellPavilion" | "stoneHut" | "prayerPole" | "lighthouse" | "stiltHut" | "ruinColumn" | "shrineGate" | "spiritStatue" | "forgeTemple" | "obelisk" | "brazier" | "observatory" | "pylon" | "starAltar" | "ethMainBuilding" | "einsteinBust" | "shipwreck";
+
+/** A wreck lies bow up on the seabed, pitched by this much (radians): its mast leans back with it */
+export const WRECK_PITCH = 0.14;
 
 export interface StructureInfo extends SpeciesInfo {
   foot: number; // radius of the ground it stands on, as a share of the height
@@ -198,6 +201,16 @@ export const STRUCTURE_INFO: Record<StructureId, StructureInfo> = {
     sway: 0,
     glows: true,
     foot: 0.25,
+    sink: 0.3,
+    spin: null,
+  },
+  // A sunken galleon: the hull is a hall along the model's x axis, the mast a trunk leaning back with the pitch
+  shipwreck: {
+    aspect: [1, 1],
+    collider: { trunk: 0.03, top: 0.97, taper: 0.6, canopy: null, lean: -Math.sin(WRECK_PITCH), hall: { x: 0.8, y: 0.3, z: 0.19 } },
+    sway: 0.03,
+    glows: true,
+    foot: 0.5,
     sink: 0.3,
     spin: null,
   },

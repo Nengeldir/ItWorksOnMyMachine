@@ -11,6 +11,7 @@ export const Kind = {
   Shard: 2, // a diamond-shaped crystal chip (or a tumbling leaf)
   Wisp: 3, // a faint puff of air
   Firefly: 4, // a soft mote that blinks on and off
+  Bubble: 5, // a thin bright rim and a glint (use with ordinary blending)
 } as const;
 export type Kind = (typeof Kind)[keyof typeof Kind];
 
@@ -84,6 +85,8 @@ const vertexShader = /* glsl */ `
     float grow = smoothstep(0.0, 0.08, t);
     float shrink = kind > 0.5 && kind < 1.5 ? sin(3.14159 * t) : 1.0 - t * t;
     if (kind > 3.5) shrink = sin(3.14159 * t);
+    // Bubbles keep their size, and pop
+    if (kind > 4.5) shrink = 1.0 - smoothstep(0.92, 1.0, t);
     gl_PointSize = timing.z * grow * shrink * pixelScale / max(0.1, -mvPosition.z);
     #ifdef ALPHA_BLEND
       vColor = color * physics.z;
@@ -92,7 +95,7 @@ const vertexShader = /* glsl */ `
     #endif
     vAlpha = (kind > 2.5 && kind < 3.5 ? (1.0 - t) * 0.5 : pow(clamp(1.0 - t, 0.0, 1.0), 1.2)) * smoothstep(1.5, 7.0, -mvPosition.z);
     // Fireflies blink: mostly dark, glowing up for a moment every few seconds
-    if (kind > 3.5) vAlpha *= 0.15 + 0.85 * smoothstep(0.55, 0.95, sin(age * (1.1 + fract(seed) * 1.4) + seed * 6.0));
+    if (kind > 3.5 && kind < 4.5) vAlpha *= 0.15 + 0.85 * smoothstep(0.55, 0.95, sin(age * (1.1 + fract(seed) * 1.4) + seed * 6.0));
     vKind = kind;
     vSpin = seed + age * 3.0;
     #include <fog_vertex>
@@ -110,7 +113,11 @@ const fragmentShader = /* glsl */ `
     vec2 uv = gl_PointCoord * 2.0 - 1.0;
     float r2 = dot(uv, uv);
     float a;
-    if (vKind < 0.5 || vKind > 3.5) {
+    if (vKind > 4.5) {
+      float r = sqrt(r2);
+      vec2 glint = uv + vec2(0.35);
+      a = smoothstep(1.0, 0.86, r) * (0.16 + 0.84 * smoothstep(0.5, 0.9, r)) + exp(-dot(glint, glint) * 30.0) * 0.8;
+    } else if (vKind < 0.5 || vKind > 3.5) {
       a = exp(-r2 * 5.0);
     } else if (vKind < 1.5) {
       // A twinkle: bright core and two rays that slowly turn
