@@ -181,6 +181,7 @@ export const ABILITIES_FX = {
 
 /** How strong the design list's items look (items/fx.ts); what they do is ITEM in run/items.ts */
 export const ITEMS_FX = {
+  relics: 1, // lanterns, path markers and relic bursts
   wind: 1, // the Anemo Catcher's updraft
   shield: 1, // the Starflake Shield's aura of ice
   wax: 1, // the Glider Wax's golden wingtip ribbons and glitter

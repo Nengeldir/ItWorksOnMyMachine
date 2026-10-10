@@ -8,6 +8,7 @@ import { clamp, smoothstep } from "../math";
 import { Kind, type Particles, fx } from "../particles";
 import { ITEM, type Items, type RunItemId, runItem } from "../run/items";
 import { ITEMS_FX } from "../tuning";
+import { RelicFx } from "./relicFx";
 import { auraMesh } from "./auras";
 import type { Equipment } from "./equip";
 
@@ -58,6 +59,7 @@ const lookAlong = (out: THREE.Quaternion, direction: THREE.Vector3) =>
 
 /** How each item is taken out and used up in the hand (the firework and the boots are worn instead) */
 const USE_STYLE: Partial<Record<RunItemId, "eat" | "raise" | "toss">> = {
+  spiritLantern: "raise",
   anemoCatcher: "raise",
   starflakeShield: "raise",
   gliderWax: "raise",
@@ -83,6 +85,7 @@ export class ItemFx {
   private readonly particles: Particles;
   private readonly host: ItemFxHost;
   private readonly disposables: { dispose(): void }[] = [];
+  private readonly relics: RelicFx;
   private active = false;
   private version = -1;
   private readonly cue = { pickup: 0, use: 0, full: 0, auto: 0, shatter: 0 };
@@ -108,6 +111,8 @@ export class ItemFx {
     this.particles = particles;
     this.host = host;
     scene.add(this.group);
+    this.relics = new RelicFx(avatar, equipment, particles);
+    this.group.add(this.relics.group);
     this.group.add(this.column, this.bubble, this.rings.mesh);
     this.disposables.push(this.column.geometry, this.column.material, this.bubble.geometry, this.bubble.material, this.rings);
     this.waxTrails = [0, 1].map(() => {
@@ -153,6 +158,8 @@ export class ItemFx {
     this.anemoCatcher(dt, items, budget);
     this.starflake(dt, items, budget);
     this.gliderWax(dt, items, flight, budget);
+    this.relics.group.visible = true;
+    this.relics.update(dt, items, flight, flying);
     this.equipment.setThrust(items.burn);
     if (items.time("cometFirework") < 0 && this.equipment.wearing("back") === "firework") this.equipment.unequip("back");
     this.updateWaves(dt);
@@ -204,6 +211,7 @@ export class ItemFx {
 
   /** An item was just used */
   private used(id: RunItemId, flight: Flight, budget: number) {
+    this.relics.used(id);
     const hand = this.avatar.slots.hand.getWorldPosition(at);
     if (id === "anemoCatcher") {
       this.columnT = 0;
@@ -372,6 +380,7 @@ export class ItemFx {
   }
 
   dispose() {
+    this.relics.dispose();
     this.group.removeFromParent();
     for (const d of this.disposables) d.dispose();
   }
