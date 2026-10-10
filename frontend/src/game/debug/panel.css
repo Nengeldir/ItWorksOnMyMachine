@@ -17,15 +17,6 @@
   line-height: 1.5;
 }
 
-/* Read-only measurements should be as legible as editable controls. */
-.playtest-panel .lil-controller.lil-disabled {
-  opacity: 1;
-}
-
-.playtest-panel .lil-controller.lil-disabled input {
-  color: #eee;
-}
-
 @media (min-width: 1000px) {
   .lil-gui.playtest-panel.playtest-with-tuning {
     right: 320px;

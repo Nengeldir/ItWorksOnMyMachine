@@ -541,6 +541,22 @@ localhost "not connecting") until the browser cache was cleared.
   outstanding; loop continuity is covered by numeric camera tests.
 
 
+### 2026-10-10: Remove flight telemetry
+Removed all flight readouts, the visibility toggle, the telemetry sampler, and its respawn, fixed-step and HUD hooks, as requested. The panel now contains only playtest controls, with no telemetry sampling overhead.
+
+Changed frontend/src/game/debug/{panel.ts,panel.css,telemetry.ts}, debugMode.ts, tuning.ts, Game.ts, the debug tests and README. Removed the obsolete telemetry tests; updated the remaining test fixture for the current wormhole host methods and upgrade-picker timing. The portal and victory implementations are unchanged.
+
+This dated record and the README carry the documentation updates because the user explicitly requested that CLAUDE.md remain unchanged.
+
+Verification:
+
+npm run build and npm run lint pass.
+npm run test:debug: all six remaining tests pass, covering development gating, shortcuts and typing/repeat guards, portal placement/replacement, upgrades and biome transitions, victory idempotency and wormhole cleanup.
+Headless Firefox: one panel with exactly three controls and no flight readouts or telemetry setting, including with ?debug&tune. Real Shift+P spawns a portal 40 m ahead and replaces it on another press; plain P pauses; Shift+O from pause opens the finish screen without saving scores or uploading results. The finish screen fades in normally. Games without ?debug have no panel or victory shortcut. No game JavaScript errors.
+Inspected screenshots of the compact panel and finish screen at 1200×800.
+No telemetry references remain in frontend source or current README. CLAUDE.md, flight physics, input and portal/victory logic have no diff.
+Follow-ups: focused-window mouse/gamepad playtesting and narrow-screen layout checks were not performed. This change was validated with the targeted debug suite, not the complete frontend test glob; the existing camera, flight-realism and input fixture issues noted in CLAUDE.md remain outside this removal.
+
 ### Debug playtest mode — 2026-10-10
 
 This record accompanies the code change without editing `CLAUDE.md`, as

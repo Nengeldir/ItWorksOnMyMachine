@@ -5,6 +5,5 @@ export function debugModeRequested(search = location.search): boolean {
 
 /** Per-game playtest settings. Add controls in tuning.ts and consume them only behind DEV. */
 export interface DebugSettings {
-  showFlight: boolean;
   portalAhead: number; // metres ahead of the pilot for the spawned portal
 }

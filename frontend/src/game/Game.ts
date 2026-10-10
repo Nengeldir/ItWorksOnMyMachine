@@ -673,7 +673,6 @@ export class Game implements RunHost {
     this.avatar.resetMotion();
     this.flight.reset(position, direction, START_SPEED);
     this.glide.stop();
-    if (import.meta.env.DEV) this.debug?.telemetry.idle(this.flight);
     this.prevPosition.copy(this.flight.position);
     this.prevQuaternion.copy(this.flight.quaternion);
     this.prevVelocity.copy(this.flight.velocity);
@@ -726,9 +725,7 @@ export class Game implements RunHost {
     this.prevPosition.copy(this.flight.position);
     this.prevQuaternion.copy(this.flight.quaternion);
     this.prevVelocity.copy(this.flight.velocity);
-    if (import.meta.env.DEV) this.debug?.telemetry.beforeStep(this.flight);
     this.flight.step(STEP, input, this.proximity * this.proximity, FLIGHT, this.run ? this.run.flightMods : null);
-    if (import.meta.env.DEV) this.debug?.telemetry.afterStep(this.flight, STEP);
 
     const { x, y, z } = this.flight.position;
     const distance = this.world.distance(x, y, z);
@@ -1210,9 +1207,6 @@ export class Game implements RunHost {
   };
 
   private hud(t: number): HudState {
-    if (import.meta.env.DEV) {
-      this.debug?.update(this.flight, !this.paused && !this.frozen && this.view.ready && this.crashedAt === null && this.raceState !== "countdown", this.world);
-    }
     const { x, y, z } = this.avatar.group.position;
     const raceTimeMs =
       this.raceState === "racing"
@@ -1417,7 +1411,7 @@ export class Game implements RunHost {
     if (!import.meta.env.DEV) return;
     const { DebugPanel } = await import("./debug/panel");
     if (this.disposed) return;
-    this.debug = new DebugPanel(this.container, this.flight, this.world, (action) => this.performDebugAction(action));
+    this.debug = new DebugPanel(this.container, (action) => this.performDebugAction(action));
     this.input.onShortcut = (event) => this.debug?.handleShortcut(event) ?? false;
     // ?tune and ?debug may load in either order.
     this.addDebugTuning?.();
