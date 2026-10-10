@@ -3,6 +3,7 @@ import { RingQuads } from "../abilities/models";
 import { funnelMesh } from "../abilities/models2";
 import type { Avatar } from "../avatar";
 import type { Flight } from "../flight";
+import { Trail } from "../trail";
 import { clamp, smoothstep } from "../math";
 import { Kind, type Particles, fx } from "../particles";
 import { ITEM, type Items, type RunItemId, runItem } from "../run/items";
@@ -20,8 +21,11 @@ import type { Equipment } from "./equip";
 //  - Starflake Shield: the crystal is held up and bursts into a faceted
 //    bubble of ice round the pilot, frost glittering on its seams; the first
 //    hit shatters it into a ring of shards.
+//  - Luminescent Glider Wax: the tin is held up and the wax spreads over the
+//    wings in a flash of gold; while it lasts, golden ribbons stream off the
+//    wingtips and the wings shed glitter like honey in the sun.
 
-export type ItemSound = "pickup" | "full" | "auto" | "uncork" | "shield" | "shatter";
+export type ItemSound = "pickup" | "full" | "auto" | "uncork" | "shield" | "shatter" | "wax";
 
 export interface ItemFxHost {
   kick(degrees?: number): void;
@@ -34,12 +38,17 @@ const ANEMO = new THREE.Color("#7df5d8");
 const LEAF = new THREE.Color("#8ee8b0");
 const ICE = new THREE.Color("#a8e4ff");
 const FROST = new THREE.Color("#e8fbff");
+const HONEY = new THREE.Color("#ffd36e");
 const UP = new THREE.Vector3(0, 1, 0);
 const ORIGIN = new THREE.Vector3();
 
 const at = new THREE.Vector3();
 const vel = new THREE.Vector3();
 const tmp = new THREE.Vector3();
+const tipL = new THREE.Vector3();
+const tipR = new THREE.Vector3();
+const span = new THREE.Vector3();
+const wingPoints = Array.from({ length: 10 }, () => new THREE.Vector3());
 const matrix = new THREE.Matrix4();
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 const ease = (current: number, target: number, rate: number, dt: number) => current + (target - current) * (1 - Math.exp(-rate * dt));
@@ -51,6 +60,7 @@ const lookAlong = (out: THREE.Quaternion, direction: THREE.Vector3) =>
 const USE_STYLE: Partial<Record<RunItemId, "eat" | "raise" | "toss">> = {
   anemoCatcher: "raise",
   starflakeShield: "raise",
+  gliderWax: "raise",
 };
 
 interface Wave {
@@ -87,6 +97,10 @@ export class ItemFx {
   private readonly bubble = auraMesh(0, "#cfefff", "#ffffff");
   private shieldT = -1;
   private frostDebt = 0;
+  // Luminescent Glider Wax
+  private readonly waxTrails: Trail[];
+  private waxShown = 0;
+  private glitterDebt = 0;
 
   constructor(scene: THREE.Scene, avatar: Avatar, equipment: Equipment, particles: Particles, host: ItemFxHost) {
     this.avatar = avatar;
@@ -96,6 +110,13 @@ export class ItemFx {
     scene.add(this.group);
     this.group.add(this.column, this.bubble, this.rings.mesh);
     this.disposables.push(this.column.geometry, this.column.material, this.bubble.geometry, this.bubble.material, this.rings);
+    this.waxTrails = [0, 1].map(() => {
+      const trail = new Trail("#ffd36e", { width: 0.22, shimmer: 1.2, length: 1.6 });
+      trail.setColor("#fff4c4", "#ffb84a");
+      scene.add(trail.mesh);
+      this.disposables.push(trail);
+      return trail;
+    });
   }
 
   /** Before the avatar animates: the items' poses (eased in and out) */
@@ -113,6 +134,7 @@ export class ItemFx {
     this.active = false;
     this.group.visible = false;
     this.equipment.lift = 0;
+    for (const trail of this.waxTrails) trail.opacity = 0;
   }
 
   /** After the avatar and its effects animated: everything else */
@@ -129,6 +151,7 @@ export class ItemFx {
     this.cues(items, flight, budget);
     this.anemoCatcher(dt, items, budget);
     this.starflake(dt, items, budget);
+    this.gliderWax(dt, items, flight, budget);
     this.updateWaves(dt);
     this.rings.end();
   }
@@ -190,6 +213,10 @@ export class ItemFx {
       this.host.kick(4);
     } else if (id === "starflakeShield") {
       this.shieldT = 0;
+    } else if (id === "gliderWax") {
+      this.waxShown = 0;
+      for (const trail of this.waxTrails) trail.reset();
+      this.host.sound("wax");
     }
   }
 
@@ -267,6 +294,41 @@ export class ItemFx {
     for (; this.frostDebt >= 1; this.frostDebt--) {
       vel.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize();
       this.particles.emit(at.copy(pilot).addScaledVector(vel, 2.3), vel.set(0, 0, 0), fx(rand(0.4, 0.8), rand(0.15, 0.3), FROST, Kind.Star, 0, 0, 2.2));
+    }
+  }
+
+  // --- Luminescent Glider Wax -----------------------------------------------------------------
+
+  private gliderWax(dt: number, items: Items, flight: Flight, budget: number) {
+    const t = items.time("gliderWax");
+    const on = t >= 0.35;
+    // The wax spreads over the wings in a flash of gold as the tin bursts
+    if (on && t - dt < 0.35) {
+      this.avatar.wingPoints(wingPoints);
+      for (let k = 0; k < Math.round(40 * budget); k++) {
+        at.copy(wingPoints[k % 10]).applyMatrix4(this.avatar.group.matrixWorld);
+        vel.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).multiplyScalar(2).addScaledVector(flight.velocity, 0.7);
+        this.particles.emit(at, vel, fx(rand(0.5, 0.9), rand(0.25, 0.45), k % 2 ? HONEY : WHITE, Kind.Star, 0, 2, 2.4));
+      }
+    }
+    const left = ITEM.waxTime - t;
+    this.waxShown = ease(this.waxShown, on ? (left < 1.5 ? 0.4 + 0.4 * Math.sin(t * 18) : 1) : 0, 6, dt);
+    this.avatar.wingtips(tipL, tipR);
+    this.avatar.span(span);
+    this.waxTrails[0].push(tipL, span, 1);
+    this.waxTrails[1].push(tipR, span, 1);
+    for (const trail of this.waxTrails) trail.opacity = this.waxShown * 0.9 * ITEMS_FX.wax;
+    if (this.waxShown < 0.05) return;
+    // Glitter shed off the wings, more the faster you go
+    this.glitterDebt += (12 + flight.speed * 0.5) * this.waxShown * budget * dt * ITEMS_FX.wax;
+    if (this.glitterDebt < 1) return;
+    this.avatar.wingPoints(wingPoints);
+    for (; this.glitterDebt >= 1; this.glitterDebt--) {
+      const a = wingPoints[Math.floor(rand(0, 10))];
+      const b = wingPoints[Math.floor(rand(0, 10))];
+      at.lerpVectors(a, b, Math.random()).applyMatrix4(this.avatar.group.matrixWorld);
+      vel.copy(flight.velocity).multiplyScalar(0.2).add(tmp.set(rand(-0.5, 0.5), rand(-0.5, 0.5), rand(-0.5, 0.5)));
+      this.particles.emit(at, vel, fx(rand(0.5, 1), rand(0.12, 0.24), Math.random() < 0.7 ? HONEY : WHITE, Kind.Star, 0.5, 1, 2.2));
     }
   }
 

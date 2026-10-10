@@ -51,6 +51,7 @@ export const ITEMS: ItemInfo[] = [
   // The design list's items (run/items.ts has what they do)
   { id: "anemoCatcher", name: "Anemo Catcher", kind: "relic", slot: "hand" },
   { id: "starflakeShield", name: "Starflake Shield", kind: "relic", slot: "hand" },
+  { id: "gliderWax", name: "Luminescent Glider Wax", kind: "relic", slot: "hand" },
 ];
 
 export const itemInfo = (id: ItemId): ItemInfo => ITEMS.find((i) => i.id === id)!;
