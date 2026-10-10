@@ -155,8 +155,9 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/world/palette.ts` | The `Palette` type: a lighting mood (colors, sun elevation and azimuth, night factor, mist, effect glow), and `sunDirection(palette)`. Each biome lists its moods |
 | `game/world/atmosphere.ts` | `ATMOSPHERE` light uniforms shared per biome; `atmospheric()` patches Lambert materials (sun-tinted haze matching the sky, valley mist, backlit rims, rock strata); `skyMaterial()` (gradient, HDR sun or moon disc and halo, painted clouds, twinkling stars at night). Under the sea (`ATMOSPHERE.underwater`, set from `SkySpec.underwater`): `atmospheric()` adds caustics, and the sky is the water's surface seen from below (`ATMOSPHERE.surface`) |
 | `game/world/deep.ts` | Under the sea, looks only: `LightShafts` (shafts of light from the surface, a world-fixed grid of them round the camera) and `SeaLife` (schools of fish, jellyfish), each one instanced draw call animated in the vertex shader. `DEEP` in `tuning.ts` |
+| `game/world/water.ts` | River pools, waterfall curtains and seas. River pools write depth so the later waterfall draw cannot paint foam over the upstream surface; dry banks are discarded. River shading continues to the edge, with narrow animated lip foam (`WATER.lipFoam`, `lipFoamWidth`, per-pixel distance) and a short `WATER.fallBlend` join below it (0.2 m). Both river and island curtains advect foam downward through a fixed travel coordinate, accelerating with the drop (`WATER.fallSpeed`); elapsed time never reverses the flow. Rendering only; water collisions still use `Steps` |
 | `game/world/WorldView.ts` | Meshes for a World, as its biome describes them: land streamed from the workers (Sky Isles' chunks, or a `LandStreamer` for v2 land), pines, the sea of clouds and cloud puffs, sky, gates. `ready` is false until the land near you has arrived. `collider` (a `LandCollider`) holds the land on screen; `covers(x, y, z)` says whether the land at a point is on screen (or there is none), else collisions there fall back to the distance field |
-| `game/world/crystals.ts` | Crystal gates: instanced crystals (bob, spin, pass flare and burst in the shader), veil discs with the pass shockwave, light pillars over the next gate and the finish |
+| `game/world/crystals.ts` | Crystal gates: instanced crystals (bob, spin, pass flare and burst in the shader), veil discs with the pass shockwave, light pillars over the next gate and the finish. `orient(index, normal)` turns one gate (Resonance; looks only) |
 | `session/` | Solo, room, explore and run sessions wiring a `Game` to the network and UI. `ExploreSession`: free flight through any biome (`/?explore=verdant&seed=2`), nothing saved; `?test` reuses it with a RunController for real portals/upgrades and unsaved victory previews, showing only test shortcuts rather than biome/light controls. `RunSession`: a roguelike run (`/?run=<seed>`), best score per run seed in localStorage |
 | `net/` | Server clock sync and the room connection (SSE down, POST up) |
 | `staleBuild.ts` | After a redeploy, an open tab's lazy chunks (bloom, `?tune`) and mesher worker are 404s: `reloadForNewBuild` reloads the page once (at most every 30 s, production only) |
@@ -251,7 +252,8 @@ the course. `__raceHashes()` checks the race map hasn't moved.
   Node 22.14 uses the equivalent asynchronous resolver; backend uses the existing
   temporary Python environment. Bundle-size and Starlette warnings remain.
   Chrome visual control still fails with unsupported API-key authentication;
-  no visual QA claimed. Merged main 2c67bc2 with its terrain, tutorial, touch,
+  no visual QA claimed. Merged main through 251d430, including the waterfall
+  fix, ability HUD keys, terrain, tutorial, touch,
   settings and menu updates, retaining all twenty abilities. Reused the local
   wardrobe branch's already-resolved integration for overlapping ability/mobile
   code; its separate local wardrobe UI is not imported. Installed the locked
@@ -298,87 +300,6 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 - Browser control unavailable: in-app browser absent; Chrome rejects API-key
   sessions. Real-play balance, desktop/mobile visual QA, sounds and
   focused-window timing remain unverified. No deployment or git history change.
-
-
-### 2026-10-10: The design list's abilities 11 to 20 (Claude)
-
-Asked for: the second ten abilities, each with models and animations in the
-game's style, adapting descriptions that don't fit the game. A deliberate
-gameplay change in **runs only** (rule 6): everything reaches the flight
-through `FlightMods` (new `turn`, `climb`, `ascend`; all no-ops at their
-defaults, tested) or run-only `Flight` methods (`surge`, `ascendStep`);
-races, time trials and ghosts fly the plain model.
-- **Rules** (`run/abilities.ts`, `ABILITY` in `?tune`):
-  - Moth's Attraction: a gate passed near its heart surges you up to 14 m/s
-    (none above 100 m/s); inside a quarter of the radius is a bullseye
-    ("Through the heart").
-  - Zenith Climber: on steep climbs gravity pulls back 1/1.2 as hard, so a
-    climb straight up keeps its speed about 17% longer (drag still acts;
-    tested between 12 and 22%).
-  - Resonance (T): a wave rolls out 260 m in a 42° cone; every gate it
-    reaches turns to face where you were (`attuned`), for the gate test
-    (`gateNormal`) and the crystals (`CrystalGates.orient`). For the level; 6 s
-    cooldown.
-  - Ley-Line Surger: five gates each within 7 s of the last wake a ley line:
-    the boost never runs out while gates keep coming (9 s), a crash ends it.
-  - Aero-Braking: there is already a held brake, so the upgrade turns its
-    press into a flare (0.55 s of hard braking down to 20 m/s, then steering
-    ×2.3 fading over 1.3 s), every 3 s.
-  - Draft-Weaving: 270° of tight turning in any direction, or two barrel
-    rolls, spins up a tornado (14 s); it shields one glancing hit (body or
-    wing, at most cos 0.55 into the surface); head-on still crashes.
-    `Game.recover` became `Game.rescue`, which asks `Abilities.save`.
-  - Ascension (G): 0.4 s on rails swinging the nose straight up and the speed
-    to 75% of what it was (32 to 58 m/s); then gravity takes over. 8 s.
-  - Falcon and Butterfly (H; with both, it cycles off → falcon → butterfly):
-    blended multipliers over 0.45 s. Falcon: sink ×2.4, drag ×0.62, steering
-    ×0.55. Butterfly: sink ×0.3, drag ×2.2, steering ×1.75, stall ×0.6.
-  - Echo-Trail: the last 9 s of the path are kept (12 samples a second); when
-    you come back within 6 m of it after 320° of turning and 45 m of flight
-    (a loop, a circle), it becomes a wind ring: +12 m/s and a push for 1.4 s,
-    and the ring hangs where you drew it for 6 s (fly it again for more).
-    Turning on the spot in a hover-stall doesn't count (a test caught it).
-- **Looks** (`abilities/models2.ts`, `abilities/fx2.ts`; `ABILITIES_FX`
-  moths, wind, song, ley, echo in `?tune`): spirit moths dancing round the
-  next gate's heart and swirling round you after it; Zenith's updraft funnel
-  and gold feathers, a star at the apex; Resonance's call, three rings and a
-  cap of ripples and notes, gates swinging round like weathervanes with a
-  ring of notes; ley pips (one per gate of the chain), the ley line as a
-  golden thread of runes from you through the next gates, violet wingtip
-  ribbons; the air cushion and spilling wisps of the flare; the tornado with
-  leaves; Ascension's wind column (Genshin's wind currents) and a ground
-  ring; a falcon of light swooping onto you, a great butterfly unfolding
-  behind you, contrails (falcon), small butterflies and pollen (butterfly);
-  the Echo-Trail ribbon and its wind ring. Poses (`Avatar.stance`): climb,
-  sing, flare, falcon, butterfly (the cape fans wide for the butterfly and
-  is thrown forward in the flare; `updateCloth` takes a spread). Sounds:
-  `GameAudio.ability2`.
-- **Controls**: T Resonance, G Ascension, H stance (gamepad: left stick
-  click, d-pad up, d-pad down); Aero-Braking is on the brake. Saved bindings
-  that already use a new action's default key no longer throw every binding
-  away: the new action gets a spare key (`storage.ts`). Controls list,
-  README and HUD keys updated.
-- Also: `RingQuads` styles 3 (a clean ring) and 4 (ticks), with no glow
-  inside: bloom filled big bright rings into white discs on a day sky.
-  `AbilityFx` and `AbilityFx2` stay hidden inside a wormhole (`inWormhole`):
-  `update()` used to show the group again every frame.
-- Verified: build and lint pass; 60 frontend tests (Node 22.14 with a
-  `module.register` resolver; new `tests/abilities2.test.mjs`, 11 tests, and
-  a settings test). In Chrome on the dev server (`/?test&seed=7`, all ten
-  granted with `__game.grant`, frames stepped by hand in a hidden tab, the
-  camera placed by script): moths at a gate and swirling, Resonance's rings
-  and a gate turned (19°), the ley pips and line, the flare, the tornado, the
-  wind column, the falcon spirit, the butterfly spirit and stance, a real
-  loop closing the Echo-Trail (radius 10.8 m) and its ring, a Zenith climb;
-  Verdant Moonlit with several at once. Fixed on the way: the call's glare
-  and the echo ribbon streaming white past the camera, the flare's particles
-  (white diamonds up close), pips that bloomed to white, the filled rings.
-  `__bench` (hidden tab, so relative only): about +0.2 ms CPU a frame with
-  everything active, GPU within noise; no console errors.
-- Not checked: sounds (not listened to), feel with a mouse or gamepad,
-  balance, most effects at night, a bullseye or ley line or tornado save in
-  real play (triggered by hand), frame time in a focused window. Not
-  committed.
 
 
 ### 2026-10-10: Review PR #33 against current main
@@ -474,6 +395,31 @@ designer). UI only: runs play as before.
   biomes (labels, moods, colors), `Esc` back to today's colors, a run's start
   pill, score pill, compass and colors. Not looked at: the upgrade picker,
   title card and finish screen (unchanged), phones.
+### 2026-10-10 — Natural river-to-waterfall transitions
+
+- Fixed waterfall foam drawing over the upstream river: pool surfaces now
+  write depth, so the later curtain draw is correctly occluded. Dry padded
+  banks are discarded before writing depth (`game/world/water.ts`).
+- Joined curtains to the exact upstream cross-section, carrying the river's
+  depth tint, flow, foam and surface normal across the lip. Curtains arc
+  downstream and downward; river shading blends into falling foam over the
+  first 0.2 m of drop. Both river and island waterfalls animate foam downward
+  through a fixed travel coordinate, accelerating with the drop without
+  reversing as elapsed time grows.
+- Added subtle, broken animated foam at the lip, fading within 0.9 m upstream.
+  Its width is evaluated per pixel so coarse river vertices cannot spread it
+  upstream. Exposed `WATER.fallBlend`, `fallSpeed`, `lipFoam` and `lipFoamWidth`
+  in `game/tuning.ts` and `?tune`; updated README and the architecture map.
+  These are rendering changes only; seeded generation and collisions are unchanged.
+- Added `frontend/tests/water.test.mjs` to check pool/curtain continuity and
+  downstream-only geometry across five biomes and three seeds. Frontend build,
+  lint and the water regression test pass; build retains the bundle-size
+  warning. Browser checks covered morning and moonlit upstream/downstream
+  views, falling animation and lip foam, with no JavaScript errors. Hiding
+  the curtain left the upstream river pixels identical after the depth fix.
+  The full test run remains blocked by failures in seven pre-existing
+  untracked test files with missing modules or stale expectations.
+
 ### 2026-10-10 — Rebase mesh fixes for review
 
 - Rebased onto main at `9f3d70c`, preserving both sides of documentation
@@ -670,6 +616,87 @@ the tilt sensor if possible. There was no touch input at all before.
   the iOS permission prompt, the feel of the ranges), full screen and the
   landscape lock on Android, the wake lock, notches, and a run's screens
   (upgrade picker, finish screen) on a short screen are all untested.
+
+### 2026-10-10: The design list's abilities 11 to 20 (Claude)
+
+Asked for: the second ten abilities, each with models and animations in the
+game's style, adapting descriptions that don't fit the game. A deliberate
+gameplay change in **runs only** (rule 6): everything reaches the flight
+through `FlightMods` (new `turn`, `climb`, `ascend`; all no-ops at their
+defaults, tested) or run-only `Flight` methods (`surge`, `ascendStep`);
+races, time trials and ghosts fly the plain model.
+- **Rules** (`run/abilities.ts`, `ABILITY` in `?tune`):
+  - Moth's Attraction: a gate passed near its heart surges you up to 14 m/s
+    (none above 100 m/s); inside a quarter of the radius is a bullseye
+    ("Through the heart").
+  - Zenith Climber: on steep climbs gravity pulls back 1/1.2 as hard, so a
+    climb straight up keeps its speed about 17% longer (drag still acts;
+    tested between 12 and 22%).
+  - Resonance (T): a wave rolls out 260 m in a 42° cone; every gate it
+    reaches turns to face where you were (`attuned`), for the gate test
+    (`gateNormal`) and the crystals (`CrystalGates.orient`). For the level; 6 s
+    cooldown.
+  - Ley-Line Surger: five gates each within 7 s of the last wake a ley line:
+    the boost never runs out while gates keep coming (9 s), a crash ends it.
+  - Aero-Braking: there is already a held brake, so the upgrade turns its
+    press into a flare (0.55 s of hard braking down to 20 m/s, then steering
+    ×2.3 fading over 1.3 s), every 3 s.
+  - Draft-Weaving: 270° of tight turning in any direction, or two barrel
+    rolls, spins up a tornado (14 s); it shields one glancing hit (body or
+    wing, at most cos 0.55 into the surface); head-on still crashes.
+    `Game.recover` became `Game.rescue`, which asks `Abilities.save`.
+  - Ascension (G): 0.4 s on rails swinging the nose straight up and the speed
+    to 75% of what it was (32 to 58 m/s); then gravity takes over. 8 s.
+  - Falcon and Butterfly (H; with both, it cycles off → falcon → butterfly):
+    blended multipliers over 0.45 s. Falcon: sink ×2.4, drag ×0.62, steering
+    ×0.55. Butterfly: sink ×0.3, drag ×2.2, steering ×1.75, stall ×0.6.
+  - Echo-Trail: the last 9 s of the path are kept (12 samples a second); when
+    you come back within 6 m of it after 320° of turning and 45 m of flight
+    (a loop, a circle), it becomes a wind ring: +12 m/s and a push for 1.4 s,
+    and the ring hangs where you drew it for 6 s (fly it again for more).
+    Turning on the spot in a hover-stall doesn't count (a test caught it).
+- **Looks** (`abilities/models2.ts`, `abilities/fx2.ts`; `ABILITIES_FX`
+  moths, wind, song, ley, echo in `?tune`): spirit moths dancing round the
+  next gate's heart and swirling round you after it; Zenith's updraft funnel
+  and gold feathers, a star at the apex; Resonance's call, three rings and a
+  cap of ripples and notes, gates swinging round like weathervanes with a
+  ring of notes; ley pips (one per gate of the chain), the ley line as a
+  golden thread of runes from you through the next gates, violet wingtip
+  ribbons; the air cushion and spilling wisps of the flare; the tornado with
+  leaves; Ascension's wind column (Genshin's wind currents) and a ground
+  ring; a falcon of light swooping onto you, a great butterfly unfolding
+  behind you, contrails (falcon), small butterflies and pollen (butterfly);
+  the Echo-Trail ribbon and its wind ring. Poses (`Avatar.stance`): climb,
+  sing, flare, falcon, butterfly (the cape fans wide for the butterfly and
+  is thrown forward in the flare; `updateCloth` takes a spread). Sounds:
+  `GameAudio.ability2`.
+- **Controls**: T Resonance, G Ascension, H stance (gamepad: left stick
+  click, d-pad up, d-pad down); Aero-Braking is on the brake. Saved bindings
+  that already use a new action's default key no longer throw every binding
+  away: the new action gets a spare key (`storage.ts`). Controls list,
+  README and HUD keys updated.
+- Also: `RingQuads` styles 3 (a clean ring) and 4 (ticks), with no glow
+  inside: bloom filled big bright rings into white discs on a day sky.
+  `AbilityFx` and `AbilityFx2` stay hidden inside a wormhole (`inWormhole`):
+  `update()` used to show the group again every frame.
+- Verified: build and lint pass; 60 frontend tests (Node 22.14 with a
+  `module.register` resolver; new `tests/abilities2.test.mjs`, 11 tests, and
+  a settings test). In Chrome on the dev server (`/?test&seed=7`, all ten
+  granted with `__game.grant`, frames stepped by hand in a hidden tab, the
+  camera placed by script): moths at a gate and swirling, Resonance's rings
+  and a gate turned (19°), the ley pips and line, the flare, the tornado, the
+  wind column, the falcon spirit, the butterfly spirit and stance, a real
+  loop closing the Echo-Trail (radius 10.8 m) and its ring, a Zenith climb;
+  Verdant Moonlit with several at once. Fixed on the way: the call's glare
+  and the echo ribbon streaming white past the camera, the flare's particles
+  (white diamonds up close), pips that bloomed to white, the filled rings.
+  `__bench` (hidden tab, so relative only): about +0.2 ms CPU a frame with
+  everything active, GPU within noise; no console errors.
+- Not checked: sounds (not listened to), feel with a mouse or gamepad,
+  balance, most effects at night, a bullseye or ley line or tornado save in
+  real play (triggered by hand), frame time in a focused window. Rebased
+  onto `main` (`9f3d70c`) for its pull request: only this file conflicted;
+  `RunHud`'s `ABILITY_ACTIONS` now maps the new abilities to their keys.
 
 ### 2026-10-10: Rebased onto main's Pengyue adventure (Claude)
 
@@ -2402,8 +2429,15 @@ ported to the islands world:
   Vision should also show updrafts and boost rings once they exist. Cloud lanes
   are built on the main thread when first needed (about 1500 puffs, each
   checked against the distance field).
-- **The rest of the design list** (items 1 to 20, abilities 11 to 20) is
-  planned, not started.
+- **Abilities 11 to 20** (see the change log): listen to the sounds, play
+  them with a mouse and balance `?tune` ("Run abilities"); look at Resonance
+  and the stances at night; the falcon spirit can fly through rock on its way
+  in (it's a spirit, but check it doesn't look odd in a canyon). Resonance's
+  gates keep their new facing for the level, even after a respawn behind
+  them. The ley line follows the racing line, not the gates you'd actually
+  fly next if you've skipped some. Echo-Trail loops are hard to fly inside
+  narrow canyons; a horizontal circle works too, but only where there's room.
+- **The rest of the design list** (items 1 to 20) is planned, not started.
 
 - Test mode: check shortcut feel with a physical keyboard and mouse;
   browser automation verified behavior, timing and layout, not

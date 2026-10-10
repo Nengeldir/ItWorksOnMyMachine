@@ -18,7 +18,8 @@ the last ring.
   and Ember Wastes in an order the run's seed decides, and the Aurora Summit
   last. Chain gates, skim for style, and pick an upgrade at every portal
   (stronger boost, wingbeats, glide lock, and abilities like Hover-Stall,
-  Plunging Attack, Gale Force and a spirit manta to draft behind).
+  Plunging Attack, Gale Force, a spirit manta to draft behind, Resonance,
+  Ascension and the falcon and butterfly gliding stances).
   A map select on the Adventure tab shows every biome.
 
 Races and time trials always fly Sky Isles, so recorded ghosts and
@@ -263,6 +264,13 @@ of light slant down, fish school and jellyfish drift; you fly it like any
 other level. Fly any biome freely at
 `/?explore=<id>&seed=<n>` (ids: `verdant`, `glacier`, `archipelago`,
 `lagoon`, `twilight`, `ember`, `aurora`, `reef`).
+
+Rivers keep their color and ripples up to the edge. Below it, waterfall foam
+flows downward and accelerates with the drop. In `?tune`, Water's `fallSpeed`
+controls that motion; `fallBlend` sets the short shading join below the edge
+(0.2 m by default). A narrow band of animated foam softens the lip;
+`lipFoam` controls its strength and `lipFoamWidth` its maximum reach upstream
+(0.9 m by default).
 
 **Test mode:** open `/?test` (or `/?test=verdant&seed=2`), or add `&test` to
 any single-player URL: `/?explore=verdant&seed=2&test` tests that world,

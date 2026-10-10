@@ -21,6 +21,11 @@ const ABILITY_ACTIONS: Partial<Record<UpgradeId, BindingAction>> = {
   hoverStall: "hover",
   plunge: "plunge",
   galeForce: "burst",
+  resonance: "resonance",
+  ascension: "ascend",
+  aeroBrake: "brake",
+  falcon: "stance",
+  butterfly: "stance",
 };
 
 /** The ability's key as bound now, else the upgrade's own label */
