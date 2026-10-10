@@ -15,6 +15,8 @@ const TOLERANCE = 0.02;
 const ITERATIONS = 3;
 
 const snapped = { x: 0, y: 0, z: 0 };
+/** How far an edge's midpoint may move off the edge, as a share of its length */
+const SPLIT_REACH = 0.3;
 
 /**
  * Moves a point onto the surface of `field` with Newton steps along the
@@ -56,15 +58,47 @@ function snapPoint(field: Field, x0: number, y0: number, z0: number, limit: numb
   return true;
 }
 
-/** Moves the vertices at `indices` (offsets of x in `vertices`) onto the surface of `field` */
-export function snapToSurface(vertices: Float32Array, indices: ArrayLike<number>, field: Field, limit: number) {
+/** The surface-nets grid the vertices belong to: vertex offset v is cell v / 3 = i + cells·(j + cells·k) */
+export interface NetGrid {
+  ox: number; // the first cell's corner
+  oy: number;
+  oz: number;
+  size: number; // of a cell (metres)
+  cells: number; // a side
+}
+
+/**
+ * Moves the vertices at `indices` (offsets of x in `vertices`) onto the
+ * surface of `field`, each kept inside its own cell: a vertex wandering into
+ * its neighbours' cells folds faces over (back to front), which would draw
+ * nothing there and leave stray faces to collide with. Deterministic per
+ * vertex, so neighbouring chunks agree on the vertices they share.
+ */
+export function snapToSurface(vertices: Float32Array, indices: ArrayLike<number>, field: Field, grid: NetGrid) {
+  const { size, cells } = grid;
   for (let n = 0; n < indices.length; n++) {
     const v = indices[n];
-    if (!snapPoint(field, vertices[v], vertices[v + 1], vertices[v + 2], limit)) continue;
-    vertices[v] = snapped.x;
-    vertices[v + 1] = snapped.y;
-    vertices[v + 2] = snapped.z;
+    const x0 = vertices[v];
+    const y0 = vertices[v + 1];
+    const z0 = vertices[v + 2];
+    if (!snapPoint(field, x0, y0, z0, size)) continue;
+    const cell = v / 3;
+    const i = cell % cells;
+    const j = Math.floor(cell / cells) % cells;
+    const k = Math.floor(cell / (cells * cells));
+    const x = clamp(snapped.x, grid.ox + i * size, grid.ox + (i + 1) * size);
+    const y = clamp(snapped.y, grid.oy + j * size, grid.oy + (j + 1) * size);
+    const z = clamp(snapped.z, grid.oz + k * size, grid.oz + (k + 1) * size);
+    // Held in its cell short of the surface: only if that's still closer than where it was
+    if ((x !== snapped.x || y !== snapped.y || z !== snapped.z) && Math.abs(field(x, y, z)) >= Math.abs(field(x0, y0, z0))) continue;
+    vertices[v] = x;
+    vertices[v + 1] = y;
+    vertices[v + 2] = z;
   }
+}
+
+function clamp(x: number, lo: number, hi: number): number {
+  return x < lo ? lo : x > hi ? hi : x;
 }
 
 /**
@@ -89,24 +123,73 @@ export class SurfaceCutter {
     this.minEdge = minEdge;
   }
 
-  triangle(ax: number, ay: number, az: number, bx: number, by: number, bz: number, cx: number, cy: number, cz: number) {
+  /**
+   * A face of the mesh (corners already snapped), and the normal of the grid's
+   * own face it came from. Pieces that end up facing the other way (folded
+   * over by the snapping, into the rock) are dropped: seen from outside they
+   * show only their backs, which are never drawn, so they must not be there
+   * to hit either
+   */
+  triangle(ax: number, ay: number, az: number, bx: number, by: number, bz: number, cx: number, cy: number, cz: number, nx: number, ny: number, nz: number) {
+    this.nx = nx;
+    this.ny = ny;
+    this.nz = nz;
     this.cut(ax, ay, az, bx, by, bz, cx, cy, cz, this.depth);
   }
 
-  /** Splits the edge (a, b) if its midpoint strays: the snapped midpoint goes to `snapped` */
+  /** Pieces dropped for facing into the rock, since this cutter was made */
+  dropped = 0;
+  private nx = 0;
+  private ny = 0;
+  private nz = 0;
+
+  private out(ax: number, ay: number, az: number, bx: number, by: number, bz: number, cx: number, cy: number, cz: number) {
+    const nx = (by - ay) * (cz - az) - (bz - az) * (cy - ay);
+    const ny = (bz - az) * (cx - ax) - (bx - ax) * (cz - az);
+    const nz = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+    if (nx * this.nx + ny * this.ny + nz * this.nz <= 0) {
+      this.dropped++;
+      return;
+    }
+    this.emit(ax, ay, az, bx, by, bz, cx, cy, cz);
+  }
+
+  /**
+   * Splits the edge (a, b) if its midpoint strays: the snapped midpoint goes
+   * to `snapped`. It only moves across the edge, at most `SPLIT_REACH` of the
+   * edge's length, so the halves can't fold over the triangles' third corners
+   */
   private split(ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean {
-    if (Math.hypot(bx - ax, by - ay, bz - az) < this.minEdge) return false;
+    const length = Math.hypot(bx - ax, by - ay, bz - az);
+    if (length < this.minEdge) return false;
     // (a + b) / 2 is the same whichever way round the edge is walked
     const mx = (ax + bx) / 2;
     const my = (ay + by) / 2;
     const mz = (az + bz) / 2;
     if (Math.abs(this.field(mx, my, mz)) <= this.tolerance) return false;
-    return snapPoint(this.field, mx, my, mz, Math.hypot(bx - ax, by - ay, bz - az) * 0.75);
+    if (!snapPoint(this.field, mx, my, mz, length)) return false;
+    const ux = (bx - ax) / length;
+    const uy = (by - ay) / length;
+    const uz = (bz - az) / length;
+    let vx = snapped.x - mx;
+    let vy = snapped.y - my;
+    let vz = snapped.z - mz;
+    const along = vx * ux + vy * uy + vz * uz;
+    vx -= ux * along;
+    vy -= uy * along;
+    vz -= uz * along;
+    const moved = Math.hypot(vx, vy, vz);
+    const cap = length * SPLIT_REACH;
+    const k = moved > cap ? cap / moved : 1;
+    snapped.x = mx + vx * k;
+    snapped.y = my + vy * k;
+    snapped.z = mz + vz * k;
+    return true;
   }
 
   private cut(ax: number, ay: number, az: number, bx: number, by: number, bz: number, cx: number, cy: number, cz: number, depth: number) {
     if (depth <= 0) {
-      this.emit(ax, ay, az, bx, by, bz, cx, cy, cz);
+      this.out(ax, ay, az, bx, by, bz, cx, cy, cz);
       return;
     }
     const d = depth - 1;
@@ -157,12 +240,25 @@ export class SurfaceCutter {
       const gz = (az + bz + cz) / 3;
       const edge = Math.max(Math.hypot(bx - ax, by - ay, bz - az), Math.hypot(cx - bx, cy - by, cz - bz), Math.hypot(ax - cx, ay - cy, az - cz));
       if (edge < this.minEdge || Math.abs(this.field(gx, gy, gz)) <= this.tolerance || !snapPoint(this.field, gx, gy, gz, edge * 0.6)) {
-        this.emit(ax, ay, az, bx, by, bz, cx, cy, cz);
+        this.out(ax, ay, az, bx, by, bz, cx, cy, cz);
         return;
       }
-      const mx = snapped.x;
-      const my = snapped.y;
-      const mz = snapped.z;
+      // Only along the face's normal: the fan then always covers the face the right way round
+      let nx = (by - ay) * (cz - az) - (bz - az) * (cy - ay);
+      let ny = (bz - az) * (cx - ax) - (bx - ax) * (cz - az);
+      let nz = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+      const n = Math.hypot(nx, ny, nz);
+      if (n < 1e-9) {
+        this.out(ax, ay, az, bx, by, bz, cx, cy, cz);
+        return;
+      }
+      nx /= n;
+      ny /= n;
+      nz /= n;
+      const lift = (snapped.x - gx) * nx + (snapped.y - gy) * ny + (snapped.z - gz) * nz;
+      const mx = gx + nx * lift;
+      const my = gy + ny * lift;
+      const mz = gz + nz * lift;
       this.cut(ax, ay, az, bx, by, bz, mx, my, mz, d);
       this.cut(bx, by, bz, cx, cy, cz, mx, my, mz, d);
       this.cut(cx, cy, cz, ax, ay, az, mx, my, mz, d);

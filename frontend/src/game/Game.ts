@@ -7,7 +7,7 @@ import { Avatar } from "./avatar";
 import { CameraRig } from "./camera";
 import { DISSOLVE_AT, type DeathKind, DeathFall, classifyCrash, fieldNormal } from "./death";
 import { Debris } from "./effects";
-import { FLIGHT, Flight, type FlightInput, type HitPart, touching } from "./flight";
+import { FLIGHT, Flight, type FlightInput, type HitPart, hitboxWorld, touching } from "./flight";
 import { GlideIn } from "./glidein";
 import { Equipment } from "./items/equip";
 import type { ItemId, ItemSlot } from "./items/models";
@@ -136,6 +136,14 @@ const surface = new THREE.Vector3();
 const hitLocal = new THREE.Vector3();
 const hitPoint = new THREE.Vector3();
 const ORIGIN = new THREE.Vector3();
+// The hitbox in world space, now and one step ago (for sweeps), and where the land was hit
+const ball = new THREE.Vector3();
+const ballBefore = new THREE.Vector3();
+const wings = Array.from({ length: 8 }, () => new THREE.Vector3());
+const wingsBefore = Array.from({ length: 8 }, () => new THREE.Vector3());
+const rightWing = wings.slice(0, 4);
+const leftWing = wings.slice(4, 8);
+const landHit = { point: new THREE.Vector3(), normal: new THREE.Vector3() };
 const waterHit: WaterHit = { distance: 0, level: 0, kind: "water" };
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
@@ -463,6 +471,59 @@ export class Game implements RunHost {
   private clearance = (x: number, y: number, z: number) => this.world.rock.distance(x, y, z);
   /** Everything solid: rock, trees, water */
   private field = (x: number, y: number, z: number) => this.world.distance(x, y, z);
+  /** Everything solid but the rock (trees, water): the land itself collides as drawn (`landTouched`) */
+  private others = (x: number, y: number, z: number) => this.world.otherDistance(x, y, z);
+
+  /** Is the land around the hitbox on screen? Until it is, collisions there use the distance field */
+  private landShown(): boolean {
+    const r = FLIGHT.hitWingTo + 1;
+    const { x, y, z } = this.flight.position;
+    const view = this.view;
+    for (let i = 0; i < 8; i++) {
+      if (!view.covers(x + (i & 1 ? r : -r), y + (i & 2 ? r : -r), z + (i & 4 ? r : -r))) return false;
+    }
+    return true;
+  }
+
+  /**
+   * The hitbox against the land exactly as drawn: the body ball and both
+   * wings' rectangles where they are now, and the paths the ball and the
+   * wingtips swept since the last step (nothing slips through a thin sheet of
+   * rock between steps). The touch goes to `landHit`
+   */
+  private landTouched(): HitPart | null {
+    const land = this.view.collider;
+    hitboxWorld(this.prevPosition, this.prevQuaternion, ballBefore, wingsBefore);
+    hitboxWorld(this.flight.position, this.flight.quaternion, ball, wings);
+    if (land.sphere(ball, FLIGHT.hitBody, landHit) || land.segment(ballBefore, ball, landHit)) return "body";
+    if (land.quad(rightWing, landHit) || land.segment(wingsBefore[1], wings[1], landHit)) return "right";
+    if (land.quad(leftWing, landHit) || land.segment(wingsBefore[5], wings[5], landHit)) return "left";
+    return null;
+  }
+
+  /**
+   * The crash tumble's contacts: the signed distance from `p` to the nearest
+   * surface within about `radius`, with the way out of it in `out`. The land
+   * as drawn where it's on screen, the distance field elsewhere, and trees
+   * and water from their own colliders
+   */
+  private contact = (p: THREE.Vector3, radius: number, out: THREE.Vector3): number => {
+    let d: number;
+    if (this.view.covers(p.x, p.y, p.z)) {
+      // Far enough to still find the face behind a point that went in deep (a wingtip in the rock at the crash)
+      d = this.view.collider.nearest(p, radius + 3, landHit);
+      if (d < Infinity) out.copy(landHit.normal);
+    } else {
+      d = this.world.rock.distance(p.x, p.y, p.z);
+      if (d < radius) fieldNormal(this.clearance, p, out);
+    }
+    const other = this.world.otherDistance(p.x, p.y, p.z);
+    if (other < radius && other < d) {
+      d = other;
+      fieldNormal(this.others, p, out);
+    }
+    return d;
+  };
 
   get seed(): number {
     return this.world.seed;
@@ -671,14 +732,24 @@ export class Game implements RunHost {
     this.respawn(this.raceState === "free" ? 0 : this.checkpoints);
   }
 
-  /** `part` hit something (at `hitLocal` in the pilot's frame), or null: fell below the islands */
-  private crash(part: HitPart | null) {
+  /**
+   * `part` hit something, or null: fell below the islands. `land`: it hit the
+   * land drawn (`landHit` has where, and the face's normal); otherwise the hit
+   * is at `hitLocal` in the pilot's frame, on the distance field
+   */
+  private crash(part: HitPart | null, land = false) {
     const f = this.flight;
     const lost = part === null;
     this.crashedAt = this.elapsed;
-    // How the hit plays out depends on how that part met the surface (seen from the last step, still outside it)
-    hitPoint.copy(lost ? ORIGIN : hitLocal).applyQuaternion(this.prevQuaternion).add(this.prevPosition);
-    fieldNormal(this.field, hitPoint, normal);
+    // How the hit plays out depends on how that part met the surface
+    if (land) {
+      hitPoint.copy(landHit.point);
+      normal.copy(landHit.normal);
+    } else {
+      // Seen from the last step, still outside it
+      hitPoint.copy(lost ? ORIGIN : hitLocal).applyQuaternion(this.prevQuaternion).add(this.prevPosition);
+      fieldNormal(this.field, hitPoint, normal);
+    }
     const kind = classifyCrash(tmp.copy(f.velocity).normalize(), f.right, normal, lost, part);
     this.death.start(kind, this.prevPosition, f.velocity, f.quaternion, f.right, f.up, normal, part === "left" ? -1 : part === "right" ? 1 : undefined);
     this.avatar.wingPoints(this.death.wing);
@@ -700,11 +771,16 @@ export class Game implements RunHost {
     this.flight.step(STEP, input, this.proximity * this.proximity, FLIGHT, this.run ? this.run.flightMods : null);
 
     const { x, y, z } = this.flight.position;
-    const distance = this.world.distance(x, y, z);
-    // The hitbox: a ball for the body, a rectangle for each wing (flight.ts)
-    const part = touching(this.field, this.flight.position, this.flight.quaternion, distance, hitLocal);
+    const rock = this.world.rock.distance(x, y, z);
+    const other = this.world.otherDistance(x, y, z);
+    const distance = Math.min(rock, other);
+    // The hitbox: a ball for the body, a rectangle for each wing (flight.ts). The land collides as
+    // drawn once it is on screen (before that, as the distance field), trees and water by their fields
+    const shown = this.landShown();
+    const land = shown ? this.landTouched() : null;
+    const part = land ?? touching(shown ? this.others : this.field, this.flight.position, this.flight.quaternion, shown ? other : distance, hitLocal);
     if (part || this.world.lost(y, z)) {
-      this.crash(part);
+      this.crash(part, land !== null);
       return;
     }
     this.proximity = clamp((SCORE_RANGE - distance) / (SCORE_RANGE - 1.5), 0, 1);
@@ -1127,12 +1203,14 @@ export class Game implements RunHost {
         this.clearance,
       );
     } else {
-      // The crash plays out: the tumble moves the body, the camera keeps it in view
-      this.death.update(dt, this.field);
-      body.position.copy(this.death.position);
-      body.quaternion.copy(this.death.quaternion);
+      // The crash plays out: the pose first (the wings flail), then the tumble moves the body and
+      // keeps that pose out of the rock, so what's drawn is always resolved; the camera keeps it in view
       this.avatar.update(dt, this.death.speed, 0);
       this.avatar.wingPoints(this.death.wing);
+      this.death.update(dt, this.contact);
+      this.avatar.foldWings(this.death.wedged[0], this.death.wedged[1], dt);
+      body.position.copy(this.death.position);
+      body.quaternion.copy(this.death.quaternion);
       this.equipment.update(dt);
       this.deathEffects(dt);
       this.rig.fall(body.position, dt, this.field);

@@ -178,8 +178,9 @@ an arcade, energy-based wingsuit. The nose points where you go, gravity along
 the flight path speeds you up or slows you down, drag caps the speed, and
 banking turns you. Physics runs at a fixed 120 Hz. What you can hit is a small
 ball for the body and a rectangle for each wing, tilted up like the wings
-drawn, a little smaller than the pilot so near misses stay graceful; the land
-you see is snapped onto the same surface the collisions use. Open the game with `?tune`
+drawn, a little smaller than the pilot so near misses stay graceful. It
+collides with the land exactly as drawn (its triangles), so you never hit rock
+you can't see, nor fly through rock you can. Open the game with `?tune`
 (e.g. `http://localhost:5173/?seed=42&tune`) to tune every constant live:
 flight physics, the pilot's animation, trails and particles, the crystal gates,
 the camera and the render quality. Look tweaks are remembered in the browser;
@@ -222,7 +223,8 @@ doesn't fly the course itself.
 | `frontend/src/game/Game.ts`            | The game: loop, physics steps, race state, HUD data      |
 | `frontend/src/game/input.ts`           | Input, actions and shared keyboard bindings (including pause) |
 | `frontend/src/game/world/`             | Racing line, rock field, meshing workers, palettes, view |
-| `frontend/src/game/world/snap.ts`      | Snaps meshed land onto the collision surface             |
+| `frontend/src/game/world/snap.ts`      | Snaps meshed land onto the distance field                |
+| `frontend/src/game/world/landCollider.ts` | Collisions with the land exactly as drawn             |
 | `frontend/src/game/flight.ts`          | Flight model and the pilot's hitbox                      |
 | `frontend/src/game/avatar.ts`          | The pilot's model and animation                          |
 | `frontend/src/game/death.ts`           | Crash animations: how a crash plays out (looks only)     |

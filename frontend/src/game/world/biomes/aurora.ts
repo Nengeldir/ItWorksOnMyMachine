@@ -98,7 +98,7 @@ export const AURORA: Biome = {
       features: [
         { kind: "summit", along: 0.82, lateral: 260, radius: 90, rise: 520, surface: 2 },
         { kind: "rings", count: 16, radius: [16, 30], lateral: [50, 260], rise: [-30, 90], surface: 1 },
-        { kind: "shards", count: 50, radius: [4, 9], rise: [30, 110], lateral: [80, 400], tilt: 0.3, surface: 1 },
+        { kind: "shards", count: 50, radius: [6, 10], rise: [30, 110], lateral: [80, 400], tilt: 0.3, surface: 1 },
         { kind: "pillars", count: 25, radius: [10, 18], rise: [60, 200], lateral: [150, 500], surface: 2 },
       ],
     },

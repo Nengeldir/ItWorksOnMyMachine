@@ -311,6 +311,8 @@ export class Avatar {
    * head, x swings it to the back), `elbow` bends the forearm
    */
   readonly armPose = { amount: 0, x: 0, y: 0, z: 0, elbow: 0 };
+  /** How far each wing (left, right) is folded in during a crash, to keep it out of rock it is wedged against (0..1) */
+  private readonly folded = [0, 0];
   /** A crash playing out: the body flails, then goes limp (Game moves `group`) */
   private death: { kind: DeathKind; t: number; side: number } | null = null;
 
@@ -867,9 +869,29 @@ export class Avatar {
     this.barrelProgress = -1;
   }
 
+  /**
+   * During a crash: fold the wings in where they are stuck in the rock by
+   * `left` and `right` metres (DeathFall.wedged), so the wing that can't get
+   * free crumples against the rock instead of going through it; unfolds
+   * slowly once free
+   */
+  foldWings(left: number, right: number, dt: number) {
+    for (let i = 0; i < 2; i++) {
+      const depth = i === 0 ? left : right;
+      // The wing reaches about 2.4 m: fold it in by the share it is stuck
+      if (depth > 0.01) this.folded[i] = Math.min(0.8, this.folded[i] + (depth / 2.4) * 1.2);
+      else this.folded[i] = Math.max(0, this.folded[i] - dt * 0.8);
+    }
+    this.left.wing.scale.setScalar(1 - this.folded[0]);
+    this.right.wing.scale.setScalar(1 - this.folded[1]);
+  }
+
   /** Back to flying (on respawn) */
   revive() {
     this.death = null;
+    this.folded[0] = this.folded[1] = 0;
+    this.left.wing.scale.setScalar(1);
+    this.right.wing.scale.setScalar(1);
     this.hasLast = false;
     this.lean = this.leanVelocity = 0;
     this.pitchRate = this.yawRate = this.rollRate = 0;

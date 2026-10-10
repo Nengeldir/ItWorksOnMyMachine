@@ -130,6 +130,29 @@ export function touching(
   return null;
 }
 
+/**
+ * The same hitbox in world space, for testing against the land drawn: the
+ * body ball's centre into `ball`, and each wing's rectangle as four corners in
+ * order into `wings` (right wing 0 to 3, left wing 4 to 7). The outer leading
+ * corners (1 and 5) are the wingtips
+ */
+export function hitboxWorld(position: Vector3, quaternion: Quaternion, ball: Vector3, wings: Vector3[], p = FLIGHT) {
+  ball.set(0, 0, -p.hitBodyAhead).applyQuaternion(quaternion).add(position);
+  const lift = Math.tan(p.hitWingDihedral);
+  const front = -p.hitWingAhead - p.hitWingChord / 2;
+  const back = -p.hitWingAhead + p.hitWingChord / 2;
+  for (let w = 0; w < 2; w++) {
+    const side = w === 0 ? 1 : -1;
+    const inner = WING_UP + p.hitWingFrom * lift;
+    const outer = WING_UP + p.hitWingTo * lift;
+    wings[w * 4].set(p.hitWingFrom * side, inner, front);
+    wings[w * 4 + 1].set(p.hitWingTo * side, outer, front);
+    wings[w * 4 + 2].set(p.hitWingTo * side, outer, back);
+    wings[w * 4 + 3].set(p.hitWingFrom * side, inner, back);
+    for (let i = 0; i < 4; i++) wings[w * 4 + i].applyQuaternion(quaternion).add(position);
+  }
+}
+
 export class Flight {
   readonly position = new Vector3();
   readonly quaternion = new Quaternion();
