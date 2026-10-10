@@ -407,3 +407,24 @@
 .gallery-panel .row {
   flex-wrap: wrap;
 }
+
+/* In game every glass panel (and the item bag and upgrade icons) shows only while the mouse moves or
+   after a tap (useIdleUi), and fades once it rests. The :not() list is what stays: the lives and
+   objectives, the pause box, results, the tutorial, the no-WebGL page, and the finish screen's and
+   upgrade picker's cards (the compass, gate marker, level title and touch controls aren't glass). All of
+   it shows while paused or while an overlay (settings, How to fly) is open. Hidden by visibility as well,
+   so panels with their own fade-in animations (toasts, the countdown) stay hidden too. */
+.game :is(.glass, .run-items, .run-upgrades):not(.run-lives, .run-objectives, .hud-pause, .panel, .coach, .no-webgl, .run-finish *, .run-picker *) {
+  transition:
+    opacity 0.3s ease,
+    visibility 0s;
+}
+
+.game.ui-idle:not(:has(.hud-pause, dialog[open], .overlay)) :is(.glass, .run-items, .run-upgrades):not(.run-lives, .run-objectives, .hud-pause, .panel, .coach, .no-webgl, .run-finish *, .run-picker *) {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.9s ease,
+    visibility 0s 0.9s;
+}

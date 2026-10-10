@@ -235,6 +235,19 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-11: In-game glass hidden until the mouse moves (Claude)
+
+Asked for by the UX group (aggressive on purpose; the team adds back what's
+needed): every glass panel in game is hidden until the mouse moves or the
+screen is tapped, and fades 2.5 s later (`useIdleUi` in `GameScreen.tsx`,
+the `.ui-idle` rule in `GameScreen.css`). A locked mouse steering and a
+finger dragging the stick don't count. Stays: lives, objectives, compass,
+gate marker, level title, touch controls, picker, finish screen, results,
+tutorial; all of it shows while paused or with an overlay open. To keep a
+panel, add it to the rule's `:not()` list. Verified: lint, build, 126
+tests; in the browser, which panels hide before take-off, in flight, paused
+and on a tap. Not tried on a phone or with a locked mouse by hand.
+
 ### 2026-10-10: Rebased PR #46 onto current main, without merge commits (Claude)
 
 Asked for: rebase from main and resolve conflicts; no merge commits in main.
@@ -2894,6 +2907,9 @@ ported to the islands world:
   through islands and gates, no console errors.
 
 ## Next up
+
+- Hidden in-game glass (2026-10-11): with the team, bring back what must stay
+  (candidates: the start button, countdown/GO, Crashed, the race clock).
 
 - All twenty adventure items and seeded island pickups are implemented. Playtest item balance, audio mix, mouse/gamepad handling and focused-window performance. Tune rarity heights and the three-slot bag through real flights.
 - PR #46 integration: inspect profile/inventory and test fitting room at phone
