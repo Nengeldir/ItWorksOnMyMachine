@@ -233,6 +233,42 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Nine failing frontend tests: three stale tests, one real grove bug (Claude)
+
+Asked for: find out why some tests fail and fix it. `npm test` had 9 of 104
+failing (Node 22.20, Windows), from four causes:
+- **Pickups blocked by trees** (a real bug, `items2` "adventure vegetation
+  leaves the pickup…"): `clearOfItems` reserved a fixed box round a pickup
+  (8 m + radius sideways), but the game calls a pickup blocked by the
+  colliders' own distances (`pickupClear`, 5 m at seven probes), and a
+  plant's canopy ellipsoid reads nearer than it is when wide and flat. On
+  Verdant run seed 2 an oak 14 m to the side read 2.9 m from a Glider Wax's
+  wing probe, so that pickup could never be collected. Now `clearOfItems`
+  also takes the collider that would stand there (built lazily, only within
+  64 m of a pickup) and refuses it if it comes within `PICKUP.clearance` of
+  any probe (`APPROACH`, now exported); the box is 9 m + radius. Passed from
+  `flora/placement.ts` (plants; structures with their real yaw, `yawAt`) and
+  `mesher.ts` (run Sky Isles pines). Runs only: levels with key index 0
+  (races, time trials) still bypass it, and the race hashes didn't move.
+  A few more plants near pickups are left out in run levels.
+- **Stale mesh hashes** (`items2` "frozen race meshes…"): the mesh-fixes
+  commit (`a1ca530`) changed the drawn race mesh on purpose but never
+  updated the recorded values, and the pickups commit copied the old ones
+  into the test. Checked in worktrees: `a1ca530~1` gives the old mesh hashes,
+  `a1ca530` and HEAD the new; trees, dist and rings are identical throughout.
+  New mesh values in `docs/dev-snippets.js` and the test (seed 1 `4cb2746a`,
+  7 `a1696d0a`, 42 `3a723711`). The snippet's `raceLevel` is now
+  `skyIslesLevel` (it no longer existed).
+- **`lives.test.mjs`** (6 tests): its stand-in world had no `distance`,
+  which `Items.setLevel` reads since the pickups work. Test stub fixed.
+- **`controls.test.mjs`**: two expectations lacked the `use` input that
+  `Input.sample` returns since the items work. Test fixed.
+- Verified: 104 of 104 frontend tests, `tsc`, lint and build pass (the build's
+  bundle-size warning stays). Placing flora round every pickup on nine run
+  levels (Verdant 2 and 7, Glacier, Lagoon, Twilight, Ember, Aurora,
+  Archipelago, Reef): no pickup blocked. Not looked at in a browser: the
+  groves are a little wider. Backend untouched.
+
 ### 2026-10-10: All twenty adventure items and island pickups
 
 Completed the design list: items 11–20 have toon models and distinct effects

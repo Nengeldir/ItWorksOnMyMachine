@@ -85,7 +85,7 @@ test('adventure vegetation leaves the pickup and both approaches clear',async()=
 test('frozen race meshes, trees, distances and gates retain their recorded hashes',async()=>{
  const {raceHashes}=await import('../src/game/devtools.ts');
  const hashes=raceHashes();
- for(const [seed,values] of Object.entries({1:['bbf7b0a1','f4f3226a','9086de69','583fd555'],7:['df8c6ea1','fb4fc91d','6aab8c08','c8cc2d15'],42:['d9c31b5b','112f6564','3b43c006','40f33295']}))
+ for(const [seed,values] of Object.entries({1:['4cb2746a','f4f3226a','9086de69','583fd555'],7:['a1696d0a','fb4fc91d','6aab8c08','c8cc2d15'],42:['3a723711','112f6564','3b43c006','40f33295']}))
   assert.deepEqual(['mesh','trees','dist','rings'].map(key=>hashes[seed][key]),values);
 });
 

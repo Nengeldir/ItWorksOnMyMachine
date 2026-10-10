@@ -15,7 +15,8 @@ export const PICKUP = {
 };
 export const pickupHeight = (rarity: number) => [PICKUP.commonHeight, PICKUP.uncommonHeight, PICKUP.rareHeight, PICKUP.legendaryHeight][rarity];
 const WEIGHT = [6, 3, 1.2, 0.35];
-const APPROACH = [[0,0,0],[-4,0,0],[4,0,0],[0,-2,0],[0,2,0],[0,0,-9],[0,0,9]];
+/** Where a pickup needs air: itself, wing room to both sides, above and below, and the way in and out */
+export const APPROACH = [[0,0,0],[-4,0,0],[4,0,0],[0,-2,0],[0,2,0],[0,0,-9],[0,0,9]];
 export interface Pickup {
   id: RunItemId;
   position: Vector3;

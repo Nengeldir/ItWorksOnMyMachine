@@ -1,8 +1,9 @@
 import { clearOfItems } from "../itemClearance";
 import { smoothstep } from "../../math";
 import { hash3 } from "../../rng";
-import type { FloraSpecies } from "../biomes/types";
+import type { FloraSpecies, StructureSpec } from "../biomes/types";
 import { TUBE_RADIUS } from "../course";
+import { Plant } from "../trees";
 import { STRUCTURE_INFO, structuresOf } from "../structures/kinds";
 import { fbm } from "../terrain/noise";
 import type { World } from "../World";
@@ -151,6 +152,9 @@ export function placeFlora(world: World, box: Box, withTufts: boolean): { plants
   const ground = field.ground;
   const structures = structuresOf(world.biome);
   const start = world.course.start;
+  /** Which way a structure faces: the racing line, or anywhere */
+  const yawAt = (spec: StructureSpec, x: number, z: number, gi: number, gk: number, s0: number) =>
+    spec.where?.facing ? Math.atan2(world.course.x(z) - x, 0.001) + (hash3(gi, gk, s0 + 4) - 0.5) * 0.5 : hash3(gi, gk, s0 + 4) * Math.PI * 2;
   /** Candidate (gi, gk) of a structure's grid: [x, y, z, height] if it can stand there, or null */
   const siteAt = (index: number, gi: number, gk: number): [number, number, number, number] | null => {
     const spec = structures[index];
@@ -219,7 +223,7 @@ export function placeFlora(world: World, box: Box, withTufts: boolean): { plants
     // Keep the racing line and the start clear
     if (world.course.distance(x, y + height / 2, z) < TUBE_RADIUS + height / 2 + 3) return null;
     if (Math.hypot(x - start.x, y - start.y, z - start.z) < 40 + height) return null;
-    if (!clearOfItems(world,x,y,z,height,foot)) return null;
+    if (!clearOfItems(world, x, y, z, height, foot, () => new Plant(x, y - 0.1, z, height, height, yawAt(spec, x, z, gi, gk, s0), info.collider))) return null;
     return [x, y, z, height];
   };
   for (let index = 0; index < structures.length; index++) {
@@ -238,7 +242,7 @@ export function placeFlora(world: World, box: Box, withTufts: boolean): { plants
       sites.push(x, y, z, clear);
       if (taken) return;
       if (x < box.x0 || x >= box.x1 || z < box.z0 || z >= box.z1 || y < box.y0 || y >= box.y1) return;
-      const yaw = spec.where?.facing ? Math.atan2(world.course.x(z) - x, 0.001) + (hash3(gi, gk, s0 + 4) - 0.5) * 0.5 : hash3(gi, gk, s0 + 4) * Math.PI * 2;
+      const yaw = yawAt(spec, x, z, gi, gk, s0);
       plants.push(veg.species.length + index, x, y - 0.1, z, height, height, yaw, hash3(gi, gk, s0 + 5));
     };
     if (spec.landmark) {
@@ -323,8 +327,9 @@ export function placeFlora(world: World, box: Box, withTufts: boolean): { plants
       const radius = height * (info.aspect[0] + (info.aspect[1] - info.aspect[0]) * hash3(gi, gk, salt + 6));
       // Keep the racing line clear
       if (world.course.distance(x, y + height / 2, z) < TUBE_RADIUS + height / 2 + 3) continue;
-      if (!clearOfItems(world,x,y,z,height,radius)) continue;
-      plants.push(pick, x, y - 0.25, z, height, radius, hash3(gi, gk, salt + 7) * Math.PI * 2, hash3(gi, gk, salt + 8));
+      const yaw = hash3(gi, gk, salt + 7) * Math.PI * 2;
+      if (!clearOfItems(world, x, y, z, height, radius, () => new Plant(x, y - 0.25, z, height, radius, yaw, info.collider))) continue;
+      plants.push(pick, x, y - 0.25, z, height, radius, yaw, hash3(gi, gk, salt + 8));
     }
   }
 
