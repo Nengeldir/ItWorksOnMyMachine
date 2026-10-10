@@ -266,8 +266,12 @@ export class RunController {
     }
     this.through = null;
     this.exiting = false;
-    this.dashTime = 0;
-    this.tunnel.place(this.host.camera.position, this.host.flight.forward, 0, 0);
+    this.finale?.dispose();
+    this.finale = null;
+    this.wormhole.place(this.host.camera, this.host.flight.forward, false, 0, this.host.pixelHeight);
+    this.host.insideWormhole(false);
+    this.host.veil(0);
+    this.host.whiteOut(0);
     this.finish();
   }
 

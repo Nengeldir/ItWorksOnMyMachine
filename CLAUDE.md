@@ -192,6 +192,25 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Resolve the claudia-test_mode rebase conflicts
+
+- Combined debug telemetry and shortcut precedence with boost/brake, dodge,
+  collision probes, loading glides, crash/finale effects and victory-lap support.
+  Preserved both test scripts and change logs, avoiding duplicate imports,
+  settings and debug documentation. The older basic-test-mode commit is retained
+  as an empty commit because its implementation already exists in the base.
+- Resolved conflicts in `frontend/package.json`, `Game.ts`, `input.ts`,
+  `RunSession.ts`, `run/controller.ts`, `tuning.ts`, README and this document;
+  staged the resolutions and continued the existing rebase.
+- Verification: production build and lint pass; 20 tracked frontend tests and
+  all 22 backend tests pass. A temporary copy of the 10 debug tests also passes
+  after adapting its host fixture, wormhole references and transition timing
+  to the replayed APIs. No browser visual playtest was performed.
+- The complete frontend test glob still fails in four pre-existing untracked
+  files: camera, flight-realism, input and debug. Those files and the untracked
+  debug-mode document are preserved unchanged. The older input/debug fixtures
+  omit current host methods; camera/flight expectations require review.
+
 ### 2026-10-10: Rebase Pengyue's newest work onto main
 
 - Replayed the ten new feature commits from `origin/Pengyue` (`fec0aee`)
@@ -1065,6 +1084,9 @@ ported to the islands world:
   through islands and gates, no console errors.
 
 ## Next up
+
+- Update the untracked input/debug test fixtures for the current APIs and
+  wormhole timing; review the older camera/flight-realism expectations.
 
 - Play through the integrated portal/finale and victory lap; check multiplayer
   and gamepad controls. Make the explore debug panel usable at narrow widths
