@@ -192,6 +192,25 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Resolve the claudia-test_mode rebase conflicts
+
+- Combined debug telemetry and shortcut precedence with boost/brake, dodge,
+  collision probes, loading glides, crash/finale effects and victory-lap support.
+  Preserved both test scripts and change logs, avoiding duplicate imports,
+  settings and debug documentation. The older basic-test-mode commit is retained
+  as an empty commit because its implementation already exists in the base.
+- Resolved conflicts in `frontend/package.json`, `Game.ts`, `input.ts`,
+  `RunSession.ts`, `run/controller.ts`, `tuning.ts`, README and this document;
+  staged the resolutions and continued the existing rebase.
+- Verification: production build and lint pass; 20 tracked frontend tests and
+  all 22 backend tests pass. A temporary copy of the 10 debug tests also passes
+  after adapting its host fixture, wormhole references and transition timing
+  to the replayed APIs. No browser visual playtest was performed.
+- The complete frontend test glob still fails in four pre-existing untracked
+  files: camera, flight-realism, input and debug. Those files and the untracked
+  debug-mode document are preserved unchanged. The older input/debug fixtures
+  omit current host methods; camera/flight expectations require review.
+
 ### 2026-10-10: Rebase Pengyue's newest work onto main
 
 - Replayed the ten new feature commits from `origin/Pengyue` (`fec0aee`)
@@ -520,6 +539,114 @@ localhost "not connecting") until the browser cache was cleared.
   Braking and Recharging retain the same 245 x 50 px boost block; the mouse hint
   no longer overlaps it. Real-gamepad and two-client visual playtesting remain
   outstanding; loop continuity is covered by numeric camera tests.
+
+
+### 2026-10-10: Remove flight telemetry
+Removed all flight readouts, the visibility toggle, the telemetry sampler, and its respawn, fixed-step and HUD hooks, as requested. The panel now contains only playtest controls, with no telemetry sampling overhead.
+
+Changed frontend/src/game/debug/{panel.ts,panel.css,telemetry.ts}, debugMode.ts, tuning.ts, Game.ts, the debug tests and README. Removed the obsolete telemetry tests; updated the remaining test fixture for the current wormhole host methods and upgrade-picker timing. The portal and victory implementations are unchanged.
+
+This dated record and the README carry the documentation updates because the user explicitly requested that CLAUDE.md remain unchanged.
+
+Verification:
+
+npm run build and npm run lint pass.
+npm run test:debug: all six remaining tests pass, covering development gating, shortcuts and typing/repeat guards, portal placement/replacement, upgrades and biome transitions, victory idempotency and wormhole cleanup.
+Headless Firefox: one panel with exactly three controls and no flight readouts or telemetry setting, including with ?debug&tune. Real Shift+P spawns a portal 40 m ahead and replaces it on another press; plain P pauses; Shift+O from pause opens the finish screen without saving scores or uploading results. The finish screen fades in normally. Games without ?debug have no panel or victory shortcut. No game JavaScript errors.
+Inspected screenshots of the compact panel and finish screen at 1200×800.
+No telemetry references remain in frontend source or current README. CLAUDE.md, flight physics, input and portal/victory logic have no diff.
+Follow-ups: focused-window mouse/gamepad playtesting and narrow-screen layout checks were not performed. This change was validated with the targeted debug suite, not the complete frontend test glob; the existing camera, flight-realism and input fixture issues noted in CLAUDE.md remain outside this removal.
+
+### Debug playtest mode — 2026-10-10
+
+This record accompanies the code change without editing `CLAUDE.md`, as
+requested. The README contains the controls and architecture additions.
+
+The mode uses Vite's development-build flag plus an explicit `?debug` URL
+opt-in. Its panel, flight telemetry and gameplay overrides load only for a
+local solo, explore or adventure game. Settings live on that game instance;
+they neither persist nor apply to rooms or the menu backdrop. Production
+builds exclude the diagnostic assets and debug shortcut actions.
+
+`FlightTelemetry` samples velocity before and after each fixed physics step
+without allocating or changing flight state. The panel publishes world
+altitude, ground distance, actual speed, climb rate, vector acceleration
+magnitude and signed speed change at the existing HUD interval. Ground
+distance uses the terrain and solid-water collision fields, excludes trees,
+and clamps negative distances to zero. It is nearest-surface clearance rather
+than a vertical raycast; these fields can be capped far from terrain. Pause,
+respawn, loading, countdown and frozen transitions clear acceleration,
+speed-change and climb-rate readings while still sampling ground clearance.
+
+The earlier portal-frequency control is replaced by `Shift+P`: after take-off,
+`RunController.spawnDebugPortal()` places a temporary exit ahead of the pilot,
+40 m by default (tunable in the debug panel). Repeated presses replace and
+dispose that portal, while retaining the normal exit. Entering it uses the
+usual upgrade and transition flow; changing levels removes it.
+
+`Shift+O` calls `RunController.debugWin()`: it banks current style once, closes
+any portal tunnel, freezes flight and sends the existing victory event. The
+normal end screen shows the actual score, upgrades and visited biomes; skipped
+biomes are not fabricated. This also works from pause, intro and the upgrade
+picker, and still bypasses score storage.
+
+Both actions have panel buttons and share a `DEBUG_ACTIONS` registry with
+their keyboard bindings. `Input.onShortcut` lets mode-specific chords take
+precedence over pause without adding debug bindings to normal input.
+Plain P retains pause/resume, repeated shortcut keydowns are consumed without
+re-running actions, and typing in editable fields is ignored. The seeded
+course, collision surfaces and flight physics are unchanged.
+
+Changed paths:
+
+- `frontend/src/game/debugMode.ts`: shared activation gate and settings type.
+- `frontend/src/game/debug/`: panel, registry, styling and telemetry.
+- `frontend/src/game/tuning.ts`: session-only debug defaults and controls.
+- `frontend/src/game/Game.ts`: lazy loading, lifecycle cleanup and telemetry hooks.
+- `frontend/src/game/input.ts`: optional shortcut precedence over normal input.
+- `frontend/src/game/run/controller.ts`: optional extra adventure portals.
+- `frontend/src/session/{Run,Solo,Room}Session.ts`: isolate scores/uploads and rooms.
+- `frontend/src/App.tsx`: preserve debug opt-in during navigation.
+- `frontend/package.json`, `frontend/tests/debug.test.mjs`: targeted test command.
+- `README.md`, this document: usage, extension points, verification and follow-ups.
+
+Verification:
+
+- `npm run build` and `npm run lint` pass.
+- Ten targeted tests pass: dev/URL gate, acceleration and signed speed
+  change, idle/respawn reset, terrain/water ground clearance, shortcut
+  precedence and typing/repeat guards, portal placement/replacement and
+  unchanged course, transition into Verdant Highlands, idempotent wins and
+  tunnel cleanup, and disabled actions outside active dev playtests.
+- Five existing input tests pass, including pause, typing, rebinding, held
+  controls and disposal.
+- Headless Firefox: one test panel under React StrictMode; ground-distance
+  reading matches the collision field; actual Shift+P spawns a portal 40 m
+  ahead without pausing; repeated presses replace it; plain P pauses; flying
+  straight ahead enters that portal and offers three upgrades; selecting one
+  reaches Verdant Highlands and removes the temporary exit. Shift+O from a
+  paused transition opens the normal victory screen, clears the tunnel,
+  unpauses and leaves best-score storage unchanged. Both actions also appear
+  in `?tune`. Normal dev games and production ignore debug actions. No
+  JavaScript errors.
+- The test panel now uses its own `playtest-panel` CSS class so the newer
+  exploration panel's layout cannot cover the victory screen.
+- Production preview with `?run=42&debug`: normal adventure UI, no debug
+  panel and no development console hooks.
+- `__raceHashes()` for seeds 1, 7 and 42 matches all documented mesh,
+  tree, collision-distance and gate hashes.
+- Production JS/CSS scan: no debug panel selector, telemetry labels,
+  control/action labels or `portalAhead` property.
+- `CLAUDE.md` and `flight.ts` have no diff from HEAD.
+- The pre-existing untracked `frontend/tests/flight.test.mjs` passes four
+  checks and fails its gravity-only energy-conservation assertion. The
+  flight model is unchanged in this task; this failure remains open.
+
+Follow-ups: manually play with pointer-lock mouse controls and measure in a
+focused browser window. Headless checks validate behavior and layout, not
+the project's 60 fps target. Production administrator testing would need a
+separately protected deployment; a client-side secret would not provide
+access control.
 
 
 ### 2026-10-10: Biome music and the wingbeat sample (Claude)
@@ -973,6 +1100,9 @@ ported to the islands world:
   through islands and gates, no console errors.
 
 ## Next up
+
+- Update the untracked input/debug test fixtures for the current APIs and
+  wormhole timing; review the older camera/flight-realism expectations.
 
 - Play through the integrated portal/finale and victory lap; check multiplayer
   and gamepad controls. Make the explore debug panel usable at narrow widths

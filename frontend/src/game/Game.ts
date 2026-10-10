@@ -7,6 +7,9 @@ import { Avatar } from "./avatar";
 import { CameraRig } from "./camera";
 import { DISSOLVE_AT, type DeathKind, DeathFall, classifyCrash, fieldNormal } from "./death";
 import { Debris } from "./effects";
+import { debugModeRequested, type DebugSettings } from "./debugMode";
+import type { DebugPanel } from "./debug/panel";
+import type { DebugAction } from "./debug/actions";
 import { FLIGHT, Flight, type FlightInput, type HitPart, touching } from "./flight";
 import { GlideIn } from "./glidein";
 import { Equipment } from "./items/equip";
@@ -116,6 +119,8 @@ export interface GameOptions {
   events: GameEvents;
   /** Set for a menu backdrop: no player input, no audio, flies itself */
   attract?: AttractMode;
+  /** Multiplayer rooms disable local playtest tools even on a dev server. */
+  allowDebug?: boolean;
 }
 
 /** Live state for the network: [x,y,z], [qx,qy,qz,qw], speed, checkpoints */
@@ -235,6 +240,8 @@ export class Game implements RunHost {
   private frame = 0;
   private readonly resizeObserver: ResizeObserver;
   private gui: { destroy(): void } | null = null;
+  private debug: DebugPanel | null = null;
+  private disposed = false;
 
   constructor(container: HTMLElement, options: GameOptions) {
     this.container = container;
@@ -314,6 +321,7 @@ export class Game implements RunHost {
     if (import.meta.env.DEV) {
       Object.assign(window, { __game: this, __fxTime: fxTime, __tuning: Object.fromEntries(TUNING_GROUPS) });
       void import("./devtools").then(({ installDevtools }) => installDevtools());
+      if (!this.attract && options.allowDebug !== false && debugModeRequested()) void this.openDebug();
     }
   }
 
@@ -408,6 +416,10 @@ export class Game implements RunHost {
 
   get hovering(): boolean {
     return this.input.hovering;
+  }
+
+  get debugSettings(): DebugSettings | null {
+    return import.meta.env.DEV ? this.debug?.settings ?? null : null;
   }
 
   respawnAt(checkpoints: number) {
@@ -610,6 +622,7 @@ export class Game implements RunHost {
   }
 
   dispose() {
+    this.disposed = true;
     cancelAnimationFrame(this.frame);
     this.resizeObserver.disconnect();
     this.renderer.domElement.removeEventListener("click", this.engage);
@@ -618,6 +631,7 @@ export class Game implements RunHost {
     this.input.dispose();
     this.audio.dispose();
     this.gui?.destroy();
+    this.debug?.dispose();
     this.run?.dispose();
     this.view.dispose();
     this.live.forEach((p) => this.removePilot(p));
@@ -1393,11 +1407,37 @@ export class Game implements RunHost {
     this.softParticles.setViewport(height * this.renderer.getPixelRatio(), this.rig.camera.fov);
   }
 
+  private async openDebug() {
+    if (!import.meta.env.DEV) return;
+    const { DebugPanel } = await import("./debug/panel");
+    if (this.disposed) return;
+    this.debug = new DebugPanel(this.container, (action) => this.performDebugAction(action));
+    this.input.onShortcut = (event) => this.debug?.handleShortcut(event) ?? false;
+    // ?tune and ?debug may load in either order.
+    this.addDebugTuning?.();
+  }
+
+  private performDebugAction(action: DebugAction) {
+    if (!import.meta.env.DEV || !this.debug || !this.run) return;
+    if (action === "spawnPortal") {
+      if (this.paused || this.frozen || this.crashedAt !== null || !this.view.ready) return;
+      this.run.spawnDebugPortal(this.debug.settings.portalAhead);
+    } else if (action === "win") {
+      if (this.paused) this.togglePause();
+      this.run.debugWin();
+      this.input.releasePointer();
+    }
+    this.events.hud(this.hud(this.clock()));
+  }
+
+  private addDebugTuning: (() => void) | null = null;
+
   private async openTuning() {
     const { default: GUI } = await import("lil-gui").catch((error: unknown) => {
       reloadForNewBuild(error);
       throw error;
     });
+    if (this.disposed) return;
     const gui = new GUI({ title: "Tuning (?tune)", width: 300 });
     const save = () => saveTuning();
 
@@ -1410,6 +1450,16 @@ export class Game implements RunHost {
       .listen();
     view.add(FX, "autoQuality").name("auto quality").onChange(save);
     const syncQuality = setInterval(() => (settings.quality = this.quality), 500);
+
+    if (import.meta.env.DEV) {
+      let added = false;
+      this.addDebugTuning = () => {
+        if (!this.debug || added) return;
+        added = true;
+        this.debug.addControls(gui.addFolder("Debug playtest (not saved)"));
+      };
+      this.addDebugTuning();
+    }
 
     // Physics isn't saved: a forgotten tweak shouldn't follow you into races
     const flight = gui.addFolder("Flight physics (not saved)");

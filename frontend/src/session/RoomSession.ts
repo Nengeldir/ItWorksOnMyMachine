@@ -90,6 +90,7 @@ export class RoomSession {
     if (!game) {
       game = new Game(this.container, {
         seed: info.seed,
+        allowDebug: false,
         clock: this.client.clock.now,
         controls: this.settings,
         color: me?.color ?? "#ffffff",

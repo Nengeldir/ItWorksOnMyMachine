@@ -249,6 +249,10 @@ doesn't fly the course itself.
 | `frontend/src/game/death.ts`           | Crash animations: how a crash plays out (looks only)     |
 | `frontend/src/game/items/`             | Item models and animations; `/?gallery` shows them all   |
 | `frontend/src/game/tuning.ts`          | Every look-and-feel constant, for the `?tune` panel      |
+| `frontend/src/game/debugMode.ts`       | Development-build and URL gate for local playtesting     |
+| `frontend/src/game/debug/`            | Lazy-loaded playtest panel and shortcut action registry  |
+| `frontend/src/game/run/controller.ts`  | Adventure progression, upgrades and portals (including dev overrides) |
+| `frontend/tests/debug.test.mjs`        | Playtest gating, shortcuts and portal transition checks  |
 | `frontend/src/game/pilots.ts`          | Remote players and ghosts, with interpolation            |
 | `frontend/src/net/`                    | Server clock and the room connection (SSE + POST)        |
 | `frontend/src/session/`                | Solo and room sessions: wire a Game to the network and UI |
@@ -319,6 +323,45 @@ them up. Deployed, HTTP/2 lifts the limit.
 
 In development, the running game is available as `window.__game` in the
 browser console, handy for teleporting around or poking at the race state.
+
+### Debug playtesting
+
+Run `npm run dev` in `frontend/`, then open
+`http://localhost:5173/?run=42&debug` for an adventure, or add `&debug` to a
+time trial (`/?seed=42&debug`) or explore URL. The opt-in survives navigation
+through the menu. Remove `debug` from the URL and reload to leave test mode.
+The panel is collapsible; press `Esc` to free the mouse before editing it.
+It starts collapsed on narrow screens.
+
+| Control | Meaning |
+| :--- | :--- |
+| `Shift+P` / Spawn portal | Adventure only, after take-off: spawns a portal in front of the pilot. Flying through it opens the normal upgrade picker and next biome. Pressing it again replaces the temporary portal; the normal exit remains. |
+| Portal distance (m) | Distance ahead for the spawned portal, default 40 m. |
+| `Shift+O` / Win adventure | Opens the normal victory/end screen immediately, including from the intro, pause or upgrade picker. Keeps the current score and visited-biome history; does not save a best score. |
+| `P` | Normal pause/resume; in debug mode `Shift+P` takes precedence. |
+
+Portal/win actions have no effect in time trials or explore mode. Shortcuts
+require Shift, ignore held-key repeats, and do not run while typing in
+editable fields. Both actions also have buttons in the panel and `?tune`.
+All settings belong to the current game and reset on restart; they are never saved in
+localStorage. Test adventures do not update best scores, and test time trials
+do not start the server clock or submit times or ghosts.
+
+The mode is disabled in multiplayer rooms and menu backdrops. Vite's
+`import.meta.env.DEV` excludes the panel and portal overrides from
+`npm run build`, including Docker deployments; adding `?debug` to the public
+site cannot enable them. Use the local dev server or an SSH-forwarded dev
+server for playtests. This does not add an administrator mode to production.
+
+To extend it, add defaults and a control descriptor in
+[`tuning.ts`](frontend/src/game/tuning.ts), a typed setting in
+[`debugMode.ts`](frontend/src/game/debugMode.ts), and the corresponding
+`DEV`-guarded consumer. Add buttons/shortcuts to the `DEBUG_ACTIONS` registry
+in `game/debug/actions.ts` and handle them in `Game.performDebugAction`.
+The same control descriptors appear in
+`?debug&tune`, without mixing gameplay overrides into persisted visual tuning.
+Run `npm run test:debug` for the targeted checks (Node 22.15+).
+See [the implementation and verification record](docs/debug-mode.md).
 
 ## Ideas for Next Steps
 

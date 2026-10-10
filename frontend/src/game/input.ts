@@ -35,6 +35,8 @@ function isTyping(event: KeyboardEvent): boolean {
 export class Input {
   settings: ControlSettings;
   onAction?: (action: InputAction) => void;
+  /** Optional mode-specific shortcuts take precedence over normal bindings. */
+  onShortcut?: (event: KeyboardEvent) => boolean;
   locked = false;
   private readonly element: HTMLElement;
   private readonly keys = new Set<string>();
@@ -75,6 +77,10 @@ export class Input {
 
   private onKeyDown = (event: KeyboardEvent) => {
     if (isTyping(event)) return;
+    if (this.onShortcut?.(event)) {
+      event.preventDefault();
+      return;
+    }
     if (event.repeat && !this.keys.has(event.code)) return;
     this.keys.add(event.code);
     // Arrow keys would scroll the page; leave them alone on buttons and panels

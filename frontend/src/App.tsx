@@ -4,6 +4,7 @@ import type { BiomeId } from "./game/world/biomes";
 import { ExploreSession } from "./session/ExploreSession";
 import GameScreen from "./components/GameScreen";
 import { randomSeed } from "./game/rng";
+import { debugModeRequested } from "./game/debugMode";
 import Menu from "./components/Menu";
 import { type Settings, loadSettings, saveSettings } from "./storage";
 
@@ -60,7 +61,9 @@ const App = () => {
   }, []);
 
   const go = (next: Screen) => {
-    history.pushState(null, "", urlFor(next));
+    const url = new URL(urlFor(next), location.origin);
+    if (debugModeRequested()) url.searchParams.set("debug", "");
+    history.pushState(null, "", url.pathname + url.search);
     setScreen(next);
   };
 

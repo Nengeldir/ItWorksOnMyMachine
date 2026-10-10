@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { DebugSettings } from "../debugMode";
 import type { Flight, FlightMods } from "../flight";
 import { plainMods } from "../flight";
 import { clamp } from "../math";
@@ -40,6 +41,7 @@ export interface RunHost {
   readonly world: World;
   readonly view: WorldView;
   readonly hovering: boolean;
+  readonly debugSettings?: DebugSettings | null;
   /** Style points flown in this level so far */
   readonly style: number;
   setLevel(level: Level): void;
@@ -146,6 +148,7 @@ export class RunController {
   private readonly passed = new Set<number>();
   private lastGate = 0; // checkpoints: how many gates to respawn after
   private portals: Portal[] = [];
+  private debugPortal: Portal | null = null;
   private levelTime = 0;
   private phaseTime = 0;
   private stamina = 0;
@@ -212,20 +215,17 @@ export class RunController {
     this.disposeLevel();
     this.path.push(biome);
     this.host.setLevel(runLevel(this.seed, this.level, biome));
-    const world = this.host.world;
     this.passed.clear();
     this.lastGate = 0;
     this.chain = 0;
     this.levelTime = 0;
     this.styleBanked = false;
     this.host.view.setRings("race", 0);
-    // The portal stands at the last gate
-    const { course } = world;
-    const finish = course.rings[course.rings.length - 1];
-    const last = this.level >= RUN_LENGTH;
-    const color = last ? "#ffe9a0" : BIOMES[destination(this.seed, this.level, this.path)].portals.color;
-    this.portals = [new Portal(finish.position.clone().addScaledVector(finish.normal, 3), finish.normal, 15, color)];
-    for (const portal of this.portals) this.group.add(portal.group);
+    // Every normal level has a single exit just beyond the final gate.
+    const finish = this.host.world.course.rings.at(-1)!;
+    const portal = new Portal(finish.position.clone().addScaledVector(finish.normal, 3), finish.normal, 15, this.portalColor);
+    this.portals.push(portal);
+    this.group.add(portal.group);
     // Abilities start charged
     this.stamina = 2 + this.stats.flap;
     this.hoverFuel = this.hoverMax;
@@ -237,6 +237,42 @@ export class RunController {
   private disposeLevel() {
     this.portals.forEach((p) => p.dispose());
     this.portals = [];
+    this.debugPortal = null;
+  }
+
+  private get portalColor(): string {
+    return this.level >= RUN_LENGTH ? "#ffe9a0" : BIOMES[destination(this.seed, this.level, this.path)].portals.color;
+  }
+
+  /** A dev playtest exit ahead of the pilot; repeated presses replace it, leaving the normal exit intact. */
+  spawnDebugPortal(distance: number) {
+    if (!import.meta.env.DEV || !this.host.debugSettings || this.frozen || !Number.isFinite(distance) || distance <= 0) return;
+    if (this.debugPortal) {
+      this.portals.splice(this.portals.indexOf(this.debugPortal), 1);
+      this.debugPortal.dispose();
+    }
+    const flight = this.host.flight;
+    this.debugPortal = new Portal(flight.position.clone().addScaledVector(flight.forward, distance), flight.forward, 15, this.portalColor);
+    this.portals.push(this.debugPortal);
+    this.group.add(this.debugPortal.group);
+  }
+
+  /** Use the real win/summary event without pretending that skipped biomes were visited. */
+  debugWin() {
+    if (!import.meta.env.DEV || !this.host.debugSettings || this.ended) return;
+    if (!this.styleBanked) {
+      this.score += Math.round(this.host.style);
+      this.styleBanked = true;
+    }
+    this.through = null;
+    this.exiting = false;
+    this.finale?.dispose();
+    this.finale = null;
+    this.wormhole.place(this.host.camera, this.host.flight.forward, false, 0, this.host.pixelHeight);
+    this.host.insideWormhole(false);
+    this.host.veil(0);
+    this.host.whiteOut(0);
+    this.finish();
   }
 
   private get hoverMax(): number {
