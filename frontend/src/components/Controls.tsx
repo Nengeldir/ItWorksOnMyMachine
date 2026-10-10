@@ -13,10 +13,12 @@ const Controls = ({ settings, onSettings }: ControlsProps) => (
       <li>
         <kbd>Mouse</kbd> or <kbd>WASD</kbd> / arrows or a gamepad stick: pitch and roll
       </li>
+      <li><kbd>Shift</kbd> boost · <kbd>Space</kbd> brake (gamepad RT / LT). Release boost to recharge.</li>
+      <li>Adventure wingbeat: <kbd>C</kbd> / gamepad A.</li>
       <li>Bank to turn. Dive for speed, pull up to trade it for height.</li>
       <li>Skim the rock and trees for style points and a speed boost.</li>
       <li>
-        <kbd>Q</kbd> / <kbd>E</kbd> or double-tap a roll key: barrel roll
+        <kbd>Q</kbd> / <kbd>E</kbd>: barrel roll
       </li>
       <li>
         <kbd>R</kbd> respawn · <kbd>M</kbd> mute · <kbd>Esc</kbd> free the mouse

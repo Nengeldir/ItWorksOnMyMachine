@@ -7,6 +7,7 @@ const desired = new Vector3();
 const blendedUp = new Vector3();
 const target = new Vector3();
 const pulled = new Vector3();
+const chase = new Vector3();
 
 /** Third-person chase camera: trails behind, banks with you, widens with speed */
 export class CameraRig {
@@ -16,6 +17,7 @@ export class CameraRig {
   private fov = CAMERA.fov;
   private punch = 0; // extra degrees of FOV that decay: a kick when passing a gate
   private time = 0;
+  private clearFraction = 1;
 
   constructor(aspect: number) {
     this.camera = new PerspectiveCamera(70, aspect, 0.5, 6000);
@@ -31,6 +33,9 @@ export class CameraRig {
 
   /** Jumps straight behind the pilot (after a respawn) */
   snap(position: Vector3, forward: Vector3, up: Vector3, speed: number) {
+    this.clearFraction = 1;
+    this.punch = 0;
+    this.fov = CAMERA.fov + clamp((speed - 30) * CAMERA.fovPerSpeed, 0, CAMERA.fovMax);
     this.offset.copy(this.desiredOffset(forward, up, speed));
     this.up.copy(WORLD_UP);
     this.update(0, position, forward, up, speed, 0, null);
@@ -44,10 +49,17 @@ export class CameraRig {
       speed: number,
       proximity: number,
       clearance: ((x: number, y: number, z: number) => number) | null,
+      velocity?: Vector3,
+      boost = 0,
   ) {
     this.time += dt;
     const k = 1 - Math.exp(-dt * CAMERA.stiffness);
-    this.offset.lerp(this.desiredOffset(forward, up, speed), k);
+    chase.copy(forward);
+    if (velocity && velocity.lengthSq() > 1) {
+      target.copy(velocity).normalize();
+      chase.lerp(target, CAMERA.pathFollow).normalize();
+    }
+    this.offset.lerp(this.desiredOffset(chase, up, speed).addScaledVector(chase, -boost * CAMERA.boostDistance), k);
     this.camera.position.copy(position).add(this.offset);
 
     // Shake when skimming the ground at speed
@@ -60,26 +72,30 @@ export class CameraRig {
     const calm = clamp((45 - speed) / 25, 0, 1);
     this.camera.position.y += Math.sin(this.time * 0.9) * 0.15 * calm;
 
-    // Behind rock? Pull in towards the pilot until the view is clear
-    if (clearance && clearance(this.camera.position.x, this.camera.position.y, this.camera.position.z) < 1.5) {
-      let clear = 0;
-      let blocked = 1;
-      for (let i = 0; i < 6; i++) {
-        const mid = (clear + blocked) / 2;
-        pulled.lerpVectors(position, this.camera.position, mid);
-        if (clearance(pulled.x, pulled.y, pulled.z) >= 1.5) clear = mid;
-        else blocked = mid;
+    // Walk the whole segment: a wall may sit between two clear endpoints.
+    let fraction = 1;
+    if (clearance) {
+      const length = this.camera.position.distanceTo(position);
+      const samples = Math.max(1, Math.ceil(length / 0.4));
+      for (let i = 1; i <= samples; i++) {
+        pulled.lerpVectors(position, this.camera.position, i / samples);
+        if (clearance(pulled.x, pulled.y, pulled.z) < 0.6) {
+          fraction = Math.max(0, (i - 1) / samples);
+          break;
+        }
       }
-      this.camera.position.lerpVectors(position, this.camera.position, clear);
     }
+    this.clearFraction = fraction < this.clearFraction ? fraction
+      : this.clearFraction + (fraction - this.clearFraction) * (1 - Math.exp(-dt * 4));
+    this.camera.position.lerpVectors(position, this.camera.position, this.clearFraction);
 
     // Roll the horizon with the pilot, but only partly
     blendedUp.copy(WORLD_UP).lerp(up, CAMERA.rollFollow).normalize();
     this.up.lerp(blendedUp, 1 - Math.exp(-dt * 5)).normalize();
     this.camera.up.copy(this.up);
-    this.camera.lookAt(target.copy(position).addScaledVector(forward, CAMERA.lookAhead).addScaledVector(up, 1.2));
+    this.camera.lookAt(target.copy(position).addScaledVector(chase, CAMERA.lookAhead).addScaledVector(up, 1.2));
 
-    this.setFov(CAMERA.fov + clamp((speed - 30) * CAMERA.fovPerSpeed, 0, CAMERA.fovMax), dt);
+    this.setFov(CAMERA.fov + clamp((speed - 30) * CAMERA.fovPerSpeed + boost * CAMERA.boostFov, 0, CAMERA.fovMax), dt);
   }
 
   /** After a crash: stay put and look at the wreck */
@@ -98,7 +114,7 @@ export class CameraRig {
   private setFov(fov: number, dt: number) {
     this.fov += (fov - this.fov) * (1 - Math.exp(-dt * 3));
     this.punch *= Math.exp(-dt * 4);
-    const total = this.fov + this.punch;
+    const total = Math.min(CAMERA.fov + CAMERA.fovMax, this.fov + this.punch);
     if (Math.abs(this.camera.fov - total) > 0.01) {
       this.camera.fov = total;
       this.camera.updateProjectionMatrix();
