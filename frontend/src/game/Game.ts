@@ -42,8 +42,12 @@ const QUALITY = [
   { pixelRatio: 1.5, particles: 0.75 },
   { pixelRatio: 2, particles: 1 },
 ] as const;
+const DRIFT_SPEED = 14; // m/s along the course, for the menu's camera
 
 export type RaceState = "free" | "countdown" | "racing" | "finished";
+
+/** The game as a menu backdrop: "drift" glides a camera over the course, "chase" follows an autopiloted pilot */
+export type AttractMode = "drift" | "chase";
 
 export interface Participant {
   id: string;
@@ -100,6 +104,8 @@ export interface GameOptions {
   controls: ControlSettings;
   color: string;
   events: GameEvents;
+  /** Set for a menu backdrop: no player input, no audio, flies itself */
+  attract?: AttractMode;
 }
 
 /** Live state for the network: [x,y,z], [qx,qy,qz,qw], speed, checkpoints */
@@ -159,6 +165,8 @@ export class Game implements RunHost {
   private ghosts: Pilot[] = [];
   private readonly clock: () => number;
   private readonly events: GameEvents;
+  private readonly attract: AttractMode | null;
+  private driftZ = 0;
   world!: World;
   view!: WorldView;
   /** The roguelike run, when this game is one (never in races) */
@@ -195,6 +203,7 @@ export class Game implements RunHost {
     this.clock = options.clock;
     this.events = options.events;
     loadTuning();
+    this.attract = options.attract ?? null;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, QUALITY[this.quality].pixelRatio));
@@ -209,10 +218,12 @@ export class Game implements RunHost {
       if (action === "barrelLeft" || action === "barrelRight") this.barrelRoll(action === "barrelLeft" ? -1 : 1);
       if ((action === "dash" || action === "flap") && this.crashedAt === null) this.run?.ability(action);
     };
-    this.renderer.domElement.addEventListener("click", this.engage);
-    // Audio may only start after a user gesture: take the first one, mouse or keyboard
-    window.addEventListener("keydown", this.startAudio, { once: true });
-    window.addEventListener("pointerdown", this.startAudio, { once: true });
+    if (!this.attract) {
+      this.renderer.domElement.addEventListener("click", this.engage);
+      // Audio may only start after a user gesture: take the first one, mouse or keyboard
+      window.addEventListener("keydown", this.startAudio, { once: true });
+      window.addEventListener("pointerdown", this.startAudio, { once: true });
+    }
 
     this.particles = new Particles();
     this.softParticles = new Particles(3000, true);
@@ -565,6 +576,32 @@ export class Game implements RunHost {
     return hit.distanceTo(ring.position) <= ring.radius + 1;
   }
 
+  /** Steers along the racing line, like a player who never misses */
+  private autopilot(): FlightInput {
+    const f = this.flight;
+    const target = this.world.course.pointAt(f.position.z + 35, tmp).sub(f.position);
+    const ahead = Math.max(target.dot(f.forward), 1);
+    const bank = clamp(2.2 * Math.atan2(target.dot(f.right), ahead), -1.1, 1.1);
+    return { roll: clamp(2.5 * (bank - f.bank), -1, 1), pitch: clamp(3 * Math.atan2(target.dot(f.up), ahead), -1, 1) };
+  }
+
+  /** Glides the camera high over the course, looking ahead and down at the islands */
+  private drift(dt: number) {
+    const { course } = this.world;
+    this.driftZ += dt * DRIFT_SPEED;
+    if (this.driftZ > course.endZ) this.driftZ = course.start.z;
+    const camera = this.rig.camera;
+    course.pointAt(this.driftZ, camera.position).add(tmp.set(0, 90, -150));
+    camera.up.set(0, 1, 0);
+    camera.lookAt(course.pointAt(this.driftZ + 450, tmp).add(tmp2.set(0, -110, 0)));
+    if (camera.fov !== 55) {
+      camera.fov = 55;
+      camera.updateProjectionMatrix();
+    }
+    this.avatar.visible = false;
+    this.fx.hide();
+  }
+
   private get multiplier(): number {
     return 1 + Math.min(this.run ? this.run.multiplierCap : 4, Math.floor(this.combo / 1.5));
   }
@@ -782,13 +819,13 @@ export class Game implements RunHost {
       }
     }
 
-    this.input0 = this.input.sample(dt);
+    this.input0 = this.attract === "chase" ? this.autopilot() : this.input.sample(dt);
     // Before a race, wait for the islands around you to show up: no flying into invisible rock
     // In a run, also while held in the tunnel between biomes
     const waiting = (!this.view.ready && this.raceState === "free") || this.frozen;
     if (this.crashedAt !== null) {
       if (this.elapsed - this.crashedAt > RESPAWN_DELAY) this.respawnNow();
-    } else if (this.raceState !== "countdown" && !waiting) {
+    } else if (this.raceState !== "countdown" && !waiting && this.attract !== "drift") {
       this.accumulator += dt;
       let steps = 0;
       while (this.accumulator >= STEP && steps++ < MAX_STEPS_PER_FRAME) {
@@ -798,6 +835,7 @@ export class Game implements RunHost {
       }
       if (steps >= MAX_STEPS_PER_FRAME) this.accumulator = 0;
     }
+    if (this.attract === "chase" && this.flight.position.z > this.world.course.endZ + 100) this.respawn(0);
 
     // Draw between the last two physics states
     const alpha = clamp(this.accumulator / STEP, 0, 1);
@@ -807,7 +845,9 @@ export class Game implements RunHost {
     this.smoothProximity += (this.proximity - this.smoothProximity) * (1 - Math.exp(-dt * 8));
 
     const crashed = this.crashedAt !== null;
-    if (!crashed) {
+    if (this.attract === "drift") {
+      this.drift(dt);
+    } else if (!crashed) {
       this.avatar.update(dt, this.flight.speed, this.smoothProximity);
       // Frozen on the start line or while islands load: no motes, or they pile up into a glowing ball
       const moving = this.raceState !== "countdown" && !waiting;
@@ -833,7 +873,7 @@ export class Game implements RunHost {
     this.run?.frame(dt);
     this.gateMotes(dt);
     this.gateGlints(dt);
-    const flying = !crashed && this.raceState !== "countdown" && !waiting;
+    const flying = !crashed && this.raceState !== "countdown" && !waiting && this.attract !== "drift";
     this.speedLines.update(dt, body.position, flying ? this.flight.velocity : tmp.set(0, 0, 0), camera, this.particles.budget);
     this.ambient.update(dt, camera.position, flying ? this.flight.velocity : tmp.set(0, 0, 0), this.particles.budget);
 

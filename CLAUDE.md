@@ -159,6 +159,24 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Merged main's menu and UI redesign (Claude)
+
+`origin/main` (`e4e5732`) redesigned the menu and HUD around a live 3D
+backdrop and glass panels. Merged into `Pengyue` for the PR:
+- `Game.ts`: main's attract mode (`drift` camera, `chase` autopilot) on top of
+  the new avatar; drift hides the avatar and its ribbons and shows no speed
+  lines.
+- `paletteFor(seed)` no longer exists (palettes are Sky Isles' moods), so
+  `theme.ts` and `Menu.tsx` use `raceLevel(seed).palette`, which picks the
+  same palette.
+- Menu: Adventure is a third tab next to Solo and With friends.
+- `RunHud.css` used the old tokens (`--panel`, `--muted`, `--accent`,
+  `--accent-2`); now `--glass-strong`, `--ink-70`, `--warm`, `--warm-deep`.
+  The run and WebGL panels got the `glass` class.
+- Verified: build and lint pass. In Chrome: the menu backdrop, the Adventure
+  tab, a run's intro and HUD in Sky Isles (Winter), no console errors. The
+  upgrade picker and the summary were not looked at in the new style.
+
 ### 2026-10-10: Feathers and sidequests peeled off for later (Claude)
 
 Asked for: take the feathers (run lives) and sidequests out of `Pengyue` and
@@ -534,6 +552,10 @@ ported to the islands world:
   copy of only the bright parts).
 - Play a run by hand with a mouse: the title card animation, the portal's
   spot in every biome.
+- The UI theme (`useUiTheme`) follows the map in time trials and rooms only;
+  runs and explore keep the menu's colors. Theme by the level's palette.
+- Restyle the run HUD, upgrade picker and run summary for the glass look
+  (only the tokens were mapped).
 - **Feathers and sidequests are parked on `Pengyue-feathers-sidequests`**
   (see the change log). To bring them back, merge that branch's
   `run/quests.ts`, the biome `sidequests` and `portals.secret` data, lives in

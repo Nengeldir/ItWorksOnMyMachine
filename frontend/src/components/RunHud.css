@@ -22,7 +22,7 @@
 }
 
 .run-chain {
-  color: var(--accent-2);
+  color: var(--warm-deep);
   font-weight: 700;
 }
 
@@ -44,7 +44,7 @@
 
 .run-compass .label {
   font-size: 0.8rem;
-  color: var(--muted);
+  color: var(--ink-70);
   font-weight: 600;
 }
 
@@ -55,7 +55,7 @@
   list-style: none;
   margin: 0;
   padding: 0.6rem 0.8rem;
-  background: var(--panel);
+  background: var(--glass-strong);
   border-radius: var(--radius);
   min-width: 15rem;
   max-width: 20rem;
@@ -73,11 +73,11 @@
 }
 
 .run-objectives .check {
-  color: var(--accent-2);
+  color: var(--warm-deep);
 }
 
 .run-objectives .progress {
-  color: var(--muted);
+  color: var(--ink-70);
   font-size: 0.8rem;
 }
 
@@ -92,7 +92,7 @@
 .run-objectives .bar span {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  background: linear-gradient(90deg, var(--warm), var(--warm-deep));
 }
 
 .run-objectives li.done {
@@ -104,7 +104,7 @@
 }
 
 .run-objectives li.failed {
-  color: var(--muted);
+  color: var(--ink-70);
   text-decoration: line-through;
 }
 
@@ -121,7 +121,7 @@
   width: 3.4rem;
   height: 3.4rem;
   border-radius: 12px;
-  background: var(--panel);
+  background: var(--glass-strong);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -142,7 +142,7 @@
 
 .run-abilities .key {
   font-size: 0.65rem;
-  color: var(--muted);
+  color: var(--ink-70);
   z-index: 1;
 }
 
@@ -177,7 +177,7 @@
   top: 26%;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--panel);
+  background: var(--glass-strong);
   padding: 0.45rem 1.1rem;
   border-radius: 999px;
   font-weight: 700;
@@ -186,7 +186,7 @@
 }
 
 .run-toast b {
-  color: var(--accent-2);
+  color: var(--warm-deep);
 }
 
 @keyframes run-toast {
@@ -222,7 +222,7 @@
   font-weight: 700;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--ink-70);
 }
 
 .run-title h2 {
@@ -301,7 +301,7 @@
 .run-picker .card:hover,
 .run-picker .card:focus-visible {
   transform: translateY(-4px);
-  box-shadow: 0 0 0 2px var(--accent-2), 0 10px 30px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 0 2px var(--warm-deep), 0 10px 30px rgba(0, 0, 0, 0.4);
 }
 
 .run-picker .card.ability {
@@ -320,7 +320,7 @@
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: var(--muted);
+  color: var(--ink-70);
 }
 
 .run-picker .card .text {
