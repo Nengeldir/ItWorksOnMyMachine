@@ -15,6 +15,7 @@
 }
 
 .run-score strong {
+  font-family: var(--font-numbers);
   display: block;
   font-size: 2.4rem;
   font-weight: 800;
@@ -424,7 +425,6 @@
   font-size: clamp(2rem, 5vw, 2.8rem);
   font-weight: 900;
   font-style: italic;
-  letter-spacing: -0.02em;
   margin-top: -0.4rem;
 }
 
@@ -436,6 +436,7 @@
 }
 
 .finish-score strong {
+  font-family: var(--font-numbers);
   font-size: 2.6rem;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
@@ -466,6 +467,7 @@
 }
 
 .finish-stats dd {
+  font-family: var(--font-numbers);
   margin: 0;
   font-size: 1.15rem;
   font-weight: 800;

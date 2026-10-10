@@ -162,7 +162,7 @@ export const AUDIO = {
 
 const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, STRUCTURES, WATER, DEEP, RUN, AUTOPILOT, ABILITIES_FX, AUDIO } as const;
 const DEFAULTS = JSON.parse(JSON.stringify(GROUPS)) as typeof GROUPS;
-const STORAGE_KEY = "wingrace.tuning.speed-control-v1";
+const STORAGE_KEY = "windrider.tuning.speed-control-v1";
 
 type Group = Record<string, number | boolean>;
 

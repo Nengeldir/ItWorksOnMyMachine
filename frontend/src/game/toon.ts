@@ -87,7 +87,7 @@ export function toonMaterial(options: ToonOptions = {}): THREE.MeshToonMaterial 
         #include <opaque_fragment>`,
       );
   };
-  material.customProgramCacheKey = () => "wingrace-toon";
+  material.customProgramCacheKey = () => "windrider-toon";
   return material;
 }
 
@@ -100,6 +100,6 @@ export function outlineMaterial(width = 0.022, color: THREE.ColorRepresentation 
       .replace("void main() {", "uniform float outlineWidth;\nvoid main() {")
       .replace("#include <begin_vertex>", "vec3 transformed = position + normal * outlineWidth;");
   };
-  material.customProgramCacheKey = () => `wingrace-outline-${width}`;
+  material.customProgramCacheKey = () => `windrider-outline-${width}`;
   return material;
 }

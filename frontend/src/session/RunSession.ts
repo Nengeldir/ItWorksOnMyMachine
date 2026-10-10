@@ -7,7 +7,7 @@ import type { Settings } from "../storage";
 import { Store } from "./store";
 
 const COLOR = "#ff5d73";
-const BEST_KEY = "wingrace.runs";
+const BEST_KEY = "windrider.runs";
 
 export interface RunState {
   hud: HudState | null;
