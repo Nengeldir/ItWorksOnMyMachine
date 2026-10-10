@@ -4,6 +4,7 @@ import { type LeaderboardEntry, getLeaderboard } from "../api";
 import { formatTime } from "../format";
 import { randomSeed } from "../game/rng";
 import { type BiomeId, MAPS, featuredSeed, seedLevel } from "../game/world/biomes";
+import { keyboardBinding } from "../game/bindings";
 import { Course } from "../game/world/course";
 import { bestRun } from "../session/RunSession";
 import { clientId } from "../storage";
@@ -132,8 +133,8 @@ const MapSelect = ({ mode, daily, countdown, art = {}, onPreview, live, onPick, 
       if (e.key === "Escape") onBack();
       // Typing a seed: the keys are letters and digits (Enter submits the seed)
       else if (e.target instanceof HTMLInputElement) return;
-      else if (e.key === "ArrowLeft" || e.code === "KeyA") step(-1);
-      else if (e.key === "ArrowRight" || e.code === "KeyD") step(1);
+      else if (e.key === "ArrowLeft" || keyboardBinding(e) === "KeyA") step(-1);
+      else if (e.key === "ArrowRight" || keyboardBinding(e) === "KeyD") step(1);
       // A focused button takes Enter itself
       else if (e.key === "Enter" && !(e.target instanceof HTMLButtonElement)) pick();
       else return;

@@ -1,6 +1,6 @@
 import type { FlightInput } from "./flight";
 import { clamp } from "./math";
-import { DEFAULT_BINDINGS, type Bindings, type BindingAction } from "./bindings";
+import { DEFAULT_BINDINGS, keyboardBinding, type Bindings, type BindingAction } from "./bindings";
 export { keyLabel } from "./bindings";
 
 export interface ControlSettings {
@@ -62,7 +62,8 @@ export class Input {
   onTestAction?: (action: TestAction) => void;
   locked = false;
   private readonly element: HTMLElement;
-  private readonly keys = new Set<string>();
+  // Release by physical identity: the character can change while held (Shift, Caps Lock, layout).
+  private readonly keys = new Map<string, string>();
   private readonly observers = new Set<InputObserver>();
   // The mouse moves a virtual stick that drifts back to center
   private stickX = 0;
@@ -132,8 +133,10 @@ export class Input {
 
   private onKeyDown = (event: KeyboardEvent) => {
     if (event.defaultPrevented || controlsBlocked() || isTyping(event)) return;
+    const binding = keyboardBinding(event);
+    if (!binding) return;
     if (this.onTestAction && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
-      const action = event.code === "KeyP" ? "portal" : event.code === "KeyO" ? "win" : event.code === "KeyS" ? "speed" : event.code === "KeyI" ? "item" : null;
+      const action = binding === "KeyP" ? "portal" : binding === "KeyO" ? "win" : binding === "KeyS" ? "speed" : binding === "KeyI" ? "item" : null;
       if (action) {
         event.preventDefault();
         // Consume the chord before P pauses or S pitches, including held Shift boost.
@@ -143,14 +146,14 @@ export class Input {
       }
     }
     if (event.repeat && !this.keys.has(event.code)) return;
-    this.keys.add(event.code);
     // Arrow keys would scroll the page; leave them alone on buttons and panels
     const target = event.target as HTMLElement | null;
     const atGame = !target || target === document.body || target === this.element;
-    if (atGame && (event.code.startsWith("Arrow") || event.code === "Space")) event.preventDefault();
+    if (atGame && (binding.startsWith("Arrow") || binding === "Space")) event.preventDefault();
     if (event.repeat) return;
+    this.keys.set(event.code, binding);
     for (const action of ACTIONS) {
-      if (this.binding(action).includes(event.code)) {
+      if (this.binding(action).includes(binding)) {
         if (atGame || action === "pause") event.preventDefault();
         this.dispatchAction(action);
         break;
@@ -218,7 +221,11 @@ export class Input {
   }
 
   private key(action: BindingAction): number {
-    return this.binding(action).some((code) => this.keys.has(code)) ? 1 : 0;
+    const bindings = this.binding(action);
+    for (const binding of this.keys.values()) {
+      if (bindings.includes(binding)) return 1;
+    }
+    return 0;
   }
 
   sample(dt: number): FlightInput {
