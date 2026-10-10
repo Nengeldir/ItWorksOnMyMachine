@@ -56,7 +56,7 @@ export const LAGOON: Biome = {
   terrain: {
     kind: "v2",
     ground: {
-      depth: 0,
+      depth: 36, // the sandy floor follows the line down, like the sea over it
       steps: null,
       river: null,
       valley: 0,
@@ -70,7 +70,7 @@ export const LAGOON: Biome = {
       overhang: 0,
       roughness: 0.8,
       falloff: null,
-      level: -36,
+      level: null,
       extent: 1400,
     },
     groundSurface: 0,

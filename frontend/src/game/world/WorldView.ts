@@ -202,7 +202,7 @@ export class WorldView {
       this.material(material);
       this.terrainUniforms = uniforms;
       if (world.biome.vegetation.kind === "flora") this.flora = new FloraView(world, this.group);
-      if (world.steps || world.seaLevel !== null || world.islandFalls.length) {
+      if (world.steps || world.hasSea || world.islandFalls.length) {
         this.water = new WaterView(world);
         this.group.add(this.water.group);
       }

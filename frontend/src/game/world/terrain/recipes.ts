@@ -18,8 +18,8 @@ export interface LandContext {
   ground: Ground | null;
   rng: Rng;
   noise: Noise;
-  /** Height of the sea, if the biome has one (stacks get a wave-cut notch there) */
-  seaLevel: number | null;
+  /** Height of the sea at z, if the biome has one (stacks get a wave-cut notch there) */
+  seaAt: ((z: number) => number | null) | null;
 }
 
 const p = new Vector3();
@@ -69,7 +69,7 @@ export function buildLand(ctx: LandContext, recipe: LandRecipe) {
 
 /** A spire, notched by the waves where it stands in the sea */
 function column(ctx: LandContext, base: Vector3, tip: Vector3, r0: number, r1: number, look: ShapeLook): Spire {
-  const sea = ctx.seaLevel;
+  const sea = ctx.seaAt ? ctx.seaAt(base.z) : null;
   const notch = sea !== null && base.y < sea && tip.y > sea + 4 ? { y: sea + 1.5, depth: r0 * 0.22 } : undefined;
   return new Spire(base, tip, r0, r1, look, notch);
 }
@@ -217,10 +217,10 @@ function buildFeature(ctx: LandContext, f: Feature) {
     }
   } else if (f.kind === "islets") {
     // Low sandy islands just breaking the sea's surface
-    const sea = ctx.seaLevel;
-    if (sea === null) return;
+    if (!ctx.seaAt) return;
     for (let i = 0; i < f.count; i++) {
       const { x, z } = scatter(ctx, f.lateral);
+      const sea = ctx.seaAt(z)!;
       const r = range(rng, f.radius[0], f.radius[1]);
       const h = range(rng, 6, 10);
       const yaw = range(rng, 0, Math.PI);
