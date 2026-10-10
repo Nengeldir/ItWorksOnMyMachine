@@ -17,6 +17,7 @@ import { useMediaToggle } from "../media";
 import { type Settings, clientId } from "../storage";
 import { useUiTheme } from "../theme";
 import Controls from "./Controls";
+import Coach from "./Coach";
 import { HelpButton } from "./Help";
 import Hud from "./Hud";
 import Leaderboard from "./Leaderboard";
@@ -60,6 +61,9 @@ interface ScreenProps {
   settings: Settings;
   onSettings: (settings: Settings) => void;
   onExit: () => void;
+  /** The newcomer said yes to the tutorial: coach them through the controls before the first level */
+  tutorial?: boolean;
+  onTutorialEnd?: () => void;
 }
 
 const TopBar = ({ title, onExit, children }: { title: string; onExit: () => void; children?: ReactNode }) => (
@@ -74,6 +78,8 @@ const TopBar = ({ title, onExit, children }: { title: string; onExit: () => void
     </div>
   </div>
 );
+
+const noop = () => {};
 
 // Roomy screens show panels in full; narrow ones only the heading and the main buttons until opened
 const ROOMY = "(min-width: 700px)";
@@ -116,7 +122,7 @@ const ReadyCard = ({ children }: { children: ReactNode }) => <div className="rea
 
 // --- Time trial ------------------------------------------------------------------
 
-const SoloScreen = ({ seed, settings, onSettings, onExit }: ScreenProps & { seed: number }) => {
+const SoloScreen = ({ seed, settings, onSettings, onExit, tutorial, onTutorialEnd = noop }: ScreenProps & { seed: number }) => {
   const [session] = useState(() => new SoloSession(seed, clientId(), settings));
   const ref = useMountedSession(session, settings);
   const { hud, stage, result, leaderboard, ghosts, error } = useSyncExternalStore(
@@ -124,9 +130,11 @@ const SoloScreen = ({ seed, settings, onSettings, onExit }: ScreenProps & { seed
     session.store.get,
   );
   useUiTheme(seed);
+  // The tutorial runs in the warm-up, before the clock: the start button waits for it
+  const coaching = !!tutorial && stage === "ready" && !error;
 
   useHotkeys({
-    Enter: () => stage !== "racing" && session.start(),
+    Enter: () => stage !== "racing" && !coaching && session.start(),
     Backspace: () => stage === "racing" && session.abort(),
   });
 
@@ -137,7 +145,8 @@ const SoloScreen = ({ seed, settings, onSettings, onExit }: ScreenProps & { seed
       <TopBar title={`Time trial · #${seed}${hud ? ` · ${hud.paletteName}` : ""}`} onExit={onExit} />
       {error && <div className="banner glass">{error}</div>}
 
-      {stage === "ready" && !error && (
+      {coaching && <Coach onEnd={onTutorialEnd} />}
+      {stage === "ready" && !error && !coaching && (
         <ReadyCard>
           <button className="primary start-cta" onClick={() => session.start()}>
             Start the run <kbd>Enter</kbd>
@@ -189,7 +198,7 @@ const SoloScreen = ({ seed, settings, onSettings, onExit }: ScreenProps & { seed
 
 // --- Race room -------------------------------------------------------------------
 
-const RoomScreen = ({ code, settings, onSettings, onExit }: ScreenProps & { code: string }) => {
+const RoomScreen = ({ code, settings, onSettings, onExit, tutorial, onTutorialEnd = noop }: ScreenProps & { code: string }) => {
   const [session] = useState(
     () => new RoomSession(code, { clientId: clientId(), nickname: settings.nickname }, settings),
   );
@@ -201,9 +210,14 @@ const RoomScreen = ({ code, settings, onSettings, onExit }: ScreenProps & { code
   useUiTheme(hud?.seed);
   const me = room?.players.find((p) => p.id === selfId);
   const lobby = room?.phase === "lobby";
+  // The tutorial runs in the lobby; if someone starts the race first, it's over
+  const coaching = !!tutorial && !!room && lobby;
+  useEffect(() => {
+    if (tutorial && room && !lobby) onTutorialEnd();
+  }, [tutorial, room, lobby, onTutorialEnd]);
 
   useHotkeys({
-    Enter: () => lobby && session.start(),
+    Enter: () => lobby && !coaching && session.start(),
     KeyN: () => lobby && session.newMap(),
   });
 
@@ -222,7 +236,8 @@ const RoomScreen = ({ code, settings, onSettings, onExit }: ScreenProps & { code
         <div className="banner glass">{message ?? "Connecting to the room…"}</div>
       )}
 
-      {room && lobby && (
+      {coaching && <Coach onEnd={onTutorialEnd} />}
+      {room && lobby && !coaching && (
         <ReadyCard>
           <div className="row">
             <button className="primary start-cta" onClick={() => session.start()}>
@@ -338,7 +353,7 @@ const ExploreScreen = ({ biome, seed, settings, onSettings, onExit, testMode = f
 
 // --- Roguelike run ------------------------------------------------------------------
 
-const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps & { seed: number; onNewRun: () => void }) => {
+const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onTutorialEnd = noop }: ScreenProps & { seed: number; onNewRun: () => void }) => {
   const [session] = useState(() => new RunSession(seed, settings));
   const ref = useMountedSession(session, settings);
   const { hud, stage, offers, next, arrived, summary, best, error } = useSyncExternalStore(session.store.subscribe, session.store.get);
@@ -356,6 +371,11 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
 
   // The title card shows for the run's "arrive" phase, its first seconds in a biome
   const showTitle = arrived && run?.phase === "arrive" && stage === "flying";
+  // A run has no warm-up: the tutorial runs in the first level's opening seconds, and ends with it
+  const coaching = !!tutorial && stage === "flying";
+  useEffect(() => {
+    if (tutorial && stage !== "intro" && stage !== "flying") onTutorialEnd();
+  }, [tutorial, stage, onTutorialEnd]);
 
   return (
     <div className="game">
@@ -368,6 +388,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
           <kbd>Enter</kbd> skip
         </div>
       )}
+      {coaching && <Coach onEnd={onTutorialEnd} />}
       {showTitle && arrived && <TitleCard level={arrived.level} length={run!.length} biome={arrived.biome} />}
       {stage !== "summary" && (
         <TopBar

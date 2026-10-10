@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { type User, getMe } from "./api";
 import GameScreen from "./components/GameScreen";
 import { randomSeed } from "./game/rng";
-import { FirstFlight, HowToFly } from "./components/Help";
+import { FirstFlight } from "./components/Help";
 import Menu from "./components/Menu";
 import { type Screen, screenFromSearch, urlFor } from "./route";
 import {
@@ -28,6 +28,7 @@ const App = () => {
   const [asked, setAsked] = useState(false);
   const [tutorial, setTutorial] = useState(false);
   const [forceTutorial] = useState(() => new URLSearchParams(location.search).has("tutorial"));
+  const endTutorial = useCallback(() => setTutorial(false), []);
 
   useEffect(() => {
     getMe(clientId())
@@ -39,6 +40,8 @@ const App = () => {
   }, []);
 
   const go = (next: Screen) => {
+    // Leaving the game leaves the tutorial too
+    setTutorial(false);
     history.pushState(null, "", urlFor(next));
     setScreen(next);
   };
@@ -56,7 +59,6 @@ const App = () => {
   const answer = (how: TutorialState) => {
     if (me) saveTutorialState(me.id, how);
     setAsked(true);
-    // The interactive tutorial comes next; until then it's the key guide
     if (how === "started") setTutorial(true);
   };
 
@@ -69,9 +71,10 @@ const App = () => {
         onSettings={updateSettings}
         onExit={() => go({ kind: "menu" })}
         onNewRun={() => go({ kind: "run", seed: randomSeed() })}
+        tutorial={tutorial}
+        onTutorialEnd={endTutorial}
       />
       {playing && newcomer && !asked && <FirstFlight onStart={() => answer("started")} onSkip={() => answer("skipped")} />}
-      {tutorial && <HowToFly onClose={() => setTutorial(false)} />}
     </>
   );
 };

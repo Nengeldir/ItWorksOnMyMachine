@@ -85,7 +85,8 @@ docker compose up -d --build
 | `Shift+S` in `?test`       | Toggle the whole simulation and animations between ½× and 1× speed |
 | `?` (top right)           | How to fly: every key and what it does             |
 
-Pitch can be inverted in the menu. Diving turns height into speed, climbing
+New players are asked once whether they want a tutorial: a short flight that
+asks for each control in turn (skippable). Pitch can be inverted in the menu. Diving turns height into speed, climbing
 turns speed back into height. Flying within a few metres of rock or trees fills
 the orange bar: you get extra acceleration (up to 18 km/h a second), so risky
 lines are faster, and in an adventure style points with a growing multiplier.
