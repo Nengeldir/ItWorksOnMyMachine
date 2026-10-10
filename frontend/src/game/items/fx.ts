@@ -69,6 +69,7 @@ const USE_STYLE: Partial<Record<RunItemId, "eat" | "raise" | "toss">> = {
   windTether: "raise",
   mothCape: "raise",
   resonantChimes: "raise",
+  crystalUpdraft: "toss",
   anemoCatcher: "raise",
   starflakeShield: "raise",
   gliderWax: "raise",

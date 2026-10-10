@@ -38,6 +38,11 @@ export const ITEM = {
   phaseTime: 3,
   chimeTime: 12,
   chimeWiden: 5,
+  padTime: 15,
+  padDepth: 120,
+  padRadius: 6,
+  padHeight: 8,
+  padSpeed: 48,
   bag: 3, // items carried at once
   // Anemo Catcher: a bottled updraft
   updraftTime: 1.6, // seconds
@@ -61,7 +66,7 @@ export const ITEM = {
   fireWobble: 0.45, // how hard it yanks the controls about
 };
 
-export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether" | "mothCape" | "resonantChimes";
+export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether" | "mothCape" | "resonantChimes" | "crystalUpdraft";
 
 /** How an item saved the pilot from a hit */
 export type ItemSave = "starflake";
@@ -106,12 +111,14 @@ export const RUN_ITEMS: readonly RunItemInfo[] = [
   { id: "windTether", model: "windTether", name: "Tether of the Wind Spirit", icon: "🪝", rarity: 2, charges: 1, description: "A hook of light pulls you into a sharp swing around a nearby gate. Find an anchor within 110 metres." },
   { id: "mothCape", model: "mothCape", name: "Illusory Moth Cape", icon: "🦋", rarity: 3, charges: 1, description: "Become a spirit for three seconds and pass through rock. Trees, water and the abyss still matter." },
   { id: "resonantChimes", model: "resonantChimes", name: "Resonant Chimes", icon: "🎐", rarity: 1, charges: 1, description: "For twelve seconds, each gate sends a shockwave that widens the next gate." },
+  { id: "crystalUpdraft", model: "crystalUpdraft", name: "Crystallized Updraft", icon: "🌪️", rarity: 1, charges: 1, description: "Drop a wind trampoline on the surface below. Dip toward it to bounce high into the sky." },
 ];
 
 export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.id === id)!;
 
 /** How long each item's effect lasts once used (seconds) */
 const DURATION: Record<RunItemId, () => number> = {
+  crystalUpdraft: () => ITEM.padTime,
   resonantChimes: () => ITEM.chimeTime,
   mothCape: () => ITEM.phaseTime,
   windTether: () => ITEM.tetherTime,
@@ -163,7 +170,7 @@ export class Items {
   /** Seconds since each item's effect began (absent: not under way) */
   readonly active = new Map<RunItemId, number>();
   /** One-off moments, counted so the looks can tell a new one happened */
-  readonly cue = { pickup: 0, use: 0, full: 0, auto: 0, shatter: 0, phoenix: 0, chime: 0 };
+  readonly cue = { pickup: 0, use: 0, full: 0, auto: 0, shatter: 0, phoenix: 0, chime: 0, bounce: 0 };
   /** The item last picked up, and last used */
   picked: RunItemId | null = null;
   used: RunItemId | null = null;
@@ -180,6 +187,8 @@ export class Items {
   readonly ghostGates: { position: THREE.Vector3; normal: THREE.Vector3; radius: number; collected: boolean }[] = [];
   readonly path: THREE.Vector3[] = [];
   chimeTarget = -1;
+  readonly pad = new THREE.Vector3();
+  private readonly up = new THREE.Vector3(0,1,0);
   readonly anchor = new THREE.Vector3();
   readonly previous = new THREE.Vector3();
   private sampled = false;
@@ -274,6 +283,19 @@ export class Items {
       }
       if(!found)return false;
     }
+    if(id === "crystalUpdraft"){
+      if(!this.world)return false;
+      let found=false;
+      for(let down=2;down<ITEM.padDepth;down+=2){
+        const y=flight.position.y-down;
+        if(this.world.distance(flight.position.x,y,flight.position.z)<=0){
+          let low=y,high=y+2;
+          for(let j=0;j<8;j++){const middle=(low+high)/2;if(this.world.distance(flight.position.x,middle,flight.position.z)>0) high=middle;else low=middle;}
+          this.pad.set(flight.position.x,high+0.2,flight.position.z);found=true;break;
+        }
+      }
+      if(!found)return false;
+    }
     // ITEM STARTS
     // A shield already up would be wasted
     if (id === "starflakeShield" && this.active.has(id)) return false;
@@ -296,6 +318,17 @@ export class Items {
     if (how === "starflake") {
       this.active.delete("starflakeShield");
       this.cue.shatter++;
+    }
+  }
+
+  /** Bounce before the next flight step can collide with the surface. */
+  beforeFlight(flight: Flight) {
+    if(!this.active.has("crystalUpdraft"))return;
+    const height=flight.position.y-this.pad.y;
+    const horizontal=(flight.position.x-this.pad.x)**2+(flight.position.z-this.pad.z)**2;
+    if(height>=0 && height<=ITEM.padHeight && horizontal<=ITEM.padRadius**2 && flight.velocity.y<0){
+      flight.place(flight.position,this.up,ITEM.padSpeed,0);
+      this.active.delete("crystalUpdraft");this.cue.bounce++;
     }
   }
 

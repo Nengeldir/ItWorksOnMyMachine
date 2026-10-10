@@ -60,6 +60,7 @@ export const ITEMS: ItemInfo[] = [
   { id: "windTether", name: "Tether of the Wind Spirit", kind: "relic", slot: "hand" },
   { id: "mothCape", name: "Illusory Moth Cape", kind: "relic", slot: "hand" },
   { id: "resonantChimes", name: "Resonant Chimes", kind: "relic", slot: "hand" },
+  { id: "crystalUpdraft", name: "Crystallized Updraft", kind: "relic", slot: "hand" },
   // The design list's items (run/items.ts has what they do)
   { id: "anemoCatcher", name: "Anemo Catcher", kind: "relic", slot: "hand" },
   { id: "starflakeShield", name: "Starflake Shield", kind: "relic", slot: "hand" },

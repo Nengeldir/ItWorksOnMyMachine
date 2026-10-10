@@ -977,6 +977,7 @@ export class Game implements RunHost {
     this.prevPosition.copy(this.flight.position);
     this.prevQuaternion.copy(this.flight.quaternion);
     this.prevVelocity.copy(this.flight.velocity);
+    this.run?.items.beforeFlight(this.flight);
     // In a run, some items take the controls a little (the input scored and recorded stays the player's)
     this.flight.step(STEP, this.run ? this.run.steer(input) : input, this.proximity * this.proximity, FLIGHT, this.run ? this.run.flightMods : null);
 
