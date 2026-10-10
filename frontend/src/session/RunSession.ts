@@ -1,5 +1,6 @@
 import { Game, type HudState } from "../game/Game";
 import { debugModeRequested } from "../game/debugMode";
+import { dailySeed } from "../game/rng";
 import { runOrder, type RunSummary } from "../game/run/run";
 import type { Upgrade, UpgradeId } from "../game/run/upgrades";
 import { type BiomeId, runLevel } from "../game/world/biomes";
@@ -145,5 +146,7 @@ export class RunSession {
       }
     }
     this.store.set({ stage: "summary", summary, best: previous });
+    // Back to the default sky map, flown by itself, behind the finish screen
+    this.game?.victoryLap(dailySeed());
   }
 }

@@ -5,13 +5,11 @@ import { formatTime, ordinal } from "../format";
 import { webglAvailable } from "../game/webgl";
 import type { BiomeId } from "../game/world/biomes";
 import { RUN } from "../game/tuning";
-import { UPGRADES } from "../game/run/upgrades";
-import { BIOMES } from "../game/world/biomes";
 import { ExploreSession } from "../session/ExploreSession";
 import { RunSession } from "../session/RunSession";
 import { ITEMS } from "../game/items/models";
 import type { ItemGallery } from "../game/items/gallery";
-import { RunHud, TitleCard, UpgradePicker } from "./RunHud";
+import { FinishScreen, RunHud, TitleCard, UpgradePicker } from "./RunHud";
 import { RoomSession } from "../session/RoomSession";
 import { SoloSession } from "../session/SoloSession";
 import { type Settings, clientId } from "../storage";
@@ -333,6 +331,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
       else if (run?.phase === "finale") session.skip();
     },
     KeyN: () => stage === "summary" && onNewRun(),
+    Backspace: () => stage === "summary" && onExit(),
   });
 
   // The title card shows for the run's "arrive" phase, its first seconds in a biome
@@ -342,7 +341,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
     <div className="game">
       <div ref={ref} className="game-view" />
       {/* Nothing but the wormhole while passing through a portal */}
-      {hud && (hud.paused || (stage !== "pick" && run?.phase !== "portal" && run?.phase !== "finale" && run?.phase !== "won")) && <Hud hud={hud} />}
+      {hud && (hud.paused || (stage !== "pick" && stage !== "summary" && run?.phase !== "portal" && run?.phase !== "finale" && run?.phase !== "won")) && <Hud hud={hud} />}
       {run && stage !== "intro" && stage !== "summary" && stage !== "pick" && run.phase !== "finale" && run.phase !== "won" && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
       {run?.phase === "finale" && (
         <div className="finale-skip">
@@ -350,10 +349,12 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
         </div>
       )}
       {showTitle && arrived && <TitleCard level={arrived.level} length={run!.length} biome={arrived.biome} />}
-      <TopBar
-        title={`Run #${seed}${run ? ` · level ${run.level}/${run.length} · ${run.biome} · ${run.mood}` : ""}`}
-        onExit={onExit}
-      />
+      {stage !== "summary" && (
+        <TopBar
+          title={`Run #${seed}${run ? ` · level ${run.level}/${run.length} · ${run.biome} · ${run.mood}` : ""}`}
+          onExit={onExit}
+        />
+      )}
       {error && <div className="banner">{error}</div>}
 
       {stage === "intro" && !error && (
@@ -381,27 +382,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
       {stage === "pick" && !hud?.paused && <UpgradePicker offers={offers} next={next} onPick={(id) => session.pick(id)} />}
 
       {stage === "summary" && summary && (
-        <aside className="panel glass results">
-          <h2>The summit!</h2>
-          <p>
-            <strong>{summary.score.toLocaleString()}</strong> points
-            {best === null || summary.score > best ? " · a new best on this run!" : ` · your best is ${best.toLocaleString()}`}
-          </p>
-          <p>
-            {summary.levels} of 8 biomes: {summary.path.map((b) => BIOMES[b].name).join(" → ")}
-          </p>
-          <p>
-            {summary.upgrades.length > 0 && <>Upgrades: {summary.upgrades.map((id) => UPGRADES.find((u) => u.id === id)?.icon).join(" ")}</>}
-          </p>
-          <div className="row">
-            <button className="primary" onClick={() => session.again()}>
-              Fly it again <kbd>Enter</kbd>
-            </button>
-            <button onClick={onNewRun}>
-              New run <kbd>N</kbd>
-            </button>
-          </div>
-        </aside>
+        <FinishScreen summary={summary} best={best} onAgain={() => session.again()} onNewRun={onNewRun} onMenu={onExit} />
       )}
     </div>
   );

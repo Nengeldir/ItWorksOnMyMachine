@@ -68,6 +68,8 @@ docker compose up -d --build
 | `C` / gamepad `A`         | Wingbeat (adventure, with the upgrade)             |
 | Hold `F` / gamepad `B`    | Hover (adventure, with the upgrade)                |
 | `1` to `4`                | Choose an upgrade at a portal                      |
+| `Enter` in the finale     | Skip the cutscene                                  |
+| `Backspace` at the end    | Back to the menu from the finish screen            |
 | `Enter`                   | Start the run / the race, fly again                |
 | `N`                       | New map (in a room's lobby)                        |
 | `Esc`                     | Free the mouse                                     |
@@ -93,7 +95,8 @@ wormhole: a dark tube of twisting stars and drifting spirits, where you pick
 an upgrade while the next biome is built.
 
 The last portal opens onto empty space under the Milky Way: a short
-cutscene, then white light.
+cutscene, then white light, and you're back over the sky isles, flying by
+yourself, with your run's stats and what to do next.
 
 In an adventure there is no clock. Gates score more in a chain without a
 crash, and skimming earns style points. The arrow at the top of the screen
