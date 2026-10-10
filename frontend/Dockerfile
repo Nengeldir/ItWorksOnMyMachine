@@ -3,7 +3,8 @@ FROM node:24-alpine AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+# Log each download: the classic builder (no buildx) shows nothing until a step ends
+RUN npm ci --no-audit --no-fund --loglevel=http
 
 COPY . .
 RUN npm run build

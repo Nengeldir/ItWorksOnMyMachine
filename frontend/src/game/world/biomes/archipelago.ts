@@ -90,6 +90,13 @@ export const ARCHIPELAGO: Biome = {
     ],
     grass: { spacing: 2.6, height: [0.5, 0.9], color: "#7aa848", tip: "#e0d070", flowers: ["#ffffff", "#ffd84a", "#ff9ac8"], flowerShare: 0.2 },
   },
+  structures: [
+    // A temple on one of the islands; broken colonnades, prayer flags in the wind and lanterns on the others
+    { id: "monastery", landmark: 1100, spacing: 40, chance: 1, height: [24, 30], colors: { stone: "#fbf6ea", stone2: "#cfc4ac", roof: "#3f7fb8", cloth: "#f2c761" }, where: { lateral: [40, 420], on: "rock", facing: true } },
+    { id: "ruinColumn", spacing: 50, chance: 0.7, height: [8, 13], colors: { stone: "#f3ecdc", stone2: "#b8c79a", roof: "#f3ecdc" }, where: { lateral: [20, 500], on: "rock" } },
+    { id: "prayerPole", spacing: 60, chance: 0.6, height: [7, 10], colors: { stone: "#cfc4ac", roof: "#f2c761" }, where: { lateral: [20, 500], on: "rock", hilltop: true } },
+    { id: "stoneLantern", spacing: 24, chance: 0.4, height: [2.6, 3.4], colors: { stone: "#efe6d2", stone2: "#b8c79a", roof: "#3f7fb8" }, where: { lateral: [0, 400], on: "rock" } },
+  ],
   sky: { cloudSea: { depth: 260 }, puffs: 30, puffsBelow: true, puffLift: 0, banks: 6, mist: { mode: "camera" } },
   particles: {
     ambient: [

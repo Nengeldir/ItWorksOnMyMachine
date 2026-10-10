@@ -28,6 +28,12 @@ export interface ColliderShape {
   taper: number; // trunk radius at the top, as a share of the bottom
   canopy: { y: number; r: number; h: number } | null; // center height, radius, half height (shares)
   lean: number; // the top leans sideways by this share of the height (palms), along the plant's yaw
+  /** An upright disc facing along the yaw (a windmill's sails): center height and distance out front, radius, half thickness (shares of the height) */
+  disc?: { y: number; out: number; r: number; t: number };
+  /** A gate: two posts `x` either side along the model's x axis (radius `r`, up to `y`) and a bar of radius `bar` across their tops (shares of the height) */
+  gate?: { x: number; r: number; y: number; bar: number };
+  /** A long building: a box from the ground up to `y`, half as long as `x` along the model's x axis and half as deep as `z` (shares of the height) */
+  hall?: { x: number; y: number; z: number };
 }
 
 export interface SpeciesInfo {

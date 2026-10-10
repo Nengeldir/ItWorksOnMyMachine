@@ -249,6 +249,7 @@ doesn't fly the course itself.
 | `frontend/src/game/world/`             | Racing line, rock field, meshing workers, palettes, view |
 | `frontend/src/game/world/snap.ts`      | Snaps meshed land onto the distance field                |
 | `frontend/src/game/world/landCollider.ts` | Collisions with the land exactly as drawn             |
+| `frontend/src/game/world/structures/`  | Towers, lanterns and windmills in the adventure's biomes |
 | `frontend/src/game/flight.ts`          | Flight model and the pilot's hitbox                      |
 | `frontend/src/game/avatar.ts`          | The pilot's model and animation                          |
 | `frontend/src/game/death.ts`           | Crash animations: how a crash plays out (looks only)     |

@@ -118,6 +118,13 @@ export const GLACIER: Biome = {
     ],
     grass: null,
   },
+  structures: [
+    // A monastery above the valley; prayer flags on the shoulders of the hills, bell pavilions on the valley floor, huts on its sides
+    { id: "monastery", landmark: 1100, spacing: 60, chance: 1, height: [32, 38], colors: { stone: "#f1ece2", stone2: "#8d95a3", roof: "#b98a2e", cloth: "#9c3b2f", snow: "#fbfdff" }, where: { above: [5, 150], lateral: [90, 380], facing: true } },
+    { id: "prayerPole", spacing: 90, chance: 0.8, height: [7, 10], colors: { stone: "#8d95a3", roof: "#b98a2e" }, where: { above: [-25, 120], lateral: [30, 500], hilltop: true } },
+    { id: "bellPavilion", spacing: 60, chance: 0.6, height: [6, 8], colors: { stone: "#c9d1dc", stone2: "#8d95a3", roof: "#8f3a30", wood: "#7a3128", light: "#bfefff", snow: "#fbfdff" }, where: { above: [-34, 5], lateral: [20, 220] } },
+    { id: "stoneHut", spacing: 60, chance: 0.7, height: [4.5, 6], colors: { stone: "#aab3bf", stone2: "#7f8896", roof: "#5a4a40", snow: "#fbfdff" }, where: { above: [-30, 60], lateral: [30, 400] } },
+  ],
   sky: { cloudSea: { depth: 300 }, puffs: 40, puffsBelow: false, puffLift: 300, mist: { mode: "valley", above: 14, thickness: 40 } },
   particles: {
     ambient: [

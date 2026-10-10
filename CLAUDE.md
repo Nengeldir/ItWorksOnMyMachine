@@ -122,14 +122,16 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/run/` | The roguelike run. `run.ts`: run length, biome order from the run seed, portal destinations, scoring constants, `RunHud`. `upgrades.ts`: nine data-defined upgrades and the 3-of-N offer. `controller.ts`: `RunController` (levels, gates and chains, abilities as `FlightMods`, the portal transition: blur in, the next level built under the blur (`buildNext`), wormhole and upgrade pick while it streams, blur out with the palette cross-fade; HUD data). `finale.ts`: `Finale`, the last portal's cutscene (space under a world-fixed Milky Way with dust lanes and its core overhead, the camera's scripted pan beneath the pilot and back, then white light; Enter skips). `portal.ts`: the portal (ring, a flat disk like a window onto night, beam), the `Wormhole` (a camera-centred shell mapping the view onto an endless twisting tube of lensed stars and nebula with the exit glowing ahead, spirit motes, its own lights) and `screenSparkle`. Game's `veil(k)` (the `.portal-veil` DOM blur and sparkles) and `insideWormhole(on)` (hides the level: land, sky, soft particles, speed lines, ambient, gate effects) serve it |
 | `game/devtools.ts` | Dev builds only: `__shot(view)` (freeze, stream the land around a fixed camera, render once), `__raceHashes()` (the race map's determinism check), `__run(s)`, `__bench(q)` and `__crash(kind, after)` (flies into rock near the start and stops `after` s into the crash animation) on `window` |
 | `game/math.ts` | `clamp`, `smoothstep`, `smin` (smooth minimum for distance fields) |
-| `game/world/terrain/` | Generator v2 (every biome but Sky Isles). `noise.ts`: seeded fbm, ridged multifractal, domain-warped ridges, terraces. `shapes.ts`: distance-field primitives (spires and rock rings never thinner than `MIN_RADIUS`, 4.5 m, what the 6 m meshing grid always holds) with boxes, surface ids and grain (Island, NoiseIsland from 3D noise with tunnels, Mesa with ledges, Spire between two points, Slab, RockRing, Cap). `ground.ts`: the heightfield following the line (valley, hills, warped ridged mountains, terraces, crevasses, carved river channel, overhang noise on cliffs). `river.ts`: `Steps`, a valley floor stepping down in pools and falls, and the river in it (water distance for collisions). `field.ts`: `TerrainField`, ground + shapes as one field, `fill()` for whole blocks (same arithmetic as `distance()`). `recipes.ts`: gates and scenery from a biome's `LandRecipe`. `mesh.ts`: surface nets per LOD node, faces painted for the shader. `streamer.ts`: `LandStreamer`, the LOD octree (384/192/96 m nodes, 16 cells each). `material.ts`: the terrain shader |
+| `game/world/terrain/` | Generator v2 (every biome but Sky Isles). `noise.ts`: seeded fbm, ridged multifractal, domain-warped ridges, terraces. `shapes.ts`: distance-field primitives (spires and rock rings never thinner than `MIN_RADIUS`, 4.5 m, what the 6 m meshing grid always holds) with boxes, surface ids and grain (Island, NoiseIsland from 3D noise with tunnels, Mesa with ledges, Spire between two points, Slab, RockRing, Cap, Bridge: a humped stone bridge with one arch). `ground.ts`: the heightfield following the line (valley, hills, warped ridged mountains, terraces, crevasses, carved river channel, overhang noise on cliffs). `river.ts`: `Steps`, a valley floor stepping down in pools and falls, and the river in it (water distance for collisions). `field.ts`: `TerrainField`, ground + shapes as one field, `fill()` for whole blocks (same arithmetic as `distance()`). `recipes.ts`: gates and scenery from a biome's `LandRecipe`. `mesh.ts`: surface nets per LOD node, faces painted for the shader. `streamer.ts`: `LandStreamer`, the LOD octree (384/192/96 m nodes, 16 cells each). `material.ts`: the terrain shader |
 | `game/world/biomes/` | Biomes as data (`types.ts`: `Biome`, `Level`, `LevelKey`). `index.ts`: the registry, `raceLevel(seed)` (races and time trials: always Sky Isles) and `runLevel(runSeed, index, biome)` (roguelike levels, deterministic from the run seed and level number). `skyIsles.ts`: the race map, frozen |
 | `game/world/World.ts` | Everything a level decides: course, rock field, trees, palette; built from a `Level` (biome + seed + mood). `distance()` (rock, trees, water) for proximity, the camera and the fallback collisions; `otherDistance()` is everything but the rock (the rock collides as drawn, see `landCollider.ts`); `lost()` below the islands. No rendering |
 | `game/world/islands.ts` | `RockField`: the floating islands as one signed distance field (shapes melted with `smin`, roughened, a tube carved along the racing line) |
 | `game/world/mesher.ts`, `mesher.worker.ts` | Cuts chunks of the rock field into flat-shaded meshes in Web Workers, and places trees (from the grid's own vertices, so the race map's tree colliders never move; `treeSink` stretches a trunk down to snapped rock, drawn only). Workers rebuild the World from a `LevelKey` |
 | `game/world/snap.ts` | Brings the land drawn close to the distance field: `snapToSurface` moves surface-nets vertices onto the field's zero surface (Newton steps), each kept inside its own cell; `SurfaceCutter` splits faces whose edges or middles still stray more than 0.5 m (crack-free: an edge's split depends only on its ends; midpoints move only across their edge, a face's middle only along its normal) and drops pieces that end up facing into the rock (never drawn, so never hit). Used by both meshers (v2 at full detail only) |
 | `game/world/landCollider.ts` | `LandCollider`: collisions with exactly the land drawn. Every land mesh on screen (Sky Isles chunks, shown v2 nodes, added and removed with them) as triangles in a lazily built grid per mesh; exact tests: ball, segment (sweeps between steps), convex quad (separating axes) and signed `nearest` (the crash tumble). Rock that is in the field but not drawn (thinner than the 6 m grid) is never hit |
-| `game/world/trees.ts` | Tree colliders and their lookup index |
+| `game/world/trees.ts` | Tree colliders and their lookup index. `Plant` is the collider of generator-v2 plants and structures: a tapered trunk, an optional canopy ellipsoid, an optional upright disc (a windmill's sails) an optional gate (two posts and a bar, open in between) and an optional hall (a long box: the ETH building's wings) |
+| `game/world/flora/` | Generator-v2 vegetation: `species.ts` (sizes, colliders), `meshes.ts` (models from primitives), `placement.ts` (`placeFlora`, run in the mesher workers: structures first, then plants keeping clear of them, then grass), `view.ts` (`FloraView`: one instanced pool per kind, impostor atlas, grass), `pool.ts` |
+| `game/world/structures/` | Built things (20 kinds: towers, lanterns, windmills, a monastery, a lighthouse, shrine gates…) riding the flora pipeline as extra kinds after a biome's species. `kinds.ts`: `StructureId`, `STRUCTURE_INFO` (collider, footprint, plinth depth, spinning parts), `kindInfo(biome, kind)`. `models.ts`: `structureGeometry` (1 m tall, true proportions, vertex color / sway / glow / spin). A biome lists them in `Biome.structures` (`StructureSpec`: spacing, chance, height, colors, `landmark` for one per stretch of the course, `where` site rules: above, lateral, wet, `water` depth, forest, hilltop, `on` ground or rock, facing the line). Species plus structures must fit the impostor atlas (16). Run biomes only; they collide |
 | `game/world/course.ts` | The racing line (a descending curve in z) and the gates along it |
 | `game/world/palette.ts` | The `Palette` type: a lighting mood (colors, sun elevation and azimuth, night factor, mist, effect glow), and `sunDirection(palette)`. Each biome lists its moods |
 | `game/world/atmosphere.ts` | `ATMOSPHERE` light uniforms shared per biome; `atmospheric()` patches Lambert materials (sun-tinted haze matching the sky, valley mist, backlit rims, rock strata); `skyMaterial()` (gradient, HDR sun or moon disc and halo, painted clouds, twinkling stars at night) |
@@ -203,6 +205,36 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Merged main's structures into Pengyue for the PR (Claude)
+
+- Merged `origin/main` (`37ed067`: structures in every run biome, stone
+  bridges, the ETH and Einstein Easter eggs). Code merged cleanly; README's
+  file table and this file conflicted. Kept both sides: `MIN_RADIUS` and
+  `Bridge` in the terrain row, `snap.ts` and `landCollider.ts` next to main's
+  `trees.ts`, `flora/` and `structures/` rows, both change logs, and one
+  hitbox follow-up in Next up (the obsolete "thin features still collide
+  where nothing is drawn" item is gone: the land collider fixed that).
+- Structures collide through `World.trees` (`otherDistance`), and the bridge
+  is rock, so it collides as drawn.
+- Verified: build and lint pass; 27 frontend tests (Node 24 in Docker) and
+  22 backend tests pass. Not looked at in a browser after the merge.
+
+### 2026-10-10: `docker compose up --build` looked stuck at `npm ci` (Claude)
+
+Reported: the build hangs at `Step 4/10 : RUN npm ci`. Not reproduced: on
+this machine (Colima, 4 CPUs, 4 GiB) the step finished in 1 to 2 min and
+the stack served `/` and `/api/time`. DNS and connect take milliseconds, but
+downloads from npm run at about 0.5 MB/s (single tarballs 50 to 120 s), and
+without `docker buildx` Compose falls back to the classic builder, which
+prints nothing until a step ends.
+- `frontend/Dockerfile`: `npm ci --no-audit --no-fund --loglevel=http`, so
+  every download is logged and a slow build is distinguishable from a hung
+  one.
+- Verified: `docker compose build --no-cache frontend` and
+  `docker compose up --build -d`; `/` returns 200. The user's own hang is
+  not diagnosed yet (needs their log). Installing `docker-buildx` would add
+  live progress and npm cache mounts.
+
 ### 2026-10-10: Collisions with the land exactly as drawn (Claude)
 
 Asked for: make absolutely sure the terrain's hitbox matches the visuals,
@@ -271,6 +303,173 @@ like the poles in some maps become unlikely. A deliberate gameplay change
   Isles through the mesh path (`land: true`), the measurements above,
   Glacier and Ember after the generation change; no console errors. Not
   measured in a focused window; not played with a mouse.
+
+### 2026-10-10: A bust of Einstein as a second Easter egg (Claude)
+
+Asked for: an Einstein bust as an Easter egg too.
+- **`einsteinBust`** (`structures/models.ts`): a bronze bust on a stone
+  pedestal with a gold plaque, 6 to 7 m tall so it reads from the air: wild
+  white hair in tufts, the moustache, bushy eyebrows. Built from primitives.
+- **Where**: Verdant Highlands only, a landmark with `chance: 0.3`, on the
+  valley floor 25 to 140 m from the racing line, facing it. Few sites pass
+  there, so it is rarer than the chance suggests: at `chance: 0.15`, 3 of
+  explore seeds 1 to 60 had one (6, 24, 59); the chance was then doubled and
+  not counted again. `/?explore=verdant&seed=6` has both the bust (near
+  z = 1574) and the ETH building.
+- It is second in Verdant's list, after ETH, so Verdant's other structures
+  moved once more.
+- Verified: build and lint pass; 27 frontend tests (new: seed 2 has no
+  bust, seed 6 has one, within its lateral range). Seen by day in headless
+  Chrome (`docs/screenshots/structures-biomes/einstein-morning.png`). Not
+  seen at night, not flown by hand.
+
+### 2026-10-10: The ETH main building as a rare Easter egg; structures, step 4 so far (Claude)
+
+Asked for: ETH as a rare Easter egg, with a link to a Sketchfab model of the
+Hauptgebäude; and to go on with step 4 (the day and night check).
+- **ETH main building** (`ethMainBuilding`): built from primitives in the
+  game's style, not imported. The Sketchfab model (by HMQ AG, a laser-scan
+  CAD model, 13.3 million triangles) shows no license and no download, and a
+  scan would break the art direction (no realistic assets) and the triangle
+  budget. Ours: the long sandstone hall on a rusticated ground floor, end
+  pavilions, the rotunda with its columns, the drum and the green ribbed
+  dome, two storeys of lit windows, banners in ETH blue. About 32 m tall and
+  70 m long.
+- **Where**: Verdant Highlands only, a landmark with `chance: 0.1` per
+  stretch: 8 of explore seeds 1 to 60 have one (5, 6, 13, 27, 41, 43, 49,
+  50). `/?explore=verdant&seed=6` (Morning) and `seed=27` (Moonlit) show it.
+  Landmarks now honor `chance`.
+- **Collider** (`trees.ts`): `ColliderShape.hall`, a box along the model's x
+  axis, so the wings collide along their whole length.
+- Adding it first in Verdant's list moved Verdant's other structures (their
+  draws depend on their place in the list).
+- **Step 4, checked so far** (headless Chrome, `__shot`): the kinds not yet
+  looked at (obelisk, brazier, ruined columns, pylon, star altar), and second
+  moods: Lagoon by day, Archipelago and Aurora at night, Ember by day.
+  Fixes: the pylon's crystal and the star altar's star were blown out to
+  white at night (glow down from about 2 to under 1); Ember's stone was too
+  dark to read against its ground (lighter stone for the temple, obelisks
+  and columns); the lighthouse's beam was a white blob (thinner, dimmer).
+- A warning for whoever takes screenshots: `__shot` needs about 7 s of
+  streaming before a structure near the camera is drawn in full detail;
+  at 3.5 s some shots show bare ground where the structure stands.
+- Verified: build and lint pass; 26 frontend tests (new: the hall collider,
+  turned by its yaw; seeds 2 and 3 have no ETH, seed 6 has one). ETH seen by
+  day and night (`docs/screenshots/structures-biomes/`). Not flown by hand.
+
+### 2026-10-10: Structures, step 3: a landmark and scattered kinds in every run biome (Claude)
+
+Asked for: step 3 of the structures plan. Every biome but Sky Isles now has
+structures. Solid, in runs only (rule 6); races are untouched.
+- **Landmarks** (`StructureSpec.landmark`, `flora/placement.ts`): at most one
+  per so many metres of the course (1100 everywhere, so two or three a
+  level): of every candidate within `where.lateral` of the line that can
+  stand, the one with the lowest draw. Worked out once per world and cached,
+  so every node agrees. List landmarks first.
+- **New site rules**: `on: "rock" | "any"` (on top of islands, islets, sea
+  stacks and mesas: the site is found by marching down the distance field,
+  never on `bare` surfaces), `water: [min, max]` (standing in the sea on
+  ground that deep: stilts, sunken ruins; negative depths are dry land above
+  it), `facing` (the front turned to the racing line).
+- **Colliders** (`trees.ts`): `ColliderShape.gate`, two posts and a bar, so
+  shrine gates can be flown through.
+- **Shader** (`flora/view.ts`): `spin.upright` turns parts about the model's
+  own upright axis (the lighthouse's beam, the observatory's rings).
+- **Fifteen new models** (`structures/models.ts`): monastery, bell pavilion,
+  stone hut, prayer-flag pole, lighthouse, stilt hut, ruined columns, shrine
+  gate, fox spirit statue, forge-temple, rune obelisk, brazier, observatory,
+  crystal pylon, star altar. Roofs take snow where a biome gives a `snow`
+  color.
+- **Per biome** (landmark first): Glacier Peaks: monastery, prayer poles,
+  bell pavilions, stone huts. Sky Archipelago (on its islands): a temple (the
+  monastery in white, blue and gold), ruined columns, prayer poles, lanterns.
+  Coral Lagoon: lighthouse on a stack or islet, stilt huts in the shallows,
+  drowned columns, lanterns on islets. Twilight Forest: a great spirit gate,
+  smaller gates, fox statues, lanterns, all lit cyan. Ember Wastes:
+  forge-temple with lava channels, rune obelisks, braziers, ruined columns.
+  Aurora Summit: observatory, crystal pylons, star altars, lanterns. Verdant
+  also got shrine gates.
+- Small structures stand on deeper plinths (`sink` up to 0.5 of the height):
+  the snowy and volcanic biomes have very little level ground.
+- Verified: build and lint pass; 25 frontend tests (new: the gate's collider;
+  every biome has one to three landmarks, more than 15 structures in the
+  sampled stretch, the same at coarse and full detail, and fits the impostor
+  atlas). In headless Chrome with `__shot`, one of every kind in every biome
+  on seed 2, Glacier also by day (seed 1): no console errors
+  (`docs/screenshots/structures-biomes/`). Looked at closely: all six
+  landmarks, the stilt hut, prayer pole, bell pavilion, stone hut, spirit
+  statue. Not looked at closely: obelisk, brazier, pylon, star altar, ruined
+  columns, Verdant's gates. Each biome was seen in one mood only (Glacier in
+  two). Not flown by hand; frame time not measured.
+
+### 2026-10-10: Structures, step 2: Verdant's stone bridges (Claude)
+
+Asked for: step 2 of the structures plan, the arched stone bridge over the
+river at a fall, as the first structure in the distance field.
+- **`Bridge`** (`terrain/shapes.ts`): a humped deck rising to a crown over
+  one arch, cut out of the block as an ellipse standing on the water. Part of
+  the land's distance field, so the stone drawn and the stone you hit are the
+  same surface. Chunky on purpose (deck 12 m wide, 6 m thick at the crown):
+  the land is meshed on a 6 m grid.
+- **Feature `bridges`** (`terrain/recipes.ts`, `biomes/types.ts`): for some
+  falls (`chance`), a bridge 44 to 92 m upstream, across the river's flow,
+  where the river is under 34 m wide, no gate is within 22 m and the crown
+  stays at least 18 m under the racing line. The arch spans the river plus
+  3.5 m each side and rises 13 m above the water: you fly over it on the
+  line, or dive under it. Listed last among the features, so the land's other
+  random draws are unchanged.
+- **Verdant**: surface 2, worked stone (pale courses, paved top, nothing
+  grows on it), and `{ kind: "bridges", chance: 0.8 }`. Two to four bridges a
+  level. A gameplay change in runs only (rule 6): new rock to hit near the
+  river; races are untouched.
+- Verified: build and lint pass; 23 frontend tests (new: on three levels,
+  every bridge's arch is open over the water, its crown is solid and it stays
+  out of the racing tube). In headless Chrome with `__shot`
+  (`/?explore=verdant`, seeds 2 Morning and 3 Moonlit): the bridge from
+  upstream, from the side, from under the arch and from the line; no console
+  errors (`docs/screenshots/structures-verdant/`). Not flown by hand.
+
+### 2026-10-10: Structures, step 1: the format, and Verdant's first three (Claude)
+
+Asked for: a plan of which structures to add to which biome, then to proceed
+with it. The plan is in "Structures per biome" under the biome plan. This is
+its step 1. Structures are solid, a gameplay change in runs only (rule 6);
+Sky Isles and races are untouched.
+- **Format** (`world/structures/`, `StructureSpec` in `biomes/types.ts`):
+  structures ride the flora pipeline as extra kinds after a biome's species,
+  so they get worker placement, instancing, impostors and colliders for free.
+  `Biome.structures` lists them with a spacing, a chance, a height range,
+  colors and site rules (`where`: above the line, lateral, wet, forest,
+  hilltop).
+- **Placement** (`flora/placement.ts`): each kind has its own sparse jittered
+  grid. A site needs ground with no rock shape over it, level enough for its
+  plinth (`STRUCTURE_INFO.sink`), out of the water, clear of the racing tube
+  and the start. A site depends only on where it is, never on the node's box,
+  so a tower is in the same spot at every level of detail (tested). Plants
+  keep 3 m clear of a structure and grass doesn't grow through its floor.
+- **Models** (`structures/models.ts`): watchtower (lantern room, gallery,
+  cone roof, banner that sways), stone lantern, windmill (round cap, four
+  cloth sails). Windows, lanterns and gold finials carry glow: dim by day,
+  blooming at night.
+- **Shader** (`flora/view.ts`): `plantMaterial` takes a structure variant:
+  lights scaled by `STRUCTURES.lights`, and `spin` vertices turning about the
+  hub in the vertex shader (`STRUCTURES.sails`). No collider moves.
+- **Colliders** (`trees.ts`): `ColliderShape.disc`, the disc a windmill's
+  sails sweep, turned by the yaw.
+- **Verdant Highlands**: windmills on the shoulders of hills, watchtowers
+  above the valley, stone lanterns along the river. Per level, within 500 m
+  of the line: about 10 windmills, 20 towers, 70 to 100 lanterns.
+- **Tuning**: new `STRUCTURES` group in `?tune` (`lights`, `sails`).
+- Dev: `__shot` now levels the camera (the chase camera's own up vector
+  rolled the shots).
+- Verified: build and lint pass; 22 frontend tests (two new: the windmill's
+  collider, and placement matching across levels of detail and staying clear
+  of the line). In headless Chrome with `__shot` (`/?explore=verdant`, seeds 2
+  Morning and 3 Moonlit): all three kinds by day and night, lights blooming at
+  night, no console errors but the missing backend's 502s
+  (`docs/screenshots/structures-verdant/`). Not flown by hand: crashing into
+  a structure, the sails in motion and the frame time weren't checked in a
+  focused window. Backend untouched.
 
 ### 2026-10-10: In-game UI simplified, map select (Claude)
 
@@ -1161,6 +1360,26 @@ ported to the islands world:
 
 ## Next up
 
+- **Structures, next steps** (plan: "Structures per biome"): step 4 is
+  partly done (see the change log). Still to check: Twilight's Midnight
+  bloom mood, Verdant's shrine gates, and every moving part in motion
+  (sails, the lighthouse's beam, the observatory's rings, flags and flames:
+  only still frames were looked at). Open from step 3: the plan's pieces that need two
+  anchors or sit on other shapes aren't built (rope and chain bridges,
+  prayer-flag lines between shards, treehouses on trunks, doors in mushroom
+  stems, sailboats, Aurora's stair of arches, Twilight's lantern tree: a
+  great gate stands in for it); Archipelago's temple is the monastery
+  recolored, not its own model; the lighthouse's beam is two opaque bars of
+  light, not a cone; Sky Isles' drawn-only dressing isn't started. Open from
+  step 2: the bridge reads as rough-hewn rock more than masonry (6 m
+  voxels, and its courses of stone are faint); it has no parapets or lanterns
+  (structures don't stand on rock shapes yet); fly under an arch by hand, and
+  check the ground's fillet doesn't close a narrow one. Open from step 1:
+  fly into a tower, a lantern and a windmill's sails by hand; impostors don't
+  glow, so distant windows are dark at night; the impostor atlas has 16 cells
+  for species plus structures; Verdant's cottages and shrine gates aren't
+  built; the windmill is plain up close (no balcony, few windows).
+
 - **Hitbox and land follow-ups**: proximity (style points), skim spray and
   the glide-in still read the distance field, so rock that isn't drawn can
   still give a few style points or a puff of spray (never a crash). The
@@ -1168,18 +1387,15 @@ ported to the islands world:
   narrower than the body (2 of 10 test crashes, briefly). About 1.7% of
   vertical rays through Sky Isles cross the mesh inconsistently (slivers
   where snapped faces meet); harmless for flying, it can confuse the
-  tumble's inside test. The extra rock triangles (about 4×) want a
+  tumble's inside test. Coarse v2 nodes (12 m and up) aren't snapped. The
+  extra rock triangles (about 4×) want a frame-time check in a focused
+  window; `SurfaceCutter`'s tolerance (0.5 m) is the knob. Remote pilots
+  don't use the hitbox (they never crash).
 
 - Play through the integrated portal/finale and victory lap; check multiplayer
   and gamepad controls. Make the explore debug panel usable at narrow widths
   without covering the HUD.
 
-- **Hitbox and land follow-ups**: features thinner than the 6 m grid (thin
-  needles, sharp spikes) still collide where nothing is drawn (snapping
-  leaves those vertices; p99 at face centres is about 2 m). Coarse v2 nodes
-  (12 m and up) aren't snapped. The extra rock triangles (about 4×) want a
-  frame-time check in a focused window; `SurfaceCutter`'s tolerance (0.5 m)
-  is the knob. Remote pilots don't use the hitbox (they never crash).
 - `__crash` teleports the pilot 5 m from the rock: the crash often comes in
   the first frame, before the avatar's pose has updated, so that frame's wing
   points are stale. Harmless in play.
@@ -1406,6 +1622,36 @@ modules, never a fork of the renderer.
 | 6 | **Twilight Forest** | Giant mushroom and redwood forest, roots forming tunnels, glowing ponds | Blue hour, bioluminescence (Nightshade) | Fireflies, glowing spores reacting to your wingbeats, light trails brighter | Relight the lanterns; follow the spirit fox |
 | 7 | **Ember Wastes** | Volcanic ridges, lava rivers, obsidian spires, ash plumes | Red-orange, underlit by lava, dark sky | Embers rising on thermals, heat haze, sparks off obsidian | Ride the thermals to the caldera; outrun the eruption |
 | 8 | **Aurora Summit** (finale) | A spire above the clouds, ring of ancient crystal gates | Night, aurora, stars, moon glare | Aurora ribbons, starfall, every gate a light pillar | The final ascent: a gauntlet of every gate type |
+
+### Structures per biome
+
+Agreed on 2026-10-10. Weathered pale stone, gold trims, cloth that moves, and
+a light that comes on at night. Structures are solid in run biomes (skimming
+a tower scores style). Sky Isles is frozen, so it only gets small dressing
+that is drawn but never collides, kept well off the line.
+
+| Biome | Signature landmark (1 or 2 per level) | Scattered structures | Night |
+| :- | :- | :- | :- |
+| **Sky Isles** (frozen) | None | Small cairns, prayer-flag lines and stone lanterns on island tops, drawn only | Lanterns glow |
+| **Verdant Highlands** | Stone windmill on a hilltop (done); arched stone bridge over the river above a fall (done) | Watchtowers (done), stone lanterns (done), shrine gates on terraces, cottages with round roofs near the pools | Warm windows, lanterns |
+| **Glacier Peaks** | Mountain monastery on a ledge, gold roof caps and banners | Ice-bell pavilions, prayer-flag lines between ice shards, snowed-in stone huts, half-buried cairns | Bells and windows glow under the aurora |
+| **Sky Archipelago** | Floating temple on one big island: colonnade, dome, a broken stair into the void | Rope-and-plank bridges between islands, broken columns, wind chimes, moored cloth kites | Braziers along the colonnade |
+| **Coral Lagoon** | Lighthouse on a sea stack with a slow sweeping beam | Stilt huts and jetties on islets, sunken ruin columns in the shallows, small sailboats, shell-roof pavilions | Lighthouse beam, hut lanterns on the water |
+| **Twilight Forest** | Great lantern tree shrine: platforms spiralling round a giant trunk | Treehouses and hanging lanterns on trunks, doors and windows in mushroom stems, mossy spirit statues, root-bridge railings | Everything bioluminescent |
+| **Ember Wastes** | Ruined forge-temple on a mesa with lava channels through it | Obsidian obelisks with glowing runes, chain bridges over lava, broken aqueduct arches, ancient braziers | Runes and braziers lit from below |
+| **Aurora Summit** | Observatory with a crystal dome near the spire; a stair of gate arches up it | Ancient crystal pylons, star altars, ring fragments on stone plinths | Pylons send faint beams up |
+
+How: scattered structures are kinds in the flora pipeline
+(`world/structures/`). Landmarks are placed once per level from the level
+seed, off the line. Bridges and aqueducts you fly under are rock shapes in
+the distance field, so the drawn stone and the collision match. Moving parts
+animate in the vertex shader and never move a collider.
+
+Order: (1) the format, proven with Verdant's watchtower, lantern and windmill
+(done); (2) Verdant's bridge, the first distance-field structure (done); (3) one
+landmark and three scattered kinds per remaining biome, in run order (done,
+with stand-ins noted in Next up);
+(4) night lights, moving parts, and a day and night browser check per biome.
 
 ### Shared systems to build (in this order)
 
