@@ -133,7 +133,7 @@ test("the ETH main building collides along its whole length, and only some level
   assert.ok(eth.distance(0, 0.3 * h, 0.9 * h) > 3, "in front of the rotunda");
   const turned = new Plant(0, 0, 0, h, h, Math.PI / 2, STRUCTURE_INFO.ethMainBuilding.collider);
   assert.ok(turned.distance(0, 0.3 * h, 1.05 * h) < 0 && turned.distance(1.05 * h, 0.3 * h, 0) > 3);
-  // Seeds 2 and 3 have none, seed 6 has one (about one Verdant level in six does)
+  // Seed 2 has none, seed 28 has one (about one Verdant level in seven does)
   const count = (seed) => {
     const world = new World(runLevel(seed, 1, "verdant"));
     assert.equal(world.biome.structures[0].id, "ethMainBuilding");
@@ -149,7 +149,7 @@ test("the ETH main building collides along its whole length, and only some level
     return n;
   };
   assert.equal(count(2), 0);
-  assert.equal(count(6), 1);
+  assert.equal(count(28), 1);
 });
 
 test("the Einstein bust is a rare landmark close to the racing line", () => {
@@ -168,7 +168,7 @@ test("the Einstein bust is a rare landmark close to the racing line", () => {
     return out;
   };
   assert.equal(find(2).length, 0);
-  const near = find(6);
+  const near = find(28);
   assert.equal(near.length, 1);
   assert.ok(near[0] >= 25 && near[0] <= 140, `${near[0]} m from the line`);
 });
@@ -185,28 +185,32 @@ test("a shipwreck collides with its hull and its mast, which leans back with the
   assert.ok(wreck.distance(0, 0.15 * h, 0.4 * h) > 3, "beside the hull");
 });
 
-test("every run dives to the Sunken Reef, and leaves one of the other middle biomes out", async () => {
+test("a run starts on its seed's own map and flies eight different maps", async () => {
   const { runOrder, destination, RUN_LENGTH } = await import("../src/game/run/run.ts");
-  const middle = ["glacier", "archipelago", "lagoon", "twilight", "ember"];
+  const { MAPS, seedMap, runLevel } = await import("../src/game/world/biomes/index.ts");
+  const firsts = new Set();
   const left = new Set();
-  const slots = new Set();
   for (let seed = 1; seed <= 200; seed++) {
     const order = runOrder(seed);
     assert.equal(order.length, RUN_LENGTH);
-    assert.equal(new Set(order).size, RUN_LENGTH, "a biome comes twice");
-    assert.deepEqual([order[0], order[1], order[RUN_LENGTH - 1]], ["skyIsles", "verdant", "aurora"]);
-    assert.ok(order.includes("reef"));
-    const out = middle.filter((b) => !order.includes(b));
-    assert.equal(out.length, 1);
-    left.add(out[0]);
-    slots.add(order.indexOf("reef"));
+    assert.equal(new Set(order).size, RUN_LENGTH, "a map comes twice");
+    // The first level is exactly the map a time trial on this seed flies
+    assert.equal(order[0], seedMap(seed).biome);
+    const first = runLevel(seed, 1, order[0]);
+    assert.equal(first.seed, seed);
+    assert.equal(first.key.mood, seedMap(seed).mood);
+    firsts.add(order[0]);
+    left.add(MAPS.find((b) => !order.includes(b)));
+    // Every other level stands for its own biome too, so a time trial on its seed flies the same map
+    for (let level = 2; level <= RUN_LENGTH; level++) {
+      const l = runLevel(seed, level, order[level - 1]);
+      assert.deepEqual(seedMap(l.seed), { biome: order[level - 1], mood: l.key.mood });
+    }
     // The portals lead along the same order
     const path = [];
-    for (let level = 1; level <= RUN_LENGTH; level++) {
-      path.push(level === 1 ? order[0] : destination(seed, level - 1, path));
-    }
+    for (let level = 1; level <= RUN_LENGTH; level++) path.push(level === 1 ? order[0] : destination(seed, path));
     assert.deepEqual(path, order);
   }
-  assert.equal(left.size, middle.length, "every middle biome sits out some runs");
-  assert.equal(slots.size, 5, "the reef comes at every place from third to seventh");
+  assert.equal(firsts.size, MAPS.length, "runs start on every map");
+  assert.equal(left.size, MAPS.length, "every map sits out some runs");
 });

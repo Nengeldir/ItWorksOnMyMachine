@@ -3,33 +3,42 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { type LeaderboardEntry, getLeaderboard } from "../api";
 import { formatTime } from "../format";
 import { randomSeed } from "../game/rng";
-import { BIOMES, raceLevel } from "../game/world/biomes";
+import { type BiomeId, MAPS, featuredSeed, seedLevel } from "../game/world/biomes";
 import { Course } from "../game/world/course";
+import { bestRun } from "../session/RunSession";
 import { clientId } from "../storage";
-import "./CourseSelect.css";
+import "./MapSelect.css";
 
-const PREVIEW_DELAY_MS = 300; // the backdrop and the board follow once the cards stop moving
+const PREVIEW_DELAY_MS = 450; // the backdrop and the board follow once the cards stop moving (building a map is dear)
 const MAX_SEED = 2 ** 31;
+
+/**
+ * What the map select is for. Every mode shows the same cards (today's, one per map, a random one) and
+ * picking one plays exactly that map: a time trial on it, a run that starts on it, a room that races it.
+ */
+export type MapSelectMode = "solo" | "run" | "room";
+
+const WORDS: Record<MapSelectMode, { title: string; today: string; card: string; random: string; roll: string }> = {
+  solo: { title: "Choose a course", today: "Today's course", card: "Course", random: "Random course", roll: "Roll a course" },
+  run: { title: "Choose a map", today: "Today's run", card: "Start the run here", random: "Random run", roll: "Roll a map" },
+  room: { title: "Choose a map", today: "Today's course", card: "Race here", random: "Random map", roll: "Roll a map" },
+};
 
 type Card = { kind: "daily"; seed: number } | { kind: "featured"; seed: number } | { kind: "random"; seed: number | null };
 
 let featured: number[] | null = null;
 
-/** One course for each of Sky Isles' moods: the lowest seed that has it */
+/** One course for each map: the lowest seed that stands for it */
 function featuredSeeds(): number[] {
-  if (featured) return featured;
-  const names = BIOMES.skyIsles.moods.map((mood) => mood.name);
-  const found = new Map<string, number>();
-  for (let seed = 1; seed < 500 && found.size < names.length; seed++) {
-    const name = raceLevel(seed).palette.name;
-    if (!found.has(name)) found.set(name, seed);
-  }
-  featured = names.flatMap((name) => (found.has(name) ? [found.get(name)!] : []));
+  featured ??= MAPS.map(featuredSeed);
   return featured;
 }
 
 interface CourseInfo {
-  palette: string;
+  biome: BiomeId;
+  /** The map's name and the mood the seed gives it */
+  map: string;
+  mood: string;
   gates: number;
   /** The course's sky, top to bottom: art until a picture arrives */
   sky: string;
@@ -40,9 +49,11 @@ const infos = new Map<number, CourseInfo>();
 function courseInfo(seed: number): CourseInfo {
   let info = infos.get(seed);
   if (!info) {
-    const { palette } = raceLevel(seed);
+    const { biome, palette } = seedLevel(seed);
     info = {
-      palette: palette.name,
+      biome: biome.id,
+      map: biome.name,
+      mood: palette.name,
       gates: new Course(seed).rings.length,
       sky: `linear-gradient(180deg, ${palette.zenith}, ${palette.horizon})`,
     };
@@ -51,26 +62,41 @@ function courseInfo(seed: number): CourseInfo {
   return info;
 }
 
-/** A card's picture: drawn ahead of time for the featured courses (public/courses), else taken by the backdrop */
+/**
+ * A card's picture: drawn ahead of time for the featured courses (public/maps), else the one the backdrop
+ * took, else its map's (the same map, maybe in another mood)
+ */
 function artFor(card: Card, taken: Record<number, string>): string | undefined {
   if (card.seed === null) return undefined;
-  return card.kind === "featured" ? `/courses/${card.seed}.jpg` : taken[card.seed];
+  const map = `/maps/${courseInfo(card.seed).biome}.jpg`;
+  return card.kind === "featured" ? map : (taken[card.seed] ?? map);
 }
 
-interface CourseSelectProps {
+
+interface MapSelectProps {
+  mode: MapSelectMode;
+  /** Today's seed: the daily course, or (runs) the daily run */
   daily: number;
-  /** Until today's course changes */
+  /** Until today's changes */
   countdown: string;
   /** Pictures the backdrop took, by seed */
-  art: Record<number, string>;
+  art?: Record<number, string>;
   /** The course the backdrop should show */
-  onPreview: (seed: number) => void;
-  onFly: (seed: number) => void;
+  onPreview?: (seed: number) => void;
+  /**
+   * The course the live backdrop has all in. Until it shows the card in the middle, that card's picture
+   * covers it, so its islands don't pop in one by one. Without it (no backdrop), nothing is covered.
+   */
+  live?: number | null;
+  onPick: (seed: number) => void;
+  /** The main button: "Fly", "Start the run"… */
+  action: string;
   onBack: () => void;
 }
 
-/** Map select: a carousel of courses over the live backdrop, which shows the one in the middle */
-const CourseSelect = ({ daily, countdown, art, onPreview, onFly, onBack }: CourseSelectProps) => {
+/** The map select: a carousel of courses (over the live backdrop on the landing page, which shows the middle one) */
+const MapSelect = ({ mode, daily, countdown, art = {}, onPreview, live, onPick, action, onBack }: MapSelectProps) => {
+  const words = WORDS[mode];
   const [rolled, setRolled] = useState<number | null>(null);
   const [seedText, setSeedText] = useState("");
   const cards = useMemo<Card[]>(
@@ -85,32 +111,38 @@ const CourseSelect = ({ daily, countdown, art, onPreview, onFly, onBack }: Cours
   const [boards, setBoards] = useState<Record<number, LeaderboardEntry[]>>({});
   const card = cards[index];
   const step = (by: number) => setIndex((i) => (i + by + cards.length) % cards.length);
-  const fly = () => onFly(card.seed ?? randomSeed());
+  const pick = () => onPick(card.seed ?? randomSeed());
 
   useEffect(() => {
     const seed = card.seed;
     if (seed === null) return;
     const timer = setTimeout(() => {
-      onPreview(seed);
+      onPreview?.(seed);
+      // Runs score in this browser only; races and rooms have a board per seed
+      if (mode === "run") return;
       getLeaderboard(seed, clientId())
         .then((entries) => setBoards((all) => ({ ...all, [seed]: entries })))
         .catch(() => {});
     }, PREVIEW_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [card.seed, onPreview]);
+  }, [card.seed, onPreview, mode]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") return onBack();
+      if (e.key === "Escape") onBack();
       // Typing a seed: the keys are letters and digits (Enter submits the seed)
-      if (e.target instanceof HTMLInputElement) return;
-      if (e.key === "ArrowLeft" || e.code === "KeyA") step(-1);
+      else if (e.target instanceof HTMLInputElement) return;
+      else if (e.key === "ArrowLeft" || e.code === "KeyA") step(-1);
       else if (e.key === "ArrowRight" || e.code === "KeyD") step(1);
       // A focused button takes Enter itself
-      else if (e.key === "Enter" && !(e.target instanceof HTMLButtonElement)) fly();
+      else if (e.key === "Enter" && !(e.target instanceof HTMLButtonElement)) pick();
+      else return;
+      e.preventDefault();
+      // Over a game (a room's lobby), the keys are for this, not for flying or the lobby's own keys
+      e.stopImmediatePropagation();
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   });
 
   const roll = () => {
@@ -126,45 +158,55 @@ const CourseSelect = ({ daily, countdown, art, onPreview, onFly, onBack }: Cours
     if (digits && seed >= 1 && seed < MAX_SEED) setRolled(seed);
   };
 
-  const flySeed = (e: FormEvent) => {
+  const pickTyped = (e: FormEvent) => {
     e.preventDefault();
-    if (rolled !== null) onFly(rolled);
+    if (rolled !== null) onPick(rolled);
   };
 
   const side = (by: number) => {
     const at = (index + by + cards.length) % cards.length;
     return (
       <article className="course-card side glass" onClick={() => step(by)} aria-hidden="true">
-        <CardArt card={cards[at]} art={art} countdown={countdown} />
+        <CardArt card={cards[at]} art={art} countdown={countdown} today={words.today} />
         <div className="course-body">
-          <CardHead card={cards[at]} />
+          <CardHead card={cards[at]} words={words} />
         </div>
       </article>
     );
   };
 
+  const veiled = live !== undefined && card.seed !== null && card.seed !== live;
+  const veil = artFor(card, art);
+
   return (
     <section className="course-select">
+      {live !== undefined && (
+        <div
+          className={`map-veil${veiled ? " on" : ""}`}
+          style={veil ? { backgroundImage: `url("${veil}")` } : undefined}
+          aria-hidden="true"
+        />
+      )}
       <button className="course-back glass" onClick={onBack}>
         <IconArrowLeft size={18} /> Back
       </button>
       <header className="menu-title course-title">
-        <h1>Choose a course</h1>
+        <h1>{words.title}</h1>
       </header>
 
       <div className="course-row">
-        <button className="course-arrow glass" aria-label="Previous course" onClick={() => step(-1)}>
+        <button className="course-arrow glass" aria-label="Previous" onClick={() => step(-1)}>
           <IconChevronLeft size={24} />
         </button>
         {side(-1)}
         <article className="course-card main glass" aria-live="polite">
-          <CardArt card={card} art={art} countdown={countdown} main />
+          <CardArt card={card} art={art} countdown={countdown} today={words.today} main />
           <div className="course-body">
-            <CardHead card={card} />
+            <CardHead card={card} words={words} />
             {card.kind === "random" && (
-              <form className="course-random" onSubmit={flySeed}>
+              <form className="course-random" onSubmit={pickTyped}>
                 <button type="button" onClick={roll}>
-                  <IconDice5 size={18} /> Roll a course
+                  <IconDice5 size={18} /> {words.roll}
                 </button>
                 <input
                   value={seedText}
@@ -175,11 +217,11 @@ const CourseSelect = ({ daily, countdown, art, onPreview, onFly, onBack }: Cours
                 />
               </form>
             )}
-            {card.seed !== null && <Board entries={boards[card.seed]} />}
+            {card.seed !== null && (mode === "run" ? <RunBest seed={card.seed} /> : <Board entries={boards[card.seed]} />)}
           </div>
         </article>
         {side(1)}
-        <button className="course-arrow glass" aria-label="Next course" onClick={() => step(1)}>
+        <button className="course-arrow glass" aria-label="Next" onClick={() => step(1)}>
           <IconChevronRight size={24} />
         </button>
       </div>
@@ -189,8 +231,8 @@ const CourseSelect = ({ daily, countdown, art, onPreview, onFly, onBack }: Cours
           <i key={i} className={i === index ? "on" : undefined} />
         ))}
       </div>
-      <button className="primary course-fly" onClick={fly}>
-        {card.seed === null ? "Fly a random course" : "Fly"} <kbd>Enter</kbd>
+      <button className="primary course-fly" onClick={pick}>
+        {action} <kbd>Enter</kbd>
       </button>
     </section>
   );
@@ -200,19 +242,20 @@ interface CardArtProps {
   card: Card;
   art: Record<number, string>;
   countdown: string;
-  /** The card in the middle: today's course gets its ribbon */
+  today: string;
+  /** The card in the middle: today's gets its ribbon */
   main?: boolean;
 }
 
 /** The picture at the top of a card, on the course's own sky until the picture has loaded */
-const CardArt = ({ card, art, countdown, main = false }: CardArtProps) => {
+const CardArt = ({ card, art, countdown, today, main = false }: CardArtProps) => {
   const url = artFor(card, art);
   const sky = card.seed === null ? "linear-gradient(180deg, var(--ink-45), var(--tint))" : courseInfo(card.seed).sky;
   return (
     <div className="course-art" style={{ backgroundImage: url ? `url("${url}"), ${sky}` : sky }}>
       {main && card.kind === "daily" && (
         <div className="course-ribbon">
-          <span>Today's course</span>
+          <span>{today}</span>
           <span>New in {countdown}</span>
         </div>
       )}
@@ -226,22 +269,34 @@ const CardArt = ({ card, art, countdown, main = false }: CardArtProps) => {
 };
 
 /** What a card is: its label, name and chips */
-const CardHead = ({ card }: { card: Card }) => {
+const CardHead = ({ card, words }: { card: Card; words: (typeof WORDS)[MapSelectMode] }) => {
   const info = card.seed === null ? null : courseInfo(card.seed);
-  const label = card.kind === "daily" ? "Today's course" : card.kind === "random" ? "Random course" : "Course";
+  const label = card.kind === "daily" ? words.today : card.kind === "random" ? words.random : words.card;
   return (
     <>
       <div className="course-head">
         <small>{label}</small>
-        <h2>{info ? `${info.palette} isles` : "Any course"}</h2>
+        <h2>{info ? info.map : "Any map"}</h2>
       </div>
       {info && card.seed !== null && (
         <div className="course-chips">
+          <span>{info.mood}</span>
           <span>#{card.seed}</span>
           <span>{info.gates} gates</span>
         </div>
       )}
     </>
+  );
+};
+
+/** Your best on a run (the maps after the first stay a surprise) */
+const RunBest = ({ seed }: { seed: number }) => {
+  const best = bestRun(seed);
+  return best === null ? null : (
+    <div className="course-best">
+      <span>Your best on this run</span>
+      <span>{best.toLocaleString()}</span>
+    </div>
   );
 };
 
@@ -273,4 +328,4 @@ const Board = ({ entries }: { entries: LeaderboardEntry[] | undefined }) => {
   );
 };
 
-export default CourseSelect;
+export default MapSelect;

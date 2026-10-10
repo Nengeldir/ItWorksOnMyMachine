@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as THREE from 'three';
 import { World } from '../src/game/world/World.ts';
-import { makeLevel, raceLevel } from '../src/game/world/biomes/index.ts';
+import { makeLevel, skyIslesLevel } from '../src/game/world/biomes/index.ts';
 import { meshNode, NODE_SIZE, VOXEL } from '../src/game/world/terrain/mesh.ts';
 import { meshChunk } from '../src/game/world/mesher.ts';
 import { cleanMesh, remapFaces } from '../src/game/world/meshCleanup.ts';
@@ -48,7 +48,7 @@ test('seeded terrain has no open interior edges after cleanup', () => {
 test('adjacent full-detail chunks share exact edges, including at negative coordinates', () => {
   for (const boundary of [0, 96]) {
     const distance = (x, y, z) => Math.hypot(x - boundary, y - 48, z - 48) - 28;
-    const world = new World(raceLevel(42));
+    const world = new World(skyIslesLevel(42));
     world.legacy = { distance };
     const a = meshChunk(world, boundary / 96 - 1, 0, 0);
     const b = meshChunk(world, boundary / 96, 0, 0);

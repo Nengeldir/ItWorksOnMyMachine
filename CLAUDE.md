@@ -95,11 +95,16 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 - `/?explore=<biome>&seed=<n>` flies a run level of any biome freely (no
   clock, nothing saved), e.g. `/?explore=verdant&seed=2` (Morning) or `&seed=3`
   (Moonlit).
-- Races and time trials always fly **Sky Isles** (`raceLevel(seed)`). Its
-  generator is frozen: recorded ghosts and leaderboards depend on every
-  collision surface staying put. `docs/dev-snippets.js` has `__raceHashes()`,
-  which must keep returning the hashes listed there for trees, distances and
-  rings. New biomes are for the roguelike run only.
+- **One map pool for every mode:** a seed stands for one map (`seedMap`:
+  which biome, which mood), the same in time trials, rooms and runs
+  (`seedLevel(seed)`; a run's level picks a seed that stands for its biome).
+  A run starts on its own seed's map and flies eight different maps
+  (`runOrder`). Every mode picks its map in the same map select
+  (`MapSelect`): rooms send the seed to the backend.
+  Sky Isles' generator stays frozen: `docs/dev-snippets.js` has
+  `__raceHashes()`, which must keep returning the hashes listed there for
+  trees, distances and rings (on `skyIslesLevel(seed)`). The other biomes are
+  still being worked on, so their seeds' maps can change; nothing is live.
 - In dev, `window.__game`, `window.__fxTime` and `window.__tuning` are exposed
   for poking at the game from the console.
 - Node 22+ works locally (the VM uses 24). Python 3.14 on the VM.
@@ -134,11 +139,11 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/audio.ts` | Synthesized wind and event sounds, run stingers (portal, upgrade, dash; sidequest and item are unused for now), the wingbeat sample (`public/audio/sfx/wingbeat.mp3`, pitch-randomized, played on each of your downstrokes and on the Wingbeat ability) and the `MusicPlayer` |
 | `game/music.ts` | `MusicPlayer`: one looping track per biome from `public/audio/music/<biome>_<title>.mp3`, crossfaded on biome change (`TRACK_OF` maps biomes to tracks; similar biomes share one). Night dims and muffles the same track. Loaded lazily, decoded with Web Audio, no music if a file fails |
 | `game/webgl.ts` | WebGL 2 availability check; `GameScreen` shows help if it's missing |
-| `game/run/` | The roguelike run. `run.ts`: run length, biome order from the run seed (Sky Isles, Verdant, then the Sunken Reef and four of the five other middle biomes shuffled, Aurora last), portal destinations, scoring constants, `RunHud`. `upgrades.ts`: twenty-seven data-defined upgrades (seven of the original, the design list's twenty abilities) and the 3-of-N offer. `abilities.ts`: `Abilities`, the twenty abilities' rules (`ABILITY` constants, in `?tune` as "Run abilities", not saved): cooldowns, Gale Force's energy and tunnel, cloud lanes (`laneAt`), the spirit manta's path, the slipstream, Wind-Shear's dodge params, Resonance's turned gates (`attuned`, `gateNormal`), the ley line's chain, the stances' multipliers, Draft-Weaving's tornado and the saves (`save`, `saved`: Acrobatic Recovery or the tornado), Ascension, the Echo-Trail's ribbon samples and wind ring; it answers each step with `FlightMods` and boost refills, and counts one-off moments (`cue`) for the looks. `controller.ts`: `RunController` (levels, gates and chains, abilities as `FlightMods`, the portal transition: blur in, the next level built under the blur (`buildNext`), wormhole and upgrade pick while it streams, blur out with the palette cross-fade; HUD data). `finale.ts`: `Finale`, the last portal's cutscene (space under a world-fixed Milky Way with dust lanes and its core overhead, the camera's scripted pan beneath the pilot and back, then white light; Enter skips). `portal.ts`: the portal (ring, a flat disk like a window onto night, beam), the `Wormhole` (a camera-centred shell mapping the view onto an endless twisting tube of lensed stars and nebula with the exit glowing ahead, spirit motes, its own lights) and `screenSparkle`. Game's `veil(k)` (the `.portal-veil` DOM blur and sparkles) and `insideWormhole(on)` (hides the level: land, sky, soft particles, speed lines, ambient, gate effects) serve it |
+| `game/run/` | The roguelike run. `run.ts`: run length, the run's eight maps (`runOrder`: the run seed's own map first, then seven of the other eight shuffled by the seed), portal destinations (`destination`: the first map of the order not flown yet), scoring constants, `RunHud`. `upgrades.ts`: twenty-seven data-defined upgrades (seven of the original, the design list's twenty abilities) and the 3-of-N offer. `abilities.ts`: `Abilities`, the twenty abilities' rules (`ABILITY` constants, in `?tune` as "Run abilities", not saved): cooldowns, Gale Force's energy and tunnel, cloud lanes (`laneAt`), the spirit manta's path, the slipstream, Wind-Shear's dodge params, Resonance's turned gates (`attuned`, `gateNormal`), the ley line's chain, the stances' multipliers, Draft-Weaving's tornado and the saves (`save`, `saved`: Acrobatic Recovery or the tornado), Ascension, the Echo-Trail's ribbon samples and wind ring; it answers each step with `FlightMods` and boost refills, and counts one-off moments (`cue`) for the looks. `controller.ts`: `RunController` (levels, gates and chains, abilities as `FlightMods`, the portal transition: blur in, the next level built under the blur (`buildNext`), wormhole and upgrade pick while it streams, blur out with the palette cross-fade; HUD data). `finale.ts`: `Finale`, the last portal's cutscene (space under a world-fixed Milky Way with dust lanes and its core overhead, the camera's scripted pan beneath the pilot and back, then white light; Enter skips). `portal.ts`: the portal (ring, a flat disk like a window onto night, beam), the `Wormhole` (a camera-centred shell mapping the view onto an endless twisting tube of lensed stars and nebula with the exit glowing ahead, spirit motes, its own lights) and `screenSparkle`. Game's `veil(k)` (the `.portal-veil` DOM blur and sparkles) and `insideWormhole(on)` (hides the level: land, sky, soft particles, speed lines, ambient, gate effects) serve it |
 | `game/devtools.ts` | Dev builds only: `__shot(view)` (freeze, stream the land around a fixed camera, render once), `__raceHashes()` (the race map's determinism check), `__run(s)`, `__bench(q)` and `__crash(kind, after)` (flies into rock near the start and stops `after` s into the crash animation) on `window` |
 | `game/math.ts` | `clamp`, `smoothstep`, `smin` (smooth minimum for distance fields) |
 | `game/world/terrain/` | Generator v2 (every biome but Sky Isles). `noise.ts`: seeded fbm, ridged multifractal, domain-warped ridges, terraces. `shapes.ts`: distance-field primitives (spires and rock rings never thinner than `MIN_RADIUS`, 4.5 m, what the 6 m meshing grid always holds) with boxes, surface ids and grain (Island, NoiseIsland from 3D noise with tunnels, Mesa with ledges, Spire between two points, Slab, RockRing, Cap, Bridge: a humped stone bridge with one arch). `ground.ts`: the heightfield following the line (valley, hills, warped ridged mountains, terraces, crevasses, carved river channel, overhang noise on cliffs). `river.ts`: `Steps`, a valley floor stepping down in pools and falls, and the river in it (water distance for collisions). `field.ts`: `TerrainField`, ground + shapes as one field, `fill()` for whole blocks (same arithmetic as `distance()`). `recipes.ts`: gates and scenery from a biome's `LandRecipe`. `mesh.ts`: surface nets per LOD node, faces painted for the shader. `streamer.ts`: `LandStreamer`, the LOD octree (384/192/96 m nodes, 16 cells each), with 48 m merge hysteresis and a bounded 48 MiB hidden-mesh cache (estimated CPU + GPU buffers, at most 256 entries). `material.ts`: the terrain shader |
-| `game/world/biomes/` | Biomes as data (`types.ts`: `Biome`, `Level`, `LevelKey`). `index.ts`: the registry, `raceLevel(seed)` (races and time trials: always Sky Isles) and `runLevel(runSeed, index, biome)` (roguelike levels, deterministic from the run seed and level number). `skyIsles.ts`: the race map, frozen. `reef.ts`: Sunken Reef, the level under the sea (`SkySpec.underwater`) |
+| `game/world/biomes/` | Biomes as data (`types.ts`: `Biome`, `Level`, `LevelKey`). `index.ts`: the registry, `MAPS` (the pool every mode shares), `seedMap(seed)` / `seedLevel(seed)` (the map a seed stands for, in every mode), `runLevel(runSeed, index, biome)` (roguelike levels: a seed from the run seed and level number that stands for that biome), `featuredSeed(biome)` (its showcase course) and `skyIslesLevel(seed)` (Sky Isles on any seed, for the frozen-map check). `skyIsles.ts`: the race map, frozen. `reef.ts`: Sunken Reef, the level under the sea (`SkySpec.underwater`) |
 | `game/world/World.ts` | Everything a level decides: course, rock field, trees, palette; built from a `Level` (biome + seed + mood). `distance()` (rock, trees, water) for proximity, the camera and the fallback collisions; `otherDistance()` is everything but the rock (the rock collides as drawn, see `landCollider.ts`); `lost()` below the islands. No rendering |
 | `game/world/islands.ts` | `RockField`: the floating islands as one signed distance field (shapes melted with `smin`, roughened, a tube carved along the racing line) |
 | `game/world/mesher.ts`, `mesher.worker.ts` | Cuts chunks of the rock field into flat-shaded meshes in Web Workers, and places trees (from the grid's own vertices, so the race map's tree colliders never move; `treeSink` stretches a trunk down to snapped rock, drawn only). Workers rebuild the World from a `LevelKey` |
@@ -152,12 +157,12 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/world/atmosphere.ts` | `ATMOSPHERE` light uniforms shared per biome; `atmospheric()` patches Lambert materials (sun-tinted haze matching the sky, valley mist, backlit rims, rock strata); `skyMaterial()` (gradient, HDR sun or moon disc and halo, painted clouds, twinkling stars at night). Under the sea (`ATMOSPHERE.underwater`, set from `SkySpec.underwater`): `atmospheric()` adds caustics, and the sky is the water's surface seen from below (`ATMOSPHERE.surface`) |
 | `game/world/deep.ts` | Under the sea, looks only: `LightShafts` (shafts of light from the surface, a world-fixed grid of them round the camera) and `SeaLife` (schools of fish, jellyfish), each one instanced draw call animated in the vertex shader. `DEEP` in `tuning.ts` |
 | `game/world/water.ts` | River pools, waterfall curtains and seas. River pools write depth so the later waterfall draw cannot paint foam over the upstream surface; dry banks are discarded. River shading continues to the edge, with narrow animated lip foam (`WATER.lipFoam`, `lipFoamWidth`, per-pixel distance) and a short `WATER.fallBlend` join below it (0.2 m). Both river and island curtains advect foam downward through a fixed travel coordinate, accelerating with the drop (`WATER.fallSpeed`); elapsed time never reverses the flow. Rendering only; water collisions still use `Steps` |
-| `game/world/WorldView.ts` | Meshes for a World, as its biome describes them: land streamed from the workers (Sky Isles' chunks, or a `LandStreamer` for v2 land), pines, the sea of clouds and cloud puffs, sky, gates. `ready` is false until the land near you has arrived. `collider` (a `LandCollider`) holds the land on screen; `covers(x, y, z)` says whether the land at a point is on screen (or there is none), else collisions there fall back to the distance field |
+| `game/world/WorldView.ts` | Meshes for a World, as its biome describes them: land streamed from the workers (Sky Isles' chunks, or a `LandStreamer` for v2 land), pines, the sea of clouds and cloud puffs, sky, gates. `ready` is false until the land near you has arrived. `collider` (a `LandCollider`) holds the land on screen; `covers(x, y, z)` says whether the land at a point is on screen (or there is none), else collisions there fall back to the distance field. `park()` / `resume(scene)`: set aside with its workers stopped (the menu's backdrop keeps a few maps) and back on screen with its light, fog and workers |
 | `game/world/crystals.ts` | Crystal gates: instanced crystals (bob, spin, pass flare and burst in the shader), veil discs with the pass shockwave, light pillars over the next gate and the finish. `orient(index, normal)` turns one gate (Resonance; looks only) |
 | `session/` | Solo, room, explore and run sessions wiring a `Game` to the network and UI. `ExploreSession`: free flight through any biome (`/?explore=verdant&seed=2`), nothing saved; `?test` reuses it with a RunController for real portals/upgrades and unsaved victory previews, showing only test shortcuts rather than biome/light controls. `RunSession`: a roguelike run (`/?run=<seed>`), best score per run seed in localStorage |
 | `net/` | Server clock sync and the room connection (SSE down, POST up) |
 | `staleBuild.ts` | After a redeploy, an open tab's lazy chunks (bloom, `?tune`) and mesher worker are 404s: `reloadForNewBuild` reloads the page once (at most every 30 s, production only) |
-| `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, controls, and the run's HUD, title card and upgrade picker (`RunHud.tsx`). The menu's live course behind the glass is `MenuBackdrop` (a `Game` in `drift` attract mode, which switches courses with `setSeed` and snapshots each one for card art); today's best folds into a flag (`TodaysBest`). `CourseSelect` is the map select (a carousel of course cards; featured art in `public/courses/`). Before a race, `GameScreen`'s `ReadyCard` sits where the timer will be; its `Panel` (results) folds to its heading and main buttons on narrow screens. `Help` is the "?" with its How to fly card and the newcomer's "First flight?" (`keys.ts`: the keys as the player bound them). `Coach` is the tutorial: one control at a time, watched on keys, mouse and gamepad. `BiomeSelect` is the adventure's map select (a card per biome, art in `public/biomes/`) |
+| `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, controls, and the run's HUD, title card and upgrade picker (`RunHud.tsx`). The menu's live course behind the glass is `MenuBackdrop` (a `Game` in `drift` attract mode, which switches courses with `setSeed`, keeps a few it showed parked (`ATTRACT_KEEP` besides its own) so going back is instant, snapshots each one for card art and reports when one is all in (`onShown`)); today's best folds into a flag (`TodaysBest`). `MapSelect` is the map select of every mode (`solo`, `run`, `room`: a carousel of today's card, one per map (`featuredSeed`) and a random one, art in `public/maps/`; a run's card shows your best on it, never the maps after the first; over a room's lobby it opens as `RoomMapSelect`, holding the game; on the landing page, a course the backdrop is still building is covered by its picture (`.map-veil`), which fades into the live view once it's in). Before a race, `GameScreen`'s `ReadyCard` sits where the timer will be; its `Panel` (results) folds to its heading and main buttons on narrow screens. `Help` is the "?" with its How to fly card and the newcomer's "First flight?" (`keys.ts`: the keys as the player bound them). `Coach` is the tutorial: one control at a time, watched on keys, mouse and gamepad |
 | `theme.ts` | The UI's colors per map: `useUiTheme(seed)` sets `--ink` (picked per palette name, else derived from the sky) and `--tint` (the horizon); every other shade comes from those two with `color-mix()`; `usePaletteTheme(palette)` does the same for any level (runs, explore, the map select) |
 | `route.ts` | The URL ↔ screen mapping (`screenFromSearch`, `urlFor`, `Screen`), pure so it's tested; `test` is honored on every single-player URL |
 | `media.ts` | `useMediaToggle(query)`: an open/closed toggle that starts open where a media query matches and follows the screen when it changes |
@@ -222,6 +227,132 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: The map select without islands popping in (Claude)
+
+Reported by the UX group: the map select's backdrop is expensive and its
+islands pop in one by one. Asked for: a cache, or a silent preload once the
+landing page has loaded. The landing page's live backdrop stays (it's
+affordable). UI and rendering only: no gameplay change.
+
+- **Measured first** (the app's browser on her machine, dev server, the
+  backdrop's drift view): a map's nearby land is in after 1.0 s (Sky
+  Archipelago) to 1.7 to 2.4 s (Verdant, Reef, Twilight, Glacier), and its
+  drawn geometry is 10 MB (Archipelago) to 33 to 55 MB (the v2 maps),
+  without the streamer's hidden-mesh cache and the three mesher workers a
+  map runs. Building all nine ahead would hold about 400 MB and 27 workers,
+  so only the pictures are fetched ahead.
+- **Pictures first** (`MapSelect`, `.map-veil`): while the backdrop builds
+  the course in the middle, that course's picture covers it, a little
+  blurred, and fades into the live view once its land is all in (ready,
+  plus 1.5 s for the far islands). Cards follow at once; the backdrop
+  follows a card after 0.45 s (was 0.3), so flipping fast builds nothing.
+  Cards without their own picture (today's, a random seed, the run's) show
+  their map's picture until the backdrop takes one (before: only the sky
+  gradient), in rooms too. The nine pictures are fetched 1.5 s after the
+  landing page opens (`Menu.tsx`, 0.8 MB).
+- **Maps kept** (`Game.setLevel` in attract mode, `WorldView.park` /
+  `resume`, `LandStreamer.park`): the backdrop keeps the landing page's own
+  course and the last `ATTRACT_KEEP` (2) others it showed, parked: workers
+  terminated, requests in flight forgotten (asked again on return), hidden
+  meshes dropped, what's on screen kept. Going back to one swaps it in with
+  its light, fog and background in about 0.5 s (the card delay); Back to the
+  landing page is instant. `MenuBackdrop` reports `onShown` at once for a
+  kept course, and snapshots each course once. Games other than the
+  backdrop keep nothing, as before.
+- Verified: tsc, lint, build and 64 frontend tests pass. In the app's
+  browser on the dev server: the picture over Verdant, then its live view
+  3.8 s later; back to today's card in 0.55 s from the kept map; Glacier,
+  Archipelago and Lagoon in 3.3 to 4.2 s each; at most the landing's course
+  plus two kept, all with stopped workers; background and fog colors right
+  after every swap. Not measured: frame time and memory in a focused
+  window over a long session, a slow machine (the picture just stays up
+  longer).
+- Rebased onto `main` (`251d430`: touch controls, the design list's
+  abilities 11 to 20, waterfalls); README and this file conflicted, both
+  sides kept. On the rebased branch: tsc, lint, build, 80 frontend tests
+  (Node 24) and 24 backend tests pass; the landing page and its map select
+  load with no new console errors.
+
+### 2026-10-10: One map pool for all three modes (Claude)
+
+Asked for by the UX group, on `fix-map-pool` (from `main`): the team took the
+maps to be shared by every mode, but time trials and rooms only ever flew
+Sky Isles; the other eight biomes were the adventure's alone. The goal: any
+map in any mode, and one seed always the same map. Nothing is live, so no
+old times or ghosts had to be kept. A deliberate gameplay change (rule 6).
+
+- **A seed stands for a map** (`world/biomes/index.ts`): `seedMap(seed)`
+  picks the biome (`MAPS`, every biome in `BIOMES`, from the seed's `map`
+  stream) and its mood (the `palette` stream); `seedLevel(seed)` builds it.
+  Time trials, rooms, today's course, the menu's backdrop and the victory lap
+  all go through it (`Game.setSeed`, `useUiTheme`), so the rooms' backend,
+  which only sends a seed, didn't change. Seeds 1 to 9000 spread evenly,
+  about 1000 per map. Adding a biome reshuffles most seeds.
+- **Runs** (`runLevel`, `run.ts`): a level's seed is the first of a short
+  series that stands for its biome, so each adventure level is exactly the
+  map a time trial on that seed flies; level 1 is the run seed itself. The
+  order (`runOrder`, decided with the UX group): the run seed's own map
+  first (the card picked), then seven of the other eight maps shuffled by
+  the seed, so a run flies eight different maps; there is no fixed first
+  map or Aurora finale any more (the finale's cutscene still plays after
+  level 8). `destination(seed, path)` is the first map of the order not
+  flown yet. Today's run has a seed of its own (`dailyRunSeed`, from the
+  date like `dailySeed`), so it starts on another map than today's course.
+  Every run's levels changed. The Easter eggs moved with them:
+  ETH stands in Verdant levels `/?explore=verdant&seed=` 4, 9, 21, 28, the
+  Einstein bust in 5, 8, 11, 16, 23, 28 (the structures tests use 2 and 28).
+- `skyIslesLevel(seed)` is the old `raceLevel`: Sky Isles' generator is still
+  frozen, and `__raceHashes()` (and the autopilot and mesh tests) check it
+  on Sky Isles seeds as before.
+- **One map select** (`MapSelect.tsx`, `MapSelect.css`, replacing
+  `CourseSelect` and `BiomeSelect`), in three modes with their own words:
+  today's card, one course per map (`featuredSeed`: the lowest seed that
+  stands for it: Sky Isles 16, Verdant 5, Glacier 14, Archipelago 1,
+  Lagoon 6, Twilight 3, Ember 12, Aurora 4, Reef 13) and the random card
+  (roll, or type a seed); cards show the map, its mood, the seed and gates.
+  Picking a card plays exactly it: Solo flies it, Adventure starts the run
+  on it (the card shows your best on that run; the maps after the first
+  stay a surprise, by the UX group's call), With friends creates a room on it. Its keys are taken
+  in the capture phase, so over a game they never reach the flight or the
+  lobby. Their art is one picture per map,
+  `public/maps/<biome>.jpg` (drift view, z = 400 or 900, software GL); the
+  old `public/courses/` and `public/biomes/` are gone. The landing card and
+  the top bars name the map and its mood; the Adventure card names today's
+  run's first map.
+- **Rooms on a seed** (backend `rooms.py`, `models.py`, `app.py`; frontend
+  `RoomClient`, `RoomSession`, `route.ts`): `POST /api/rooms/{code}/join`
+  takes an optional `seed` (used only when it creates the room), and
+  `POST /api/rooms/{code}/map` an optional `seed` (else random, as before).
+  In the lobby, Change map (`N`) opens the map select over the game
+  (`RoomMapSelect`, held paused); the pick switches the room for everyone.
+  It closes if the race starts meanwhile. Deploy frontend and backend
+  together (old frontends still work: the seed is optional).
+- **Start waits for the land** (`GameScreen.tsx`): v2 maps take longer to
+  build than Sky Isles, and in races nothing glides in, so a time trial's
+  Start (and `Enter`) waits until the land around you is in, reading
+  "Loading the map…". In a room, your own Start does too; someone else can
+  still start, and the 5 s countdown is all the land gets.
+- **Run top bar** (`GameScreen.tsx`): "Level 1/8 · map · mood", without the
+  run's seed (it was "Run #seed · level 1/8 · …"); test mode keeps its seed
+  and also says "Level".
+- Verified: lint, build and 64 frontend tests pass (Node 24; the run test
+  checks every level's seed stands for its map, eight different maps, runs
+  starting on every map); 24 backend tests (one new: a room created and
+  switched on a given seed). In the app's browser on the dev server with
+  this branch's backend: a room created from the Glacier card (#14), `N`
+  in its lobby, the Reef card, Enter: the room on #13 and still in the
+  lobby; `Esc` closes it unchanged; the Adventure card for today's run,
+  the Reef card, a run started on it (`?run=13`, level 1 the Reef).
+  In headless
+  Chromium on the dev server (software GL): time trials on Sky Isles (16),
+  the Reef (13), Glacier (14), Lagoon (6) and Ember (12): an early `Enter`
+  is ignored, Start comes back after 3 s (Sky Isles) to 20 to 32 s (the
+  others, software GL), and GO always finds the land ready. In the app's
+  browser: the landing card and all 11 course cards. Not checked: load times
+  on a real GPU, a two-player room on a v2 map (the map switch reaching a
+  second pilot), every map's race by hand, a run through a portal to its
+  second map by hand (the test checks the order).
 
 ### 2026-10-10: Review PR #33 against current main
 
@@ -2448,14 +2579,24 @@ finale and the finish screen. What's open:
 - Restyle the upgrade picker, the title card and the finish screen in the
   Solo look (the run HUD and intro are done). Biome palettes have no picked
   inks (`theme.ts`), so most derive a similar deep blue; pick some by eye.
-- **Adventure map select:** starting a run in the chosen biome is the run
-  designer's call (today every run starts in Sky Isles). Re-render
-  `public/biomes/` when the biomes' looks change.
+- **Map select backdrop:** the picture and the live view are different
+  shots of the same map (the live camera is wherever its drift is), so the
+  fade is a cut of sorts; matching them would need the drift to start where
+  the picture was taken. Preloading whole maps was left out (about 40 MB and
+  three workers each); the next card to the right could be built ahead if
+  wanted.
+- **Map select:** re-render `public/maps/` when the maps' looks change
+  (drift view on each map's `featuredSeed`). Over a room's lobby, today's
+  and random cards show their map's picture, maybe in another mood (no
+  backdrop to take one); runs have no finale biome any more (Aurora is one map among nine): if the
+  run's designer wants a fixed last map, `runOrder` is the place.
+- **Map pool follow-ups:** time how long each map takes to load on a real GPU;
+  if it's long, rooms want their countdown to wait for every pilot's land (a
+  backend change), and the time trial's Start could show progress.
 - The run's screens don't use the folding `Panel` (the time trial's and
   rooms' results do).
-- **Map select follow-ups:** re-render `public/courses/` when Sky Isles' looks
-  change (drift view at z = 400 or 900, see the change log); rendered on a real
-  GPU with bloom they'd look better. Swipe on touch screens. More cards
+- **Map select follow-ups:** the map art was rendered without bloom (software
+  GL); on a real GPU it would look better. Swipe on touch screens. More cards
   (yesterday's course, a friend's seed) if wanted.
 - **Tutorial follow-ups:** play it in a room and an adventure, with a gamepad,
   and time a newcomer (aim: under 30 s). Maybe a chime per step. The room's

@@ -2,8 +2,9 @@ import { IconArrowLeft, IconChevronDown, IconChevronUp, IconSettings } from "@ta
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from "react";
 import type { Screen } from "../App";
 import { holdGame } from "../game/hold";
-import { formatTime, ordinal } from "../format";
+import { formatTime, ordinal, untilTomorrow } from "../format";
 import { controlsBlocked } from "../game/input";
+import { dailySeed } from "../game/rng";
 import { webglAvailable } from "../game/webgl";
 import { BIOMES, type BiomeId } from "../game/world/biomes";
 import { RUN } from "../game/tuning";
@@ -22,6 +23,7 @@ import { HelpButton } from "./Help";
 import SettingsPanel from "./SettingsPanel";
 import Hud from "./Hud";
 import Leaderboard from "./Leaderboard";
+import MapSelect from "./MapSelect";
 import "./GameScreen.css";
 import "./Touch.css";
 
@@ -156,9 +158,11 @@ const SoloScreen = ({ seed, settings, onSettings, onExit, tutorial, onTutorialEn
   useUiTheme(seed);
   // The tutorial runs in the warm-up, before the clock: the start button waits for it
   const coaching = !!tutorial && stage === "ready" && !error;
+  // So does the land: some maps take a few seconds to build, and the clock shouldn't start before them
+  const building = stage === "ready" && !!hud?.loading;
 
   useHotkeys({
-    Enter: () => stage !== "racing" && !coaching && session.start(),
+    Enter: () => stage !== "racing" && !coaching && !building && session.start(),
     Backspace: () => stage === "racing" && session.abort(),
   });
 
@@ -166,14 +170,14 @@ const SoloScreen = ({ seed, settings, onSettings, onExit, tutorial, onTutorialEn
     <div className="game">
       <div ref={ref} className="game-view" />
       {hud && <Hud hud={hud} settings={settings} />}
-      <TopBar title={`Time trial · #${seed}${hud ? ` · ${hud.paletteName}` : ""}`} onExit={onExit} controls={{ settings, onSettings, muted: !!hud?.muted }} />
+      <TopBar title={`Time trial · #${seed}${hud ? ` · ${hud.biomeName} · ${hud.paletteName}` : ""}`} onExit={onExit} controls={{ settings, onSettings, muted: !!hud?.muted }} />
       {error && <div className="banner glass">{error}</div>}
 
       {coaching && <Coach onEnd={onTutorialEnd} observeInput={session.observeInput} />}
       {stage === "ready" && !error && !coaching && (
         <ReadyCard>
-          <button className="primary start-cta" onClick={() => session.start()}>
-            Start the run <kbd>Enter</kbd>
+          <button className="primary start-cta" disabled={building} onClick={() => session.start()}>
+            {building ? "Loading the map…" : <>Start the run <kbd>Enter</kbd></>}
           </button>
         </ReadyCard>
       )}
@@ -222,9 +226,24 @@ const SoloScreen = ({ seed, settings, onSettings, onExit, tutorial, onTutorialEn
 
 // --- Race room -------------------------------------------------------------------
 
-const RoomScreen = ({ code, settings, onSettings, onExit, tutorial, onTutorialEnd = noop }: ScreenProps & { code: string }) => {
+/** The landing page's map select over the room's game (held paused): the room flies the map picked next */
+const RoomMapSelect = ({ onPick, onBack }: { onPick: (seed: number) => void; onBack: () => void }) => {
+  const [countdown, setCountdown] = useState(untilTomorrow);
+  useEffect(() => holdGame(), []);
+  useEffect(() => {
+    const timer = setInterval(() => setCountdown(untilTomorrow()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <div className="map-overlay">
+      <MapSelect mode="room" daily={dailySeed()} countdown={countdown} onPick={onPick} action="Race this map" onBack={onBack} />
+    </div>
+  );
+};
+
+const RoomScreen = ({ code, seed, settings, onSettings, onExit, tutorial, onTutorialEnd = noop }: ScreenProps & { code: string; seed?: number }) => {
   const [session] = useState(
-    () => new RoomSession(code, { clientId: clientId(), nickname: settings.nickname }, settings),
+    () => new RoomSession(code, { clientId: clientId(), nickname: settings.nickname, seed }, settings),
   );
   const ref = useMountedSession(session, settings);
   const { hud, connection, message, room, selfId, lastPlace } = useSyncExternalStore(
@@ -236,20 +255,29 @@ const RoomScreen = ({ code, settings, onSettings, onExit, tutorial, onTutorialEn
   const lobby = room?.phase === "lobby";
   // The tutorial runs in the lobby; if someone starts the race first, it's over
   const coaching = !!tutorial && !!room && lobby;
+  // Your own land first (others can still start: the countdown gives it a few more seconds)
+  const building = lobby && !!hud?.loading;
   useEffect(() => {
     if (tutorial && room && !lobby) onTutorialEnd();
   }, [tutorial, room, lobby, onTutorialEnd]);
+  // The map select, for the next race; it closes if someone starts this one meanwhile
+  const [choosing, setChoosing] = useState(false);
+  const [wasLobby, setWasLobby] = useState(lobby);
+  if (lobby !== wasLobby) {
+    setWasLobby(lobby);
+    if (!lobby) setChoosing(false);
+  }
 
   useHotkeys({
-    Enter: () => lobby && !coaching && session.start(),
-    KeyN: () => lobby && session.newMap(),
+    Enter: () => lobby && !coaching && !building && !choosing && session.start(),
+    KeyN: () => lobby && !coaching && setChoosing(true),
   });
 
   return (
     <div className="game">
       <div ref={ref} className="game-view" />
       {hud && <Hud hud={hud} settings={settings} />}
-      <TopBar title={`Room ${code}${hud ? ` · course #${hud.seed} · ${hud.paletteName}` : ""}`} onExit={onExit} controls={{ settings, onSettings, muted: !!hud?.muted }}>
+      <TopBar title={`Room ${code}${hud ? ` · course #${hud.seed} · ${hud.biomeName} · ${hud.paletteName}` : ""}`} onExit={onExit} controls={{ settings, onSettings, muted: !!hud?.muted }}>
         <span className={`connection glass ${connection}`}>
           <span className="dot" />
           {connection === "connected" ? "online" : connection}
@@ -264,14 +292,23 @@ const RoomScreen = ({ code, settings, onSettings, onExit, tutorial, onTutorialEn
       {room && lobby && !coaching && (
         <ReadyCard>
           <div className="row">
-            <button className="primary start-cta" onClick={() => session.start()}>
-              Start race <kbd>Enter</kbd>
+            <button className="primary start-cta" disabled={building} onClick={() => session.start()}>
+              {building ? "Loading the map…" : <>Start race <kbd>Enter</kbd></>}
             </button>
-            <button onClick={() => session.newMap()}>
-              New map <kbd>N</kbd>
+            <button onClick={() => setChoosing(true)}>
+              Change map <kbd>N</kbd>
             </button>
           </div>
         </ReadyCard>
+      )}
+      {choosing && lobby && (
+        <RoomMapSelect
+          onPick={(seed) => {
+            session.newMap(seed);
+            setChoosing(false);
+          }}
+          onBack={() => setChoosing(false)}
+        />
       )}
 
       {room && !lobby && me && !me.racing && (
@@ -330,7 +367,7 @@ const ExploreScreen = ({ biome, seed, settings, onSettings, onExit, testMode = f
       {/* Test mode flies a real run: its score, chain and compass to the portal */}
       {testMode && run && !summary && !transitioning && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
       {!summary && <TopBar title={testMode
-        ? `Test · #${seed}${run ? ` · level ${run.level}/${run.length} · ${run.biome} · ${run.mood}` : ""} · ${speed}× speed`
+        ? `Test · #${seed}${run ? ` · Level ${run.level}/${run.length} · ${run.biome} · ${run.mood}` : ""} · ${speed}× speed`
         : `Explore · ${hud ? `${hud.biomeName} · ${hud.paletteName}` : ""} · #${seed}`} onExit={onExit} controls={{ settings, onSettings, muted: !!hud?.muted }} />}
       {error && <div className="banner">{error}</div>}
       {!summary && !transitioning && <aside className={`debug-panel glass${testMode ? " test" : ""}`}>
@@ -426,7 +463,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onT
       {showTitle && arrived && <TitleCard level={arrived.level} length={run!.length} biome={arrived.biome} />}
       {stage !== "summary" && (
         <TopBar
-          title={`Run #${seed}${run ? ` · level ${run.level}/${run.length} · ${run.biome} · ${run.mood}` : ""}`}
+          title={run ? `Level ${run.level}/${run.length} · ${run.biome} · ${run.mood}` : "Adventure"}
           onExit={onExit}
           controls={{ settings, onSettings, muted: !!hud?.muted }}
         />
@@ -543,7 +580,7 @@ const GameScreen = ({ screen, onNewRun, ...props }: ScreenProps & { screen: Excl
   return screen.kind === "solo" ? (
     <SoloScreen seed={screen.seed} {...props} />
   ) : (
-    <RoomScreen code={screen.code} {...props} />
+    <RoomScreen code={screen.code} seed={screen.seed} {...props} />
   );
 };
 

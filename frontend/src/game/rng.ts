@@ -62,6 +62,11 @@ export function dailySeed(date = new Date()): number {
   return 1 + (hash128(`daily/${date.toISOString().slice(0, 10)}`)[0] % 999_999);
 }
 
+/** Today's adventure: a seed of its own, so it doesn't start on today's course */
+export function dailyRunSeed(date = new Date()): number {
+  return 1 + (hash128(`daily-run/${date.toISOString().slice(0, 10)}`)[0] % 999_999);
+}
+
 export function randomSeed(): number {
   return 1 + Math.floor(Math.random() * 999_999);
 }

@@ -203,6 +203,17 @@
   pointer-events: none;
 }
 
+/* Waiting for the map: no call to action yet */
+.ready-card .start-cta:disabled,
+.ready-card .start-cta:disabled::after {
+  animation: none;
+}
+
+.ready-card .start-cta:disabled {
+  opacity: 0.75;
+  cursor: progress;
+}
+
 @keyframes cta-halo {
   0% {
     box-shadow:

@@ -7,23 +7,25 @@ same seed. Every couple of seconds the racing line threads a gate. Dive for
 speed, skim the rock for style points and a boost, and beat your friends to
 the last ring.
 
-- **Race friends:** create a room, share its code, everyone flies the same map
-  at the same time and sees each other live.
+- **Race friends:** create a room on a map from the map select, share its
+  code, everyone flies the same map at the same time and sees each other
+  live. In the lobby, `N` opens the map select again for the next race.
 - **Time trial:** race the clock on today's course, or choose one in the map
-  select (a course for each of Sky Isles' moods, a random one or any seed),
+  select (a course on each of the nine maps, a random one or any seed),
   against the ghosts of the fastest runs. Leaderboards per seed.
-- **Adventure:** a roguelike run through eight biomes linked by portals:
-  Sky Isles, Verdant Highlands, then the Sunken Reef (a dive under the sea)
-  and four of Glacier Peaks, Sky Archipelago, Coral Lagoon, Twilight Forest
-  and Ember Wastes in an order the run's seed decides, and the Aurora Summit
-  last. Chain gates, skim for style, and pick an upgrade at every portal
-  (stronger boost, wingbeats, glide lock, and abilities like Hover-Stall,
-  Plunging Attack, Gale Force, a spirit manta to draft behind, Resonance,
-  Ascension and the falcon and butterfly gliding stances).
-  A map select on the Adventure tab shows every biome.
+- **Adventure:** a roguelike run across eight different maps linked by
+  portals. It starts on the map you pick (today's run, one of the nine, a
+  random one or any seed), then flies seven of the other eight in an order
+  the run's seed decides, so every level is a new biome. Chain gates, skim
+  for style, and pick an upgrade at every portal (stronger boost,
+  wingbeats, glide lock, and abilities like Hover-Stall, Plunging Attack,
+  Gale Force, a spirit manta to draft behind, Resonance, Ascension and the
+  falcon and butterfly gliding stances). Today's run has its own seed,
+  apart from today's course.
 
-Races and time trials always fly Sky Isles, so recorded ghosts and
-leaderboards stay valid; the other biomes are for the adventure.
+All three modes share one pool of maps: a seed stands for one of the nine
+biomes, its layout and its light, the same in a time trial, a room and an
+adventure level.
 
 Built on the VIScon hackathon template: React + Three.js in the browser,
 FastAPI behind Caddy on the team VM.
@@ -82,7 +84,7 @@ docker compose up -d --build
 | `Enter` in the finale     | Skip the cutscene                                  |
 | `Backspace` at the end    | Back to the menu from the finish screen            |
 | `Enter`                   | Start the run / the race, fly again                |
-| `N`                       | New map (in a room's lobby)                        |
+| `N`                       | Change map (in a room's lobby: the map select)     |
 | `←` `→` / `A` `D`         | Switch course in the map select (`Esc` goes back)  |
 | `Esc`                     | Free the mouse                                     |
 | `Shift+P` in `?test`       | Spawn a usable portal ahead of the pilot            |
@@ -396,11 +398,11 @@ All routes start with `/api`; interactive docs are at `/api/docs`.
 | :----- | :------------------------- | :------------------------------------------------------- |
 | `GET`  | `/api/me`                  | The current user (portal login or guest), `has_played`   |
 | `GET`  | `/api/time`                | Server clock in ms, for clock sync                       |
-| `POST` | `/api/rooms/{code}/join`   | Join (or create) a room; returns your id and token       |
+| `POST` | `/api/rooms/{code}/join`   | Join (or create, on `seed` if given) a room; id, token   |
 | `GET`  | `/api/rooms/{code}/stream` | SSE: room events and position snapshots                  |
 | `POST` | `/api/rooms/{code}/state`  | Your position, rotation, speed and rings passed          |
 | `POST` | `/api/rooms/{code}/start`  | Start a race (5 s countdown)                             |
-| `POST` | `/api/rooms/{code}/map`    | New random seed (lobby only)                             |
+| `POST` | `/api/rooms/{code}/map`    | Another map: `seed` if given, else random (lobby only)   |
 | `POST` | `/api/rooms/{code}/finish` | Report your finish time and ghost                        |
 | `POST` | `/api/rooms/{code}/leave`  | Leave the room                                           |
 | `GET`  | `/api/rooms/{code}`        | Room state, for debugging                                |

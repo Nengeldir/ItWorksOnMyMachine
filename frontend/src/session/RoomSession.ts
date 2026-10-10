@@ -159,7 +159,7 @@ export class RoomSession {
     this.client?.start().catch((e: Error) => this.flash(e.message));
   }
 
-  newMap() {
-    this.client?.newMap().catch((e: Error) => this.flash(e.message));
+  newMap(seed?: number) {
+    this.client?.newMap(seed).catch((e: Error) => this.flash(e.message));
   }
 }

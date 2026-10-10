@@ -3,7 +3,8 @@ import { BIOMES, type BiomeId } from "./game/world/biomes/index";
 export type Screen =
   | { kind: "menu"; joinCode?: string }
   | { kind: "solo"; seed: number }
-  | { kind: "room"; code: string }
+  // `seed`: creating the room on the map picked in the map select (not in the URL: joiners get the room's)
+  | { kind: "room"; code: string; seed?: number }
   | { kind: "explore"; biome: BiomeId; seed: number }
   | { kind: "test"; biome: BiomeId; seed: number }
   | { kind: "run"; seed: number }

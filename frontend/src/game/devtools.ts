@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { fieldNormal } from "./death";
 import type { Game } from "./Game";
 import { fxTime } from "./particles";
-import { raceLevel } from "./world/biomes";
+import { skyIslesLevel } from "./world/biomes";
 import { meshChunk, rockChunks } from "./world/mesher";
 import { World } from "./world/World";
 
@@ -275,7 +275,7 @@ function raceHashes() {
   };
   const out: Record<number, Record<string, string>> = {};
   for (const seed of [1, 7, 42]) {
-    const w = new World(raceLevel(seed));
+    const w = new World(skyIslesLevel(seed));
     const chunks = rockChunks(w).sort((a, b) => a.key - b.key);
     let mesh = 2166136261;
     let trees = 2166136261;
