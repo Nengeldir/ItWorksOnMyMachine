@@ -1,5 +1,6 @@
 import type { SpeciesId } from "../flora/species";
 import type { Palette } from "../palette";
+import type { StructureId } from "../structures/kinds";
 import type { GroundSpec } from "../terrain/ground";
 
 // A biome is data: what a level looks like, what grows there, what floats in
@@ -64,6 +65,8 @@ export type Feature =
   | { kind: "islets"; count: number; radius: Range; lateral: Range; surface: number }
   | { kind: "rings"; count: number; radius: Range; lateral: Range; rise: Range; surface: number }
   | { kind: "volcano"; lateral: number; radius: number; rise: number; surface: number }
+  /** Humped stone bridges over the river, a little upstream of some falls (list them last: they are built around everything else) */
+  | { kind: "bridges"; chance: number; width: number; surface: number }
   | { kind: "summit"; along: number; lateral: number; radius: number; rise: number; surface: number };
 
 export interface LandRecipe {
@@ -148,6 +151,39 @@ export type VegetationSpec =
       grass: GrassSpec | null;
     };
 
+/**
+ * Something built, standing on the land: placed on its own sparse grid by site
+ * rules, drawn and collided like a plant. Only where the vegetation is "flora".
+ */
+export interface StructureSpec {
+  id: StructureId;
+  spacing: number; // metres between candidate sites (a jittered grid)
+  chance: number; // share of candidates tried
+  height: [number, number]; // metres
+  /** A landmark: at most one per this many metres of the course, on the best site there (`chance`: how likely each stretch has one; `where.lateral` bounds the search). List landmarks first */
+  landmark?: number;
+  colors: {
+    stone: string; // walls
+    stone2?: string; // mossy or weathered patches
+    roof: string;
+    wood?: string;
+    cloth?: string; // banners, sails
+    trim?: string; // gold caps and finials
+    light?: string; // windows and lanterns: dim by day, glowing at night
+    snow?: string; // snow lying on its roofs
+  };
+  where?: {
+    above?: [number, number]; // metres above the racing line
+    lateral?: [number, number]; // metres to the side of the racing line
+    wet?: boolean; // only near water (true) or away from it (false)
+    water?: [number, number]; // standing in the sea, on ground this deep under it (stilts, sunken ruins)
+    forest?: boolean; // true: only in forests, false: only in the open
+    hilltop?: boolean; // only where the land falls away on most sides
+    on?: "ground" | "rock" | "any"; // open ground (the default), or on top of rock shapes: islands, islets, mesas, sea stacks
+    facing?: boolean; // its front turned towards the racing line (otherwise any way)
+  };
+}
+
 /** Mist and clouds around the land */
 export interface SkySpec {
   /** A faceted floor of clouds this far below the racing line (null: none) */
@@ -195,6 +231,8 @@ export interface Biome {
   readonly moods: readonly Palette[];
   readonly terrain: TerrainRecipe;
   readonly vegetation: VegetationSpec;
+  /** Towers, lanterns, windmills… (generator-v2 biomes with flora) */
+  readonly structures?: readonly StructureSpec[];
   readonly sky: SkySpec;
   readonly particles: ParticleStyle;
   readonly portals: PortalSpec;

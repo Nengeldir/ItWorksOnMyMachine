@@ -114,6 +114,13 @@ export const LAGOON: Biome = {
     ],
     grass: { spacing: 2.6, height: [0.5, 0.9], color: "#5aa040", tip: "#b8d070", flowers: ["#ff5a8a", "#ffd84a", "#ffffff", "#ff8a3a"], flowerShare: 0.3 },
   },
+  structures: [
+    // A lighthouse on a sea stack or an islet; huts on stilts and the columns of a drowned city in the shallows, lanterns on the islets
+    { id: "lighthouse", landmark: 1100, spacing: 50, chance: 1, height: [36, 42], colors: { stone: "#f6f1e6", stone2: "#9c9484", roof: "#c8473a", cloth: "#d9574a", light: "#fff0b0" }, where: { lateral: [70, 420], water: [-40, -1], on: "rock" } },
+    { id: "stiltHut", spacing: 34, chance: 0.6, height: [7, 9], colors: { stone: "#e6d2a8", stone2: "#d0b888", roof: "#b8894a", wood: "#7a5636" }, where: { lateral: [20, 420], water: [0.4, 2.6], on: "any" } },
+    { id: "ruinColumn", spacing: 44, chance: 0.6, height: [9, 14], colors: { stone: "#efe6d2", stone2: "#bfd8c6", roof: "#efe6d2" }, where: { lateral: [20, 500], water: [0.5, 5] } },
+    { id: "stoneLantern", spacing: 18, chance: 0.5, height: [2.6, 3.4], colors: { stone: "#e3d8c0", stone2: "#bfd8c6", roof: "#c8473a" }, where: { lateral: [0, 400], water: [-6, -0.6], on: "rock" } },
+  ],
   sky: { cloudSea: null, puffs: 45, puffsBelow: false, puffLift: 250, mist: { mode: "valley", above: 10, thickness: 30 } },
   particles: {
     ambient: [

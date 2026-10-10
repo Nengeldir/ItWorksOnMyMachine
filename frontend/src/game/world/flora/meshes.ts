@@ -9,7 +9,7 @@ import type { SpeciesId } from "./species";
 // (0 on the trunk's foot, 1 on the leaves; the shader moves it with the wind)
 // and a glow weight (self-lit caps and crystals).
 
-interface Paint {
+export interface Paint {
   color: THREE.Color;
   color2?: THREE.Color; // some faces take this one instead
   share2?: number; // share of faces painted color2
@@ -28,9 +28,13 @@ function random(): number {
   t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
+/** Restarts the shaping random, so a mesh comes out the same every time */
+export function reseed(value: number) {
+  seed = value;
+}
 const rr = (a: number, b: number) => a + (b - a) * random();
 
-function part(source: THREE.BufferGeometry, paint: Paint): THREE.BufferGeometry {
+export function part(source: THREE.BufferGeometry, paint: Paint): THREE.BufferGeometry {
   const geometry = source.index ? source.toNonIndexed() : source;
   if (geometry !== source) source.dispose();
   geometry.deleteAttribute("uv");
@@ -75,7 +79,7 @@ function blob(radius: number, squash = 0.8, detail = 0): THREE.BufferGeometry {
 }
 
 /** A cylinder between two points */
-function limb(a: THREE.Vector3, b: THREE.Vector3, r0: number, r1: number, sides = 5): THREE.BufferGeometry {
+export function limb(a: THREE.Vector3, b: THREE.Vector3, r0: number, r1: number, sides = 5): THREE.BufferGeometry {
   const dir = new THREE.Vector3().subVectors(b, a);
   const length = dir.length();
   const g = new THREE.CylinderGeometry(r1, r0, length, sides, 1);
@@ -85,7 +89,7 @@ function limb(a: THREE.Vector3, b: THREE.Vector3, r0: number, r1: number, sides 
   return g;
 }
 
-const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+export const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 interface Colors {
   foliage: THREE.Color;
@@ -295,7 +299,7 @@ function redwood(c: Colors): THREE.BufferGeometry[] {
 
 /** Builds a species' mesh in a biome's colors */
 export function speciesGeometry(spec: FloraSpecies, snow: THREE.Color): THREE.BufferGeometry {
-  seed = spec.id.length * 7919 + 17;
+  reseed(spec.id.length * 7919 + 17);
   const foliage = new THREE.Color(spec.foliage);
   const colors: Colors = {
     foliage,

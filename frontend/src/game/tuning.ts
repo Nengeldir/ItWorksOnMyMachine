@@ -103,6 +103,12 @@ export const FLORA = {
   grassDistance: 140, // metres: grass and flowers grow on screen within this
 };
 
+/** Towers, lanterns, windmills. Looks only: colliders are the swept shapes */
+export const STRUCTURES = {
+  lights: 1, // windows and lanterns (dim by day, glowing at night)
+  sails: 1, // how fast windmill sails turn
+};
+
 /** Rivers, falls and seas */
 export const WATER = {
   glitter: 1, // sun glitter on the water
@@ -126,7 +132,7 @@ export const AUDIO = {
   nightMuffle: 0.55, // how much the highs are rolled off at night
 };
 
-const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, WATER, RUN, AUDIO } as const;
+const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, STRUCTURES, WATER, RUN, AUDIO } as const;
 const DEFAULTS = JSON.parse(JSON.stringify(GROUPS)) as typeof GROUPS;
 const STORAGE_KEY = "wingrace.tuning.speed-control-v1";
 
@@ -238,6 +244,8 @@ export const RANGES: Record<string, [number, number, number?]> = {
   texture: [0, 3],
   textureScale: [0.2, 4],
   wind: [0, 4],
+  lights: [0, 4],
+  sails: [0, 4],
   glitter: [0, 4],
   spray: [0, 4],
   tunnelFade: [0.3, 4],
@@ -257,6 +265,7 @@ export const TUNING_GROUPS: [string, Group][] = [
   ["Camera", CAMERA],
   ["Terrain", TERRAIN],
   ["Plants", FLORA],
+  ["Structures", STRUCTURES],
   ["Water", WATER],
   ["Run", RUN],
   ["Audio", AUDIO],
