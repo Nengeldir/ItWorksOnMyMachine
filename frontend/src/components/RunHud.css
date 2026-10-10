@@ -505,6 +505,8 @@
 
 .run-picker .card:hover,
 .run-picker .card:focus-visible {
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--ink);
   transform: translateY(-4px);
   box-shadow: 0 0 0 2px var(--warm-deep), 0 10px 30px rgba(0, 0, 0, 0.4);
 }
@@ -532,6 +534,16 @@
   color: #f4f0ff;
   background: rgba(255, 255, 255, 0.12);
   border-color: rgba(255, 255, 255, 0.25);
+}
+
+.run-picker .card:is(:hover, :focus-visible) .kind {
+  color: var(--ink-70);
+}
+
+.run-picker .card:is(:hover, :focus-visible) kbd {
+  color: var(--ink);
+  background: var(--ink-06);
+  border-color: var(--ink-45);
 }
 
 .run-picker .card .text {
