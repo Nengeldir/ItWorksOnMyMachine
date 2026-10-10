@@ -104,7 +104,9 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/world/crystals.ts` | Crystal gates: instanced crystals (bob, spin, pass flare and burst in the shader), veil discs with the pass shockwave, light pillars over the next gate and the finish |
 | `session/` | Solo, room, explore and run sessions wiring a `Game` to the network and UI. `ExploreSession`: free flight through any biome (`/?explore=verdant&seed=2`), nothing saved. `RunSession`: a roguelike run (`/?run=<seed>`), best score per run seed in localStorage |
 | `net/` | Server clock sync and the room connection (SSE down, POST up) |
-| `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, controls, and the run's HUD, title card and upgrade picker (`RunHud.tsx`) |
+| `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, controls, and the run's HUD, title card and upgrade picker (`RunHud.tsx`). The menu's live course behind the glass is `MenuBackdrop` (a `Game` in `drift` attract mode); today's best folds into a flag (`TodaysBest`). `GameScreen`'s `Panel` folds to its heading and main buttons on narrow screens; its `TopBar` asks before leaving a run |
+| `theme.ts` | The UI's colors per map: `useUiTheme(seed)` sets `--ink` (picked per palette name, else derived from the sky) and `--tint` (the horizon); every other shade comes from those two with `color-mix()` |
+| `media.ts` | `useMediaToggle(query)`: an open/closed toggle that starts open where a media query matches and follows the screen when it changes |
 
 Backend (`backend/`): `app.py` endpoints, `rooms.py` race state machine and
 15 Hz SSE relay, `store.py` SQLite runs and ghosts, `models.py` Pydantic models.
@@ -158,6 +160,51 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: UX fixes from playtesting (Claude)
+
+Asked for by the UX group: fix the problems found while playtesting, on
+`shiyu-ux` (seven commits), then `origin/main` merged in.
+
+- **Landing page:** the `?backdrop=` switch is gone; the backdrop always
+  drifts (`chase` stays in `Game` for a results screen). A page left open past
+  UTC midnight now switches to the new daily course: the countdown tick also
+  re-reads `dailySeed()` (`Menu.tsx`).
+- **Leaving a run:** Menu asks first ("Keep flying" / "Leave") while a time
+  trial is running or you're flying a room race; in warm-up, results and the
+  lobby it leaves at once. `TopBar` (`GameScreen.tsx`) takes a `leaveWarning`.
+- **Narrow screens:** below 700 px the course, results and lobby panels fold to
+  their heading and main buttons; a chevron opens the rest (`Panel` in
+  `GameScreen.tsx`). `useMediaToggle` (`media.ts`) is shared with the
+  landing's `TodaysBest`. The centred hint and banners no longer squeeze into
+  half the screen width.
+- **Ring marker:** clamped by its own measured size, `MARKER_EDGE` (8 px) from
+  each edge (`Game.updateMarker`), so the distance label never hangs off the
+  screen.
+- **Crash feedback:** while crashed, the HUD's speed and proximity read 0, the
+  clearance line hides, the flight panel dims, and "Crashed!" says where you
+  respawn: "Back to ring N" or "Back to the start" (`Game.hud`, `Hud.tsx`,
+  `Hud.css`).
+- **Start heading (a gameplay change, decided by the UX group):**
+  `World.startDirection` aims at the first ring, 4 m above its centre, when
+  the straight line there has 3 m of air; otherwise it keeps the course's old
+  heading (`course.startDirection`, the line 120 m ahead). Rock, rings and
+  trees are untouched, but race starts now face a little differently, so
+  times from before and after aren't strictly comparable. Hands-off flights
+  from the start on Sky Isles seeds 1 to 60: through the first ring 16 → 48
+  times, median time to a crash 5.7 → 9.1 s, and no seed does worse.
+- **Merging main:** `Menu.tsx` uses `raceLevel(daily).palette` and keeps the
+  Adventure tab; `Game.hud` reads the avatar's position; `startHeading()` runs
+  at the end of the `World(level)` constructor and works on both the legacy
+  islands and v2 land.
+- Verified: `npm run build` and `npm run lint` pass. `__raceHashes()` matches
+  `docs/dev-snippets.js` for seeds 1, 7 and 42 (trees, dist, rings). In
+  headless Chromium (software GL), after the merge: the Menu confirmation in a
+  time trial and in a room race, panels folded on a 390 px phone and open at
+  1440 px, the marker inside the screen with the ring off to every side, the
+  crash HUD, the midnight switch (fake clock) and the start-heading
+  simulation. Not checked: a real GPU window, touch input, and the run mode
+  with these changes.
 
 ### 2026-10-10: Merged main's menu and UI redesign (Claude)
 
@@ -556,6 +603,12 @@ ported to the islands world:
   runs and explore keep the menu's colors. Theme by the level's palette.
 - Restyle the run HUD, upgrade picker and run summary for the glass look
   (only the tokens were mapped).
+- The run's screens don't use the folding `Panel` yet, and leaving a run has
+  no confirmation; the time trial and rooms have both (UX fixes above).
+- `theme.ts` has no picked ink for Sky Isles' **Starlight** mood, so it gets
+  the one derived from its sky; pick one by eye.
+- Leaderboard times from before the 2026-10-10 start-heading change were flown
+  facing the old way; decide whether that matters for the daily boards.
 - **Feathers and sidequests are parked on `Pengyue-feathers-sidequests`**
   (see the change log). To bring them back, merge that branch's
   `run/quests.ts`, the biome `sidequests` and `portals.secret` data, lives in
