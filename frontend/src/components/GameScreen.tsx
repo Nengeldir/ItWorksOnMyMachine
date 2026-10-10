@@ -340,7 +340,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
   return (
     <div className="game">
       <div ref={ref} className="game-view" />
-      {hud && (stage !== "pick" || hud.paused) && <Hud hud={hud} />}
+      {hud && (hud.paused || (stage !== "pick" && run?.phase !== "portal")) && <Hud hud={hud} />}
       {run && stage !== "intro" && stage !== "summary" && stage !== "pick" && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
       {showTitle && arrived && <TitleCard level={arrived.level} length={run!.length} biome={arrived.biome} />}
       <TopBar

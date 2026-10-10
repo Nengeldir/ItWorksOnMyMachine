@@ -8,7 +8,7 @@ import { ATMOSPHERE } from "../world/atmosphere";
 import { BIOMES, type BiomeId, type Level, runLevel } from "../world/biomes";
 import type { World } from "../world/World";
 import type { WorldView } from "../world/WorldView";
-import { Portal, Tunnel } from "./portal";
+import { Portal, Wormhole, screenSparkle } from "./portal";
 import {
   CHAIN_MAX,
   GATE_POINTS,
@@ -26,7 +26,7 @@ import { type RunStats, type Upgrade, type UpgradeId, baseStats, offer, statsFor
 // One roguelike run, from the first level to the last portal: it loads each
 // biome, scores gates and style, runs the
 // abilities (handing the flight model its FlightMods), and plays the portal,
-// the upgrade pick and the tunnel to the next biome. Game calls it only in
+// the upgrade pick and the wormhole to the next biome. Game calls it only in
 // run mode, so races never see any of it.
 
 /** What the run needs from the game */
@@ -44,8 +44,14 @@ export interface RunHost {
   setLevel(level: Level): void;
   /** Puts the pilot back after `checkpoints` gates (0: the start) */
   respawnAt(checkpoints: number): void;
-  /** Holds the pilot still (in the tunnel) */
+  /** Holds the pilot still (in the wormhole) */
   freeze(on: boolean): void;
+  /** The portal's screen veil: blur and sparkle over everything, 0..1 */
+  veil(amount: number): void;
+  /** Inside the wormhole: the land, sky, weather and other effects of the level are hidden */
+  insideWormhole(on: boolean): void;
+  /** The drawing buffer's height in pixels (for sizing point sprites) */
+  readonly pixelHeight: number;
   gateBurst(index: number): void;
   wingbeat(): void;
   stinger(kind: "portal" | "upgrade" | "dash"): void;
@@ -99,6 +105,20 @@ function captureSky(scene: THREE.Scene, out?: Sky): Sky {
 const tmp = new THREE.Vector3();
 const toTarget = new THREE.Vector3();
 const forward = new THREE.Vector3();
+const SPARKLE = new THREE.Color();
+
+/** Seconds for the screen to blur into sparkles going in, and to clear again inside */
+const BLUR_IN = 0.5;
+const BLUR_CLEAR = 0.8;
+/** Seconds for the blur to come back on the way out (then it clears over RUN.tunnelFade) */
+const BLUR_OUT = 0.4;
+/** At most this long in the wormhole waiting for the next land, then out anyway (it glides in) */
+const EXIT_WAIT = 8;
+
+const ease = (t: number) => {
+  const x = clamp(t, 0, 1);
+  return x * x * (3 - 2 * x);
+};
 
 export class RunController {
   readonly seed: number;
@@ -107,7 +127,7 @@ export class RunController {
   private readonly events: RunEvents;
   private readonly group = new THREE.Group();
   private readonly mods: FlightMods = plainMods();
-  private readonly tunnel = new Tunnel();
+  private readonly wormhole = new Wormhole();
   private level = 1;
   private readonly path: BiomeId[] = [];
   private readonly picked: UpgradeId[] = [];
@@ -130,13 +150,17 @@ export class RunController {
   private readonly skyNow: Sky;
   private ended = false;
   private styleBanked = false; // this level's style is already in the score (we're through the portal)
-  private exiting = false; // fading out of the tunnel
+  private exiting = false; // on the way out of the wormhole
+  private exitTime = 0;
+  private waited = 0; // seconds in the wormhole waiting for the next land
+  private unfrozen = false;
+  private sparkled = false;
 
   constructor(seed: number, host: RunHost, events: RunEvents) {
     this.seed = seed;
     this.host = host;
     this.events = events;
-    host.scene.add(this.group, this.tunnel.mesh);
+    host.scene.add(this.group, this.wormhole.group);
     this.skyNow = captureSky(host.scene);
   }
 
@@ -286,7 +310,7 @@ export class RunController {
     this.toastTime = 2.6;
   }
 
-  // --- portals, the upgrade pick and the tunnel -----------------------------------------
+  // --- portals, the upgrade pick and the wormhole -----------------------------------------
 
   private enterPortal() {
     // Clearing the level: a bonus, more for a fast one
@@ -301,8 +325,9 @@ export class RunController {
     this.through = { next: destination(this.seed, this.level, this.path) };
     this.phase = "portal";
     this.phaseTime = 0;
+    this.sparkled = false;
     this.host.freeze(true);
-    this.tunnel.colors(this.host.world.palette.accent, BIOMES[this.through.next!].portals.color);
+    this.wormhole.colors(this.host.world.palette.accent, BIOMES[this.through.next!].portals.color);
     this.skyFrom = captureSky(this.host.scene, this.skyFrom ?? undefined);
   }
 
@@ -313,14 +338,17 @@ export class RunController {
     this.stats = statsFor(this.picked);
     this.host.stinger("upgrade");
     this.level++;
-    // Build the next biome while the tunnel hides everything
+    // Build the next biome while the wormhole hides everything
     this.loadLevel(this.through.next!);
     this.host.respawnAt(0);
     this.host.freeze(true);
     this.skyTo = captureSky(this.host.scene, this.skyTo ?? undefined);
     this.phase = "portal";
-    this.phaseTime = 1; // past the tunnel's way in: now waiting for the land, then out
+    this.phaseTime = 0;
     this.through = null;
+    this.exiting = false;
+    this.waited = 0;
+    this.unfrozen = false;
   }
 
   private finish() {
@@ -347,42 +375,72 @@ export class RunController {
     if (this.stats.flap > 0) this.stamina = Math.min(2 + this.stats.flap, this.stamina + dt / 9);
     if (this.phase === "arrive" && this.phaseTime > 3) this.phase = "explore";
 
-    for (const p of this.portals) p.update(dt, particles, camera.position);
+    // A dash trails light
+    if (this.dashTime > 0) {
+      for (let i = 0; i < 3; i++) {
+        particles.emit(this.host.flight.position, tmp.copy(this.host.flight.velocity).multiplyScalar(-0.2).add(forward.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5)), fx(0.5, 1, DASH_COLOR, Kind.Wisp, 0, 2, 1.4));
+      }
+    }
 
-    // The tunnel: in, wait for the pick (and the next land), out with the palettes cross-fading
+    // Through a portal: the screen blurs into sparkles, clears inside the wormhole, the
+    // upgrade pick, waiting there for the next land, then blur and out into the new biome
     camera.getWorldDirection(forward);
+    let veil = 0;
+    let inside = false;
+    let blend = 0;
     if (this.phase === "portal" && this.through) {
-      const t = clamp(this.phaseTime / 0.7, 0, 1);
-      this.tunnel.place(camera.position, forward, t, 0);
-      if (t >= 1 && this.phase === "portal") {
+      const t = this.phaseTime;
+      if (!this.sparkled) {
+        this.sparkled = true;
+        screenSparkle(particles, camera, forward, SPARKLE.set(this.host.world.palette.accent));
+      }
+      veil = t < BLUR_IN ? ease(t / BLUR_IN) : 1 - ease((t - BLUR_IN - 0.1) / BLUR_CLEAR);
+      inside = t >= BLUR_IN;
+      if (t >= BLUR_IN + 0.1 + BLUR_CLEAR * 0.6) {
         this.phase = "pick";
+        this.phaseTime = 0;
         this.events.offer?.(offer(this.seed, this.level, this.picked), this.through.next);
       }
     } else if (this.phase === "pick") {
-      this.tunnel.place(camera.position, forward, 1, 0.2 + 0.1 * Math.sin(this.phaseTime));
+      inside = true;
+      blend = 0.25 + 0.1 * Math.sin(this.phaseTime * 0.5);
     } else if (this.phase === "portal") {
-      // Waiting for the new land under cover, then fading out of the tunnel into it
-      // (once the fade has begun it carries on, even as more land streams in)
-      if (!this.host.view.ready && !this.exiting) {
-        this.phaseTime = 1;
-        this.tunnel.place(camera.position, forward, 1, 1);
+      blend = 1;
+      if (!this.exiting) {
+        // Under cover until the land near the start has arrived (or we've waited long enough)
+        inside = true;
         this.blendSky(0);
+        this.waited += dt;
+        if (this.host.view.ready || this.waited > EXIT_WAIT) {
+          this.exiting = true;
+          this.exitTime = 0;
+        }
       } else {
-        this.exiting = true;
-        const out = clamp((this.phaseTime - 1) / RUN.tunnelFade, 0, 1);
-        this.tunnel.place(camera.position, forward, 1 - out, 1);
-        this.blendSky(out);
-        if (out > 0.15) this.host.freeze(false);
-        if (out >= 1) {
+        // Blur, swap the wormhole for the new biome under it, clear while the sky cross-fades
+        const t = (this.exitTime += dt);
+        veil = t < BLUR_OUT ? ease(t / BLUR_OUT) : 1 - ease((t - BLUR_OUT) / RUN.tunnelFade);
+        inside = t < BLUR_OUT;
+        if (!inside) {
+          this.blendSky(ease((t - BLUR_OUT) / RUN.tunnelFade));
+          if (!this.unfrozen) {
+            this.unfrozen = true;
+            this.host.freeze(false);
+          }
+        }
+        if (t >= BLUR_OUT + RUN.tunnelFade) {
           this.phase = "arrive";
           this.phaseTime = 0;
           this.skyFrom = null;
           this.exiting = false;
         }
       }
-    } else {
-      this.tunnel.place(camera.position, forward, 0, 0);
     }
+    this.wormhole.place(camera, forward, inside, blend, this.host.pixelHeight);
+    this.host.insideWormhole(inside);
+    // From inside, the portal you came through is gone too
+    this.group.visible = !inside;
+    this.host.veil(veil);
+    if (!inside) for (const p of this.portals) p.update(dt, particles, camera.position);
   }
 
   /** Mixes the sky from the biome we left to the one we arrived in (k = 0 … 1) */
@@ -454,8 +512,9 @@ export class RunController {
 
   dispose() {
     this.disposeLevel();
-    this.tunnel.dispose();
+    this.wormhole.dispose();
     this.group.removeFromParent();
-    this.tunnel.mesh.removeFromParent();
+    this.host.insideWormhole(false);
+    this.host.veil(0);
   }
 }
