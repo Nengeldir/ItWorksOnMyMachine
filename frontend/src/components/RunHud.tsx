@@ -49,19 +49,6 @@ export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compas
       </span>
     </div>
 
-    {Number.isFinite(run.lives) && (
-      <div className={`run-lives glass${run.lives <= 1 ? " last" : ""}`} title="Feathers: crashes left" key={run.lives}>
-        {Array.from({ length: run.lives }, (_, i) => (
-          <Feather key={i} />
-        ))}
-        {/* Those lost, as empty outlines */}
-        {Array.from({ length: run.maxLives - run.lives }, (_, i) => (
-          <Feather key={`spent${i}`} spent />
-        ))}
-        {run.lives === 1 && <small>last feather</small>}
-      </div>
-    )}
-
     {run.compass && run.phase !== "pick" && run.phase !== "portal" && (
       <div className="run-compass" style={{ transform: `translateX(-50%) scale(${compassScale})` }}>
         <div className="arrow" style={{ transform: `rotate(${run.compass.angle}rad)` }}>
@@ -73,22 +60,37 @@ export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compas
       </div>
     )}
 
-    {run.objectives.length > 0 && (
-      <ul className="run-objectives glass">
-        {run.objectives.map((o) => (
-          <li key={o.title} className={o.done ? "done" : o.failed ? "failed" : undefined}>
-            <span className="check">{o.done ? "✔" : o.failed ? "✖" : "◇"}</span>
-            <span className="title">{o.title}</span>
-            <span className="progress">{o.progress}</span>
-            {!o.done && !o.failed && o.fraction > 0 && (
-              <span className="bar">
-                <span style={{ width: `${Math.round(o.fraction * 100)}%` }} />
-              </span>
-            )}
-          </li>
-        ))}
-      </ul>
-    )}
+    {/* Down the left edge, under the top bar: the feathers, then the objectives */}
+    <div className="run-side">
+      {Number.isFinite(run.lives) && (
+        <div className={`run-lives glass${run.lives <= 1 ? " last" : ""}`} title="Feathers: crashes left" key={run.lives}>
+          {Array.from({ length: run.lives }, (_, i) => (
+            <Feather key={i} />
+          ))}
+          {/* Those lost, as empty outlines */}
+          {Array.from({ length: run.maxLives - run.lives }, (_, i) => (
+            <Feather key={`spent${i}`} spent />
+          ))}
+          {run.lives === 1 && <small>last feather</small>}
+        </div>
+      )}
+      {run.objectives.length > 0 && (
+        <ul className="run-objectives glass">
+          {run.objectives.map((o) => (
+            <li key={o.title} className={o.done ? "done" : o.failed ? "failed" : undefined}>
+              <span className="check">{o.done ? "✔" : o.failed ? "✖" : "◇"}</span>
+              <span className="title">{o.title}</span>
+              <span className="progress">{o.progress}</span>
+              {!o.done && !o.failed && o.fraction > 0 && (
+                <span className="bar">
+                  <span style={{ width: `${Math.round(o.fraction * 100)}%` }} />
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
 
     {run.abilities.length > 0 && (
       <div className="run-abilities">
