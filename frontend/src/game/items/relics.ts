@@ -7,7 +7,7 @@ import { Builder, GOLD, GOLD_DEEP, blend, cyl, lathe, leaf, sphere, star } from 
 // is a hand's length or two); `y` is up, `-z` the front. The giant firework
 // (the Comet Tail Firework) is in models.ts.
 
-export type RelicId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether" | "mothCape" | "resonantChimes" | "crystalUpdraft" | "duskHourglass";
+export type RelicId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether" | "mothCape" | "resonantChimes" | "crystalUpdraft" | "duskHourglass" | "electroPrism";
 
 const ANEMO = "#5fe6c6";
 const ANEMO_LIGHT = "#c8fff1";
@@ -172,7 +172,14 @@ function duskHourglass(): THREE.BufferGeometry {
  b.add(cyl(0.003,0.003,0.06,6),"#ffe9a3",0.8,[0,0.1,0]);return b.build();
 }
 
+function electroPrism(): THREE.BufferGeometry {
+ const b=new Builder();b.add(new THREE.OctahedronGeometry(0.09),"#a786da",0.55,[0,0.08,0],[0,0,0],[0.8,1.5,0.8]);
+ for(let j=0;j<3;j++)b.add(new THREE.TorusGeometry(0.05,0.006,5,16),j%2 ? "#e4c5ff":GOLD,0.6,[0,0.04+j*0.035,0],[Math.PI/2,j*0.6,0]);
+ b.add(star(0.025,0.005,0.006,4),"#fff3be",1,[0,0.08,-0.065],[0,0,0.4]);return b.build();
+}
+
 export const RELIC_BUILDERS: Record<RelicId, () => THREE.BufferGeometry> = {
+  electroPrism,
   duskHourglass,
   crystalUpdraft,
   resonantChimes,

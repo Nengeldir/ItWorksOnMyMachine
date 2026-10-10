@@ -71,6 +71,7 @@ const USE_STYLE: Partial<Record<RunItemId, "eat" | "raise" | "toss">> = {
   resonantChimes: "raise",
   crystalUpdraft: "toss",
   duskHourglass: "raise",
+  electroPrism: "raise",
   anemoCatcher: "raise",
   starflakeShield: "raise",
   gliderWax: "raise",
