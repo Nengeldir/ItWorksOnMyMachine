@@ -49,6 +49,7 @@ const QUALITY = [
   { pixelRatio: 2, particles: 1 },
 ] as const;
 const DRIFT_SPEED = 14; // m/s along the course, for the menu's camera
+const MARKER_EDGE = 8; // px the ring marker keeps from the screen edge
 
 export type RaceState = "free" | "countdown" | "racing" | "finished";
 
@@ -176,6 +177,7 @@ export class Game implements RunHost {
   private readonly speedLines: SpeedLines;
   private readonly debris: Debris;
   private readonly marker: HTMLDivElement;
+  private markerBox: { left: number; top: number; width: number; height: number } | null = null;
   private readonly vignette: HTMLDivElement;
   /** Blur and sparkles over the screen while passing through a portal */
   private readonly portalVeil: HTMLDivElement;
@@ -545,6 +547,30 @@ export class Game implements RunHost {
 
   get level(): Level {
     return this.world.level;
+  }
+
+  /** True once the land around the camera has arrived */
+  get landReady(): boolean {
+    return this.view.ready;
+  }
+
+  /**
+   * The view right now as a JPEG data URL, `width` pixels wide and cut to `aspect` (width / height)
+   * around the middle: map-select card art. Renders a frame first, since WebGL clears what it showed.
+   */
+  snapshot(width: number, aspect: number): string | null {
+    const source = this.renderer.domElement;
+    if (!source.width || !source.height) return null;
+    this.render();
+    const height = Math.round(width / aspect);
+    const crop = Math.min(source.height, source.width / aspect);
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    context.drawImage(source, 0, (source.height - crop) / 2, source.width, crop, 0, 0, width, height);
+    return canvas.toDataURL("image/jpeg", 0.85);
   }
 
   /** A race or time trial on `seed`: Sky Isles, the race map */
@@ -1272,6 +1298,7 @@ export class Game implements RunHost {
 
   private hud(t: number): HudState {
     const { x, y, z } = this.avatar.group.position;
+    const crashed = this.crashedAt !== null;
     const raceTimeMs =
       this.raceState === "racing"
         ? t - this.startAt
@@ -1286,7 +1313,8 @@ export class Game implements RunHost {
       boostCharge: this.flight.boostCharge,
       boosting: this.flight.boost > 0.05,
       braking: this.flight.brake > 0.05,
-      speedKmh: Math.round(this.flight.speed * 3.6),
+      // The flight state freezes at the moment of a crash; the pilot isn't flying any more
+      speedKmh: crashed ? 0 : Math.round(this.flight.speed * 3.6),
       clearance: Math.max(0, Math.round(this.world.distance(x, y, z))),
       loading: !this.view.ready,
       raceState: this.raceState,
@@ -1294,10 +1322,10 @@ export class Game implements RunHost {
       countdown: this.raceState === "countdown" ? Math.max(0, Math.ceil((this.startAt - t) / 1000)) : null,
       checkpoints: this.checkpoints,
       totalCheckpoints: this.world.course.rings.length,
-      proximity: this.smoothProximity,
+      proximity: crashed ? 0 : this.smoothProximity,
       style: Math.round(this.style),
       multiplier: this.multiplier,
-      crashed: this.crashedAt !== null,
+      crashed,
       paused: this.paused,
       locked: this.input.locked,
       muted: this.audio.isMuted,
@@ -1355,11 +1383,28 @@ export class Game implements RunHost {
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
     this.marker.style.display = "block";
-    this.marker.style.transform = `translate(${((px + 1) / 2) * width}px, ${((1 - py) / 2) * height}px)`;
     this.marker.classList.toggle("offscreen", !onScreen);
     this.marker.classList.toggle("finish", ring.finish);
     const text = `${Math.round(this.flight.position.distanceTo(ring.position))} m`;
     if (this.marker.textContent !== text) this.marker.textContent = text;
+
+    // Keep the whole label on screen, not just the point it marks
+    const box = this.markerBox ?? this.measureMarker();
+    const x = clamp(((px + 1) / 2) * width, MARKER_EDGE - box.left, width - box.left - box.width - MARKER_EDGE);
+    const y = clamp(((1 - py) / 2) * height, MARKER_EDGE - box.top, height - box.top - box.height - MARKER_EDGE);
+    this.marker.style.transform = `translate(${x}px, ${y}px)`;
+  }
+
+  /** Where the marker's box sits around its point. The CSS fixes its size, so this runs once. */
+  private measureMarker() {
+    const style = getComputedStyle(this.marker);
+    this.markerBox = {
+      left: parseFloat(style.marginLeft),
+      top: parseFloat(style.marginTop),
+      width: this.marker.offsetWidth,
+      height: this.marker.offsetHeight,
+    };
+    return this.markerBox;
   }
 
   private updateVignette(dt: number, flying: boolean) {

@@ -1,0 +1,300 @@
+/* Map select: the course in the middle is the one behind the glass */
+.course-select {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.menu .course-back {
+  position: fixed;
+  top: 1.25rem;
+  left: 1.25rem;
+  z-index: 1;
+  height: 2.75rem;
+  border-radius: 999px;
+  padding: 0 1rem 0 0.8rem;
+}
+
+.course-title h1 {
+  font-size: clamp(2.2rem, 6vw, 3.4rem);
+}
+
+.course-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.menu .course-arrow {
+  flex: none;
+  width: 3rem;
+  height: 3rem;
+  padding: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+
+.course-card {
+  border-radius: 28px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.course-card.main {
+  width: min(27rem, 100%);
+}
+
+/* The course itself: a picture (or its sky until the picture is in) */
+.course-art {
+  position: relative;
+  height: 12.5rem;
+  background-size: cover;
+  background-position: center;
+}
+
+.course-card.side .course-art {
+  height: 7rem;
+}
+
+.course-body {
+  padding: 1rem 1.25rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.course-card.side .course-body {
+  padding: 0.8rem 1rem 1rem;
+}
+
+.course-ribbon {
+  position: absolute;
+  top: 0.8rem;
+  left: 0.8rem;
+  display: flex;
+  gap: 0.4rem;
+}
+
+.course-ribbon span {
+  padding: 0.3rem 0.65rem;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #fff;
+  background: color-mix(in srgb, var(--ink) 72%, transparent);
+  backdrop-filter: blur(6px);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The neighbours: smaller, quieter, a click brings one to the middle */
+.course-card.side {
+  width: 15rem;
+  opacity: 0.75;
+  transform: scale(0.92);
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.course-card.side:hover {
+  opacity: 0.95;
+  transform: scale(0.95);
+}
+
+.course-head small {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-45);
+  margin-bottom: 0.15rem;
+}
+
+.course-head h2 {
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.course-card.side h2 {
+  font-size: 1.25rem;
+}
+
+.course-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.course-chips span {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 8px;
+  background: var(--ink-06);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Over the random card's picture */
+.course-dice {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 20px;
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  background: linear-gradient(180deg, #fff, color-mix(in srgb, var(--tint) 25%, #fff));
+  box-shadow: 0 5px 0 var(--ink-12), 0 12px 30px var(--ink-12);
+  transform: translate(-50%, -50%) rotate(-8deg);
+}
+
+.course-card.side .course-dice {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 15px;
+}
+
+.course-random {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.course-random button {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.course-random input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.6rem 0.9rem;
+}
+
+.course-podium {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.course-podium li {
+  min-width: 0;
+  padding: 0.55rem 0.65rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.course-podium li.me {
+  background: var(--ink-12);
+}
+
+.course-podium span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.course-podium i {
+  display: inline-grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-right: 0.35rem;
+  border-radius: 50%;
+  font-size: 0.72rem;
+  font-style: normal;
+  color: #fff;
+  vertical-align: 1px;
+}
+
+.course-podium li:nth-child(1) i {
+  background: linear-gradient(160deg, #ffe07a, #e0a400);
+}
+
+.course-podium li:nth-child(2) i {
+  background: linear-gradient(160deg, #e9eef5, #9aa6b8);
+}
+
+.course-podium li:nth-child(3) i {
+  background: linear-gradient(160deg, #f5b48a, #c0703c);
+}
+
+.course-podium em {
+  display: block;
+  margin-top: 0.1rem;
+  font-style: normal;
+  font-weight: 500;
+  color: var(--ink-70);
+  font-variant-numeric: tabular-nums;
+}
+
+.course-best {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0.8rem;
+  border-radius: 12px;
+  background: var(--ink-06);
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.course-empty {
+  margin: 0;
+  color: var(--ink-70);
+  font-size: 0.9rem;
+}
+
+.course-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.course-dots i {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.55);
+  transition: width 0.2s ease;
+}
+
+.course-dots i.on {
+  width: 24px;
+  background: #fff;
+}
+
+.menu .course-fly {
+  min-width: min(18rem, 100%);
+  min-height: 3.75rem;
+  font-size: 1.15rem;
+}
+
+/* Narrow screens: only the course in the middle, the arrows beside it */
+@media (max-width: 860px) {
+  .course-card.side {
+    display: none;
+  }
+
+  .course-row {
+    gap: 0.5rem;
+  }
+
+  .menu .course-arrow {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+}
