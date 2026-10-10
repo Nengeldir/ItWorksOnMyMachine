@@ -119,7 +119,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/audio.ts` | Synthesized wind and event sounds, run stingers (portal, upgrade, dash; sidequest and item are unused for now), the wingbeat sample (`public/audio/sfx/wingbeat.mp3`, pitch-randomized, played on each of your downstrokes and on the Wingbeat ability) and the `MusicPlayer` |
 | `game/music.ts` | `MusicPlayer`: one looping track per biome from `public/audio/music/<biome>_<title>.mp3`, crossfaded on biome change (`TRACK_OF` maps biomes to tracks; similar biomes share one). Night dims and muffles the same track. Loaded lazily, decoded with Web Audio, no music if a file fails |
 | `game/webgl.ts` | WebGL 2 availability check; `GameScreen` shows help if it's missing |
-| `game/run/` | The roguelike run. `run.ts`: run length, biome order from the run seed, portal destinations, scoring constants, `RunHud`. `upgrades.ts`: nine data-defined upgrades and the 3-of-N offer. `controller.ts`: `RunController` (levels, gates and chains, abilities as `FlightMods`, the portal, upgrade pick, tunnel and palette cross-fade, HUD data). `portal.ts`: portal (ring, swirling veil, beam) and the tunnel |
+| `game/run/` | The roguelike run. `run.ts`: run length, biome order from the run seed, portal destinations, scoring constants, `RunHud`. `upgrades.ts`: nine data-defined upgrades and the 3-of-N offer. `controller.ts`: `RunController` (levels, gates and chains, abilities as `FlightMods`, the portal transition: blur in, wormhole, upgrade pick, waiting for the next land, blur out with the palette cross-fade; HUD data). `portal.ts`: the portal (ring, a flat disk like a window onto night, beam), the `Wormhole` (a camera-centred shell mapping the view onto an endless twisting tube of lensed stars and nebula with the exit glowing ahead, spirit motes, its own lights) and `screenSparkle`. Game's `veil(k)` (the `.portal-veil` DOM blur and sparkles) and `insideWormhole(on)` (hides the level: land, sky, soft particles, speed lines, ambient, gate effects) serve it |
 | `game/devtools.ts` | Dev builds only: `__shot(view)` (freeze, stream the land around a fixed camera, render once), `__raceHashes()` (the race map's determinism check), `__run(s)`, `__bench(q)` and `__crash(kind, after)` (flies into rock near the start and stops `after` s into the crash animation) on `window` |
 | `game/math.ts` | `clamp`, `smoothstep`, `smin` (smooth minimum for distance fields) |
 | `game/world/terrain/` | Generator v2 (every biome but Sky Isles). `noise.ts`: seeded fbm, ridged multifractal, domain-warped ridges, terraces. `shapes.ts`: distance-field primitives with boxes, surface ids and grain (Island, NoiseIsland from 3D noise with tunnels, Mesa with ledges, Spire between two points, Slab, RockRing, Cap). `ground.ts`: the heightfield following the line (valley, hills, warped ridged mountains, terraces, crevasses, carved river channel, overhang noise on cliffs). `river.ts`: `Steps`, a valley floor stepping down in pools and falls, and the river in it (water distance for collisions). `field.ts`: `TerrainField`, ground + shapes as one field, `fill()` for whole blocks (same arithmetic as `distance()`). `recipes.ts`: gates and scenery from a biome's `LandRecipe`. `mesh.ts`: surface nets per LOD node, faces painted for the shader. `streamer.ts`: `LandStreamer`, the LOD octree (384/192/96 m nodes, 16 cells each). `material.ts`: the terrain shader |
@@ -190,6 +190,42 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Portal transitions: blur, sparkle, the wormhole (Claude)
+
+Asked for: transition screens through portals that feel authentic and
+exotic: the screen blurs and sparkles; the portal is just a flat disk from
+outside; inside, a dark wormhole with spirit-like sparkles everywhere and
+sides like Interstellar's contorted space, vast and peaceful like sleeping
+under the night sky.
+- **The portal** (`portal.ts`): the disk now looks like a window onto deep
+  night (stars swirling into the middle) inside a softer swirling rim. No
+  tunnel geometry exists outside.
+- **Going in**: star sparkles thrown across the view, the screen blurs and
+  brightens with drifting CSS sparkles (`.portal-veil`, backdrop-filter,
+  0.5 s); under the blur the level is hidden and the wormhole appears; the
+  blur clears (0.8 s) and the upgrade picker fades in.
+- **The wormhole** (`Wormhole`): a shell around the camera, drawn first and
+  writing no depth (the pilot draws over it, lit by the wormhole's own
+  moonlight and the exit's glow). Each view direction maps onto an endless
+  tube (`depth = log((1 + cos θ) / (1 - cos θ))`) that twists with depth:
+  three layers of pixel-sized stars, stretched along the travel near the far
+  end, faint nebula bands bent around the tube, the exit glowing far ahead
+  in a lensed ring, darker behind. 1100 spirits (moonlight, pale gold, rose
+  motes) float on slow paths all around and drift past. Dark and calm.
+- **Going out**: once the next land is ready (or after 8 s; the glide-in
+  then covers the rest), the screen blurs again, the wormhole is swapped
+  for the new biome, and the blur clears over `RUN.tunnelFade` while the sky
+  cross-fades. The HUD stays hidden for the whole transition.
+- Upgrade picker restyled for the dark: light text, translucent blurred
+  cards (its text was dark on dark before).
+- Dev: `__portal(after)` flies into the current level's portal and stops
+  `after` s past the crossing.
+- Verified: build and lint pass. In Chrome (run 7, Sky Isles → Verdant):
+  the portal from outside, the blur in, the wormhole with the picker, the
+  blur out, the arrival (the 8 s exit cap was hit in the throttled tab and
+  the glide-in took over); no console errors. GPU cost of the shell
+  (full-screen fbm) not measured in a focused window.
 
 ### 2026-10-10: Item models and animations (Claude)
 
