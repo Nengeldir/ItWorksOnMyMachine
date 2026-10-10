@@ -20,6 +20,11 @@ class User(BaseModel):
     verified: bool = False
 
 
+class Me(User):
+    # Ever finished a race or time trial (this account, or this browser for guests): newcomers get the tutorial
+    has_played: bool = False
+
+
 class Ghost(BaseModel):
     """A recorded run: samples of [t_ms, x, y, z, qx, qy, qz, qw, boost?, brake?, dodge?]."""
 
