@@ -9,6 +9,8 @@ import { DISSOLVE_AT, type DeathKind, DeathFall, classifyCrash, fieldNormal } fr
 import { Debris } from "./effects";
 import { FLIGHT, Flight, type FlightInput } from "./flight";
 import { GlideIn } from "./glidein";
+import { Equipment } from "./items/equip";
+import type { ItemId, ItemSlot } from "./items/models";
 import { type GhostData, GhostRecorder, type GhostRun, ghostSamples } from "./ghost";
 import { type ControlSettings, Input } from "./input";
 import { FX_LIGHT, Kind, Particles, fx, fxTime } from "./particles";
@@ -155,6 +157,8 @@ export class Game implements RunHost {
   private readonly prevQuaternion = new THREE.Quaternion();
   private readonly avatar: Avatar;
   private readonly fx: PilotFx;
+  /** What the pilot carries (models and animations only, for now) */
+  private readonly equipment: Equipment;
   readonly particles: Particles;
   /** Particles that blend instead of glowing: snow, leaves, ash, mist */
   private readonly softParticles: Particles;
@@ -264,6 +268,7 @@ export class Game implements RunHost {
         if (!this.frozen && this.crashedAt === null) this.audio.wing(strength);
       };
     }
+    this.equipment = new Equipment(this.avatar, this.particles);
     this.speedLines = new SpeedLines();
     this.debris = new Debris(options.color);
     this.scene.add(this.avatar.group, this.debris.mesh, this.particles.points, this.softParticles.points, this.speedLines.mesh, ...this.fx.meshes);
@@ -336,6 +341,27 @@ export class Game implements RunHost {
   pickUpgrade(id: Parameters<RunController["pick"]>[0]) {
     if (this.paused) return;
     this.run?.pick(id);
+  }
+
+  // --- items (models and animations only: nothing here changes the flight) ----------------
+
+  /** Pulls an item out of the inventory and puts it on (the firework on the back, helmets on the head, the rest in hand) */
+  equip(id: ItemId) {
+    this.equipment.equip(id);
+  }
+
+  unequip(slot: ItemSlot) {
+    this.equipment.unequip(slot);
+  }
+
+  /** Eats or uses what's in the hand */
+  useItem() {
+    this.equipment.use();
+  }
+
+  /** The firework's flame, 0..1 (looks only; the boost itself comes later) */
+  thrust(amount: number) {
+    this.equipment.setThrust(amount);
   }
 
   get camera(): THREE.PerspectiveCamera {
@@ -526,6 +552,7 @@ export class Game implements RunHost {
     this.live.forEach((p) => this.removePilot(p));
     this.ghosts.forEach((p) => this.removePilot(p));
     this.fx.dispose();
+    this.equipment.dispose();
     this.avatar.dispose();
     this.particles.dispose();
     this.softParticles.dispose();
@@ -1018,6 +1045,7 @@ export class Game implements RunHost {
       this.avatar.setDodge(this.flight.dodgePhase);
       this.avatar.setSpeedControls(this.flight.boost, this.flight.brake);
       this.avatar.update(dt, this.flight.speed, this.smoothProximity);
+      this.equipment.update(dt);
       // Frozen on the start line or in the tunnel: no motes, or they pile up into a glowing ball
       const moving = this.raceState !== "countdown" && !waiting;
       this.fx.update(dt, this.flight.speed, this.flight.velocity, this.smoothProximity, moving);
@@ -1039,6 +1067,7 @@ export class Game implements RunHost {
       body.position.copy(this.death.position);
       body.quaternion.copy(this.death.quaternion);
       this.avatar.update(dt, this.death.speed, 0);
+      this.equipment.update(dt);
       this.deathEffects(dt);
       this.rig.follow(body.position, dt, this.clearance);
     }
