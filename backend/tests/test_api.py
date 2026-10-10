@@ -4,7 +4,7 @@ import app as app_module
 from app import app, rooms
 from rooms import COUNTDOWN_MS
 
-client = TestClient(app, headers={"X-Flight-Rules": "speed-control-v2"})
+client = TestClient(app, headers={"X-Flight-Rules": "speed-control-v3"})
 
 
 def ghost(n=3):

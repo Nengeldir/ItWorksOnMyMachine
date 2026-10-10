@@ -3,7 +3,7 @@ import { type ReactNode, useEffect, useEffectEvent, useRef, useState, useSyncExt
 import type { Screen } from "../App";
 import { formatTime, ordinal } from "../format";
 import { webglAvailable } from "../game/webgl";
-import type { BiomeId } from "../game/world/biomes";
+import { BIOMES, type BiomeId } from "../game/world/biomes";
 import { RUN } from "../game/tuning";
 import { ExploreSession } from "../session/ExploreSession";
 import { RunSession } from "../session/RunSession";
