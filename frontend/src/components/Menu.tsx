@@ -1,5 +1,5 @@
-import { IconDice5, IconMap, IconSettings, IconUser, IconX } from "@tabler/icons-react";
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { IconDiamond, IconDice5, IconMap, IconSettings, IconUser } from "@tabler/icons-react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { type LeaderboardEntry, type User, getLeaderboard } from "../api";
 import type { Screen } from "../App";
 import { randomRoomCode, untilTomorrow } from "../format";
@@ -7,6 +7,7 @@ import { dailyRunSeed, dailySeed, randomSeed } from "../game/rng";
 import { MAPS, seedLevel } from "../game/world/biomes";
 import { Course } from "../game/world/course";
 import { bestRun } from "../session/RunSession";
+import { profileClient } from "../profile/client";
 import { type Settings, clientId } from "../storage";
 import { usePaletteTheme } from "../theme";
 import SettingsPanel from "./SettingsPanel";
@@ -26,7 +27,6 @@ interface MenuProps {
 }
 
 const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
-  const [inventoryOpen, setInventoryOpen] = useState(false);
   const [daily, setDaily] = useState(() => dailySeed());
   // Today's run has a seed of its own, so it starts on another map than today's course
   const [dailyRun, setDailyRun] = useState(() => dailyRunSeed());
@@ -44,7 +44,10 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
   const [code, setCode] = useState(joinCode ?? "");
   const [board, setBoard] = useState<LeaderboardEntry[]>([]);
   const best = useMemo(() => bestRun(dailyRun), [dailyRun]);
-  const [panel, setPanel] = useState<"none" | "settings" | "pilot">(joinCode && !settings.nickname ? "pilot" : "none");
+  // The journal is the pilot's own page (name, level, collection); an invite opens it to pick a name first
+  const [panel, setPanel] = useState<"none" | "settings" | "journal">(joinCode && !settings.nickname ? "journal" : "none");
+  const { profile } = useSyncExternalStore(profileClient.store.subscribe, profileClient.store.get);
+  useEffect(() => void profileClient.initialize(), []);
   const [countdown, setCountdown] = useState(untilTomorrow);
   // The map select, for a time trial, a run or a new room: it shows its course behind the glass, and the UI
   // takes its colors
@@ -107,8 +110,6 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
 
   return (
     <main className="menu">
-      <button className="menu-inventory glass" onClick={() => setInventoryOpen(true)}>Profile & inventory</button>
-      {inventoryOpen && <ProfilePanel onClose={() => setInventoryOpen(false)} />}
       <MenuBackdrop seed={shown} mode="drift" onSnapshot={keepArt} onShown={setLive} settings={settings} />
 
       <HelpButton className="menu-help" />
@@ -243,41 +244,25 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
 
       {!picking && <TodaysBest entries={board} />}
 
-      {panel === "pilot" && (
-        <section className="menu-popover glass pilot-panel">
-          <header>
-            <h2>Pilot</h2>
-            <button className="menu-icon" aria-label="Close" onClick={() => setPanel("none")}>
-              <IconX size={18} />
-            </button>
-          </header>
-          {me?.verified ? (
-            <p>
-              Flying as <strong>{me.name}</strong>
-            </p>
-          ) : (
-            <label className="field">
-              <span>Your name</span>
-              <input
-                value={settings.nickname}
-                maxLength={24}
-                placeholder="Guest"
-                autoFocus
-                onChange={(e) => onSettings({ ...settings, nickname: e.target.value })}
-              />
-            </label>
-          )}
-        </section>
+      {panel === "journal" && (
+        <ProfilePanel
+          onClose={() => setPanel("none")}
+          pilot={{ name: me?.verified ? me.name : settings.nickname, verified: !!me?.verified, onName: (nickname) => onSettings({ ...settings, nickname }) }}
+        />
       )}
-      <button
-        className="menu-pilot glass"
-        aria-label={`Pilot: ${pilotName}`}
-        onClick={() => setPanel(panel === "pilot" ? "none" : "pilot")}
-      >
+      {/* You: your name, level and crystals; opens your journal */}
+      <button className="menu-pilot glass" aria-label={`Journal of ${pilotName}`} onClick={() => setPanel("journal")}>
         <span className="menu-badge">
           <IconUser size={22} />
         </span>
-        {pilotName}
+        <span className="menu-pilot-text">
+          {pilotName}
+          {profile && (
+            <small>
+              Lv. {profile.level} · <IconDiamond size={12} /> {profile.crystals.toLocaleString()}
+            </small>
+          )}
+        </span>
       </button>
     </main>
   );

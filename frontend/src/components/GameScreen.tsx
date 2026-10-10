@@ -515,7 +515,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onT
     <div className={`game${idle ? " ui-idle" : ""}`}>
       <div ref={ref} className="game-view" />
       {/* Nothing but the wormhole while passing through a portal */}
-      {(hud?.paused || stage === "intro" || stage === "summary" || run?.phase === "explore" || run?.phase === "arrive") && <ProfileStatus paused={hud?.paused} />}
+      {stage !== "intro" && (hud?.paused || stage === "summary" || run?.phase === "explore" || run?.phase === "arrive") && <ProfileStatus paused={hud?.paused} />}
       {hud && (hud.paused || (stage !== "intro" && stage !== "pick" && stage !== "summary" && run?.phase !== "portal" && run?.phase !== "finale" && run?.phase !== "won")) && <Hud hud={hud} settings={settings} showStyle />}
       {run && stage !== "intro" && stage !== "summary" && stage !== "pick" && run.phase !== "finale" && run.phase !== "won" && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
       {run?.phase === "finale" && (
