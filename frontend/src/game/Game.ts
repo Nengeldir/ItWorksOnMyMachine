@@ -532,6 +532,7 @@ export class Game {
 
   private hud(t: number): HudState {
     const { x, y, z } = this.body.position;
+    const crashed = this.crashedAt !== null;
     const raceTimeMs =
       this.raceState === "racing"
         ? t - this.startAt
@@ -541,7 +542,8 @@ export class Game {
     return {
       seed: this.world.seed,
       paletteName: this.world.palette.name,
-      speedKmh: Math.round(this.flight.speed * 3.6),
+      // The flight state freezes at the moment of a crash; the pilot isn't flying any more
+      speedKmh: crashed ? 0 : Math.round(this.flight.speed * 3.6),
       clearance: Math.max(0, Math.round(this.world.distance(x, y, z))),
       loading: !this.view.ready,
       raceState: this.raceState,
@@ -549,10 +551,10 @@ export class Game {
       countdown: this.raceState === "countdown" ? Math.max(0, Math.ceil((this.startAt - t) / 1000)) : null,
       checkpoints: this.checkpoints,
       totalCheckpoints: this.world.course.rings.length,
-      proximity: this.smoothProximity,
+      proximity: crashed ? 0 : this.smoothProximity,
       style: Math.round(this.style),
       multiplier: this.multiplier,
-      crashed: this.crashedAt !== null,
+      crashed,
       locked: this.input.locked,
       muted: this.audio.isMuted,
       standings: this.standings(),

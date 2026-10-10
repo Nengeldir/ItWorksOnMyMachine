@@ -54,12 +54,25 @@
   top: 34%;
   left: 50%;
   transform: translate(-50%, -50%);
-  padding: 0.5rem 1.6rem;
-  border-radius: 999px;
+  padding: 0.5rem 1.6rem 0.6rem;
+  border-radius: 28px;
   font-size: clamp(1.6rem, 5vw, 2.4rem);
   font-weight: 800;
+  line-height: 1.15;
+  text-align: center;
   color: var(--bad);
   animation: pop 0.9s ease-out both;
+}
+
+.hud-crash small {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink-70);
+}
+
+.hud-flight.crashed {
+  opacity: 0.55;
 }
 
 @keyframes pop {

@@ -25,7 +25,14 @@ const Hud = ({ hud }: { hud: HudState }) => {
         </div>
       )}
       {go && <div className="hud-big glass go">GO!</div>}
-      {hud.crashed && <div className="hud-crash glass">Crashed!</div>}
+      {hud.crashed && (
+        <div className="hud-crash glass">
+          Crashed!
+          <small>
+            {hud.raceState !== "free" && hud.checkpoints > 0 ? `Back to ring ${hud.checkpoints}` : "Back to the start"}
+          </small>
+        </div>
+      )}
       {hud.loading && hud.raceState === "free" && <div className="hud-loading glass">Building islands…</div>}
 
       {hud.standings.length > 1 && (
@@ -42,7 +49,7 @@ const Hud = ({ hud }: { hud: HudState }) => {
         </ol>
       )}
 
-      <div className="hud-flight glass">
+      <div className={`hud-flight glass ${hud.crashed ? "crashed" : ""}`}>
         <div className="hud-speed">
           <strong>{hud.speedKmh}</strong> km/h
         </div>
@@ -52,7 +59,9 @@ const Hud = ({ hud }: { hud: HudState }) => {
         <div className="hud-style">
           Style {hud.style.toLocaleString()} {hud.multiplier > 1 && <b>×{hud.multiplier}</b>}
         </div>
-        <div className="hud-altitude">{hud.clearance < 40 ? `${hud.clearance} m to the rock` : "\u00a0"}</div>
+        <div className="hud-altitude">
+          {hud.clearance < 40 && !hud.crashed ? `${hud.clearance} m to the rock` : "\u00a0"}
+        </div>
       </div>
 
       {!hud.locked && (
