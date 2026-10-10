@@ -154,8 +154,8 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `session/` | Solo, room, explore and run sessions wiring a `Game` to the network and UI. `ExploreSession`: free flight through any biome (`/?explore=verdant&seed=2`), nothing saved; `?test` reuses it with a RunController for real portals/upgrades and unsaved victory previews, showing only test shortcuts rather than biome/light controls. `RunSession`: a roguelike run (`/?run=<seed>`), best score per run seed in localStorage |
 | `net/` | Server clock sync and the room connection (SSE down, POST up) |
 | `staleBuild.ts` | After a redeploy, an open tab's lazy chunks (bloom, `?tune`) and mesher worker are 404s: `reloadForNewBuild` reloads the page once (at most every 30 s, production only) |
-| `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, controls, and the run's HUD, title card and upgrade picker (`RunHud.tsx`). The menu's live course behind the glass is `MenuBackdrop` (a `Game` in `drift` attract mode, which switches courses with `setSeed` and snapshots each one for card art); today's best folds into a flag (`TodaysBest`). `CourseSelect` is the map select (a carousel of course cards; featured art in `public/courses/`). Before a race, `GameScreen`'s `ReadyCard` sits where the timer will be; its `Panel` (results) folds to its heading and main buttons on narrow screens. `Help` is the "?" with its How to fly card and the newcomer's "First flight?" (`keys.ts`: the keys as the player bound them). `Coach` is the tutorial: one control at a time, watched on keys, mouse and gamepad |
-| `theme.ts` | The UI's colors per map: `useUiTheme(seed)` sets `--ink` (picked per palette name, else derived from the sky) and `--tint` (the horizon); every other shade comes from those two with `color-mix()` |
+| `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, controls, and the run's HUD, title card and upgrade picker (`RunHud.tsx`). The menu's live course behind the glass is `MenuBackdrop` (a `Game` in `drift` attract mode, which switches courses with `setSeed` and snapshots each one for card art); today's best folds into a flag (`TodaysBest`). `CourseSelect` is the map select (a carousel of course cards; featured art in `public/courses/`). Before a race, `GameScreen`'s `ReadyCard` sits where the timer will be; its `Panel` (results) folds to its heading and main buttons on narrow screens. `Help` is the "?" with its How to fly card and the newcomer's "First flight?" (`keys.ts`: the keys as the player bound them). `Coach` is the tutorial: one control at a time, watched on keys, mouse and gamepad. `BiomeSelect` is the adventure's map select (a card per biome, art in `public/biomes/`) |
+| `theme.ts` | The UI's colors per map: `useUiTheme(seed)` sets `--ink` (picked per palette name, else derived from the sky) and `--tint` (the horizon); every other shade comes from those two with `color-mix()`; `usePaletteTheme(palette)` does the same for any level (runs, explore, the map select) |
 | `route.ts` | The URL ↔ screen mapping (`screenFromSearch`, `urlFor`, `Screen`), pure so it's tested; `test` is honored on every single-player URL |
 | `media.ts` | `useMediaToggle(query)`: an open/closed toggle that starts open where a media query matches and follows the screen when it changes |
 
@@ -219,6 +219,49 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Adventure in the Solo look, a map select for every biome (Claude)
+
+Asked for by the UX group, on `shiyu-unify-ui` (from `shiyu-tutorial`): the
+landing page's other tabs and the adventure's screens in the style of Solo,
+and a map select that shows off every biome (wished for by the roguelike
+designer). UI only: runs play as before.
+
+- **Landing tabs** (`Menu.tsx`, `Menu.css`): With friends and Adventure get
+  Solo's layout: a card (label, title, chips), the big button, a row of small
+  links. Adventure: "Today's run · #seed" / "Eight biomes", chips for your
+  best and "New in", Start today's run (`Enter` works on this tab too),
+  Choose a map, New random run. With friends: "Race room" / "Same map, same
+  time" / "Up to 12 pilots", Create a room, and a quieter join row (rounded
+  field, light button).
+- **Choose a map** (`BiomeSelect.tsx`, on `CourseSelect.css`): the course
+  select's carousel, a card per biome in run order (Sky Isles, Verdant, the
+  middle six, Aurora): its place in a run, name, tagline, moods, and art
+  from `public/biomes/<id>.jpg`. The backdrop flies the biome's showcase
+  level (`runLevel(2, 1, biome)`, what `/?explore=<id>&seed=2` flies;
+  `MenuBackdrop`'s new `level` prop) and the UI takes its colors. Start
+  today's run (`Enter`) starts a normal run: the chosen biome doesn't change
+  where a run starts (that would be a gameplay change, for the run's
+  designer).
+- **In a run** (`GameScreen.tsx`, `RunHud.tsx`, `RunHud.css`): the intro
+  panel is now the time trial's start pill (Take off); the score sits in a
+  glass pill like the race timer, with "Level N / 8" and the chain under it;
+  the compass under the pill, its label white with an ink edge; objectives
+  (hidden when empty), abilities and toasts on glass; done objectives in
+  ink. The intro's text and Controls fold-out are gone (How to fly and the
+  settings have them).
+- **Colors follow the level** in runs and explore (`usePaletteTheme`,
+  `HudState.palette`); before, they kept the menu's. The landing page takes
+  the colors of whatever its backdrop shows.
+- **Crash note in runs:** "Back to gate N" (the run's last gate,
+  `RunHud.checkpoint`) instead of "Back to the start".
+- Biome card art rendered in headless Chromium (software GL, so no bloom)
+  from the backdrop's drift view at z = 400 or 900.
+- Verified: build, lint and the frontend tests pass. In the app's browser
+  on the Docker build: the three tabs, the map select through all nine
+  biomes (labels, moods, colors), `Esc` back to today's colors, a run's start
+  pill, score pill, compass and colors. Not looked at: the upgrade picker,
+  title card and finish screen (unchanged), phones.
 
 ### 2026-10-10: The interactive tutorial (Claude)
 
@@ -1972,10 +2015,12 @@ finale and the finish screen. What's open:
   copy of only the bright parts).
 - Play a run by hand with a mouse: the title card animation, the portal's
   spot in every biome.
-- The UI theme (`useUiTheme`) follows the map in time trials and rooms only;
-  runs and explore keep the menu's colors. Theme by the level's palette.
-- Restyle the run HUD, upgrade picker and run summary for the glass look
-  (only the tokens were mapped).
+- Restyle the upgrade picker, the title card and the finish screen in the
+  Solo look (the run HUD and intro are done). Biome palettes have no picked
+  inks (`theme.ts`), so most derive a similar deep blue; pick some by eye.
+- **Adventure map select:** starting a run in the chosen biome is the run
+  designer's call (today every run starts in Sky Isles). Re-render
+  `public/biomes/` when the biomes' looks change.
 - The run's screens don't use the folding `Panel` (the time trial's and
   rooms' results do).
 - **Map select follow-ups:** re-render `public/courses/` when Sky Isles' looks

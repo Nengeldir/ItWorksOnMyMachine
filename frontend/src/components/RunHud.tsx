@@ -28,9 +28,13 @@ function abilityKey(id: UpgradeId, fallback: string): string {
 /** The run on top of the flight HUD: score, objectives, the portal compass, abilities */
 export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compassScale: number; toasts: boolean }) => (
   <div className="run-hud">
-    <div className="run-score">
+    {/* Like the race timer: a glass pill at the top, the score big, where you are small */}
+    <div className="run-score glass">
       <strong>{run.score.toLocaleString()}</strong>
-      {run.chain > 1 && <span className="run-chain">gate chain ×{run.chain}</span>}
+      <span>
+        Level {run.level} / {run.length}
+        {run.chain > 1 && <b className="run-chain"> · chain ×{run.chain}</b>}
+      </span>
     </div>
 
     {run.compass && run.phase !== "pick" && run.phase !== "portal" && (
@@ -44,25 +48,27 @@ export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compas
       </div>
     )}
 
-    <ul className="run-objectives">
-      {run.objectives.map((o) => (
-        <li key={o.title} className={o.done ? "done" : o.failed ? "failed" : undefined}>
-          <span className="check">{o.done ? "✔" : o.failed ? "✖" : "◇"}</span>
-          <span className="title">{o.title}</span>
-          <span className="progress">{o.progress}</span>
-          {!o.done && !o.failed && o.fraction > 0 && (
-            <span className="bar">
-              <span style={{ width: `${Math.round(o.fraction * 100)}%` }} />
-            </span>
-          )}
-        </li>
-      ))}
-    </ul>
+    {run.objectives.length > 0 && (
+      <ul className="run-objectives glass">
+        {run.objectives.map((o) => (
+          <li key={o.title} className={o.done ? "done" : o.failed ? "failed" : undefined}>
+            <span className="check">{o.done ? "✔" : o.failed ? "✖" : "◇"}</span>
+            <span className="title">{o.title}</span>
+            <span className="progress">{o.progress}</span>
+            {!o.done && !o.failed && o.fraction > 0 && (
+              <span className="bar">
+                <span style={{ width: `${Math.round(o.fraction * 100)}%` }} />
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    )}
 
     {run.abilities.length > 0 && (
       <div className="run-abilities">
         {run.abilities.map((a) => (
-          <div key={a.id} className={a.ready ? "ready" : undefined}>
+          <div key={a.id} className={`glass ${a.ready ? "ready" : ""}`}>
             <span className="icon">{icon(a.id)}</span>
             <span className="key">{abilityKey(a.id, a.key)}</span>
             {a.count !== undefined && <span className="count">{a.count}</span>}
@@ -81,7 +87,7 @@ export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compas
     )}
 
     {toasts && run.toast && (
-      <div className="run-toast" key={run.toast.id}>
+      <div className="run-toast glass" key={run.toast.id}>
         {run.toast.text}
         {run.toast.points > 0 && <b> +{run.toast.points.toLocaleString()}</b>}
       </div>

@@ -34,6 +34,7 @@ import { type Level, levelId, raceLevel } from "./world/biomes";
 import type { WaterKind } from "./world/terrain/river";
 import { type WaterHit, World } from "./world/World";
 import { WorldView } from "./world/WorldView";
+import type { Palette } from "./world/palette";
 import { reloadForNewBuild } from "../staleBuild";
 import { onHold } from "./hold";
 
@@ -83,6 +84,7 @@ export interface HudState {
   run: RunHud | null;
   biomeName: string;
   paletteName: string;
+  palette: Palette; // the level's lighting mood: the UI takes its colors from it
   speedKmh: number;
   boostCharge: number;
   boosting: boolean;
@@ -1473,6 +1475,7 @@ export class Game implements RunHost {
       run: runHud,
       biomeName: this.world.biome.name,
       paletteName: this.world.palette.name,
+      palette: this.world.palette,
       boostCharge: this.flight.boostCharge,
       boosting: this.flight.boost > 0.05,
       braking: this.flight.brake > 0.05,

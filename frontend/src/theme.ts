@@ -34,3 +34,10 @@ export function useUiTheme(seed: number | undefined) {
     if (seed !== undefined) applyUiTheme(raceLevel(seed).palette);
   }, [seed]);
 }
+
+/** Keeps the UI in the colors of the level being flown (runs and explore: any biome, any mood) */
+export function usePaletteTheme(palette: Palette | undefined) {
+  useEffect(() => {
+    if (palette) applyUiTheme(palette);
+  }, [palette]);
+}
