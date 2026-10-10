@@ -10,6 +10,7 @@ import type { World } from "../world/World";
 import type { WorldView } from "../world/WorldView";
 import { Abilities, type AbilityPress } from "./abilities";
 import { Finale } from "./finale";
+import { Items, type RunItemId, runItem } from "./items";
 import { Portal, Wormhole, WormholeCamera, screenSparkle } from "./portal";
 import {
   CHAIN_MAX,
@@ -160,6 +161,8 @@ export class RunController {
   private stamina = 0;
   /** The design list's abilities: their rules (their looks read them, game/abilities/) */
   readonly abilities = new Abilities();
+  /** The design list's items: the bag and what they do (their looks read them, items/fx.ts) */
+  readonly items = new Items();
   private toast: RunHud["toast"] = null;
   private toastTime = 0;
   private toastId = 0;
@@ -239,6 +242,7 @@ export class RunController {
     this.styleBanked = false;
     this.host.view.setRings("race", 0);
     this.abilities.setLevel(world);
+    this.items.setLevel(world);
     // The portal stands at the last gate
     const { course } = world;
     const finish = course.rings[course.rings.length - 1];
@@ -274,6 +278,29 @@ export class RunController {
     if (this.abilities.press(action, this.host.flight) && action === "burst") this.host.stinger("dash");
   }
 
+  /** Y (or the right mouse button): uses the item picked in the bag */
+  useItem() {
+    if (this.frozen || (this.phase !== "explore" && this.phase !== "arrive")) return;
+    this.items.use(this.host.flight);
+  }
+
+  /** U (or the mouse wheel): the next item in the bag */
+  nextItem() {
+    this.items.cycle();
+  }
+
+  /** Puts an item in the bag right now (dev tools and test mode); false if the bag is full */
+  giveItem(id: RunItemId): boolean {
+    const given = this.items.give(id);
+    this.notify(given ? `${runItem(id).name}` : "Your bag is full", 0);
+    return given;
+  }
+
+  /** The input flown this step: some items take the controls a little */
+  steer(input: FlightInput): FlightInput {
+    return this.phase === "explore" || this.phase === "arrive" ? this.items.steer(input) : input;
+  }
+
   /** Per physics step, after the flight moved: gates and portals. `proximity` 0..1, the input flown */
   step(dt: number, proximity = 0, input: FlightInput = { pitch: 0, roll: 0 }) {
     const { flight, prevPosition } = this.host;
@@ -296,6 +323,11 @@ export class RunController {
     if (this.phase !== "explore" && this.phase !== "arrive") return;
     this.levelTime += dt;
     this.abilities.step(dt, input, proximity, flight, m);
+    this.items.step(dt, input, proximity, flight, m);
+    if (this.items.points > 0) {
+      this.score += Math.round(this.items.points);
+      this.items.points = 0;
+    }
     if (this.abilities.restore > 0) {
       if (this.stats.flap > 0) this.stamina = Math.min(2 + this.stats.flap, this.stamina + this.abilities.restore);
       this.abilities.restore = 0;
@@ -354,6 +386,7 @@ export class RunController {
     if (this.phase !== "explore" && this.phase !== "arrive" && !leaving) return;
     this.crashes++;
     this.abilities.crashed();
+    this.items.reset();
     const chain = this.chain;
     this.chain = 0;
     this.lives--;
@@ -689,6 +722,7 @@ export class RunController {
       compass,
       abilities,
       upgrades: [...this.picked],
+      items: this.items.hud(),
       toast: this.toast,
     };
   }

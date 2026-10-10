@@ -408,6 +408,7 @@ const ExploreScreen = ({ biome, seed, settings, onSettings, onExit, testMode = f
             <li><kbd>Shift+P</kbd> portal ahead</li>
             <li><kbd>Shift+O</kbd> victory</li>
             <li><kbd>Shift+S</kbd> {speed === 1 ? "half speed" : "normal speed"}</li>
+            <li><kbd>Shift+I</kbd> next item</li>
           </ul>
         </>}
       </aside>}

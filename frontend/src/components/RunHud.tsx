@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { type CSSProperties, useEffect } from "react";
 import { formatTime } from "../format";
+import { RARITIES } from "../game/run/items";
 import { RUN_LENGTH, type RunHud as RunHudState, type RunSummary } from "../game/run/run";
 import { UPGRADES, type Upgrade, type UpgradeId } from "../game/run/upgrades";
 import type { BindingAction } from "../game/bindings";
@@ -105,6 +106,8 @@ export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compas
       </div>
     )}
 
+    <ItemBag items={run.items} />
+
     {run.upgrades.length > 0 && (
       <div className="run-upgrades" title="Upgrades">
         {run.upgrades.map((id, i) => (
@@ -121,6 +124,49 @@ export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compas
     )}
   </div>
 );
+
+/** The bag of items (three slots, the one to use lit up) and the effects under way */
+const ItemBag = ({ items }: { items: RunHudState["items"] }) => {
+  if (!items.bag.length && !items.active.length) return null;
+  const use = boundKeys("useItem")[0]?.[0] ?? "Y";
+  const next = boundKeys("nextItem")[0]?.[0] ?? "U";
+  return (
+    <div className="run-items">
+      {items.active.length > 0 && (
+        <ul className="run-items-active">
+          {items.active.map((a) => (
+            <li key={a.id} title={a.name}>
+              <span className="icon">{a.icon}</span>
+              <span className="bar">
+                <span style={{ width: `${Math.round(Math.max(0, Math.min(1, a.charge)) * 100)}%` }} />
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {items.bag.length > 0 && (
+        <div className="run-items-bag">
+          {items.bag.map((item, i) => (
+            <div
+              key={`${i}/${item.id}`}
+              className={`slot${i === items.selected ? " selected" : ""}${item.auto ? " auto" : ""}`}
+              style={{ "--rarity": RARITIES[item.rarity].color } as CSSProperties}
+              title={`${item.name} · ${RARITIES[item.rarity].name}`}
+            >
+              <span className="icon">{item.icon}</span>
+              {item.charges > 1 && <span className="count">{item.charges}</span>}
+              {i === items.selected && <span className="name">{item.name}</span>}
+            </div>
+          ))}
+          <span className="keys">
+            {items.bag[items.selected]?.auto ? "works by itself" : <><kbd>{use}</kbd> use</>}
+            {items.bag.length > 1 && <> · <kbd>{next}</kbd> next</>}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+};
 
 /** "Level 3 · Coral Lagoon", over the land as you arrive */
 export const TitleCard = ({ level, length, biome }: { level: number; length: number; biome: BiomeId }) => (

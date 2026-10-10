@@ -16,6 +16,7 @@ import { TouchControls } from "./touch";
 import { FLIGHT, Flight, type FlightInput, type HitPart, hitboxWorld, touching } from "./flight";
 import { GlideIn } from "./glidein";
 import { Equipment } from "./items/equip";
+import { ItemFx } from "./items/fx";
 import type { ItemId, ItemSlot } from "./items/models";
 import { type GhostData, GhostRecorder, type GhostRun, ghostSamples } from "./ghost";
 import { type ControlSettings, type InputObserver, type TestAction, Input, controlsBlocked } from "./input";
@@ -29,6 +30,7 @@ import { SpeedLines } from "./speedlines";
 import { TOON_LIGHT } from "./toon";
 import { FX, RANGES, RINGS, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveTuning } from "./tuning";
 import { ABILITY } from "./run/abilities";
+import { ITEM, RUN_ITEMS, type RunItemId } from "./run/items";
 import { RunController, type RunEvents, type RunHost } from "./run/controller";
 import type { UpgradeId } from "./run/upgrades";
 import type { RunHud } from "./run/run";
@@ -191,6 +193,10 @@ export class Game implements RunHost {
   private readonly abilityFx: AbilityFx;
   /** …and of the design list's abilities 11 to 20 */
   private readonly abilityFx2: AbilityFx2;
+  /** What the design list's items look like when used (items/fx.ts) */
+  private readonly itemFx: ItemFx;
+  /** Test mode's Shift+I hands out the items in turn */
+  private nextTestItem = 0;
   readonly particles: Particles;
   /** Particles that blend instead of glowing: snow, leaves, ash, mist */
   private readonly softParticles: Particles;
@@ -310,6 +316,8 @@ export class Game implements RunHost {
       if (action === "respawn") this.respawnNow();
       if (action === "barrelLeft" || action === "barrelRight") this.barrelRoll(action === "barrelLeft" ? -1 : 1);
       if ((action === "flap" || action === "hover" || action === "plunge" || action === "burst" || action === "resonance" || action === "ascend" || action === "stance") && this.crashedAt === null && !this.glide.active) this.run?.ability(action);
+      if (action === "useItem" && this.crashedAt === null && !this.glide.active) this.run?.useItem();
+      if (action === "nextItem") this.run?.nextItem();
     };
     if (options.testMode) {
       this.testPlayback = new TestPlayback(container.parentElement ?? container);
@@ -321,6 +329,9 @@ export class Game implements RunHost {
         else if (action === "win") {
           if (this.paused) this.togglePause();
           this.run?.testWin();
+        } else if (action === "item") {
+          const id = RUN_ITEMS[this.nextTestItem++ % RUN_ITEMS.length].id;
+          if (this.run && !this.run.giveItem(id)) this.nextTestItem--;
         } else if (!this.paused && this.crashedAt === null) this.run?.spawnTestPortal();
       };
     }
@@ -354,6 +365,10 @@ export class Game implements RunHost {
       kick: (degrees) => this.rig.kick(degrees),
       sound: (kind, pitch) => this.audio.ability2(kind, pitch),
       turnGate: (index, normal) => this.view.gates.orient(index, normal),
+    });
+    this.itemFx = new ItemFx(this.scene, this.avatar, this.equipment, this.particles, {
+      kick: (degrees) => this.rig.kick(degrees),
+      sound: (kind, pitch) => this.audio.item(kind, pitch),
     });
     this.speedLines = new SpeedLines();
     this.debris = new Debris(options.color);
@@ -471,6 +486,11 @@ export class Game implements RunHost {
     this.run?.grant(id);
   }
 
+  /** Dev tools: put an item in the run's bag now, e.g. `__game.giveItem("anemoCatcher")` */
+  giveItem(id: RunItemId) {
+    this.run?.giveItem(id);
+  }
+
   /** The upgrade chosen at a portal */
   pickUpgrade(id: Parameters<RunController["pick"]>[0]) {
     if (this.paused) return;
@@ -559,7 +579,8 @@ export class Game implements RunHost {
     this.view.group.visible = !on;
     this.abilityFx.group.visible = !on;
     this.abilityFx2.group.visible = !on;
-    this.abilityFx.inWormhole = this.abilityFx2.inWormhole = on;
+    this.itemFx.group.visible = !on;
+    this.abilityFx.inWormhole = this.abilityFx2.inWormhole = this.itemFx.inWormhole = on;
     this.softParticles.points.visible = !on;
     this.speedLines.mesh.visible = !on;
     if (on) this.debris.mesh.visible = false;
@@ -854,6 +875,7 @@ export class Game implements RunHost {
     this.fx.dispose();
     this.abilityFx.dispose();
     this.abilityFx2.dispose();
+    this.itemFx.dispose();
     this.equipment.dispose();
     this.avatar.dispose();
     this.particles.dispose();
@@ -899,6 +921,7 @@ export class Game implements RunHost {
     this.proximity = 0;
     this.combo = 0;
     this.run?.abilities.reset();
+    this.run?.items.reset();
     this.avatar.revive();
     this.avatar.visible = true;
     this.fx.reset();
@@ -954,7 +977,8 @@ export class Game implements RunHost {
     this.prevPosition.copy(this.flight.position);
     this.prevQuaternion.copy(this.flight.quaternion);
     this.prevVelocity.copy(this.flight.velocity);
-    this.flight.step(STEP, input, this.proximity * this.proximity, FLIGHT, this.run ? this.run.flightMods : null);
+    // In a run, some items take the controls a little (the input scored and recorded stays the player's)
+    this.flight.step(STEP, this.run ? this.run.steer(input) : input, this.proximity * this.proximity, FLIGHT, this.run ? this.run.flightMods : null);
 
     const { x, y, z } = this.flight.position;
     const rock = this.world.rock.distance(x, y, z);
@@ -1453,6 +1477,7 @@ export class Game implements RunHost {
     } else if (!crashed) {
       this.abilityFx.pose(dt, this.run && !waiting ? this.run.abilities : null);
       this.abilityFx2.pose(dt, this.run && !waiting ? this.run.abilities : null);
+      this.itemFx.pose(dt, this.run && !waiting ? this.run.items : null);
       this.avatar.setDodge(this.flight.dodgePhase);
       this.avatar.setSpeedControls(this.flight.boost, this.flight.brake);
       this.avatar.update(dt, this.flight.speed, this.smoothProximity);
@@ -1464,9 +1489,11 @@ export class Game implements RunHost {
       if (this.run) {
         this.abilityFx.update(dt, this.run.abilities, this.world, this.flight, this.rig.camera, this.passedGate, moving);
         this.abilityFx2.update(dt, this.run.abilities, this.world, this.flight, this.rig.camera, this.passedGate, moving);
+        this.itemFx.update(dt, this.run.items, this.flight, moving);
       } else {
         this.abilityFx.hide();
         this.abilityFx2.hide();
+        this.itemFx.hide();
       }
       this.rig.update(
         dt,
@@ -1490,6 +1517,7 @@ export class Game implements RunHost {
       body.quaternion.copy(this.death.quaternion);
       this.abilityFx.hide();
       this.abilityFx2.hide();
+      this.itemFx.hide();
       this.equipment.update(dt);
       this.deathEffects(dt);
       this.rig.fall(body.position, dt, this.field);
@@ -1792,6 +1820,9 @@ export class Game implements RunHost {
     const abilities = gui.addFolder("Run abilities (not saved)");
     for (const key of Object.keys(ABILITY) as (keyof typeof ABILITY)[]) abilities.add(ABILITY, key);
     abilities.close();
+    const items = gui.addFolder("Run items (not saved)");
+    for (const key of Object.keys(ITEM) as (keyof typeof ITEM)[]) items.add(ITEM, key);
+    items.close();
 
     for (const [title, group] of TUNING_GROUPS) {
       const folder = gui.addFolder(title);
@@ -1814,7 +1845,7 @@ export class Game implements RunHost {
     const actions = {
       barrelLeft: () => this.barrelRoll(-1),
       barrelRight: () => this.barrelRoll(1),
-      copy: () => void navigator.clipboard?.writeText(JSON.stringify({ FLIGHT, ABILITY, ...Object.fromEntries(TUNING_GROUPS) }, null, 2)),
+      copy: () => void navigator.clipboard?.writeText(JSON.stringify({ FLIGHT, ABILITY, ITEM, ...Object.fromEntries(TUNING_GROUPS) }, null, 2)),
       reset: () => {
         resetTuning();
         gui.controllersRecursive().forEach((c) => c.updateDisplay());

@@ -76,6 +76,7 @@ export interface FlightInput {
   brake?: number; // 0..1, held
   pitch: number; // -1..1, positive = nose up
   roll: number; // -1..1 steering target, positive = turn right
+  use?: number; // 0..1, the use-item key held (run items that act while held; the flight ignores it)
 }
 
 const LOCAL_RIGHT = new Vector3(1, 0, 0);
