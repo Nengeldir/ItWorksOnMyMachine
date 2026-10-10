@@ -137,7 +137,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `session/` | Solo, room, explore and run sessions wiring a `Game` to the network and UI. `ExploreSession`: free flight through any biome (`/?explore=verdant&seed=2`), nothing saved. `RunSession`: a roguelike run (`/?run=<seed>`), best score per run seed in localStorage |
 | `net/` | Server clock sync and the room connection (SSE down, POST up) |
 | `staleBuild.ts` | After a redeploy, an open tab's lazy chunks (bloom, `?tune`) and mesher worker are 404s: `reloadForNewBuild` reloads the page once (at most every 30 s, production only) |
-| `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, controls, and the run's HUD, title card and upgrade picker (`RunHud.tsx`). The menu's live course behind the glass is `MenuBackdrop` (a `Game` in `drift` attract mode); today's best folds into a flag (`TodaysBest`). `GameScreen`'s `Panel` folds to its heading and main buttons on narrow screens |
+| `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, controls, and the run's HUD, title card and upgrade picker (`RunHud.tsx`). The menu's live course behind the glass is `MenuBackdrop` (a `Game` in `drift` attract mode, which switches courses with `setSeed` and snapshots each one for card art); today's best folds into a flag (`TodaysBest`). `CourseSelect` is the map select (a carousel of course cards; featured art in `public/courses/`). Before a race, `GameScreen`'s `ReadyCard` sits where the timer will be; its `Panel` (results) folds to its heading and main buttons on narrow screens |
 | `theme.ts` | The UI's colors per map: `useUiTheme(seed)` sets `--ink` (picked per palette name, else derived from the sky) and `--tint` (the horizon); every other shade comes from those two with `color-mix()` |
 | `media.ts` | `useMediaToggle(query)`: an open/closed toggle that starts open where a media query matches and follows the screen when it changes |
 
@@ -193,6 +193,62 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: In-game UI simplified, map select (Claude)
+
+Asked for by the UX group, on `shiyu-ux`: take text off the game screen to
+make room for a tutorial, a map select in the style of the "E" mockup that
+shows off the maps, and a landing backdrop that doesn't flash on tab switches.
+
+- **Before a race:** the time trial's course panel and the room lobby panel
+  are gone. A small card at the top centre, where the race timer appears,
+  holds one line and the start buttons (`ReadyCard` in `GameScreen.tsx`):
+  "20 gates · warm up as long as you like" with Start the run (`Enter`), or
+  "Race room · N pilots" with Start race (`Enter`) and New map (`N`). The
+  time trial's best times and controls fold-out left that screen (the map
+  select shows best times; controls go to the planned settings overlay). The
+  room's invite link (the code is in the top bar and the URL), pilot list
+  and last race went too. A ready state for rooms was considered and
+  dropped: anyone can still start, with the 5 s countdown.
+- **Flight panel** (`Hud.tsx`, `Hud.css`): no more key hint line, Ready
+  label or "m to the rock" line. Two labelled bars, then the speed: boost
+  (blue: Boost ready, Boosting, Boost charging) and skimming (orange:
+  "Gaining N points/s" in runs, from `Game.step`'s style formula; "Gaining N
+  km/h per second" in races, from `FLIGHT.proximityBoost`; "Skim the rock
+  for …" when far). Style points show in runs only (`showStyle`), where
+  they score. The panel's height follows its content and the mouse hint
+  stacks on top of it (`.hud-bottom`).
+- **Mouse hint:** only while the mouse moves over the unlocked game view, gone
+  2.5 s after it stops (`useMouseHint`); keyboard and gamepad players never
+  see it. The ghost note moved under the race timer (it overlapped the
+  flight panel).
+- **Map select** (`CourseSelect.tsx`, `CourseSelect.css`): "Choose a
+  course" on the landing's Solo tab replaces the random course link and the
+  seed field. A carousel (arrows, `A`/`D`, `←`/`→`, `Esc` back, `Enter`
+  flies) of today's course, one course per Sky Isles mood (the lowest seed
+  with it: Alpine 2, Misty pines 5, Autumn 12, Dusk 3, Winter 1, Starlight 8)
+  and a random card (roll, or type a seed). Cards have a picture, name, seed
+  and gates; the middle one the top three and your best. The backdrop flies
+  over the course in the middle (after 0.3 s) and the UI takes its colors.
+- **Card art:** the featured courses' pictures are
+  `frontend/public/courses/<seed>.jpg`, rendered in headless Chromium
+  (software GL, so no bloom) from the backdrop's drift view at z = 400 or
+  900. Today's and random courses get a snapshot of the backdrop once its
+  land is in (`Game.landReady`, `Game.snapshot(width, aspect)`,
+  `MenuBackdrop`'s `onSnapshot`); until then, a gradient of the course's sky.
+- **Backdrop:** `MenuBackdrop` keeps one `Game` and calls `setSeed` for
+  another course. It's sized by the viewport (`100vw` × `100lvh`), not the
+  page: the scrollbar coming and going with the Solo tab's height resized
+  the canvas, which blanks it for a frame (a grey flash on tab switches).
+- Gameplay untouched: `Game.ts` only gained the two read-only members above;
+  the race map's code wasn't changed.
+- Verified: `npm run build`, `npm run lint` and the frontend tests (Node 24)
+  pass. In the app's browser on the Docker build: the ready cards, both
+  bars' labels, the mouse hint appearing and hiding, every map-select card
+  and its theme, roll, keys after clicking an arrow, `Esc`, the backdrop
+  canvas keeping its size across tab switches, no console errors. Not
+  checked: phones and touch, a room with two players, the snapshot timing on
+  a slow machine.
 
 ### 2026-10-10: UX fixes from playtesting (Claude)
 
@@ -1084,8 +1140,16 @@ finale and the finish screen. What's open:
   runs and explore keep the menu's colors. Theme by the level's palette.
 - Restyle the run HUD, upgrade picker and run summary for the glass look
   (only the tokens were mapped).
-- The run's screens don't use the folding `Panel` yet (the time trial and
-  rooms do, see the UX fixes above).
+- The run's screens don't use the folding `Panel` (the time trial's and
+  rooms' results do).
+- **Map select follow-ups:** re-render `public/courses/` when Sky Isles' looks
+  change (drift view at z = 400 or 900, see the change log); rendered on a real
+  GPU with bloom they'd look better. Swipe on touch screens. More cards
+  (yesterday's course, a friend's seed) if wanted.
+- What left the game screen needs a new home: boost (`Shift`), brake
+  (`Space`) and mouse steering in the tutorial; controls in the settings
+  overlay; the room's pilot list and last race, if missed, in the pause
+  overlay.
 - Misclicks that throw a run away, to judge once the in-game UI is settled
   (a Menu confirmation was tried and reverted): Menu in any mode, the
   browser's Back (mouse side button, touchpad swipe, Alt+←), and Backspace,
