@@ -20,6 +20,7 @@ export class RelicFx {
   readonly group = new THREE.Group();
   private readonly kite = buildItem("stormKite");
   private readonly cord = new THREE.Line(new THREE.BufferGeometry().setAttribute("position",new THREE.Float32BufferAttribute(new Float32Array(6),3)),new THREE.LineBasicMaterial({color:"#f5df9e",transparent:true,opacity:0.75}));
+  private readonly tether = new THREE.Line(new THREE.BufferGeometry().setAttribute("position",new THREE.Float32BufferAttribute(new Float32Array(6),3)),new THREE.LineBasicMaterial({color:"#9ceddb",transparent:true,opacity:0.9}));
   private readonly lights = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.3), new THREE.MeshBasicMaterial({color:"#ffe5a0"}),128);
   private readonly lightMatrix = new THREE.Matrix4();
   private readonly lightScale = new THREE.Vector3(1,1,1);
@@ -34,7 +35,7 @@ export class RelicFx {
   private readonly particles: Particles;
   constructor(avatar: Avatar, equipment: Equipment, particles: Particles) {
     this.avatar = avatar; this.equipment = equipment; this.particles = particles;
-    this.group.add(this.markers.mesh, this.ribbon.mesh, this.lights, this.kite, this.cord);
+    this.group.add(this.markers.mesh, this.ribbon.mesh, this.lights, this.kite, this.cord, this.tether);
   }
   used(id: RunItemId) {
     if(id === "sunNectar"){
@@ -83,6 +84,13 @@ export class RelicFx {
       this.markers.add(this.avatar.group.position,null,2.8,0.65 * ITEMS_FX.relics,0.04,4,ICE);
       this.markers.add(this.avatar.group.position,UP,2.1,0.35 * ITEMS_FX.relics,0.06,3,ICE);
     }
+    this.tether.visible=items.time("windTether")>=0;
+    if(this.tether.visible){
+      const rope=this.tether.geometry.getAttribute("position");
+      this.avatar.slots.hand.getWorldPosition(at);rope.setXYZ(0,at.x,at.y,at.z);
+      rope.setXYZ(1,items.anchor.x,items.anchor.y,items.anchor.z);rope.needsUpdate=true;this.tether.frustumCulled=false;
+      this.markers.add(items.anchor,null,2,0.7 * ITEMS_FX.relics,0.05,0,GOLD);
+    }
     const kiteTime=items.time("stormKite");
     this.kite.visible=this.cord.visible=kiteTime>=0;
     if(kiteTime>=0){
@@ -130,5 +138,5 @@ export class RelicFx {
     this.markers.end();
   }
   hide() { this.group.visible = false; }
-  dispose() { disposeItem(this.kite); this.cord.geometry.dispose(); this.cord.material.dispose(); this.lights.geometry.dispose(); this.lights.material.dispose(); this.ribbon.dispose(); this.markers.dispose(); this.group.removeFromParent(); }
+  dispose() { disposeItem(this.kite); this.tether.geometry.dispose(); this.tether.material.dispose(); this.cord.geometry.dispose(); this.cord.material.dispose(); this.lights.geometry.dispose(); this.lights.material.dispose(); this.ribbon.dispose(); this.markers.dispose(); this.group.removeFromParent(); }
 }

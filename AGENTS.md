@@ -2173,7 +2173,7 @@ Status: **done** = mechanics, models and animations in the game.
 | 11 | Stormcaller's Kite | A kite that catches high winds and tows you upward for 5 s | done |
 | 12 | Glacial Prism | Freezes the timer or the combo's decay for a few seconds | done |
 | 13 | Sun-Kissed Nectar | Fills the boost reserve (and stamina) at once | done |
-| 14 | Tether of the Wind Spirit | A grappling hook of light to a nearby hoop or cliff, swinging you round it for a sharp turn | planned |
+| 14 | Tether of the Wind Spirit | A grappling hook of light to a nearby hoop or cliff, swinging you round it for a sharp turn | done |
 | 15 | Illusory Moth Cape | Intangible for 3 s: fly straight through rock | planned |
 | 16 | Resonant Chimes | Passing a hoop while active sends a shockwave that widens the next hoop | planned |
 | 17 | Crystallized Updraft | A trampoline of wind dropped on a surface: bounce off it for a big vertical boost | planned |
