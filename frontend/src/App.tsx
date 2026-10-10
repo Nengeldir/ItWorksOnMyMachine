@@ -26,8 +26,8 @@ function screenFromUrl(): Screen {
   const seed = Number(params.get("seed"));
   const run = Number(params.get("run"));
   if (Number.isInteger(run) && run >= 1 && run < 2 ** 31) return { kind: "run", seed: run };
-  if (params.has("gallery")) return { kind: "gallery" };
   // /?explore=ember, or just /?explore to start in the first world and switch from there
+  if (params.has("gallery")) return { kind: "gallery" };
   const explore = params.get("explore");
   if (explore !== null) {
     return { kind: "explore", biome: ExploreSession.valid(explore) ? explore : "skyIsles", seed: Number.isInteger(seed) && seed >= 1 ? seed : 1 };

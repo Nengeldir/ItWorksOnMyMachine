@@ -6,8 +6,8 @@ export interface ControlSettings {
   mouseSensitivity: number; // 0.25..3, 1 = default
 }
 
-/** One-off presses. dash and flap only do something in a roguelike run, with the upgrade */
-export type InputAction = "pause" | "respawn" | "mute" | "barrelLeft" | "barrelRight" | "dash" | "flap";
+/** One-off presses. Wingbeat needs its adventure upgrade. */
+export type InputAction = "pause" | "respawn" | "mute" | "barrelLeft" | "barrelRight" | "flap";
 
 /** KeyboardEvent.code bindings. Change these here; control hints use the same values. */
 export const KEY_BINDINGS = { pause: "KeyP" } as const;
@@ -17,13 +17,6 @@ export function keyLabel(code: string): string {
 }
 
 const DEAD_ZONE = 0.12;
-const DOUBLE_TAP_MS = 280;
-const ROLL_KEYS: Record<string, InputAction> = {
-  KeyA: "barrelLeft",
-  ArrowLeft: "barrelLeft",
-  KeyD: "barrelRight",
-  ArrowRight: "barrelRight",
-};
 
 function deadZone(value: number): number {
   if (Math.abs(value) < DEAD_ZONE) return 0;
@@ -32,7 +25,7 @@ function deadZone(value: number): number {
 
 function isTyping(event: KeyboardEvent): boolean {
   const target = event.target as HTMLElement | null;
-  return !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+  return !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
 }
 
 /**
@@ -49,7 +42,6 @@ export class Input {
   private stickX = 0;
   private stickY = 0;
   private padButtons: boolean[] = [];
-  private lastTap = { code: "", at: 0 };
 
   constructor(element: HTMLElement, settings: ControlSettings) {
     this.element = element;
@@ -81,21 +73,14 @@ export class Input {
     if (document.pointerLockElement === this.element) document.exitPointerLock();
   }
 
-  /** Discard held controls and mouse motion when pausing or resuming. */
-  reset() {
-    this.keys.clear();
-    this.stickX = 0;
-    this.stickY = 0;
-    this.lastTap = { code: "", at: 0 };
-  }
-
   private onKeyDown = (event: KeyboardEvent) => {
     if (isTyping(event)) return;
+    if (event.repeat && !this.keys.has(event.code)) return;
     this.keys.add(event.code);
     // Arrow keys would scroll the page; leave them alone on buttons and panels
     const target = event.target as HTMLElement | null;
     const atGame = !target || target === document.body || target === this.element;
-    if (atGame && event.code.startsWith("Arrow")) event.preventDefault();
+    if (atGame && (event.code.startsWith("Arrow") || event.code === "Space")) event.preventDefault();
     if (event.repeat) return;
     if (event.code === KEY_BINDINGS.pause) {
       event.preventDefault();
@@ -104,23 +89,13 @@ export class Input {
     }
     if (event.code === "KeyR") this.onAction?.("respawn");
     if (event.code === "KeyM") this.onAction?.("mute");
-    // Barrel rolls: Q / E, or double-tap a roll key
+    // Explicit barrel rolls only: steering taps should never trigger a stunt.
     if (event.code === "KeyQ") this.onAction?.("barrelLeft");
     if (event.code === "KeyE") this.onAction?.("barrelRight");
-    if (event.code === "ShiftLeft" || event.code === "ShiftRight") this.onAction?.("dash");
-    if (event.code === "Space") {
+
+    if (event.code === "KeyC") {
       if (atGame) event.preventDefault();
       this.onAction?.("flap");
-    }
-    const roll = ROLL_KEYS[event.code];
-    if (roll) {
-      const now = performance.now();
-      if (this.lastTap.code === event.code && now - this.lastTap.at < DOUBLE_TAP_MS) {
-        this.onAction?.(roll);
-        this.lastTap = { code: "", at: 0 };
-      } else {
-        this.lastTap = { code: event.code, at: now };
-      }
     }
   };
 
@@ -129,8 +104,14 @@ export class Input {
   };
 
   private onBlur = () => {
-    this.keys.clear();
+    this.reset();
   };
+
+  reset() {
+    this.keys.clear();
+    this.stickX = this.stickY = 0;
+    this.padButtons = [];
+  }
 
   private onMouseMove = (event: MouseEvent) => {
     if (!this.locked) return;
@@ -149,7 +130,7 @@ export class Input {
 
   /** Is the hover button held? (F, or the gamepad's B / circle) */
   get hovering(): boolean {
-    return this.keys.has("KeyF") || this.padButtons[1];
+    return this.keys.has("KeyF") || !!this.padButtons[1];
   }
 
   private key(...codes: string[]): number {
@@ -157,6 +138,7 @@ export class Input {
   }
 
   sample(dt: number): FlightInput {
+    if (!document.hasFocus()) { this.reset(); return { pitch: 0, roll: 0, boost: 0, brake: 0 }; }
     const recenter = Math.exp(-dt * 3.5);
     this.stickX *= recenter;
     this.stickY *= recenter;
@@ -166,6 +148,8 @@ export class Input {
     let pitch = this.key("KeyS", "ArrowDown") - this.key("KeyW", "ArrowUp") + this.stickY;
     let roll = this.key("KeyD", "ArrowRight") - this.key("KeyA", "ArrowLeft") + this.stickX;
 
+    let boost = this.key("ShiftLeft", "ShiftRight");
+    let brake = this.key("Space");
     const pad = navigator.getGamepads?.().find((p) => p?.connected);
     if (pad) {
       roll += deadZone(pad.axes[0] ?? 0);
@@ -175,13 +159,16 @@ export class Input {
       if (pressed[3] && !this.padButtons[3]) this.onAction?.("respawn");
       if (pressed[4] && !this.padButtons[4]) this.onAction?.("barrelLeft");
       if (pressed[5] && !this.padButtons[5]) this.onAction?.("barrelRight");
-      // A flaps, X dashes (B, held, hovers): runs only
+      // A flaps and B hovers in adventure; triggers control speed in every mode.
       if (pressed[0] && !this.padButtons[0]) this.onAction?.("flap");
-      if (pressed[2] && !this.padButtons[2]) this.onAction?.("dash");
+      boost = Math.max(boost, deadZone(pad.buttons[7]?.value ?? 0));
+      brake = Math.max(brake, deadZone(pad.buttons[6]?.value ?? 0));
       this.padButtons = pressed;
+    } else {
+      this.padButtons = [];
     }
 
     if (this.settings.invertPitch) pitch = -pitch;
-    return { pitch: clamp(pitch, -1, 1), roll: clamp(roll, -1, 1) };
+    return { pitch: clamp(pitch, -1, 1), roll: clamp(roll, -1, 1), boost, brake };
   }
 }

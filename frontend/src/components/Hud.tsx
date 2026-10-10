@@ -51,6 +51,11 @@ const Hud = ({ hud }: { hud: HudState }) => {
       )}
 
       <div className="hud-flight glass">
+        <div className="hud-boost" aria-label={`Boost reserve ${Math.round(hud.boostCharge * 100)} percent`}>
+          <span>{hud.braking ? "Braking" : hud.boosting ? "Boosting" : hud.boostCharge < 0.999 ? "Recharging" : "Ready"}</span>
+          <progress aria-label="Boost reserve" max={1} value={hud.boostCharge} />
+          <span className="hud-boost-keys">Shift · boost / Space · brake</span>
+        </div>
         <div className="hud-speed">
           <strong>{hud.speedKmh}</strong> km/h
         </div>

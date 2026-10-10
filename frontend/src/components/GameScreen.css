@@ -227,32 +227,6 @@
   }
 }
 
-.gallery-items {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.4rem;
-}
-
-.gallery-items button {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 0.45rem 0.7rem;
-  border-radius: 14px;
-  font-weight: 700;
-  text-align: left;
-}
-
-.gallery-items button small {
-  font-weight: 500;
-  font-size: 0.72rem;
-  color: var(--ink-45);
-}
-
-.gallery-panel .row {
-  flex-wrap: wrap;
-}
-
 /* Explore mode: switch worlds and lighting to check looks and music */
 .debug-panel {
   position: absolute;
@@ -300,4 +274,30 @@
 
 .debug-keys {
   opacity: 0.7;
+}
+
+.gallery-items {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+}
+
+.gallery-items button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0.45rem 0.7rem;
+  border-radius: 14px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.gallery-items button small {
+  font-weight: 500;
+  font-size: 0.72rem;
+  color: var(--ink-45);
+}
+
+.gallery-panel .row {
+  flex-wrap: wrap;
 }

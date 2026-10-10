@@ -8,9 +8,13 @@ export const FLIGHT = {
   gravity: 9.81, // Earth's gravitational acceleration, m/s²
   drag: 0.0013, // vertical terminal speed ≈ 87 m/s
   pitchRate: 2.4, // rad/s at full input
-  rollRate: 4.2,
+  rollRate: 4.2, // maximum bank response, rad/s
+  maxBank: 80, // degrees: steering cannot roll past this
+  dodgeDistance: 5, // metres along the unbanked right axis at activation
+  dodgeDuration: 0.6,
+  dodgeCooldown: 1, // seconds between starts
   turnRate: 1.4, // gameplay multiplier on coordinated turning
-  autoLevel: 2, // how fast the wings level out when you let go (0 = off)
+  autoLevel: 2, // bank-target and upright recovery response, 1/s
   pathResponse: 14, // flight-path response, 1/s (about 70 ms)
   maxLoad: 8, // maximum steering acceleration in g; tuned for arcade handling
   stallSpeed: 16, // below this the nose drops
@@ -19,7 +23,13 @@ export const FLIGHT = {
   glideDrag: 0.5, // dissipate energy from lift-related sink rather than sustaining speed
   proximityBoost: 5, // gameplay bonus: extra m/s² while skimming terrain
   maxSpeed: 120, // overspeed drag onset, not an instantaneous speed clamp
-  minSpeed: 6,
+  boostAcceleration: 24,
+  boostSeconds: 2.5,
+  boostRecharge: 0.22, // reserve per second after release
+  controlResponse: 12,
+  brakeDrag: 0.025,
+  brakeFloor: 22, // brake force fades here; climbing can still stall
+  minSpeed: 6, // steering denominator only; never injects speed
   // The hitbox (see touching()): a ball for the body, a flat rectangle per wing.
   // A little smaller than the pilot drawn, so near misses stay graceful
   hitBody: 0.5, // radius of the body's ball (m)
@@ -41,7 +51,7 @@ export interface FlightMods {
   sink: number; // multiplies the sink
   stall: number; // multiplies the stall speed
   proximityBoost: number; // multiplies FLIGHT.proximityBoost
-  boost: number; // extra m/s² right now (a dash, a thermal)
+  boost: number; // additional fraction of universal boost acceleration
   lift: number; // m/s of climb right now (a thermal's updraft)
   hover: number; // 0..1: cancels the sink and gravity along the path
   glideLock: boolean; // let go of pitch and the nose holds a shallow glide
@@ -55,8 +65,10 @@ export function plainMods(): FlightMods {
 const GLIDE_ANGLE = 0.09;
 
 export interface FlightInput {
+  boost?: number; // 0..1, held
+  brake?: number; // 0..1, held
   pitch: number; // -1..1, positive = nose up
-  roll: number; // -1..1, positive = roll right
+  roll: number; // -1..1 steering target, positive = turn right
 }
 
 const LOCAL_RIGHT = new Vector3(1, 0, 0);
@@ -162,8 +174,45 @@ export class Flight {
   readonly right = new Vector3(1, 0, 0);
   private readonly flightPath = new Vector3(0, 0, -1);
   speed = 35;
+  boost = 0;
+  brake = 0;
+  boostCharge = 1;
+  private exhausted = false;
+  private steeringBank = 0;
+  private readonly dodgeAxis = new Vector3();
+  private dodgeElapsed = -1;
+  private dodgeWait = 0;
+  private dodgeDirection = 1;
+  private dodgeLength = 5;
+  private dodgeDuration = 0.6;
+
+  /** Signed animation progress; zero means no dodge. */
+  get dodgePhase(): number {
+    return this.dodgeElapsed < 0 ? 0 : this.dodgeDirection * Math.max(0.0001, this.dodgeElapsed / this.dodgeDuration);
+  }
+
+  dodge(direction: 1 | -1, p = FLIGHT): boolean {
+    if (this.dodgeElapsed >= 0 || this.dodgeWait > 0) return false;
+    // Remove steering bank so a horizontal dodge doesn't also change altitude.
+    turn.setFromAxisAngle(LOCAL_BACK, this.steeringBank);
+    this.dodgeAxis.set(1, 0, 0).applyQuaternion(turn).applyQuaternion(this.quaternion).normalize();
+    this.dodgeDirection = direction;
+    this.dodgeLength = p.dodgeDistance;
+    this.dodgeDuration = Math.max(0.1, p.dodgeDuration);
+    this.dodgeElapsed = 0;
+    this.dodgeWait = Math.max(this.dodgeDuration, p.dodgeCooldown);
+    return true;
+  }
+
+  releaseControls() { this.boost = 0; this.brake = 0; this.dodgeElapsed = -1; }
 
   reset(position: Vector3, direction: Vector3, speed: number) {
+    this.releaseControls();
+    this.boostCharge = 1;
+    this.exhausted = false;
+    this.steeringBank = 0;
+    this.dodgeElapsed = -1;
+    this.dodgeWait = 0;
     this.position.copy(position);
     // Matrix4.lookAt points -z at the target, which is our forward
     lookMatrix.lookAt(ORIGIN, direction, WORLD_UP);
@@ -182,19 +231,37 @@ export class Flight {
 
   /** A wingbeat (run mode): a burst of speed and the nose lifted a little */
   flap(speed: number, pitch: number) {
-    this.speed = Math.min(FLIGHT.maxSpeed, this.speed + speed);
+    this.speed += speed;
+    turn.setFromAxisAngle(LOCAL_BACK, this.steeringBank);
+    this.quaternion.multiply(turn);
     turn.setFromAxisAngle(LOCAL_RIGHT, pitch);
+    this.quaternion.multiply(turn);
+    turn.setFromAxisAngle(LOCAL_BACK, -this.steeringBank);
     this.quaternion.multiply(turn).normalize();
     this.updateAxes();
   }
 
-  /** Bank angle in radians, positive with the right wing down */
+  /** Steering bank relative to the pitch frame; continuous through vertical flight. */
   get bank(): number {
-    return Math.atan2(-this.right.y, this.up.y);
+    return this.steeringBank;
   }
 
   step(dt: number, input: FlightInput, proximity: number, p = FLIGHT, mods: FlightMods | null = null) {
     this.updateAxes();
+    const brakeInput = clamp(input.brake ?? 0, 0, 1);
+    const boostInput = brakeInput > 0 ? 0 : clamp(input.boost ?? 0, 0, 1);
+    if (boostInput === 0) this.exhausted = false;
+    const boosting = boostInput > 0 && !this.exhausted && this.boostCharge > 0;
+    const response = 1 - Math.exp(-p.controlResponse * dt);
+    this.brake += (brakeInput - this.brake) * response;
+    this.boost += ((boosting ? boostInput : 0) - this.boost) * response;
+    if (brakeInput > 0 || this.exhausted) this.boost = 0;
+    if (boosting) {
+      this.boostCharge = Math.max(0, this.boostCharge - boostInput * dt / p.boostSeconds);
+      if (this.boostCharge === 0) { this.exhausted = true; this.boost = 0; }
+    } else if (boostInput === 0) {
+      this.boostCharge = Math.min(1, this.boostCharge + p.boostRecharge * dt);
+    }
     // Glide lock: with pitch let go, ease the nose towards a shallow, efficient glide
     if (mods?.glideLock && Math.abs(input.pitch) < 0.05) {
       const angle = Math.asin(clamp(this.forward.y, -1, 1));
@@ -203,17 +270,32 @@ export class Flight {
       input = locked;
     }
 
-    // Pitch and roll in the pilot's own frame
-    const liftAuthority = clamp(this.speed / Math.max(p.stallSpeed, 0.01), 0, 1) ** 2;
+    // Unbank before pitching: pitch remains continuous through a full loop.
+    // A/D choose a bounded bank target, rather than continuously adding roll.
+    const stallSpeed = p.stallSpeed * (mods ? mods.stall : 1);
+    const liftAuthority = clamp(this.speed / Math.max(stallSpeed, 0.01), 0, 1) ** 2;
+    turn.setFromAxisAngle(LOCAL_BACK, this.steeringBank);
+    this.quaternion.multiply(turn);
     turn.setFromAxisAngle(LOCAL_RIGHT, clamp(input.pitch, -1, 1) * p.pitchRate * liftAuthority * dt);
     this.quaternion.multiply(turn);
+    // Pitch loops can leave the underlying frame upside down even when the
+    // steering bank is zero. Recover that frame around the nose when pitch is
+    // released, preserving heading and allowing deliberate loops while held.
+    // Fade recovery at the poles, where world-up has no unique roll direction.
     this.updateAxes();
-    let rollRate = clamp(input.roll, -1, 1) * p.rollRate * liftAuthority;
-    if (Math.abs(input.roll) < 0.05 && p.autoLevel > 0 && this.up.y > 0) {
-      rollRate = clamp(-this.bank * p.autoLevel * 2, -p.rollRate * 0.5, p.rollRate * 0.5) * liftAuthority;
+    if (Math.abs(input.pitch) < 0.05) {
+      const horizontalSq = this.forward.x ** 2 + this.forward.z ** 2;
+      const uprightAngle = Math.abs(this.right.y) < 1e-8 && this.up.y < 0
+        ? Math.PI : Math.atan2(-this.right.y, this.up.y);
+      const recovery = uprightAngle * (1 - Math.exp(-p.autoLevel * horizontalSq * dt));
+      turn.setFromAxisAngle(LOCAL_BACK, clamp(recovery, -p.rollRate * dt, p.rollRate * dt));
+      this.quaternion.multiply(turn);
     }
-    // Rolling right turns about the forward axis (-z), i.e. negative about +z
-    turn.setFromAxisAngle(LOCAL_BACK, -rollRate * dt);
+    const limit = p.maxBank * Math.PI / 180;
+    const bankTarget = clamp(input.roll, -1, 1) * limit;
+    const bankChange = (bankTarget - this.steeringBank) * (1 - Math.exp(-Math.max(2, p.autoLevel * 2) * dt));
+    this.steeringBank = clamp(this.steeringBank + clamp(bankChange, -p.rollRate * dt, p.rollRate * dt) * liftAuthority, -limit, limit);
+    turn.setFromAxisAngle(LOCAL_BACK, -this.steeringBank);
     this.quaternion.multiply(turn);
 
     // A coordinated turn tightens at lower airspeed. Limit the bank factor near
@@ -223,13 +305,11 @@ export class Flight {
     const bankFactor = Math.sin(this.bank) / Math.max(Math.abs(Math.cos(this.bank)), 0.26);
     const headingAuthority = Math.hypot(this.forward.x, this.forward.z);
     const yawRate = p.turnRate * p.gravity * bankFactor
-      / Math.max(this.speed, 6) * liftAuthority * headingAuthority;
+      / Math.max(this.speed, p.minSpeed, 0.01) * liftAuthority * headingAuthority;
     turn.setFromAxisAngle(WORLD_UP, -yawRate * dt);
     this.quaternion.premultiply(turn);
 
     // Too slow: the nose drops towards the ground
-    const stallSpeed = p.stallSpeed * (mods ? mods.stall : 1);
-    // const stall = clamp((stallSpeed - this.speed) / stallSpeed, 0, 1);
     const stall = clamp((stallSpeed - this.speed) / Math.max(stallSpeed, 0.01), 0, 1);
     if (stall > 0) {
       axis.crossVectors(this.forward, WORLD_DOWN);
@@ -245,24 +325,11 @@ export class Flight {
     this.quaternion.normalize();
     this.updateAxes();
 
-    // Energy: gravity along the flight path, drag, and a boost for flying close
-    let accel = -p.gravity * this.forward.y - p.drag * this.speed * this.speed + p.proximityBoost * proximity;
-    if (mods) {
-      // The same terms, changed by upgrades (run mode only)
-      const gravity = -p.gravity * this.forward.y * (1 - mods.hover);
-      accel = gravity - p.drag * mods.drag * this.speed * this.speed + p.proximityBoost * mods.proximityBoost * proximity + mods.boost;
-    }
-    this.speed = clamp(this.speed + accel * dt, p.minSpeed, p.maxSpeed);
-    // let sink = Math.min(30, p.sink * (p.sinkSpeed / Math.max(this.speed, 6)) ** 2);
-    // if (mods) sink = sink * mods.sink * (1 - mods.hover) - mods.lift;
-    // this.velocity.copy(this.forward).multiplyScalar(this.speed);
-    // this.velocity.y -= sink;
-    // this.position.addScaledVector(this.velocity, dt);
     // Sink changes the glide angle, not the speed magnitude. This avoids adding
     // free kinetic energy and makes gravity respond to the actual flight path.
     const horizontal = Math.hypot(this.forward.x, this.forward.z);
     const bankSink = 1 / Math.max(Math.cos(this.bank), 0.25) ** 2;
-    let sink = Math.min(30, p.sink * (p.sinkSpeed / Math.max(this.speed, 6)) ** 2
+    let sink = Math.min(30, p.sink * (p.sinkSpeed / Math.max(this.speed, p.minSpeed, 0.01)) ** 2
       * bankSink) * horizontal;
     if (mods) sink = sink * mods.sink * (1 - mods.hover) - mods.lift;
     desiredPath.copy(this.forward).multiplyScalar(Math.max(this.speed, 0.01));
@@ -274,7 +341,7 @@ export class Flight {
       if (axis.lengthSq() < 1e-12) axis.copy(this.right);
       axis.normalize();
       const responseAngle = pathAngle * (1 - Math.exp(-p.pathResponse * dt));
-      const loadAngle = p.maxLoad * p.gravity / Math.max(this.speed, 6) * dt;
+      const loadAngle = p.maxLoad * p.gravity / Math.max(this.speed, p.minSpeed, 0.01) * dt;
       turn.setFromAxisAngle(axis, Math.min(responseAngle, loadAngle));
       this.flightPath.applyQuaternion(turn).normalize();
     }
@@ -288,11 +355,13 @@ export class Flight {
     // nose at a fixed glide speed indefinitely. Deliberate nose-down dives
     // still gain speed; holding the nose level spends speed until it stalls.
     const glideLoss = p.glideDrag * p.gravity * Math.max(0, this.forward.y - this.flightPath.y);
-    const pathAccel = -p.gravity * this.flightPath.y - glideLoss
-      + p.proximityBoost * clamp(proximity, 0, 1);
+    const pathAccel = -p.gravity * this.flightPath.y * (1 - (mods?.hover ?? 0)) - glideLoss
+      + p.proximityBoost * (mods?.proximityBoost ?? 1) * clamp(proximity, 0, 1)
+      + this.boost * p.boostAcceleration * (1 + (mods?.boost ?? 0))
+      - this.brake * p.brakeDrag * Math.max(0, this.speed ** 2 - p.brakeFloor ** 2);
     // Extra drag above the design speed replaces the old hard speed cutoff.
     const overspeed = Math.max(0, previousSpeed - p.maxSpeed);
-    const drag = p.drag + 0.0001 * overspeed;
+    const drag = p.drag * (mods?.drag ?? 1) + 0.0001 * overspeed;
     const predictedSpeed = Math.max(0, previousSpeed
       + (pathAccel - drag * previousSpeed ** 2) * dt * 0.5);
     this.speed = Math.max(0, previousSpeed
@@ -300,5 +369,17 @@ export class Flight {
     const averageSpeed = (previousSpeed + this.speed) * 0.5;
     this.velocity.copy(this.flightPath).multiplyScalar(this.speed);
     this.position.addScaledVector(this.flightPath, averageSpeed * dt);
+    this.dodgeWait = Math.max(0, this.dodgeWait - dt);
+    if (this.dodgeElapsed >= 0) {
+      const before = this.dodgeElapsed / this.dodgeDuration;
+      this.dodgeElapsed = Math.min(this.dodgeDuration, this.dodgeElapsed + dt);
+      const after = this.dodgeElapsed / this.dodgeDuration;
+      // Smoothstep displacement integrates to exactly 5 m, with zero end speeds.
+      const moved = this.dodgeDirection * this.dodgeLength
+        * (after * after * (3 - 2 * after) - before * before * (3 - 2 * before));
+      this.position.addScaledVector(this.dodgeAxis, moved);
+      if (dt > 0) this.velocity.addScaledVector(this.dodgeAxis, moved / dt);
+      if (this.dodgeElapsed >= this.dodgeDuration) this.dodgeElapsed = -1;
+    }
   }
 }

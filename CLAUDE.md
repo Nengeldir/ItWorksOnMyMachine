@@ -254,12 +254,42 @@ like the poles in some maps become unlikely. A deliberate gameplay change
   spikes keep about the height that was drawn before. Ember seed 1: 0.5% of
   near-rock points are field-only rock (Sky Isles: 2%). Runs' levels change
   a little.
+- **Crash camera under overhangs**: when the sky over the pilot is blocked,
+  the fall camera now lowers its arc (70°, then 50, 30, 12) to the first
+  angle with a clear view instead of being pulled in against the pilot
+  (`CameraRig.fall`, `FALL_ANGLES`).
 - Race hashes: trees, dist and rings unchanged; mesh changed (new values in
   `docs/dev-snippets.js`).
+- Rebased onto `main` (`30f2d85`: the rebased Pengyue work and the new
+  flight controls) and merged into `Pengyue`; collisions keep the
+  `speed-control-v3` rules tag (not bumped: that would hide every v3 time).
+  The 20 frontend tests pass (run on Node 22.14 with an equivalent
+  `module.register` resolver; `tests/register.mjs` needs Node ≥ 22.15).
 - Verified: build and lint pass. In Chrome: crashes of every kind on Sky
   Isles through the mesh path (`land: true`), the measurements above,
   Glacier and Ember after the generation change; no console errors. Not
   measured in a focused window; not played with a mouse.
+
+### 2026-10-10: Rebase Pengyue's newest work onto main
+
+- Replayed the ten new feature commits from `origin/Pengyue` (`fec0aee`)
+  onto `main` (`f532f3e`) on `pengyue-rebase`. Older biome work was already
+  integrated in main; main's flight/pause/music commits were not replayed.
+  The shared Pengyue branch was left unchanged.
+- Resolved conflicts in crash/dodge animation, camera, flight hitboxes,
+  loading fly-ins, portal/finale HUD, pause behavior, item gallery and docs.
+  Kept 80° banking, upright recovery, boost/brake, 5 m dodges, stable camera
+  orientation, fixed boost UI and biome audio. Removed obsolete dash effects
+  and restored the explore biome import. Synced camera velocity interpolation
+  during fly-in and handover.
+- New body/wing collision rules use `speed-control-v3` in frontend and backend;
+  v2 results remain stored but are excluded from current rankings. Deploy both
+  together. Added tests for hitbox orientation, crash-camera respawn, glide-in
+  handover and preservation/exclusion of v2 scores.
+- Verified build, lint, 20 frontend tests and 22 backend tests. Browser smoke
+  check: Verdant Morning/Moonlit, loading fly-in, pause overlay, crash state and
+  item-gallery page load. Full portal/finale and two-client/gamepad playtests
+  remain outstanding. The explore debug panel overlaps the HUD at narrow widths.
 
 ### 2026-10-10: Crash camera from above, pilot hitbox, land matching its collisions (Claude)
 
@@ -309,56 +339,6 @@ gameplay change (rule 6): what crashes you changed, in races too.
   overhead view during headfirst, slide and wing crashes; with real flying
   poses, the drawn wing at a crash is a median 0.49 m clear of the rock, worst
   0.78 m into it for one frame. Not played with a mouse.
-- Merged `origin/main` (`dd61606`: pause on P; `8f5e3e5`: the more physical
-  flight model, taken as is, with `FLIGHT` keeping the `hit*` keys).
-  Conflicts: `flight.ts` (`FLIGHT`), `effects.ts` (kept the feathers),
-  `Hud.tsx` (pause panel plus "Gliding in…"), `GameScreen.tsx` (the HUD
-  shows while paused, otherwise hidden in portals, the finale and after),
-  `Game.ts` (pause before the autopilot and glide-in logic; no pointer lock
-  while paused or on autopilot). Then `e20b112` (biome music, the
-  wingbeat sample, the explore debug panel): `App.tsx`, `GameScreen.css`,
-  `Game.ts` and this file, all kept from both sides. Rechecked after the
-  merges: build, lint, race hashes, the three crash kinds, pause; no
-  console errors.
-
-### 2026-10-10: Biome music and the wingbeat sample (Claude)
-
-Asked for: an audio controller for the generated ElevenLabs tracks, files moved
-out of the repo root into a sensible place.
-
-- **Files** moved to `frontend/public/audio/`: `music/sky-isles_soaring-above-the-clouds.mp3`,
-  `music/glacier_blue-shadows-over-cold-peaks.mp3`, `music/verdant_dewdrop-stream.mp3`,
-  `music/twilight_blue-hour-fireflies.mp3`, `music/ember_red-orange-embers.mp3`,
-  `sfx/wingbeat.mp3`.
-- **`music.ts`** (new): `MusicPlayer` crossfades between tracks when the biome
-  changes. Mapping: Sky Isles and Archipelago share the Sky Isles track;
-  Glacier and Aurora Summit share the Glacier track (until the finale gets
-  its own); Verdant and Lagoon share Dewdrop Stream; Twilight and Ember have
-  their own. A biome change that keeps the track doesn't restart it. Night
-  (`palette.night`) lowers the volume and rolls off the highs of the same track.
-- **`audio.ts`**: owns the player, remembers the biome until the first user
-  gesture starts audio, plays the wingbeat sample (random pitch ±8%) on your
-  downstrokes (quiet, scaled by effort) and for the Wingbeat ability (loud).
-  Falls back to the synthesized whoosh if the sample hasn't loaded.
-- **`Game.ts`**: `setLevel` calls `audio.setBiome`; your avatar's
-  `onDownstroke` also plays the flap (not for the menu backdrop, which has
-  no audio).
-- **`tuning.ts`**: new `AUDIO` group in `?tune`: `music`, `sfx`, `crossfade`,
-  `nightDim`, `nightMuffle`.
-- **Explore debug mode** (`ExploreSession.ts`, `GameScreen.tsx`, `App.tsx`,
-  `Menu.tsx`): open `/?explore` (or `/?explore=ember&seed=7`; in dev builds
-  also "Debug: explore worlds" on the Adventure tab). A panel lists every
-  world and its lighting moods; click, or press **N** next world, **B**
-  previous, **V** next light. Switching rebuilds the level in place (no
-  reload) and the URL follows. The panel shows the music file the world should
-  play and the one actually playing, so a mismatch is visible at a glance.
-  `/?explore` with no or an unknown biome starts in Sky Isles.
-- Looks and sounds only: no gameplay code touched.
-- Verified: `npm run build` and `npm run lint` pass. **Not run in a
-  browser**: the debug panel, level switching, crossfades, loop points and mix
-  levels against the wind are unchecked. A reported "world and music don't
-  match" was not reproduced or diagnosed yet; the panel is there to find it.
-- Branch `audio-music`, cut from `main`.
 
 ### 2026-10-10: Victory lap and the finish screen (Claude)
 
@@ -563,6 +543,130 @@ localhost "not connecting") until the browser cache was cleared.
 - Verified: build and lint pass. In a test container from the new image:
   `/` and `/explore` return `no-cache`, hashed assets return `immutable`, and
   a missing asset returns 404. The reload itself wasn't triggered in a browser.
+
+### 2026-10-10: Rebase speed controls onto current main
+
+- Rebased onto `e20b112`, preserving pause controls, biome music, wingbeat
+  samples and explore debug mode while resolving overlapping input/audio/docs.
+- Kept one input reset implementation, retained the pause action, and made
+  disconnected gamepad hover return false. Extended input coverage for the
+  pause key, repeats and reset alongside held speed controls.
+- Verified frontend build, lint and 17 tests; backend 22 tests pass. Browser
+  integration and real-gamepad/two-client playtests remain outstanding.
+
+### 2026-10-10: Upright recovery and 80° steering bank
+
+- `flight.ts`: raised the bank cap to 80°. The unbanked pitch frame now
+  gradually rolls toward world-up when pitch is released, fixing the case
+  where a half loop leaves the pilot stuck on its back despite zero bank.
+  Recovery preserves the nose direction, is rate-limited, and fades at the
+  vertical poles. Held pitch still allows deliberate loops.
+- Updated README and controls text. Added regression coverage for half loops
+  in both directions at 30/60/120 Hz and neutral recovery at both poles.
+- Verified frontend build, lint and all 17 tests. No browser playtest this
+  session; upright recovery feel remains part of the Next up playtest.
+
+### 2026-10-10: Increase steering bank to 75°
+
+- Raised `FLIGHT.maxBank` from 50° to 75° so held steering can produce
+  tighter coordinated turns while retaining the bank limit and auto-level.
+- Updated the controls overlay, README and bank-limit regression expectation.
+- Verified: frontend build, lint and all 15 tests pass. No new browser
+  playtest; assessing the higher bank's feel remains in Next up.
+
+### 2026-10-10: Bounded steering, sideways dodge and vertical camera continuity
+
+- `flight.ts`: A/D, mouse and stick now choose a bank target capped at 50°;
+  release levels the wings. Pitch uses the unbanked frame and remains unrestricted.
+  Q/E and LB/RB trigger a 5 m dodge over 0.6 s, with a 1 s start-to-start cooldown.
+  Its smooth displacement is integrated in the fixed step before collision/gate
+  checks; dodge never changes the base orientation. Respawn clears dodge state.
+- `avatar.ts`, `Game.ts`, `tuning.ts`: visual roll follows physics dodge progress;
+  removed cosmetic corkscrew displacement and extra visual bank. Removed obsolete
+  auto-roll/time/radius knobs; dodge timing and distance belong to `FLIGHT`.
+- `camera.ts`: transport the previous view/up frame through vertical flight,
+  suppress horizon correction near the poles, and bound recovery away from them.
+- `Hud.tsx`, `Hud.css`: fixed panel/status/bar dimensions, stable key hint line,
+  Ready/Boosting/Recharging/Braking labels, and moved the mouse hint above the panel.
+- Room snapshots and ghosts carry signed dodge progress. Older ghost formats
+  remain readable; v2 result filtering preserves legacy and v1 scores separately.
+  Frontend and backend must deploy together.
+- Verification: 15 frontend tests and 22 backend tests pass, including exact
+  dodge displacement at multiple speeds/timesteps, steering limits, cooldown,
+  reset, and camera continuity over loops in both directions at 30/60/144 fps.
+  Production build and lint pass. In the live browser preview, Ready, Boosting,
+  Braking and Recharging retain the same 245 x 50 px boost block; the mouse hint
+  no longer overlaps it. Real-gamepad and two-client visual playtesting remain
+  outstanding; loop continuity is covered by numeric camera tests.
+
+
+### 2026-10-10: Biome music and the wingbeat sample (Claude)
+
+Asked for: an audio controller for the generated ElevenLabs tracks, files moved
+out of the repo root into a sensible place.
+
+- **Files** moved to `frontend/public/audio/`: `music/sky-isles_soaring-above-the-clouds.mp3`,
+  `music/glacier_blue-shadows-over-cold-peaks.mp3`, `music/verdant_dewdrop-stream.mp3`,
+  `music/twilight_blue-hour-fireflies.mp3`, `music/ember_red-orange-embers.mp3`,
+  `sfx/wingbeat.mp3`.
+- **`music.ts`** (new): `MusicPlayer` crossfades between tracks when the biome
+  changes. Mapping: Sky Isles and Archipelago share the Sky Isles track;
+  Glacier and Aurora Summit share the Glacier track (until the finale gets
+  its own); Verdant and Lagoon share Dewdrop Stream; Twilight and Ember have
+  their own. A biome change that keeps the track doesn't restart it. Night
+  (`palette.night`) lowers the volume and rolls off the highs of the same track.
+- **`audio.ts`**: owns the player, remembers the biome until the first user
+  gesture starts audio, plays the wingbeat sample (random pitch ±8%) on your
+  downstrokes (quiet, scaled by effort) and for the Wingbeat ability (loud).
+  Falls back to the synthesized whoosh if the sample hasn't loaded.
+- **`Game.ts`**: `setLevel` calls `audio.setBiome`; your avatar's
+  `onDownstroke` also plays the flap (not for the menu backdrop, which has
+  no audio).
+- **`tuning.ts`**: new `AUDIO` group in `?tune`: `music`, `sfx`, `crossfade`,
+  `nightDim`, `nightMuffle`.
+- **Explore debug mode** (`ExploreSession.ts`, `GameScreen.tsx`, `App.tsx`,
+  `Menu.tsx`): open `/?explore` (or `/?explore=ember&seed=7`; in dev builds
+  also "Debug: explore worlds" on the Adventure tab). A panel lists every
+  world and its lighting moods; click, or press **N** next world, **B**
+  previous, **V** next light. Switching rebuilds the level in place (no
+  reload) and the URL follows. The panel shows the music file the world should
+  play and the one actually playing, so a mismatch is visible at a glance.
+  `/?explore` with no or an unknown biome starts in Sky Isles.
+- Looks and sounds only: no gameplay code touched.
+- Verified: `npm run build` and `npm run lint` pass. **Not run in a
+  browser**: the debug panel, level switching, crossfades, loop points and mix
+  levels against the wind are unchecked. A reported "world and music don't
+  match" was not reproduced or diagnosed yet; the panel is there to find it.
+- Branch `audio-music`, cut from `main`.
+
+### 2026-10-10: Speed controls (`speed-control`)
+
+- Consolidated the two speed integrations in `flight.ts`; gravity, drag,
+  proximity and adventure modifiers now participate in one integration.
+- Universal held Shift/RT boost (2.5 s reserve, release to recharge) and
+  Space/LT brake (priority over boost, drag tapers near 22 m/s). Wingbeat
+  moved to C/A; Gale boost strengthens the universal boost by 25% per stack.
+- `input.ts`, `Game.ts`: reset held controls/motion at respawn, clear stale
+  gamepad state, ignore unfocused input and remove double-tap stunt triggers.
+- `camera.ts`, `tuning.ts`: interpolated heading and travel direction,
+  restrained horizon/FOV, bounded boost feedback, segment obstruction checks
+  and eased camera extension. New tuning storage namespace keeps old camera
+  overrides from masking the defaults.
+- `avatar.ts`, `pilotfx.ts`, `trail.ts`, `audio.ts`: swept boost/spread brake
+  poses, brightened/lengthened boost trails, brake wisps, wind feedback and
+  fresh animation history on respawn. Fixed trail sampling so sub-0.8 m
+  movement per frame accumulates instead of repeatedly replacing one point.
+- HUD charge meter and control hints; updated adventure intro and upgrades.
+- `pilots.ts`, `ghost.ts`, room/API state and backend validation carry explicit
+  boost/brake intensity. Old eight-field ghosts remain readable.
+- Backend store preserves old scores/ghosts as `legacy`, filters all current
+  results by `speed-control-v1`, and rejects outdated gameplay POSTs with a
+  reload message. Deploy frontend and backend together.
+- Verified: production build and lint pass; 11 frontend regression tests and
+  21 backend tests pass. Browser visual playtesting
+  was blocked by unavailable Chrome, an in-app webview timeout, and a stalled
+  Safari control call; no visual or gamepad playtest is claimed.
+
 
 ### 2026-10-10: Merged main's menu and UI redesign (Claude)
 
@@ -956,6 +1060,15 @@ ported to the islands world:
   vertical rays through Sky Isles cross the mesh inconsistently (slivers
   where snapped faces meet); harmless for flying, it can confuse the
   tumble's inside test. The extra rock triangles (about 4×) want a
+
+- Play through the integrated portal/finale and victory lap; check multiplayer
+  and gamepad controls. Make the explore debug panel usable at narrow widths
+  without covering the HUD.
+
+- **Hitbox and land follow-ups**: features thinner than the 6 m grid (thin
+  needles, sharp spikes) still collide where nothing is drawn (snapping
+  leaves those vertices; p99 at face centres is about 2 m). Coarse v2 nodes
+  (12 m and up) aren't snapped. The extra rock triangles (about 4×) want a
   frame-time check in a focused window; `SurfaceCutter`'s tolerance (0.5 m)
   is the knob. Remote pilots don't use the hitbox (they never crash).
 - `__crash` teleports the pilot 5 m from the rock: the crash often comes in
@@ -986,6 +1099,13 @@ finale and the finish screen. What's open:
   menu music yet); Aurora Summit needs its own finale track; the portal tunnel
   and results screen could use stingers; the music doesn't duck under fast wind.
   The tracks are ~2.9 MB each, so consider lowering the bitrate if load time matters.
+
+- Playtest `speed-control` with keyboard, mouse and gamepad: boost into a
+  banked turn, brake before a narrow gate, low-speed recovery, inverted flight,
+  respawn and two-player effects. Tune reserve/drag/camera in `?tune`; assess
+  camera-segment query cost in a focused window at Medium and High quality.
+- Check speed-control poses/trails in day and night biomes, including with
+  bloom disabled; visual verification remains outstanding.
 
 - **Measure in a focused window**: `__bench(2/1/0)` after `__shot(0)` in a
   dev build. Bloom at High was 30 to 70 ms of GPU on an M2 in a hidden tab

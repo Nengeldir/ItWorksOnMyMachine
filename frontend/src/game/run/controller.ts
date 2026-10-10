@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { Flight, FlightMods } from "../flight";
 import { plainMods } from "../flight";
 import { clamp } from "../math";
-import { Kind, type Particles, fx } from "../particles";
+import type { Particles } from "../particles";
 import { RUN } from "../tuning";
 import { ATMOSPHERE } from "../world/atmosphere";
 import { BIOMES, type BiomeId, type Level, runLevel } from "../world/biomes";
@@ -108,7 +108,6 @@ function captureSky(scene: THREE.Scene, out?: Sky): Sky {
 const tmp = new THREE.Vector3();
 const toTarget = new THREE.Vector3();
 const forward = new THREE.Vector3();
-const DASH_COLOR = new THREE.Color("#bff4ff");
 const SPARKLE = new THREE.Color();
 
 /** Seconds for the screen to blur into sparkles going in, and to clear again inside */
@@ -149,8 +148,6 @@ export class RunController {
   private portals: Portal[] = [];
   private levelTime = 0;
   private phaseTime = 0;
-  private dashTime = 0;
-  private dashCooldown = 0;
   private stamina = 0;
   private hoverFuel = 0;
   private toast: RunHud["toast"] = null;
@@ -232,7 +229,6 @@ export class RunController {
     // Abilities start charged
     this.stamina = 2 + this.stats.flap;
     this.hoverFuel = this.hoverMax;
-    this.dashCooldown = 0;
     this.phase = "arrive";
     this.phaseTime = 0;
     this.events.arrived?.(this.level, biome);
@@ -249,14 +245,10 @@ export class RunController {
 
   // --- the pilot's moves ----------------------------------------------------------
 
-  /** Shift and Space: dash and wingbeat, if the upgrades are there */
-  ability(action: "dash" | "flap") {
+  /** C / gamepad A: wingbeat, if the upgrade is present */
+  ability(action: "flap") {
     if (this.frozen) return;
-    if (action === "dash" && this.stats.dash > 0 && this.dashCooldown <= 0) {
-      this.dashTime = 0.55;
-      this.dashCooldown = Math.max(1.6, 5 - this.stats.dash * 1.1);
-      this.host.stinger("dash");
-    } else if (action === "flap" && this.stats.flap > 0 && this.stamina >= 1) {
+    if (action === "flap" && this.stats.flap > 0 && this.stamina >= 1) {
       this.stamina -= 1;
       this.host.flight.flap(5 + this.stats.flap * 1.5, 0.1);
       this.host.wingbeat();
@@ -273,7 +265,7 @@ export class RunController {
     m.stall = this.stats.stall;
     m.proximityBoost = this.stats.proximity;
     m.glideLock = this.stats.glideLock > 0;
-    m.boost = this.dashTime > 0 ? 34 + 8 * this.stats.dash : 0;
+    m.boost = this.stats.dash * 0.25;
     m.hover = 0;
     if (this.host.hovering && this.hoverFuel > 0 && this.stats.hover > 0) {
       m.hover = 1;
@@ -320,12 +312,11 @@ export class RunController {
     if (this.phase === "explore" || this.phase === "arrive") this.levelTime += dt;
   }
 
-  /** A crash: the gate chain and any dash are lost */
+  /** A crash breaks the gate chain. Flight resets the shared boost state. */
   crashed() {
     this.crashes++;
     if (this.chain > 1) this.notify("Gate chain lost", 0);
     this.chain = 0;
-    this.dashTime = 0;
   }
 
   private notify(text: string, points: number) {
@@ -432,18 +423,9 @@ export class RunController {
     const { camera, particles } = this.host;
     this.phaseTime += dt;
     if (this.toast && (this.toastTime -= dt) <= 0) this.toast = null;
-    this.dashTime = Math.max(0, this.dashTime - dt);
-    this.dashCooldown = Math.max(0, this.dashCooldown - dt);
     if (!this.host.hovering) this.hoverFuel = Math.min(this.hoverMax, this.hoverFuel + dt * 0.35);
     if (this.stats.flap > 0) this.stamina = Math.min(2 + this.stats.flap, this.stamina + dt / 9);
     if (this.phase === "arrive" && this.phaseTime > 3) this.phase = "explore";
-
-    // A dash trails light
-    if (this.dashTime > 0) {
-      for (let i = 0; i < 3; i++) {
-        particles.emit(this.host.flight.position, tmp.copy(this.host.flight.velocity).multiplyScalar(-0.2).add(forward.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5)), fx(0.5, 1, DASH_COLOR, Kind.Wisp, 0, 2, 1.4));
-      }
-    }
 
     if (this.phase === "finale" && this.finale) {
       if (!this.sparkled) {
@@ -572,8 +554,7 @@ export class RunController {
       compass = { angle, distance: Math.round(best), ahead };
     }
     const abilities: RunHud["abilities"] = [];
-    if (this.stats.dash > 0) abilities.push({ id: "dash", name: "Dash", key: "Shift", charge: 1 - this.dashCooldown / Math.max(1.6, 5 - this.stats.dash * 1.1), ready: this.dashCooldown <= 0 });
-    if (this.stats.flap > 0) abilities.push({ id: "flap", name: "Wingbeat", key: "Space", charge: this.stamina / (2 + this.stats.flap), ready: this.stamina >= 1, count: Math.floor(this.stamina) });
+    if (this.stats.flap > 0) abilities.push({ id: "flap", name: "Wingbeat", key: "C", charge: this.stamina / (2 + this.stats.flap), ready: this.stamina >= 1, count: Math.floor(this.stamina) });
     if (this.stats.hover > 0) abilities.push({ id: "hover", name: "Hover", key: "F", charge: this.hoverFuel / Math.max(0.01, this.hoverMax), ready: this.hoverFuel > 0.05 });
     const objectives = [{ title: "Reach the portal", progress: compass ? `${compass.distance} m` : "", fraction: 0, done: false, failed: false }];
     return {

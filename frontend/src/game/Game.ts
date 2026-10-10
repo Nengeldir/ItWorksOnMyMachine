@@ -74,6 +74,9 @@ export interface HudState {
   biomeName: string;
   paletteName: string;
   speedKmh: number;
+  boostCharge: number;
+  boosting: boolean;
+  braking: boolean;
   clearance: number; // metres to the nearest rock or tree
   loading: boolean; // the islands near you are still being built
   raceState: RaceState;
@@ -121,6 +124,9 @@ export interface NetState {
   q: [number, number, number, number];
   v: number;
   cp: number;
+  boost: number;
+  brake: number;
+  dodge: number;
 }
 
 const tmp = new THREE.Vector3();
@@ -156,6 +162,8 @@ export class Game implements RunHost {
   private readonly audio = new GameAudio();
   readonly flight = new Flight();
   readonly prevPosition = new THREE.Vector3();
+  private readonly prevVelocity = new THREE.Vector3();
+  private readonly renderVelocity = new THREE.Vector3();
   private readonly prevQuaternion = new THREE.Quaternion();
   private readonly avatar: Avatar;
   private readonly fx: PilotFx;
@@ -262,7 +270,7 @@ export class Game implements RunHost {
       if (this.autopiloting) return;
       if (action === "respawn") this.respawnNow();
       if (action === "barrelLeft" || action === "barrelRight") this.barrelRoll(action === "barrelLeft" ? -1 : 1);
-      if ((action === "dash" || action === "flap") && this.crashedAt === null && !this.glide.active) this.run?.ability(action);
+      if (action === "flap" && this.crashedAt === null && !this.glide.active) this.run?.ability(action);
     };
     if (!this.attract) {
       this.renderer.domElement.addEventListener("click", this.engage);
@@ -276,7 +284,6 @@ export class Game implements RunHost {
     this.ambient = new Ambient(this.particles, this.softParticles);
     this.avatar = new Avatar(options.color);
     this.fx = new PilotFx(this.avatar, options.color, this.particles);
-    this.equipment = new Equipment(this.avatar, this.particles);
     if (!this.attract) {
       // Your own wings make a sound on each downstroke (the effects keep their own hook)
       const puff = this.avatar.onDownstroke;
@@ -285,6 +292,7 @@ export class Game implements RunHost {
         if (!this.frozen && this.crashedAt === null) this.audio.wing(strength);
       };
     }
+    this.equipment = new Equipment(this.avatar, this.particles);
     this.speedLines = new SpeedLines();
     this.debris = new Debris(options.color);
     this.scene.add(this.avatar.group, this.debris.mesh, this.particles.points, this.softParticles.points, this.speedLines.mesh, ...this.fx.meshes);
@@ -416,6 +424,7 @@ export class Game implements RunHost {
 
   freeze(on: boolean) {
     this.frozen = on;
+    if (on) { this.flight.releaseControls(); this.input.reset(); }
     this.accumulator = 0;
   }
 
@@ -654,7 +663,7 @@ export class Game implements RunHost {
 
   netState(): NetState {
     const { position: p, quaternion: q, speed } = this.flight;
-    return { p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], v: speed, cp: this.checkpoints };
+    return { p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], v: speed, cp: this.checkpoints, boost: this.flight.boost, brake: this.flight.brake, dodge: this.flight.dodgePhase };
   }
 
   toggleMute(): boolean {
@@ -707,10 +716,13 @@ export class Game implements RunHost {
       position.addScaledVector(side, column * 9).addScaledVector(direction, -12 * row);
       position.y += 4 * row;
     }
+    this.input.reset();
+    this.avatar.resetMotion();
     this.flight.reset(position, direction, START_SPEED);
     this.glide.stop();
     this.prevPosition.copy(this.flight.position);
     this.prevQuaternion.copy(this.flight.quaternion);
+    this.prevVelocity.copy(this.flight.velocity);
     this.accumulator = 0;
     this.crashedAt = null;
     this.proximity = 0;
@@ -741,6 +753,7 @@ export class Game implements RunHost {
     const f = this.flight;
     const lost = part === null;
     this.crashedAt = this.elapsed;
+    this.flight.releaseControls();
     // How the hit plays out depends on how that part met the surface
     if (land) {
       hitPoint.copy(landHit.point);
@@ -768,6 +781,7 @@ export class Game implements RunHost {
   private step(input: FlightInput) {
     this.prevPosition.copy(this.flight.position);
     this.prevQuaternion.copy(this.flight.quaternion);
+    this.prevVelocity.copy(this.flight.velocity);
     this.flight.step(STEP, input, this.proximity * this.proximity, FLIGHT, this.run ? this.run.flightMods : null);
 
     const { x, y, z } = this.flight.position;
@@ -795,7 +809,7 @@ export class Game implements RunHost {
     this.style += this.proximity ** 2 * this.flight.speed * STEP * this.multiplier * 0.5;
 
     if (this.raceState === "racing") {
-      this.recorder.record(this.clock() - this.startAt, this.flight.position, this.flight.quaternion);
+      this.recorder.record(this.clock() - this.startAt, this.flight.position, this.flight.quaternion, this.flight.boost, this.flight.brake, this.flight.dodgePhase);
       this.checkRing();
     } else if (this.run) {
       this.run.step(STEP);
@@ -824,6 +838,7 @@ export class Game implements RunHost {
     this.glide.update(dt, this.flight, this.field);
     this.prevPosition.copy(this.flight.position);
     this.prevQuaternion.copy(this.flight.quaternion);
+    this.prevVelocity.copy(this.flight.velocity);
     this.accumulator = 0;
     this.proximity = 0;
     this.run?.wait(dt);
@@ -835,6 +850,7 @@ export class Game implements RunHost {
     this.flight.reset(this.flight.position, this.glide.heading, START_SPEED);
     this.prevPosition.copy(this.flight.position);
     this.prevQuaternion.copy(this.flight.quaternion);
+    this.prevVelocity.copy(this.flight.velocity);
     this.accumulator = 0;
   }
 
@@ -860,6 +876,7 @@ export class Game implements RunHost {
       camera.fov = 55;
       camera.updateProjectionMatrix();
     }
+    this.flight.releaseControls();
     this.avatar.visible = false;
     this.fx.hide();
   }
@@ -882,7 +899,7 @@ export class Game implements RunHost {
       this.view.setRings("hidden", 0);
       this.gateBurst(index);
       this.audio.finish();
-      const ghost = this.recorder.finish(timeMs, this.flight.position, this.flight.quaternion);
+      const ghost = this.recorder.finish(timeMs, this.flight.position, this.flight.quaternion, this.flight.boost, this.flight.brake, this.flight.dodgePhase);
       this.events.finished?.({ timeMs, ghost });
     } else {
       this.audio.ring();
@@ -894,8 +911,8 @@ export class Game implements RunHost {
   // --- effects -------------------------------------------------------------------
 
   private barrelRoll(dir: 1 | -1) {
-    if (this.crashedAt !== null || this.raceState === "countdown") return;
-    this.avatar.barrelRoll(dir);
+    if (this.crashedAt !== null || this.raceState === "countdown" || this.frozen || !this.view.ready) return;
+    this.flight.dodge(dir);
   }
 
   /** A gate was passed: it flares (WorldView), and shards, stars and light burst out of it */
@@ -1157,6 +1174,7 @@ export class Game implements RunHost {
     const loading = !this.view.ready && this.raceState === "free" && this.attract !== "drift";
     // Held still: a run's start line, the tunnel between biomes
     const waiting = this.frozen;
+    if (waiting || loading || this.raceState === "countdown") this.flight.releaseControls();
     if (this.crashedAt !== null) {
       if (this.elapsed - this.crashedAt > RESPAWN_DELAY) this.respawnNow();
     } else if (loading && !waiting) {
@@ -1181,12 +1199,15 @@ export class Game implements RunHost {
     const body = this.avatar.group;
     body.position.lerpVectors(this.prevPosition, this.flight.position, alpha);
     body.quaternion.slerpQuaternions(this.prevQuaternion, this.flight.quaternion, alpha);
+    this.renderVelocity.lerpVectors(this.prevVelocity, this.flight.velocity, alpha);
     this.smoothProximity += (this.proximity - this.smoothProximity) * (1 - Math.exp(-dt * 8));
 
     const crashed = this.crashedAt !== null;
     if (this.attract === "drift") {
       this.drift(dt);
     } else if (!crashed) {
+      this.avatar.setDodge(this.flight.dodgePhase);
+      this.avatar.setSpeedControls(this.flight.boost, this.flight.brake);
       this.avatar.update(dt, this.flight.speed, this.smoothProximity);
       this.equipment.update(dt);
       // Frozen on the start line or in the tunnel: no motes, or they pile up into a glowing ball
@@ -1196,11 +1217,13 @@ export class Game implements RunHost {
       this.rig.update(
         dt,
         body.position,
-        this.flight.forward,
-        this.flight.up,
+        tmp.set(0, 0, -1).applyQuaternion(body.quaternion),
+        tmp2.set(0, 1, 0).applyQuaternion(body.quaternion),
         this.flight.speed,
         this.smoothProximity,
         this.clearance,
+        this.renderVelocity,
+        this.flight.boost,
       );
     } else {
       // The crash plays out: the pose first (the wings flail), then the tumble moves the body and
@@ -1236,7 +1259,7 @@ export class Game implements RunHost {
     this.particles.update();
     this.softParticles.update();
 
-    this.audio.update(this.flight.speed, this.smoothProximity, flying);
+    this.audio.update(this.flight.speed, this.smoothProximity, flying, this.flight.boost, this.flight.brake);
     this.updateMarker();
     this.updateVignette(dt, flying);
     this.render();
@@ -1260,6 +1283,9 @@ export class Game implements RunHost {
       run: this.run ? this.run.hud() : null,
       biomeName: this.world.biome.name,
       paletteName: this.world.palette.name,
+      boostCharge: this.flight.boostCharge,
+      boosting: this.flight.boost > 0.05,
+      braking: this.flight.brake > 0.05,
       speedKmh: Math.round(this.flight.speed * 3.6),
       clearance: Math.max(0, Math.round(this.world.distance(x, y, z))),
       loading: !this.view.ready,

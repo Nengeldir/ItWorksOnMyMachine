@@ -340,7 +340,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
   return (
     <div className="game">
       <div ref={ref} className="game-view" />
-      {/* Nothing but the wormhole while passing through a portal (but the pause panel) */}
+      {/* Nothing but the wormhole while passing through a portal */}
       {hud && (hud.paused || (stage !== "pick" && stage !== "summary" && run?.phase !== "portal" && run?.phase !== "finale" && run?.phase !== "won")) && <Hud hud={hud} />}
       {run && stage !== "intro" && stage !== "summary" && stage !== "pick" && run.phase !== "finale" && run.phase !== "won" && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
       {run?.phase === "finale" && (
@@ -365,8 +365,8 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
             and choose an upgrade. Gates score more in a chain, and skimming the land earns style.
           </p>
           <p className="hint">
-            A crash puts you back at the last gate and breaks your gate chain. Abilities you pick up: <kbd>Shift</kbd> dash, <kbd>Space</kbd>{" "}
-            wingbeat, hold <kbd>F</kbd> to hover. The arrow at the top points to the portal.
+            A crash puts you back at the last gate and breaks your gate chain. Hold <kbd>Shift</kbd> to boost or <kbd>Space</kbd> to brake.
+            Adventure upgrades add <kbd>C</kbd> wingbeat and hold <kbd>F</kbd> hover. The arrow at the top points to the portal.
           </p>
           {best !== null && <p>Your best on this run: {best.toLocaleString()}</p>}
           <button className="primary" onClick={() => session.begin()}>
