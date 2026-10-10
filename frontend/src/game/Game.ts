@@ -30,6 +30,7 @@ import { SpeedLines } from "./speedlines";
 import { TOON_LIGHT } from "./toon";
 import { FX, RANGES, RINGS, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveTuning } from "./tuning";
 import { ABILITY } from "./run/abilities";
+import { PICKUP } from "./run/pickups";
 import { ITEM, RUN_ITEMS, type RunItemId } from "./run/items";
 import { RunController, type RunEvents, type RunHost } from "./run/controller";
 import type { UpgradeId } from "./run/upgrades";
@@ -402,7 +403,10 @@ export class Game implements RunHost {
     // Lets browser tests drive the game in development
     if (import.meta.env.DEV) {
       Object.assign(window, { __game: this, __fxTime: fxTime, __tuning: Object.fromEntries(TUNING_GROUPS) });
-      void import("./devtools").then(({ installDevtools }) => installDevtools());
+      const itemShot = new URLSearchParams(location.search).get("itemShot");
+      void import("./devtools").then(({ installDevtools }) => {
+        if((window as unknown as {__game: Game}).__game===this)installDevtools(itemShot);
+      });
     }
   }
 
@@ -1842,7 +1846,10 @@ export class Game implements RunHost {
     abilities.close();
     const items = gui.addFolder("Run items (not saved)");
     for (const key of Object.keys(ITEM) as (keyof typeof ITEM)[]) items.add(ITEM, key);
+    const pickups = gui.addFolder("Island pickups (next level, not saved)");
+    for(const key of Object.keys(PICKUP) as (keyof typeof PICKUP)[]) pickups.add(PICKUP,key);
     items.close();
+    pickups.close();
 
     for (const [title, group] of TUNING_GROUPS) {
       const folder = gui.addFolder(title);

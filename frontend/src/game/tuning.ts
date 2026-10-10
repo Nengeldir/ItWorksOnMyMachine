@@ -181,6 +181,10 @@ export const ABILITIES_FX = {
 
 /** How strong the design list's items look (items/fx.ts); what they do is ITEM in run/items.ts */
 export const ITEMS_FX = {
+  pickups: 1, // soft light underneath floating items
+  pickupSize: 2, // model diameter in metres
+  pickupSpot: 7, // spotlight footprint in metres
+  pickupRange: 240, // only nearby models are built and animated
   relics: 1, // lanterns, path markers and relic bursts
   wind: 1, // the Anemo Catcher's updraft
   shield: 1, // the Starflake Shield's aura of ice

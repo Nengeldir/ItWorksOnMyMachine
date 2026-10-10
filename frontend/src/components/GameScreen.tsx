@@ -517,11 +517,8 @@ const GalleryScreen = ({ onExit }: { onExit: () => void }) => {
     <div className="game">
       <div ref={ref} className="game-view" />
       <TopBar title="Item gallery" onExit={onExit} />
-      <aside className="panel glass gallery-panel">
-        <header className="panel-head">
-          <small>Models and animations{demo ? " · demo playing" : ""}</small>
-          <h2>Items</h2>
-        </header>
+      <Panel className="gallery-panel" head={<><small>Models and animations{demo ? " · demo playing" : ""}</small><h2>Items</h2></>}>
+
         <p className="hint">Preview the models here. Adventure items have their own effects in a run.</p>
         <div className="gallery-items">
           {ITEMS.map((item) => (
@@ -537,7 +534,7 @@ const GalleryScreen = ({ onExit }: { onExit: () => void }) => {
           <button onClick={() => act((g) => g.thrust(false))}>Off</button>
           <button onClick={() => act((g) => g.clear())}>Put away</button>
         </div>
-      </aside>
+      </Panel>
     </div>
   );
 };

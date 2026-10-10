@@ -1,3 +1,4 @@
+import { PickupView } from "./pickups";
 import * as THREE from "three";
 import { RingQuads } from "../abilities/models";
 import { funnelMesh } from "../abilities/models2";
@@ -98,9 +99,10 @@ export class ItemFx {
   private readonly host: ItemFxHost;
   private readonly disposables: { dispose(): void }[] = [];
   private readonly relics: RelicFx;
+  private readonly pickups = new PickupView();
   private active = false;
   private version = -1;
-  private readonly cue = { pickup: 0, use: 0, full: 0, auto: 0, shatter: 0 };
+  private readonly cue = { pickup: 0, use: 0, full: 0, auto: 0, shatter: 0, chime: 0, bounce: 0 };
   private readonly rings = new RingQuads(16, true);
   private readonly waves: Wave[] = [];
 
@@ -124,7 +126,7 @@ export class ItemFx {
     this.host = host;
     scene.add(this.group);
     this.relics = new RelicFx(avatar, equipment, particles);
-    this.group.add(this.relics.group);
+    this.group.add(this.relics.group, this.pickups.group);
     this.group.add(this.column, this.bubble, this.rings.mesh);
     this.disposables.push(this.column.geometry, this.column.material, this.bubble.geometry, this.bubble.material, this.rings);
     this.waxTrails = [0, 1].map(() => {
@@ -167,6 +169,7 @@ export class ItemFx {
       this.columnT = -1;
       this.waves.length = 0;
     }
+    if(!this.inWormhole)this.pickups.update(dt,items,flight.position,this.particles);
     this.rings.begin();
     this.cues(items, flight, budget);
     this.anemoCatcher(dt, items, budget);
@@ -185,6 +188,30 @@ export class ItemFx {
   private cues(items: Items, flight: Flight, budget: number) {
     const c = items.cue;
     const seen = this.cue;
+    if(c.chime !== seen.chime){
+      seen.chime=c.chime;
+      const gate=items.world?.course.rings[items.chimeTarget-1];
+      if(gate)this.wave(gate.position,gate.normal,gate.radius,2,0.9,HONEY);
+      this.host.sound("uncork",1.4);
+    }
+    if(c.bounce !== seen.bounce){
+      seen.bounce=c.bounce;
+      this.wave(items.pad,UP,ITEM.padRadius,1.5,0.7,ANEMO);
+      for(let k=0;k<Math.round(32*budget);k++){
+        vel.set(rand(-3,3),rand(8,16),rand(-3,3));
+        this.particles.emit(items.pad,vel,fx(0.8,0.3,ANEMO,Kind.Wisp,0,1,0.7));
+      }
+      this.host.sound("uncork");
+    }
+    if(c.pickup !== seen.pickup){
+      seen.pickup=c.pickup;
+      this.host.sound("pickup");
+      this.wave(this.avatar.group.position,null,0.8,2,0.5,HONEY);
+      for(let i=0;i<Math.round(18*budget);i++){
+        vel.set(rand(-2,2),rand(0,3),rand(-2,2));
+        this.particles.emit(this.avatar.group.position,vel,fx(0.8,0.2,HONEY,Kind.Star,-1,1,1.5));
+      }
+    }
     if (c.full !== seen.full) {
       seen.full = c.full;
       this.host.sound("full");
@@ -394,6 +421,7 @@ export class ItemFx {
   }
 
   dispose() {
+    this.pickups.dispose();
     this.relics.dispose();
     this.group.removeFromParent();
     for (const d of this.disposables) d.dispose();

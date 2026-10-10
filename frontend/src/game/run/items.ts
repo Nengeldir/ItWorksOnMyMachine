@@ -3,6 +3,7 @@ import type { Flight, FlightInput, FlightMods, HitPart } from "../flight";
 import type { ItemId } from "../items/models";
 import { clamp, smoothstep } from "../math";
 import { segmentDistanceSq } from "./segments";
+import { placePickups, pickupClear, PICKUP, type Pickup } from "./pickups";
 import type { Course } from "../world/course";
 
 // The design list's items (CLAUDE.md, "Items and abilities"), for runs only:
@@ -166,6 +167,7 @@ export interface Carried {
 /** What a level gives the items: its seed, the racing line and the solid world */
 export interface ItemWorld {
   readonly seed: number;
+  readonly rock?: { distance(x: number, y: number, z: number): number };
   readonly course: Course;
   distance(x: number, y: number, z: number): number;
 }
@@ -201,6 +203,8 @@ export class Items {
   readonly lights: { position: THREE.Vector3; energy: boolean; collected: boolean }[] = [];
   readonly ghostGates: { position: THREE.Vector3; normal: THREE.Vector3; radius: number; collected: boolean }[] = [];
   readonly path: THREE.Vector3[] = [];
+  readonly pickups: Pickup[] = [];
+  private clearanceTime = 0;
   chimeTarget = -1;
   readonly boltTargets: THREE.Vector3[] = [];
   private electroWait = 0;
@@ -222,6 +226,8 @@ export class Items {
     this.sampled = false;
     this.ghostGates.length = 0;
     this.lights.length = 0;
+    this.pickups.splice(0, this.pickups.length, ...placePickups(world, RUN_ITEMS));
+    this.clearanceTime = 0;
     for(const ring of world.course.rings) for(let j=0;j<3;j++){
       const position=world.course.pointAt(ring.position.z-30+j*8).add(new THREE.Vector3((j-1)*3,1,0));
       if(world.distance(position.x,position.y,position.z)>3) this.lights.push({position,energy:j===1,collected:false});
@@ -423,6 +429,18 @@ export class Items {
         if(light.energy) flight.boostCharge=Math.min(1,flight.boostCharge+ITEM.lightEnergy);
         else this.points+=ITEM.lightBonus;
       }
+    }
+    this.clearanceTime -= dt;
+    const checkClearance = this.clearanceTime <= 0;
+    if (checkClearance) this.clearanceTime = 0.5;
+    for (const pickup of this.pickups) {
+      if (pickup.collected) continue;
+      // Trees arrive with streamed land; recheck nearby air as it arrives.
+      if (checkClearance && pickup.position.distanceToSquared(flight.position)<200**2)
+        pickup.blocked = !pickupClear(this.world!,pickup.position);
+      const touching = !pickup.blocked && (this.sampled ? segmentDistanceSq(pickup.position,this.previous,flight.position) : pickup.position.distanceToSquared(flight.position)) <= PICKUP.radius**2;
+      if (touching && (this.bag.length<ITEM.bag || !pickup.touching)) pickup.collected = this.give(pickup.id);
+      pickup.touching = touching;
     }
     this.previous.copy(flight.position); this.sampled = true;
     if(this.active.has("silkRibbon")) mods.turn *= ITEM.ribbonTurn;

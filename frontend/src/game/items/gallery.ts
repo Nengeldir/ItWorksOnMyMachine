@@ -40,6 +40,7 @@ export class ItemGallery {
   private readonly resizeObserver: ResizeObserver;
   private frame = 0;
   private last = 0;
+  private panelOffset = 2.2;
   private time = 0;
   private demoTime = 0;
   private demoStep = 0;
@@ -74,12 +75,13 @@ export class ItemGallery {
 
     // The pilot, flying in place and turned three-quarters to the camera
     this.avatar = new Avatar("#ff5d73");
-    this.avatar.group.position.set(-1.6, 0.1, 3.6);
+    this.avatar.group.position.set(-1.6, -1.2, 3.6);
+    this.avatar.group.scale.setScalar(0.78);
     this.avatar.group.rotation.set(0.15, Math.PI * 0.78, 0);
     this.scene.add(this.avatar.group);
     this.equipment = new Equipment(this.avatar, this.particles);
 
-    // Every item on a curved wall of three rows behind the pilot, with its name
+    // Every item on a curved wall of four rows behind the pilot, with its name
     const columns = Math.ceil(ITEMS.length / 4);
     ITEMS.forEach((info, i) => {
       const row = Math.floor(i / columns);
@@ -149,7 +151,7 @@ export class ItemGallery {
     const a = Math.sin(this.time * 0.15) * 0.35;
     this.camera.position.set(Math.sin(a) * 10, 2.0, Math.cos(a) * 10 + 1);
     // Aimed left of the middle, so the scene sits right of the panel
-    this.camera.lookAt(-2.2, 1.2, 0);
+    this.camera.lookAt(-this.panelOffset, 1.2, 0);
     this.avatar.update(dt, 26, 0);
     this.equipment.update(dt);
     this.displays.forEach((d) => d.update(dt, this.particles));
@@ -162,6 +164,10 @@ export class ItemGallery {
     const height = this.container.clientHeight || 1;
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
+    // Preserve the wall's horizontal framing when the controls fold on narrow screens.
+    this.panelOffset = width < 700 ? 0 : 2.2;
+    this.avatar.group.position.y = width < 700 ? -3 : -1.2;
+    this.camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(23)) * Math.max(1, (16 / 9) / this.camera.aspect)));
     this.camera.updateProjectionMatrix();
     this.particles.setViewport(height * this.renderer.getPixelRatio(), this.camera.fov);
   }
