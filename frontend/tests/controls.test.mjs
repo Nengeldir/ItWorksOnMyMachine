@@ -29,6 +29,11 @@ test("held controls, repeat handling, focus loss and gamepad disconnect", () => 
     pads = [{connected:true, axes:[0,0], buttons:Array.from({length:8}, (_, i) => ({pressed:i===1, value:i===7?0.5:0}))}];
     assert.ok(input.sample(1/60).boost > 0.3); assert.equal(input.hovering, true);
     pads = []; assert.equal(input.sample(1/60).boost, 0); assert.equal(input.hovering, false);
+    key("KeyP"); key("KeyP", "keydown", true);
+    assert.equal(actions.filter(action => action === "pause").length, 1);
+    input.reset();
+    assert.equal(input.sample(1/60).brake, 0);
+    assert.equal(input.hovering, false);
     key("ShiftLeft"); focused = false; assert.equal(input.sample(1/60).boost, 0);
     focused = true; assert.equal(input.sample(1/60).boost, 0);
   } finally {

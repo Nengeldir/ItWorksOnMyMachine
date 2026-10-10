@@ -136,7 +136,7 @@ export class Input {
 
   /** Is the hover button held? (F, or the gamepad's B / circle) */
   get hovering(): boolean {
-    return this.keys.has("KeyF") || this.padButtons[1];
+    return this.keys.has("KeyF") || !!this.padButtons[1];
   }
 
   private key(...codes: string[]): number {
