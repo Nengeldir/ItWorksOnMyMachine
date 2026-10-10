@@ -75,7 +75,8 @@ turns speed back into height. Flying within a few metres of rock or trees fills
 the proximity bar: you get style points with a growing multiplier and extra
 acceleration, so risky lines are faster. Crash, or drop into the sea of clouds
 below the islands, and you respawn at your last ring, with the clock still
-running.
+running. While the land around you is still loading (outside races), the
+pilot glides in slowly by itself and you get control once it has arrived.
 
 In an adventure there is no clock. Gates score more in a chain without a
 crash, and skimming earns style points. The arrow at the top of the screen

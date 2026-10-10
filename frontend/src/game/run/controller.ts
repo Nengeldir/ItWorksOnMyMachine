@@ -277,6 +277,11 @@ export class RunController {
     }
   }
 
+  /** A frame without control (gliding in while the land loads): the level's clock still runs */
+  wait(dt: number) {
+    if (this.phase === "explore" || this.phase === "arrive") this.levelTime += dt;
+  }
+
   /** A crash: the gate chain and any dash are lost */
   crashed() {
     if (this.chain > 1) this.notify("Gate chain lost", 0);
