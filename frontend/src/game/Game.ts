@@ -1044,10 +1044,14 @@ export class Game implements RunHost {
       fieldNormal(this.field, hitPoint, normal);
     }
     const abilities = this.run!.abilities;
-    const how = abilities.save(part, normal, tmp.copy(f.velocity).normalize());
+    const items = this.run!.items;
+    const direction = tmp.copy(f.velocity).normalize();
+    // The abilities first (they come back by themselves), then an item that's used up by it
+    const how = abilities.save(part, normal, direction) ?? items.save(part, normal, direction);
     if (!how) return false;
     if (how === "roll") f.deflect(normal, ABILITY.recoverPush, ABILITY.recoverKeep);
-    else f.deflect(normal, ABILITY.weavePush, ABILITY.weaveKeep);
+    else if (how === "shield") f.deflect(normal, ABILITY.weavePush, ABILITY.weaveKeep);
+    else f.deflect(normal, ITEM.shieldPush, ITEM.shieldKeep);
     // Teleported out: no sweep from where we were, and a few more nudges if anything still touches
     for (let i = 0; ; i++) {
       this.prevPosition.copy(f.position);
@@ -1062,7 +1066,8 @@ export class Game implements RunHost {
       Object.assign(this.recoverRoll, FLIGHT, { dodgeDistance: 3, dodgeDuration: 0.55 });
       f.dodge(normal.dot(f.right) >= 0 ? 1 : -1, this.recoverRoll, true);
     }
-    abilities.saved(how, hitPoint, normal);
+    if (how === "roll" || how === "shield") abilities.saved(how, hitPoint, normal);
+    else items.saved(how, hitPoint, normal);
     return true;
   }
 

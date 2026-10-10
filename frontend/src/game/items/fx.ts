@@ -1,11 +1,13 @@
 import * as THREE from "three";
+import { RingQuads } from "../abilities/models";
 import { funnelMesh } from "../abilities/models2";
 import type { Avatar } from "../avatar";
 import type { Flight } from "../flight";
-import { smoothstep } from "../math";
+import { clamp, smoothstep } from "../math";
 import { Kind, type Particles, fx } from "../particles";
-import { type Items, type RunItemId, runItem } from "../run/items";
+import { ITEM, type Items, type RunItemId, runItem } from "../run/items";
 import { ITEMS_FX } from "../tuning";
+import { auraMesh } from "./auras";
 import type { Equipment } from "./equip";
 
 // What the design list's items look like when used (their rules:
@@ -15,8 +17,11 @@ import type { Equipment } from "./equip";
 //  - Anemo Catcher: the bottle is held up and uncorked with a pop; a column of
 //    wind bursts up under the pilot, who rides it reaching for the sky, wisps
 //    and leaves streaming up past.
+//  - Starflake Shield: the crystal is held up and bursts into a faceted
+//    bubble of ice round the pilot, frost glittering on its seams; the first
+//    hit shatters it into a ring of shards.
 
-export type ItemSound = "pickup" | "full" | "auto" | "uncork";
+export type ItemSound = "pickup" | "full" | "auto" | "uncork" | "shield" | "shatter";
 
 export interface ItemFxHost {
   kick(degrees?: number): void;
@@ -27,6 +32,8 @@ const TAU = Math.PI * 2;
 const WHITE = new THREE.Color("#ffffff");
 const ANEMO = new THREE.Color("#7df5d8");
 const LEAF = new THREE.Color("#8ee8b0");
+const ICE = new THREE.Color("#a8e4ff");
+const FROST = new THREE.Color("#e8fbff");
 const UP = new THREE.Vector3(0, 1, 0);
 const ORIGIN = new THREE.Vector3();
 
@@ -43,7 +50,18 @@ const lookAlong = (out: THREE.Quaternion, direction: THREE.Vector3) =>
 /** How each item is taken out and used up in the hand (the firework and the boots are worn instead) */
 const USE_STYLE: Partial<Record<RunItemId, "eat" | "raise" | "toss">> = {
   anemoCatcher: "raise",
+  starflakeShield: "raise",
 };
+
+interface Wave {
+  t: number;
+  life: number;
+  center: THREE.Vector3;
+  normal: THREE.Vector3 | null;
+  radius: number;
+  grow: number;
+  tint: THREE.Color;
+}
 
 export class ItemFx {
   /** Everything placed in the world (the level's): hidden with it inside a wormhole */
@@ -57,12 +75,18 @@ export class ItemFx {
   private readonly disposables: { dispose(): void }[] = [];
   private active = false;
   private version = -1;
-  private readonly cue = { pickup: 0, use: 0, full: 0, auto: 0 };
+  private readonly cue = { pickup: 0, use: 0, full: 0, auto: 0, shatter: 0 };
+  private readonly rings = new RingQuads(16, true);
+  private readonly waves: Wave[] = [];
 
   // Anemo Catcher
   private readonly column = funnelMesh({ mouth: 2.4, end: 1.3, color: "#7fe9cf", twist: 0.45, flow: 3.4, spin: 1.8, streaks: 7, rings: true });
   private columnT = -1;
   private riseDebt = 0;
+  // Starflake Shield
+  private readonly bubble = auraMesh(0, "#cfefff", "#ffffff");
+  private shieldT = -1;
+  private frostDebt = 0;
 
   constructor(scene: THREE.Scene, avatar: Avatar, equipment: Equipment, particles: Particles, host: ItemFxHost) {
     this.avatar = avatar;
@@ -70,8 +94,8 @@ export class ItemFx {
     this.particles = particles;
     this.host = host;
     scene.add(this.group);
-    this.group.add(this.column);
-    this.disposables.push(this.column.geometry, this.column.material);
+    this.group.add(this.column, this.bubble, this.rings.mesh);
+    this.disposables.push(this.column.geometry, this.column.material, this.bubble.geometry, this.bubble.material, this.rings);
   }
 
   /** Before the avatar animates: the items' poses (eased in and out) */
@@ -99,9 +123,14 @@ export class ItemFx {
     if (items.version !== this.version) {
       this.version = items.version;
       this.columnT = -1;
+      this.waves.length = 0;
     }
+    this.rings.begin();
     this.cues(items, flight, budget);
     this.anemoCatcher(dt, items, budget);
+    this.starflake(dt, items, budget);
+    this.updateWaves(dt);
+    this.rings.end();
   }
 
   // --- one-off moments ----------------------------------------------------------------
@@ -116,6 +145,23 @@ export class ItemFx {
     if (c.auto !== seen.auto) {
       seen.auto = c.auto;
       this.host.sound("auto");
+    }
+    if (c.shatter !== seen.shatter) {
+      seen.shatter = c.shatter;
+      // The shield shatters: a ring of ice shards thrown off the hit, the shell gone in a flash
+      this.shieldT = -1;
+      this.bubble.visible = false;
+      const pilot = this.avatar.group.position;
+      this.wave(items.savePoint, items.saveNormal, 1, 6, 0.6, FROST);
+      this.wave(pilot, null, 2.2, 1.6, 0.4, ICE);
+      for (let k = 0; k < Math.round(70 * budget); k++) {
+        vel.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize();
+        at.copy(pilot).addScaledVector(vel, 2.2);
+        vel.multiplyScalar(rand(4, 12)).addScaledVector(items.saveNormal, rand(2, 6)).addScaledVector(flight.velocity, 0.5);
+        this.particles.emit(at, vel, k % 3 ? fx(rand(0.7, 1.3), rand(0.25, 0.5), k % 2 ? ICE : FROST, Kind.Shard, 6, 1.2, 1.6) : fx(rand(0.5, 0.9), rand(0.3, 0.5), WHITE, Kind.Star, 2, 1.5, 2.4));
+      }
+      this.host.sound("shatter");
+      this.host.kick(8);
     }
     if (c.use !== seen.use) {
       seen.use = c.use;
@@ -142,6 +188,8 @@ export class ItemFx {
       }
       this.host.sound("uncork");
       this.host.kick(4);
+    } else if (id === "starflakeShield") {
+      this.shieldT = 0;
     }
   }
 
@@ -175,6 +223,82 @@ export class ItemFx {
       at.copy(pilot).add(tmp.set(Math.cos(angle) * r, rand(-6, -1), Math.sin(angle) * r));
       vel.set(-Math.sin(angle) * 5, rand(24, 38), Math.cos(angle) * 5);
       this.particles.emit(at, vel, Math.random() < 0.7 ? fx(rand(0.4, 0.7), rand(0.5, 0.9), ANEMO, Kind.Wisp, 0, 2, 0.45) : fx(rand(0.8, 1.2), rand(0.3, 0.45), LEAF, Kind.Shard, 0, 1.5, 1.2));
+    }
+  }
+
+  // --- Starflake Shield -------------------------------------------------------------------
+
+  private starflake(dt: number, items: Items, budget: number) {
+    const left = items.time("starflakeShield");
+    if (left < 0 && this.shieldT >= 0 && this.shieldT > 1) {
+      // It ran out: the ice melts away in a glitter
+      this.shieldT = -1;
+      const pilot = this.avatar.group.position;
+      for (let k = 0; k < Math.round(30 * budget); k++) {
+        vel.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize();
+        this.particles.emit(at.copy(pilot).addScaledVector(vel, 2.2), vel.multiplyScalar(rand(0.5, 2)), fx(rand(0.8, 1.4), rand(0.2, 0.35), FROST, Kind.Star, -0.5, 1, 2));
+      }
+    }
+    if (this.shieldT < 0 || left < 0) {
+      this.bubble.visible = false;
+      return;
+    }
+    this.shieldT += dt;
+    const t = this.shieldT;
+    // The crystal bursts at the top of the raise (0.45 s), and the bubble swells out of it
+    const grow = smoothstep(0.42, 0.85, t);
+    if (t >= 0.45 && t - dt < 0.45) {
+      this.host.sound("shield");
+      this.wave(this.avatar.slots.hand.getWorldPosition(at), null, 0.4, 5, 0.5, FROST);
+    }
+    this.bubble.visible = grow > 0;
+    if (!this.bubble.visible) return;
+    const pilot = this.avatar.group.position;
+    this.bubble.position.copy(pilot);
+    this.bubble.quaternion.copy(this.avatar.group.quaternion);
+    this.bubble.rotateY(t * 0.4);
+    this.bubble.scale.setScalar(2.3 * (0.6 + 0.4 * grow) * (1 + 0.025 * Math.sin(t * 5)));
+    // In its last seconds it flickers, thinning
+    const ending = clamp((3 - this.shieldLeft(items)) / 3, 0, 1);
+    const flicker = 1 - ending * (0.5 + 0.5 * Math.sin(t * 22));
+    this.bubble.material.uniforms.opacity.value = grow * flicker * ITEMS_FX.shield;
+    // Frost glittering on its seams
+    this.frostDebt += 14 * budget * dt * ITEMS_FX.shield;
+    for (; this.frostDebt >= 1; this.frostDebt--) {
+      vel.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize();
+      this.particles.emit(at.copy(pilot).addScaledVector(vel, 2.3), vel.set(0, 0, 0), fx(rand(0.4, 0.8), rand(0.15, 0.3), FROST, Kind.Star, 0, 0, 2.2));
+    }
+  }
+
+  private shieldLeft(items: Items): number {
+    return ITEM.shieldTime - items.time("starflakeShield");
+  }
+
+  // --- rings of light ------------------------------------------------------------------------
+
+  private wave(center: THREE.Vector3, normal: THREE.Vector3 | null, radius: number, grow: number, life: number, tint: THREE.Color) {
+    let wave = this.waves.find((w) => w.t >= w.life);
+    if (!wave) {
+      if (this.waves.length >= 12) return;
+      wave = { t: 0, life, center: new THREE.Vector3(), normal: null, radius, grow, tint: new THREE.Color() };
+      this.waves.push(wave);
+    }
+    wave.t = 0;
+    wave.life = life;
+    wave.center.copy(center);
+    wave.normal = normal ? (wave.normal ?? new THREE.Vector3()).copy(normal) : null;
+    wave.radius = radius;
+    wave.grow = grow;
+    wave.tint.copy(tint);
+  }
+
+  private updateWaves(dt: number) {
+    for (const w of this.waves) {
+      if (w.t >= w.life) continue;
+      w.t += dt;
+      const k = clamp(w.t / w.life, 0, 1);
+      const out = 1 - (1 - k) * (1 - k) * (1 - k);
+      this.rings.add(w.center, w.normal, w.radius * (1 + w.grow * out), Math.pow(1 - k, 1.5), 0.03 + 0.05 * k, 3, w.tint);
     }
   }
 

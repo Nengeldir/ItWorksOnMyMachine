@@ -1,4 +1,5 @@
-import type { Flight, FlightInput, FlightMods } from "../flight";
+import * as THREE from "three";
+import type { Flight, FlightInput, FlightMods, HitPart } from "../flight";
 import type { ItemId } from "../items/models";
 import { smoothstep } from "../math";
 import type { Course } from "../world/course";
@@ -18,9 +19,16 @@ export const ITEM = {
   updraftLift: 30, // m/s of climb added to the path…
   updraftHover: 0.85, // …while gravity barely pulls back along it
   updraftThrust: 6, // m/s²
+  // Starflake Shield: an aura that takes one hit of any kind, then shatters
+  shieldTime: 30, // seconds it lasts unused
+  shieldPush: 1, // metres out of the rock
+  shieldKeep: 0.72, // share of the speed kept
 };
 
-export type RunItemId = "anemoCatcher";
+export type RunItemId = "anemoCatcher" | "starflakeShield";
+
+/** How an item saved the pilot from a hit */
+export type ItemSave = "starflake";
 
 /** How rare (and how strong) an item is: common, uncommon, rare, legendary */
 export type Rarity = 0 | 1 | 2 | 3;
@@ -47,6 +55,7 @@ export interface RunItemInfo {
 
 export const RUN_ITEMS: readonly RunItemInfo[] = [
   { id: "anemoCatcher", model: "anemoCatcher", name: "Anemo Catcher", icon: "🍶", rarity: 0, charges: 1, description: "Uncork a bottle of wind: an updraft lifts you straight up, for the gate you were about to miss." },
+  { id: "starflakeShield", model: "starflakeShield", name: "Starflake Shield", icon: "❄️", rarity: 2, charges: 1, description: "A shimmering, fragile aura of ice: it shatters on the first thing you hit, and you glance off instead of crashing." },
 ];
 
 export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.id === id)!;
@@ -54,6 +63,7 @@ export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.i
 /** How long each item's effect lasts once used (seconds) */
 const DURATION: Record<RunItemId, () => number> = {
   anemoCatcher: () => ITEM.updraftTime,
+  starflakeShield: () => ITEM.shieldTime,
 };
 
 /** Effects that move the pilot: they end on a crash or a respawn */
@@ -86,7 +96,7 @@ export class Items {
   /** Seconds since each item's effect began (absent: not under way) */
   readonly active = new Map<RunItemId, number>();
   /** One-off moments, counted so the looks can tell a new one happened */
-  readonly cue = { pickup: 0, use: 0, full: 0, auto: 0 };
+  readonly cue = { pickup: 0, use: 0, full: 0, auto: 0, shatter: 0 };
   /** The item last picked up, and last used */
   picked: RunItemId | null = null;
   used: RunItemId | null = null;
@@ -94,6 +104,9 @@ export class Items {
   points = 0;
   /** Bumped when the level changes, so the looks rebuild what depends on it */
   version = 0;
+  /** Where the last save happened, and the surface's normal there */
+  readonly savePoint = new THREE.Vector3();
+  readonly saveNormal = new THREE.Vector3(0, 1, 0);
   /** The level the items are in */
   world: ItemWorld | null = null;
 
@@ -150,8 +163,28 @@ export class Items {
   /** Starts an item's effect; false if it can't be used right now */
   private start(id: RunItemId, flight: Flight): boolean {
     void flight;
+    // A shield already up would be wasted
+    if (id === "starflakeShield" && this.active.has(id)) return false;
     this.active.set(id, 0);
     return true;
+  }
+
+  /** Something touched: can an item save the pilot? The Starflake Shield takes any hit. Null: no */
+  save(part: HitPart | null, normal: THREE.Vector3, direction: THREE.Vector3): ItemSave | null {
+    void normal;
+    void direction;
+    if (part !== null && this.active.has("starflakeShield")) return "starflake";
+    return null;
+  }
+
+  /** The save happened at `at`, off a surface facing `normal` */
+  saved(how: ItemSave, at: THREE.Vector3, normal: THREE.Vector3) {
+    this.savePoint.copy(at);
+    this.saveNormal.copy(normal);
+    if (how === "starflake") {
+      this.active.delete("starflakeShield");
+      this.cue.shatter++;
+    }
   }
 
   /** Seconds into an item's effect, or -1 */
