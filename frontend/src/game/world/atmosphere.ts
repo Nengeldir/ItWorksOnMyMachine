@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { fxTime } from "../particles";
+import { sceneryTime as fxTime } from "../particles";
 
 // The air between you and the world: one set of light uniforms shared by the
 // sky, the terrain and the rocks, set per biome (palette). The patch adds what

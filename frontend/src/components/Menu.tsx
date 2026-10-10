@@ -2,18 +2,16 @@ import { IconDice5, IconMap, IconSettings, IconUser, IconX } from "@tabler/icons
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { type LeaderboardEntry, type User, getLeaderboard } from "../api";
 import type { Screen } from "../App";
-import { randomRoomCode } from "../format";
-import { dailySeed, randomSeed } from "../game/rng";
-import { raceLevel } from "../game/world/biomes";
-import type { Level } from "../game/world/biomes/types";
+import { randomRoomCode, untilTomorrow } from "../format";
+import { dailyRunSeed, dailySeed, randomSeed } from "../game/rng";
+import { MAPS, seedLevel } from "../game/world/biomes";
 import { Course } from "../game/world/course";
 import { bestRun } from "../session/RunSession";
 import { type Settings, clientId } from "../storage";
 import { usePaletteTheme } from "../theme";
 import SettingsPanel from "./SettingsPanel";
+import MapSelect, { type MapSelectMode } from "./MapSelect";
 import ProfilePanel from "./ProfilePanel";
-import BiomeSelect from "./BiomeSelect";
-import CourseSelect from "./CourseSelect";
 import { HelpButton } from "./Help";
 import MenuBackdrop from "./MenuBackdrop";
 import TodaysBest from "./TodaysBest";
@@ -27,40 +25,45 @@ interface MenuProps {
   go: (screen: Screen) => void;
 }
 
-/** Until the next UTC midnight, when the daily course changes */
-function untilTomorrow(): string {
-  const now = new Date();
-  const ms = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1) - now.getTime();
-  const s = Math.floor(ms / 1000);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${Math.floor(s / 3600)}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}`;
-}
-
 const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [daily, setDaily] = useState(() => dailySeed());
-  const course = useMemo(
-    () => ({ palette: raceLevel(daily).palette.name, gates: new Course(daily).rings.length }),
-    [daily],
-  );
+  // Today's run has a seed of its own, so it starts on another map than today's course
+  const [dailyRun, setDailyRun] = useState(() => dailyRunSeed());
+  // Today's course: whichever map the daily seed stands for
+  const course = useMemo(() => {
+    const { biome, palette } = seedLevel(daily);
+    return { map: biome.name, mood: palette.name, gates: new Course(daily).rings.length };
+  }, [daily]);
+  // Today's run: it starts on the map its seed stands for
+  const run = useMemo(() => {
+    const { biome, palette } = seedLevel(dailyRun);
+    return { map: biome.name, mood: palette.name };
+  }, [dailyRun]);
   const [tab, setTab] = useState<"solo" | "friends" | "adventure">(joinCode ? "friends" : "solo");
   const [code, setCode] = useState(joinCode ?? "");
   const [board, setBoard] = useState<LeaderboardEntry[]>([]);
-  const best = useMemo(() => bestRun(daily), [daily]);
+  const best = useMemo(() => bestRun(dailyRun), [dailyRun]);
   const [panel, setPanel] = useState<"none" | "settings" | "pilot">(joinCode && !settings.nickname ? "pilot" : "none");
   const [countdown, setCountdown] = useState(untilTomorrow);
-  // The map select shows its course behind the glass, and the UI takes its colors
-  // The course select (Solo) or the map select (Adventure)
-  const [picking, setPicking] = useState<"course" | "map" | null>(null);
+  // The map select, for a time trial, a run or a new room: it shows its course behind the glass, and the UI
+  // takes its colors
+  const [picking, setPicking] = useState<MapSelectMode | null>(null);
   const [preview, setPreview] = useState<number | null>(null);
-  const [previewLevel, setPreviewLevel] = useState<Level | null>(null);
-  const shown = picking === "course" && preview !== null ? preview : daily;
-  const level = picking === "map" ? previewLevel : null;
-  const shownPalette = useMemo(() => raceLevel(shown).palette, [shown]);
+  const shown = picking && preview !== null ? preview : daily;
+  const shownPalette = useMemo(() => seedLevel(shown).palette, [shown]);
   // Pictures of the courses the backdrop has shown, for the map select's cards
   const [art, setArt] = useState<Record<number, string>>({});
   const keepArt = useCallback((seed: number, url: string) => setArt((all) => ({ ...all, [seed]: url })), []);
-  usePaletteTheme(level ? level.palette : shownPalette);
+  // The course the backdrop has all in: the map select covers the others with their picture meanwhile
+  const [live, setLive] = useState<number | null>(null);
+  usePaletteTheme(shownPalette);
+
+  // The map select's pictures (public/maps, about 0.8 MB), fetched while the landing page is up
+  useEffect(() => {
+    const timer = setTimeout(() => MAPS.forEach((biome) => (new Image().src = `/maps/${biome}.jpg`)), 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     getLeaderboard(daily, clientId())
@@ -73,6 +76,7 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
     const timer = setInterval(() => {
       setCountdown(untilTomorrow());
       setDaily(dailySeed());
+      setDailyRun(dailyRunSeed());
     }, 1000);
     return () => clearInterval(timer);
   }, []);
@@ -82,11 +86,11 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "Enter" || e.target !== document.body || picking) return;
       if (tab === "solo") go({ kind: "solo", seed: daily });
-      else if (tab === "adventure") go({ kind: "run", seed: daily });
+      else if (tab === "adventure") go({ kind: "run", seed: dailyRun });
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [daily, tab, picking, go]);
+  }, [daily, dailyRun, tab, picking, go]);
 
   const joinRoom = (e: FormEvent) => {
     e.preventDefault();
@@ -97,7 +101,6 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
   const closePicker = () => {
     setPicking(null);
     setPreview(null);
-    setPreviewLevel(null);
   };
 
   const pilotName = me?.verified ? me.name : settings.nickname || "Guest";
@@ -106,7 +109,7 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
     <main className="menu">
       <button className="menu-inventory glass" onClick={() => setInventoryOpen(true)}>Profile & inventory</button>
       {inventoryOpen && <ProfilePanel onClose={() => setInventoryOpen(false)} />}
-      <MenuBackdrop seed={shown} level={level} mode="drift" onSnapshot={keepArt} settings={settings} />
+      <MenuBackdrop seed={shown} mode="drift" onSnapshot={keepArt} onShown={setLive} settings={settings} />
 
       <HelpButton className="menu-help" />
       <button
@@ -118,15 +121,24 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
       </button>
       {panel === "settings" && <SettingsPanel settings={settings} onSettings={onSettings} onClose={() => setPanel("none")} />}
 
-      {picking === "map" ? (
-        <BiomeSelect onPreview={setPreviewLevel} onStart={() => go({ kind: "run", seed: daily })} onBack={closePicker} />
-      ) : picking === "course" ? (
-        <CourseSelect
-          daily={daily}
+      {picking ? (
+        <MapSelect
+          mode={picking}
+          daily={picking === "run" ? dailyRun : daily}
           countdown={countdown}
           art={art}
           onPreview={setPreview}
-          onFly={(seed) => go({ kind: "solo", seed })}
+          live={live}
+          onPick={(seed) =>
+            go(
+              picking === "solo"
+                ? { kind: "solo", seed }
+                : picking === "run"
+                  ? { kind: "run", seed }
+                  : { kind: "room", code: randomRoomCode(), seed },
+            )
+          }
+          action={picking === "solo" ? "Fly" : picking === "run" ? "Start the run" : "Create the room"}
           onBack={closePicker}
         />
       ) : (
@@ -154,8 +166,9 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
                 <div className="menu-course">
                   <div>
                     <small>Today's course · #{daily}</small>
-                    <b>{course.palette} isles</b>
+                    <b>{course.map}</b>
                   </div>
+                  <span>{course.mood}</span>
                   <span>{course.gates} gates</span>
                   <span>New in {countdown}</span>
                 </div>
@@ -163,7 +176,7 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
                   Fly today's course <kbd>Enter</kbd>
                 </button>
                 <div className="menu-more">
-                  <button className="menu-link" onClick={() => setPicking("course")}>
+                  <button className="menu-link" onClick={() => setPicking("solo")}>
                     <IconMap size={18} /> Choose a course
                   </button>
                 </div>
@@ -172,17 +185,19 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
               <>
                 <div className="menu-course">
                   <div>
-                    <small>Today's run · #{daily}</small>
-                    <b>Eight biomes</b>
+                    <small>Today's run · #{dailyRun}</small>
+                    <b>{run.map}</b>
                   </div>
+                  <span>{run.mood}</span>
+                  <span>8 maps</span>
                   {best !== null && <span>Best {best.toLocaleString()}</span>}
                   <span>New in {countdown}</span>
                 </div>
-                <button className="primary" onClick={() => go({ kind: "run", seed: daily })}>
+                <button className="primary" onClick={() => go({ kind: "run", seed: dailyRun })}>
                   Start today's run <kbd>Enter</kbd>
                 </button>
                 <div className="menu-more">
-                  <button className="menu-link" onClick={() => setPicking("map")}>
+                  <button className="menu-link" onClick={() => setPicking("run")}>
                     <IconMap size={18} /> Choose a map
                   </button>
                   <button className="menu-link" onClick={() => go({ kind: "run", seed: randomSeed() })}>
@@ -204,7 +219,7 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
                   </div>
                   <span>Up to 12 pilots</span>
                 </div>
-                <button className="primary" onClick={() => go({ kind: "room", code: randomRoomCode() })}>
+                <button className="primary" onClick={() => setPicking("room")}>
                   Create a room
                 </button>
                 <form onSubmit={joinRoom} className="menu-join">

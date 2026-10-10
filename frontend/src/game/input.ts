@@ -1,7 +1,6 @@
 import type { FlightInput } from "./flight";
 import { clamp } from "./math";
-import { DEFAULT_BINDINGS, type Bindings, type BindingAction } from "./bindings";
-import { tilt } from "./tilt";
+import { DEFAULT_BINDINGS, keyboardBinding, type Bindings, type BindingAction } from "./bindings";
 export { keyLabel } from "./bindings";
 
 export interface ControlSettings {
@@ -9,9 +8,8 @@ export interface ControlSettings {
   mouseSensitivity: number; // 0.3..6, 2 = default
   invertMouse?: boolean;
   invertGamepad?: boolean;
-  /** The touch stick and tilting: up / top away from you climbs instead of diving */
+  /** The touch stick: up climbs instead of diving */
   invertTouch?: boolean;
-  tiltSensitivity?: number; // 0.4..2.5, 1 = default
   bindings?: Bindings;
   deadZone?: number;
   reducedMotion?: boolean;
@@ -21,11 +19,14 @@ export interface ControlSettings {
   muted?: boolean;
 }
 
-/** URL test mode only: Shift+P, Shift+O, Shift+S */
-export type TestAction = "portal" | "win" | "speed";
+/** URL test mode only: Shift+P, Shift+O, Shift+S, Shift+I */
+export type TestAction = "portal" | "win" | "speed" | "item";
 
-/** One-off presses. Wingbeat, hover-stall, plunge, Gale Force, Resonance, Ascension and the stances need their adventure upgrades. */
-export type InputAction = "pause" | "respawn" | "mute" | "barrelLeft" | "barrelRight" | "flap" | "hover" | "plunge" | "burst" | "resonance" | "ascend" | "stance";
+/**
+ * One-off presses. Wingbeat, hover-stall, plunge, Gale Force, Resonance, Ascension and the stances need
+ * their adventure upgrades; items (use, next) need something in the bag
+ */
+export type InputAction = "pause" | "respawn" | "mute" | "barrelLeft" | "barrelRight" | "flap" | "hover" | "plunge" | "burst" | "resonance" | "ascend" | "stance" | "useItem" | "nextItem";
 
 export interface InputObserver {
   sample?: (input: FlightInput) => void;
@@ -35,21 +36,13 @@ export interface InputObserver {
 export function controlsBlocked(): boolean {
   return !!document.querySelector?.("dialog[open]");
 }
-const ACTIONS: InputAction[] = ["pause", "respawn", "mute", "barrelLeft", "barrelRight", "flap", "hover", "plunge", "burst", "resonance", "ascend", "stance"];
+const ACTIONS: InputAction[] = ["pause", "respawn", "mute", "barrelLeft", "barrelRight", "flap", "hover", "plunge", "burst", "resonance", "ascend", "stance", "useItem", "nextItem"];
+/** The mouse wheel cycles items at most this often (ms): one notch of a free-spinning wheel is many events */
+const WHEEL_GAP = 160;
 
 function deadZone(value: number, threshold = 0.12): number {
   if (Math.abs(value) < threshold) return 0;
   return (value - Math.sign(value) * threshold) / (1 - threshold);
-}
-
-// Tilting the phone: how far is full deflection, and how much of it around level does nothing
-const TILT_ROLL = 0.5; // radians, about 29°
-const TILT_PITCH = 0.36; // about 21°
-const TILT_DEAD = 0.035; // about 2°
-
-function tiltAxis(angle: number, full: number, sensitivity: number): number {
-  const beyond = Math.max(0, Math.abs(angle) - TILT_DEAD);
-  return clamp((Math.sign(angle) * beyond * sensitivity) / (full - TILT_DEAD), -1, 1);
 }
 
 function isTyping(event: KeyboardEvent): boolean {
@@ -58,8 +51,8 @@ function isTyping(event: KeyboardEvent): boolean {
 }
 
 /**
- * Keyboard, mouse (pointer lock), gamepad, the touch stick and buttons
- * (`TouchControls`) and tilting the phone (`tilt`), merged into pitch and roll.
+ * Keyboard, mouse (pointer lock), gamepad and the touch stick and buttons
+ * (`TouchControls`), merged into pitch and roll.
  * Flight-stick convention by default: forward / W / mouse up dives.
  */
 export class Input {
@@ -69,7 +62,8 @@ export class Input {
   onTestAction?: (action: TestAction) => void;
   locked = false;
   private readonly element: HTMLElement;
-  private readonly keys = new Set<string>();
+  // Release by physical identity: the character can change while held (Shift, Caps Lock, layout).
+  private readonly keys = new Map<string, string>();
   private readonly observers = new Set<InputObserver>();
   // The mouse moves a virtual stick that drifts back to center
   private stickX = 0;
@@ -80,6 +74,9 @@ export class Input {
   touchY = 0;
   touchBoost = false;
   touchBrake = false;
+  /** The right mouse button, held (while the pointer is locked it uses items) */
+  private mouseUse = false;
+  private lastWheel = 0;
 
   constructor(element: HTMLElement, settings: ControlSettings) {
     this.element = element;
@@ -88,7 +85,11 @@ export class Input {
     window.addEventListener("keyup", this.onKeyUp);
     window.addEventListener("blur", this.onBlur);
     document.addEventListener("mousemove", this.onMouseMove);
+    document.addEventListener("mousedown", this.onMouseDown);
+    document.addEventListener("mouseup", this.onMouseUp);
+    document.addEventListener("wheel", this.onWheel, { passive: true });
     document.addEventListener("pointerlockchange", this.onLockChange);
+    document.addEventListener("contextmenu", this.onContextMenu);
   }
 
   dispose() {
@@ -97,7 +98,11 @@ export class Input {
     window.removeEventListener("keyup", this.onKeyUp);
     window.removeEventListener("blur", this.onBlur);
     document.removeEventListener("mousemove", this.onMouseMove);
+    document.removeEventListener("mousedown", this.onMouseDown);
+    document.removeEventListener("mouseup", this.onMouseUp);
+    document.removeEventListener("wheel", this.onWheel);
     document.removeEventListener("pointerlockchange", this.onLockChange);
+    document.removeEventListener("contextmenu", this.onContextMenu);
     if (document.pointerLockElement === this.element) document.exitPointerLock();
   }
 
@@ -107,8 +112,9 @@ export class Input {
     return () => { this.observers.delete(observer); };
   }
 
-  dispatchAction(action: InputAction) {
-    if (controlsBlocked() || !document.hasFocus()) return;
+  /** `touched`: from a finger on the page, which needs no focus check (some phone browsers report none) */
+  dispatchAction(action: InputAction, touched = false) {
+    if (controlsBlocked() || (!touched && !document.hasFocus())) return;
     for (const observer of this.observers) observer.action?.(action);
     this.onAction?.(action);
   }
@@ -127,8 +133,10 @@ export class Input {
 
   private onKeyDown = (event: KeyboardEvent) => {
     if (event.defaultPrevented || controlsBlocked() || isTyping(event)) return;
+    const binding = keyboardBinding(event);
+    if (!binding) return;
     if (this.onTestAction && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
-      const action = event.code === "KeyP" ? "portal" : event.code === "KeyO" ? "win" : event.code === "KeyS" ? "speed" : null;
+      const action = binding === "KeyP" ? "portal" : binding === "KeyO" ? "win" : binding === "KeyS" ? "speed" : binding === "KeyI" ? "item" : null;
       if (action) {
         event.preventDefault();
         // Consume the chord before P pauses or S pitches, including held Shift boost.
@@ -138,14 +146,14 @@ export class Input {
       }
     }
     if (event.repeat && !this.keys.has(event.code)) return;
-    this.keys.add(event.code);
     // Arrow keys would scroll the page; leave them alone on buttons and panels
     const target = event.target as HTMLElement | null;
     const atGame = !target || target === document.body || target === this.element;
-    if (atGame && (event.code.startsWith("Arrow") || event.code === "Space")) event.preventDefault();
+    if (atGame && (binding.startsWith("Arrow") || binding === "Space")) event.preventDefault();
     if (event.repeat) return;
+    this.keys.set(event.code, binding);
     for (const action of ACTIONS) {
-      if (this.binding(action).includes(event.code)) {
+      if (this.binding(action).includes(binding)) {
         if (atGame || action === "pause") event.preventDefault();
         this.dispatchAction(action);
         break;
@@ -167,7 +175,31 @@ export class Input {
     this.padButtons = [];
     this.touchX = this.touchY = 0;
     this.touchBoost = this.touchBrake = false;
+    this.mouseUse = false;
   }
+
+  // Flying with the mouse, the right button uses an item and the wheel picks the next one
+  private onMouseDown = (event: MouseEvent) => {
+    if (!this.locked || controlsBlocked() || event.button !== 2) return;
+    this.mouseUse = true;
+    this.onAction?.("useItem");
+  };
+
+  private onMouseUp = (event: MouseEvent) => {
+    if (event.button === 2) this.mouseUse = false;
+  };
+
+  private onWheel = (event: WheelEvent) => {
+    if (!this.locked || controlsBlocked() || Math.abs(event.deltaY) < 1) return;
+    const now = performance.now();
+    if (now - this.lastWheel < WHEEL_GAP) return;
+    this.lastWheel = now;
+    this.onAction?.("nextItem");
+  };
+
+  private onContextMenu = (event: Event) => {
+    if (this.locked && event.target === this.element) event.preventDefault();
+  };
 
   private onMouseMove = (event: MouseEvent) => {
     if (!this.locked || controlsBlocked()) return;
@@ -189,11 +221,17 @@ export class Input {
   }
 
   private key(action: BindingAction): number {
-    return this.binding(action).some((code) => this.keys.has(code)) ? 1 : 0;
+    const bindings = this.binding(action);
+    for (const binding of this.keys.values()) {
+      if (bindings.includes(binding)) return 1;
+    }
+    return 0;
   }
 
   sample(dt: number): FlightInput {
-    if (controlsBlocked() || !document.hasFocus()) { this.reset(); return { pitch: 0, roll: 0, boost: 0, brake: 0 }; }
+    // A finger on the stick or a button is on this page, whatever the browser says about focus
+    const touched = this.touchBoost || this.touchBrake || this.touchX !== 0 || this.touchY !== 0;
+    if (controlsBlocked() || (!touched && !document.hasFocus())) { this.reset(); return { pitch: 0, roll: 0, boost: 0, brake: 0, use: 0 }; }
     const recenter = Math.exp(-dt * 3.5);
     this.stickX *= recenter;
     this.stickY *= recenter;
@@ -207,14 +245,10 @@ export class Input {
     const touchSign = this.settings.invertTouch ? -1 : 1;
     pitch += this.touchY * touchSign;
     roll += this.touchX;
-    if (tilt.active) {
-      const sensitivity = this.settings.tiltSensitivity ?? 1;
-      roll += tiltAxis(tilt.roll, TILT_ROLL, sensitivity);
-      pitch += tiltAxis(tilt.pitch, TILT_PITCH, sensitivity) * touchSign;
-    }
 
     let boost = this.touchBoost ? 1 : this.key("boost");
     let brake = this.touchBrake ? 1 : this.key("brake");
+    let use = Math.max(this.key("useItem"), this.mouseUse ? 1 : 0);
     const pad = navigator.getGamepads?.().find((p) => p?.connected);
     if (pad) {
       roll += deadZone(pad.axes[0] ?? 0, this.settings.deadZone);
@@ -225,7 +259,8 @@ export class Input {
       if (pressed[4] && !this.padButtons[4]) this.dispatchAction("barrelLeft");
       if (pressed[5] && !this.padButtons[5]) this.dispatchAction("barrelRight");
       // In adventure: A flaps, B hover-stalls, X plunges, the right stick's click is Gale Force,
-      // the left stick's click sings (Resonance), d-pad up ascends, d-pad down changes stance.
+      // the left stick's click sings (Resonance), d-pad up ascends, d-pad down changes stance,
+      // d-pad right uses the item and d-pad left picks the next one.
       // Triggers control speed in every mode.
       if (pressed[0] && !this.padButtons[0]) this.dispatchAction("flap");
       if (pressed[1] && !this.padButtons[1]) this.dispatchAction("hover");
@@ -234,6 +269,9 @@ export class Input {
       if (pressed[10] && !this.padButtons[10]) this.dispatchAction("resonance");
       if (pressed[12] && !this.padButtons[12]) this.dispatchAction("ascend");
       if (pressed[13] && !this.padButtons[13]) this.dispatchAction("stance");
+      if (pressed[15] && !this.padButtons[15]) this.dispatchAction("useItem");
+      if (pressed[14] && !this.padButtons[14]) this.dispatchAction("nextItem");
+      if (pressed[15]) use = 1;
       boost = Math.max(boost, deadZone(pad.buttons[7]?.value ?? 0));
       brake = Math.max(brake, deadZone(pad.buttons[6]?.value ?? 0));
       this.padButtons = pressed;
@@ -241,7 +279,7 @@ export class Input {
       this.padButtons = [];
     }
 
-    const sample = { pitch: clamp(pitch, -1, 1), roll: clamp(roll, -1, 1), boost, brake };
+    const sample = { pitch: clamp(pitch, -1, 1), roll: clamp(roll, -1, 1), boost, brake, use };
     for (const observer of this.observers) observer.sample?.(sample);
     return sample;
   }

@@ -174,6 +174,17 @@ const lathe = (profile: [number, number][], n = 14) =>
 
 type ClothShape = (u: number, v: number, out: THREE.Vector3) => void;
 
+/** Height on a triangle projected into cloth's (x, y) plane. */
+function clothHeight(triangle: THREE.Triangle, x: number, y: number, inside = false): number {
+  const { a, b, c } = triangle;
+  const determinant = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y);
+  if (Math.abs(determinant) < 1e-10) return -Infinity;
+  const u = ((b.y - c.y) * (x - c.x) + (c.x - b.x) * (y - c.y)) / determinant;
+  const v = ((c.y - a.y) * (x - c.x) + (a.x - c.x) * (y - c.y)) / determinant;
+  if (inside && (u < -1e-7 || v < -1e-7 || u + v > 1 + 1e-7)) return -Infinity;
+  return u * a.z + v * b.z + (1 - u - v) * c.z;
+}
+
 /** A grid of vertices moved procedurally every frame: the cape and the scarf tails */
 class Cloth {
   readonly mesh: THREE.Mesh;
@@ -181,10 +192,16 @@ class Cloth {
   private readonly cols: number;
   private readonly rows: number;
   private readonly point = new THREE.Vector3();
+  private readonly clearance: Float32Array;
+  private readonly ribbonTriangle = new THREE.Triangle();
+  private readonly surfaceTriangle = new THREE.Triangle();
+  private readonly ribbonCorners = [this.ribbonTriangle.a, this.ribbonTriangle.b, this.ribbonTriangle.c];
+  private readonly surfaceCorners = [this.surfaceTriangle.a, this.surfaceTriangle.b, this.surfaceTriangle.c];
 
   constructor(cols: number, rows: number, paint: (u: number, v: number, tones: Tones, out: THREE.Color) => void, material: THREE.Material) {
     this.cols = cols;
     this.rows = rows;
+    this.clearance = new Float32Array((cols + 1) * (rows + 1));
     const geometry = new THREE.PlaneGeometry(1, 1, cols, rows);
     geometry.deleteAttribute("uv");
     // Keep (u, v) per vertex so the paint can use them
@@ -219,6 +236,64 @@ class Cloth {
         position.setXYZ(r * (this.cols + 1) + c, this.point.x, this.point.y, this.point.z);
       }
     }
+    position.needsUpdate = true;
+    this.mesh.geometry.computeVertexNormals();
+  }
+
+  /** Lift ribbons above another cloth mesh, including crossings between vertices. */
+  keepAbove(surface: Cloth, gap: number) {
+    const position = this.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+    const surfacePosition = surface.mesh.geometry.getAttribute("position");
+    const index = this.mesh.geometry.index!;
+    const surfaceIndex = surface.mesh.geometry.index!;
+    this.clearance.fill(0);
+    for (let i = 0; i < index.count; i += 3) {
+      for (let k = 0; k < 3; k++) this.ribbonCorners[k].fromBufferAttribute(position, index.getX(i + k));
+      const [a, b, c] = this.ribbonCorners;
+      const minX = Math.min(a.x, b.x, c.x), maxX = Math.max(a.x, b.x, c.x);
+      const minY = Math.min(a.y, b.y, c.y), maxY = Math.max(a.y, b.y, c.y);
+      let lift = 0;
+      for (let j = 0; j < surfaceIndex.count; j += 3) {
+        for (let k = 0; k < 3; k++) this.surfaceCorners[k].fromBufferAttribute(surfacePosition, surfaceIndex.getX(j + k));
+        const [d, e, f] = this.surfaceCorners;
+        if (Math.max(d.x, e.x, f.x) < minX || Math.min(d.x, e.x, f.x) > maxX ||
+            Math.max(d.y, e.y, f.y) < minY || Math.min(d.y, e.y, f.y) > maxY) continue;
+
+        // The height difference is linear on each triangle. Its maximum lies
+        // at a vertex of their projected intersection: an enclosed corner or
+        // an edge crossing. Checking both covers the whole ribbon triangle.
+        for (const p of this.ribbonCorners) {
+          lift = Math.max(lift, clothHeight(this.surfaceTriangle, p.x, p.y, true) + gap - p.z);
+        }
+        for (const p of this.surfaceCorners) {
+          const height = clothHeight(this.ribbonTriangle, p.x, p.y, true);
+          if (height !== -Infinity) lift = Math.max(lift, p.z + gap - height);
+        }
+        for (let k = 0; k < 3; k++) {
+          const p = this.ribbonCorners[k], q = this.ribbonCorners[(k + 1) % 3];
+          const rx = q.x - p.x, ry = q.y - p.y;
+          for (let l = 0; l < 3; l++) {
+            const s = this.surfaceCorners[l], t = this.surfaceCorners[(l + 1) % 3];
+            const sx = t.x - s.x, sy = t.y - s.y;
+            const determinant = rx * sy - ry * sx;
+            if (Math.abs(determinant) < 1e-10) continue;
+            const dx = s.x - p.x, dy = s.y - p.y;
+            const along = (dx * sy - dy * sx) / determinant;
+            const across = (dx * ry - dy * rx) / determinant;
+            if (along < 0 || along > 1 || across < 0 || across > 1) continue;
+            const x = p.x + along * rx, y = p.y + along * ry;
+            lift = Math.max(lift, clothHeight(this.surfaceTriangle, x, y) + gap - clothHeight(this.ribbonTriangle, x, y));
+          }
+        }
+      }
+      // Accumulate first: all three corners must move by at least this lift,
+      // and neighboring triangles share the larger correction without seams.
+      for (let k = 0; k < 3; k++) {
+        const vertex = index.getX(i + k);
+        this.clearance[vertex] = Math.max(this.clearance[vertex], lift);
+      }
+    }
+    for (let i = 0; i < position.count; i++) position.setZ(i, position.getZ(i) + this.clearance[i]);
     position.needsUpdate = true;
     this.mesh.geometry.computeVertexNormals();
   }
@@ -288,6 +363,10 @@ export class Avatar {
   private wingModels: ReturnType<typeof buildWing>[] = [];
   get wingStyle(): WingId { return this.appearance.wings; }
   private readonly scarf: Cloth[];
+  // Conservative bounds of the animated legs, reused for cloth self-collision.
+  private readonly clothObstacles: { mesh: THREE.Mesh; local: THREE.Box3; bounds: THREE.Box3 }[] = [];
+  private readonly clothInverse = new THREE.Matrix4();
+  private readonly clothMatrix = new THREE.Matrix4();
   private readonly painted: Painted[] = [];
   private readonly outlines: THREE.Mesh[] = [];
   private readonly materials: THREE.Material[] = [];
@@ -336,6 +415,8 @@ export class Avatar {
   barrelProgress = -1;
   /** Where carried items go: on the back (the firework), on the head (helmets), in the right hand */
   readonly slots: Record<ItemSlot, THREE.Object3D>;
+  /** The right and left shin, for boots */
+  readonly feet: [THREE.Object3D, THREE.Object3D];
   /**
    * Blends the right arm towards a pose, for item animations (items/equip.ts):
    * `amount` 0..1, shoulder angles in radians (z raises the arm towards the
@@ -388,6 +469,11 @@ export class Avatar {
         mesh.add(outline);
         this.outlines.push(outline);
       }
+      return mesh;
+    };
+    const clothObstacle = (mesh: THREE.Mesh) => {
+      mesh.geometry.computeBoundingBox();
+      this.clothObstacles.push({ mesh, local: mesh.geometry.boundingBox!.clone(), bounds: new THREE.Box3() });
       return mesh;
     };
 
@@ -520,18 +606,18 @@ export class Avatar {
       const hip = new THREE.Object3D();
       hip.position.set(0.062 * s, -0.04, 0);
       this.pelvis.add(hip);
-      part(hip, new PartBuilder().add(capsule(0.05, 0.2), "white", [0, -0.14, 0]));
+      clothObstacle(part(hip, new PartBuilder().add(capsule(0.05, 0.2), "white", [0, -0.14, 0])));
       const knee = new THREE.Object3D();
       knee.position.set(0, -0.29, 0);
       hip.add(knee);
-      const boot = part(
+      const boot = clothObstacle(part(
         knee,
         new PartBuilder()
           .add(capsule(0.042, 0.18), "dark", [0, -0.13, 0])
           .add(new THREE.TorusGeometry(0.046, 0.013, 6, 12), "trim", [0, -0.03, 0], [Math.PI / 2, 0, 0])
           // Pointed toes, like a dancer's
           .add(capsule(0.034, 0.08), "dark", [0, -0.3, -0.012], [0.25, 0, 0]),
-      );
+      ));
 
       // Wings: an inner arm-wing and an outer hand-wing, each a fan of feathers
       const wing = new THREE.Object3D();
@@ -596,7 +682,15 @@ export class Avatar {
     const hand = new THREE.Object3D();
     hand.position.set(0, -0.215, -0.02);
     this.right.elbow.add(hand);
-    this.slots = { back, head: crown, hand };
+    // Boots go on both shins (items/equip.ts mirrors the left one)
+    const foot = (side: Side) => {
+      const anchor = new THREE.Object3D();
+      anchor.position.set(0, -0.2, -0.005);
+      side.knee.add(anchor);
+      return anchor;
+    };
+    this.feet = [foot(this.right), foot(this.left)];
+    this.slots = { back, head: crown, hand, feet: this.feet[0] };
 
     // The cape: wide, long and rippling, with a golden hem and an emblem
     this.cape = new Cloth(
@@ -930,6 +1024,15 @@ export class Avatar {
   private updateCloth(wave: number, leanX: number, pitch: number, spread = 1) {
     const A = ANIM;
     const ct = this.clothTime;
+    // Cloth is in chest space, whereas the legs follow the pelvis. Resolve
+    // their current pose before shaping it, including knees bent by climbing,
+    // braking, abilities or a crash. Never alter the limbs or flight hitbox.
+    this.body.updateWorldMatrix(true, true);
+    this.clothInverse.copy(this.chest.matrixWorld).invert();
+    for (const obstacle of this.clothObstacles) {
+      this.clothMatrix.multiplyMatrices(this.clothInverse, obstacle.mesh.matrixWorld);
+      obstacle.bounds.copy(obstacle.local).applyMatrix4(this.clothMatrix);
+    }
     this.capeShape = (u, v, out) => {
       const spec = capeSpec(this.capeId);
       const width = (0.11 + 0.2 * Math.pow(v, 0.8) * spread) * spec.width;
@@ -942,6 +1045,7 @@ export class Avatar {
         0.245 - v * 1.18 * spec.length + scallop * Math.pow(v, 6),
         0.085 + 0.06 * v + 0.12 * v * v + 0.05 * (1 - u * u) * v + w - pitch * v * v,
       );
+      this.clearCloth(out);
     };
     this.cape.update(this.capeShape);
     this.scarf.forEach((cloth, i) => {
@@ -954,8 +1058,22 @@ export class Avatar {
           0.27 - v * length,
           0.13 + 0.08 * v + 0.16 * v * v + wave * 1.4 * v * Math.sin(phase) - pitch * v,
         );
+        this.clearCloth(out);
       });
+      cloth.keepAbove(this.cape, 0.02);
     });
+  }
+
+  /** Keep cloth behind the legs (+z in chest space), with a soft drape around them. */
+  private clearCloth(out: THREE.Vector3) {
+    for (const { bounds } of this.clothObstacles) {
+      // Cover half a cloth grid cell beyond the bounds so triangles between
+      // samples also clear the boots. The z gap includes their ink outlines.
+      const dx = Math.max(bounds.min.x - out.x, out.x - bounds.max.x, 0);
+      const dy = Math.max(bounds.min.y - out.y, out.y - bounds.max.y, 0);
+      const drape = 1 - smoothstep(0.06, 0.12, Math.max(dx, dy));
+      out.z += Math.max(0, bounds.max.z + 0.025 - out.z) * drape;
+    }
   }
 
   /** Starts the crash animation of this kind; `side` is the wing that hit (1 right, -1 left) */
@@ -1053,6 +1171,18 @@ export class Avatar {
     // Cloth whips around hard
     this.clothTime += dt * 14 * A.clothSpeed;
     this.updateCloth(A.clothWave * 0.16, wave(3, 0) * 0.35, -0.3 + wave(4, 1) * 0.3);
+  }
+
+  /** Run-only spirit cape: translucent toon body and ink; normal opacity is restored on exit. */
+  spectral(amount: number) {
+    if(this.ghost)return;
+    for(const material of this.materials){
+      if(material===this.aura.material)continue;
+      const transparent=amount>0;
+      if(material.transparent!==transparent){material.transparent=transparent;material.needsUpdate=true;}
+      material.opacity=1-amount*0.65;
+      material.depthWrite=!transparent;
+    }
   }
 
   /** A ghost's opacity, 0..1 (Wind-Shear Dash's afterimages fade out); solid pilots ignore it */

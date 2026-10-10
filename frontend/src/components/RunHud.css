@@ -36,6 +36,62 @@
   color: var(--warm-deep);
 }
 
+.run-side {
+  position: absolute;
+  top: 4.4rem;
+  left: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.run-lives {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.8rem 0.3rem 0.65rem;
+  border-radius: 999px;
+  font-size: 1.3rem;
+  animation: run-life 0.5s ease-out both;
+}
+
+.run-lives .feather {
+  vertical-align: 0;
+}
+
+/* The last feather breathes */
+.run-lives.last .feather:not(.spent) {
+  animation: run-last-feather 1.4s ease-in-out infinite;
+}
+
+@keyframes run-last-feather {
+  50% {
+    filter: drop-shadow(0 0 0.5em rgba(255, 190, 90, 1));
+    transform: translateY(-1px);
+  }
+}
+
+.run-lives small {
+  margin-left: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--warm-deep);
+}
+
+@keyframes run-life {
+  from {
+    transform: scale(1.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .run-lives,
+  .run-lives.last .feather:not(.spent) {
+    animation: none;
+  }
+}
+
 /* Under the score pill, white with an ink edge like the ring marker: it reads on any sky */
 .run-compass {
   position: absolute;
@@ -63,9 +119,6 @@
 }
 
 .run-objectives {
-  position: absolute;
-  top: 6.2rem;
-  left: 1rem;
   list-style: none;
   margin: 0;
   padding: 0.7rem 0.9rem;
@@ -170,6 +223,129 @@
   right: 0;
   bottom: 0;
   background: rgba(143, 227, 255, 0.22);
+}
+
+.run-items {
+  position: absolute;
+  right: 1rem;
+  bottom: 7.6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+
+.run-items-active {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 0.35rem;
+}
+
+.run-items-active li {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: var(--glass-strong);
+  font-size: 0.95rem;
+  animation: run-item-in 0.35s ease-out;
+}
+
+.run-items-active .bar {
+  width: 2.4rem;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+}
+
+.run-items-active .bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #ffe39a, #fff6d8);
+}
+
+.run-items-bag {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+  position: relative;
+}
+
+.run-items-bag .slot {
+  position: relative;
+  width: 2.7rem;
+  height: 2.7rem;
+  border-radius: 50%;
+  background: var(--glass-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--rarity) 55%, transparent);
+  opacity: 0.7;
+  transition: transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+  animation: run-item-in 0.4s cubic-bezier(0.3, 1.6, 0.6, 1);
+}
+
+.run-items-bag .slot.selected {
+  opacity: 1;
+  transform: scale(1.18);
+  box-shadow: inset 0 0 0 2px var(--rarity), 0 0 14px color-mix(in srgb, var(--rarity) 70%, transparent);
+}
+
+.run-items-bag .slot.auto .icon {
+  filter: saturate(0.8);
+}
+
+.run-items-bag .icon {
+  font-size: 1.3rem;
+}
+
+.run-items-bag .count {
+  position: absolute;
+  top: -0.15rem;
+  right: -0.15rem;
+  min-width: 1rem;
+  padding: 0 0.2rem;
+  border-radius: 999px;
+  background: var(--rarity);
+  color: #1d1a2a;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.run-items-bag .name {
+  position: absolute;
+  bottom: calc(100% + 0.45rem);
+  right: 0;
+  white-space: nowrap;
+  font-size: 0.7rem;
+  color: var(--rarity);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+
+.run-items-bag .keys {
+  order: -1;
+  align-self: center;
+  margin-right: 0.3rem;
+  white-space: nowrap;
+  font-size: 0.65rem;
+  color: var(--ink-70);
+}
+
+.run-items-bag kbd {
+  font-size: 0.65rem;
+}
+
+@keyframes run-item-in {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
 }
 
 .run-upgrades {
@@ -329,6 +505,8 @@
 
 .run-picker .card:hover,
 .run-picker .card:focus-visible {
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--ink);
   transform: translateY(-4px);
   box-shadow: 0 0 0 2px var(--warm-deep), 0 10px 30px rgba(0, 0, 0, 0.4);
 }
@@ -356,6 +534,16 @@
   color: #f4f0ff;
   background: rgba(255, 255, 255, 0.12);
   border-color: rgba(255, 255, 255, 0.25);
+}
+
+.run-picker .card:is(:hover, :focus-visible) .kind {
+  color: var(--ink-70);
+}
+
+.run-picker .card:is(:hover, :focus-visible) kbd {
+  color: var(--ink);
+  background: var(--ink-06);
+  border-color: var(--ink-45);
 }
 
 .run-picker .card .text {

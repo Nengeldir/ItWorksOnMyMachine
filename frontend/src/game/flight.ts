@@ -76,6 +76,7 @@ export interface FlightInput {
   brake?: number; // 0..1, held
   pitch: number; // -1..1, positive = nose up
   roll: number; // -1..1 steering target, positive = turn right
+  use?: number; // 0..1, the use-item key held (run items that act while held; the flight ignores it)
 }
 
 const LOCAL_RIGHT = new Vector3(1, 0, 0);
@@ -264,6 +265,23 @@ export class Flight {
     this.forward.set(0, 0, -1).applyQuaternion(this.quaternion);
     this.up.set(0, 1, 0).applyQuaternion(this.quaternion);
     this.right.set(1, 0, 0).applyQuaternion(this.quaternion);
+  }
+
+  /** Run grappling force changes heading continuously; normal flight sweeps still test the path. */
+  pullToward(anchor: Vector3, dt: number, acceleration: number) {
+    axis.subVectors(anchor,this.position).normalize();
+    desiredPath.copy(this.flightPath).addScaledVector(axis,acceleration*dt/Math.max(this.speed,6)).normalize();
+    turn.setFromUnitVectors(this.flightPath,desiredPath);
+    this.quaternion.premultiply(turn).normalize();
+    this.flightPath.copy(desiredPath);
+    this.updateAxes();
+    this.velocity.copy(this.flightPath).multiplyScalar(this.speed);
+  }
+
+  /** Run item energy: refill and allow held boost to restart after exhaustion. */
+  refillBoost(amount: number) {
+    this.boostCharge = clamp(this.boostCharge + amount,0,1);
+    if(this.boostCharge>0) this.exhausted=false;
   }
 
   /** A wingbeat (run mode): a burst of speed and the nose lifted a little */

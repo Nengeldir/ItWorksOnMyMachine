@@ -186,6 +186,18 @@ export const ABILITIES_FX = {
   echo: 1, // the Echo-Trail ribbon and its wind rings
 };
 
+/** How strong the design list's items look (items/fx.ts); what they do is ITEM in run/items.ts */
+export const ITEMS_FX = {
+  pickups: 1, // soft light underneath floating items
+  pickupSize: 2, // model diameter in metres
+  pickupSpot: 7, // spotlight footprint in metres
+  pickupRange: 240, // only nearby models are built and animated
+  relics: 1, // lanterns, path markers and relic bursts
+  wind: 1, // the Anemo Catcher's updraft
+  shield: 1, // the Starflake Shield's aura of ice
+  wax: 1, // the Glider Wax's golden wingtip ribbons and glitter
+};
+
 /** Companion movement and scale: looks only, independent of all flight rules. */
 export const PET_LOOKS = { size: 1.8, spacing: 2.9, height: 0.7, trail: 0.8, follow: 8, snapDistance: 30, bob: 0.12, wingbeat: 1, tailSway: 1, lead: 20 };
 /** Small ornaments and particle emission, never the pilot's hitbox. */
@@ -203,7 +215,7 @@ export const AUDIO = {
   nightMuffle: 0.55, // how much the highs are rolled off at night
 };
 
-const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, STRUCTURES, WATER, DEEP, RUN, AUTOPILOT, ABILITIES_FX, PET_LOOKS, COSMETIC_FX, COLLECTION_FX, AUDIO } as const;
+const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, STRUCTURES, WATER, DEEP, RUN, AUTOPILOT, ABILITIES_FX, ITEMS_FX, PET_LOOKS, COSMETIC_FX, COLLECTION_FX, AUDIO } as const;
 const DEFAULTS = JSON.parse(JSON.stringify(GROUPS)) as typeof GROUPS;
 const STORAGE_KEY = "windrider.tuning.speed-control-v1";
 
@@ -388,6 +400,7 @@ export const TUNING_GROUPS: [string, Group][] = [
   ["Run", RUN],
   ["Autopilot", AUTOPILOT],
   ["Ability looks", ABILITIES_FX],
+  ["Item looks", ITEMS_FX],
   ["Companions", PET_LOOKS],
   ["Cosmetic detail", COSMETIC_FX],
   ["Collection pickups", COLLECTION_FX],

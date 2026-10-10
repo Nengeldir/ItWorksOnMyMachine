@@ -1,47 +1,45 @@
 import { makeRng } from "../rng";
-import type { BiomeId } from "../world/biomes";
+import { type BiomeId, MAPS, seedMap } from "../world/biomes/index";
+import type { ItemsHud } from "./items";
 import type { UpgradeId } from "./upgrades";
 
 // The shape of a roguelike run: which biome comes when, and how it scores.
-// A run is RUN_LENGTH levels: Sky Isles first, Verdant Highlands second, then
-// five more in an order shuffled by the run seed (the Sunken Reef and four of
-// the other five: one sits out each run), and Aurora Summit last.
-// Every level ends in a portal to the next biome and a choice of upgrades.
+// A run is RUN_LENGTH levels, each on a different map: it starts on the map
+// its seed stands for (the one picked in the map select, or today's), then
+// flies seven of the other eight in an order the seed draws; one sits out.
+// Every level ends in a portal to the next biome and a choice of upgrades,
+// the last one in the finale.
+// A crash costs a life (a golden feather on screen); with none left the run is over where you fell.
 
 export const RUN_LENGTH = 8;
+export const START_LIVES = 3; // crashes a run survives, less one: the last life's crash ends it
 export const GATE_POINTS = 100;
 export const CHAIN_MAX = 5; // gates in a row without crashing multiply their points, up to this
 export const LEVEL_BONUS = 1000;
 export const PAR_POINTS = 20; // per second under par at the portal
 
-const MIDDLE: BiomeId[] = ["glacier", "archipelago", "lagoon", "twilight", "ember"];
-/** Always in a run, in place of one of MIDDLE */
-const DIVE: BiomeId = "reef";
-
-/** The biomes of a run, level by level (index 0 = level 1), when you always take the main portal */
+/** The biomes of a run, level by level (index 0 = level 1): the seed's own map first, then seven others */
 export function runOrder(runSeed: number): BiomeId[] {
+  const first = seedMap(runSeed).biome;
+  const rest = MAPS.filter((biome) => biome !== first);
   const rng = makeRng(runSeed, "biome order");
-  const middle = [...MIDDLE];
-  for (let i = middle.length - 1; i > 0; i--) {
+  for (let i = rest.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
-    [middle[i], middle[j]] = [middle[j], middle[i]];
+    [rest[i], rest[j]] = [rest[j], rest[i]];
   }
-  // The reef takes the place of the last one drawn, somewhere among the others
-  middle.pop();
-  middle.splice(Math.floor(rng() * (middle.length + 1)), 0, DIVE);
-  return ["skyIsles", "verdant", ...middle, "aurora"];
+  return [first, ...rest.slice(0, RUN_LENGTH - 1)];
 }
 
 /**
- * Where the portal of level `level` (1-based) leads, given the biomes visited
- * so far: the next biome on the run's order not yet seen (the finale last).
+ * Where the next portal leads, given the biomes visited so far: the next
+ * biome on the run's order not yet seen
  */
-export function destination(runSeed: number, level: number, path: readonly BiomeId[]): BiomeId {
-  if (level >= RUN_LENGTH - 1) return "aurora";
-  return runOrder(runSeed).find((b) => b !== "aurora" && !path.includes(b)) ?? "aurora";
+export function destination(runSeed: number, path: readonly BiomeId[]): BiomeId {
+  const order = runOrder(runSeed);
+  return order.find((biome) => !path.includes(biome)) ?? order[order.length - 1];
 }
 
-export type RunPhase = "arrive" | "explore" | "portal" | "pick" | "finale" | "won";
+export type RunPhase = "arrive" | "explore" | "portal" | "pick" | "finale" | "won" | "lost";
 
 export interface Objective {
   title: string;
@@ -60,6 +58,10 @@ export interface RunHud {
   mood: string;
   phase: RunPhase;
   score: number;
+  /** Crashes left before the run ends (Infinity in the test sandbox) */
+  lives: number;
+  /** The most lives held so far in this run */
+  maxLives: number;
   chain: number;
   /** Gates passed in this level: a crash puts you back after the last one */
   checkpoint: number;
@@ -68,6 +70,8 @@ export interface RunHud {
   compass: { angle: number; distance: number; ahead: boolean } | null;
   abilities: { id: UpgradeId; name: string; key: string; charge: number; ready: boolean; count?: number }[];
   upgrades: UpgradeId[];
+  /** The bag of items, and the effects under way */
+  items: ItemsHud;
   toast: { text: string; points: number; id: number } | null;
 }
 
@@ -75,6 +79,9 @@ export interface RunHud {
 export interface RunSummary {
   seed: number;
   score: number;
+  /** Through the last portal (false: out of lives on the way) */
+  completed: boolean;
+  /** The level reached, 1-based */
   levels: number;
   path: BiomeId[];
   upgrades: UpgradeId[];
@@ -82,6 +89,8 @@ export interface RunSummary {
   timeMs: number;
   gates: number;
   crashes: number;
+  /** Lives still in hand at the end */
+  livesLeft: number;
   bestChain: number;
   /** Style points, all levels together */
   style: number;

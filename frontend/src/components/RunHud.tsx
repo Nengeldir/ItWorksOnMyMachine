@@ -1,13 +1,16 @@
-import { useEffect } from "react";
+import { type CSSProperties, useEffect } from "react";
 import { formatTime } from "../format";
-import type { RunHud as RunHudState, RunSummary } from "../game/run/run";
+import { RARITIES } from "../game/run/items";
+import { RUN_LENGTH, type RunHud as RunHudState, type RunSummary } from "../game/run/run";
 import { UPGRADES, type Upgrade, type UpgradeId } from "../game/run/upgrades";
 import type { BindingAction } from "../game/bindings";
 import { BIOMES, type BiomeId } from "../game/world/biomes";
+import { Feather } from "./Feather";
 import { boundKeys } from "./keys";
 import "./RunHud.css";
 
-const icon = (id: UpgradeId) => UPGRADES.find((u) => u.id === id)?.icon ?? "•";
+/** An upgrade's icon: its emoji, but the Spare feather is the same drawn feather as the lives */
+const icon = (id: UpgradeId) => (id === "spareFeather" ? <Feather /> : (UPGRADES.find((u) => u.id === id)?.icon ?? "•"));
 
 // Abilities use the keys the player bound in the settings, not the defaults written in the upgrades
 const TOUCH_ABILITY: Partial<Record<UpgradeId, string>> = {
@@ -35,7 +38,7 @@ function abilityKey(id: UpgradeId, fallback: string): string {
   return key ?? fallback;
 }
 
-/** The run on top of the flight HUD: score, objectives, the portal compass, abilities */
+/** The run on top of the flight HUD: score, feathers (lives), objectives, the portal compass, abilities */
 export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compassScale: number; toasts: boolean }) => (
   <div className="run-hud">
     {/* Like the race timer: a glass pill at the top, the score big, where you are small */}
@@ -58,22 +61,37 @@ export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compas
       </div>
     )}
 
-    {run.objectives.length > 0 && (
-      <ul className="run-objectives glass">
-        {run.objectives.map((o) => (
-          <li key={o.title} className={o.done ? "done" : o.failed ? "failed" : undefined}>
-            <span className="check">{o.done ? "✔" : o.failed ? "✖" : "◇"}</span>
-            <span className="title">{o.title}</span>
-            <span className="progress">{o.progress}</span>
-            {!o.done && !o.failed && o.fraction > 0 && (
-              <span className="bar">
-                <span style={{ width: `${Math.round(o.fraction * 100)}%` }} />
-              </span>
-            )}
-          </li>
-        ))}
-      </ul>
-    )}
+    {/* Down the left edge, under the top bar: the feathers, then the objectives */}
+    <div className="run-side">
+      {Number.isFinite(run.lives) && (
+        <div className={`run-lives glass${run.lives <= 1 ? " last" : ""}`} title="Feathers: crashes left" key={run.lives}>
+          {Array.from({ length: run.lives }, (_, i) => (
+            <Feather key={i} />
+          ))}
+          {/* Those lost, as empty outlines */}
+          {Array.from({ length: run.maxLives - run.lives }, (_, i) => (
+            <Feather key={`spent${i}`} spent />
+          ))}
+          {run.lives === 1 && <small>last feather</small>}
+        </div>
+      )}
+      {run.objectives.length > 0 && (
+        <ul className="run-objectives glass">
+          {run.objectives.map((o) => (
+            <li key={o.title} className={o.done ? "done" : o.failed ? "failed" : undefined}>
+              <span className="check">{o.done ? "✔" : o.failed ? "✖" : "◇"}</span>
+              <span className="title">{o.title}</span>
+              <span className="progress">{o.progress}</span>
+              {!o.done && !o.failed && o.fraction > 0 && (
+                <span className="bar">
+                  <span style={{ width: `${Math.round(o.fraction * 100)}%` }} />
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
 
     {run.abilities.length > 0 && (
       <div className="run-abilities">
@@ -87,6 +105,8 @@ export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compas
         ))}
       </div>
     )}
+
+    <ItemBag items={run.items} />
 
     {run.upgrades.length > 0 && (
       <div className="run-upgrades" title="Upgrades">
@@ -104,6 +124,49 @@ export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compas
     )}
   </div>
 );
+
+/** The bag of items (three slots, the one to use lit up) and the effects under way */
+const ItemBag = ({ items }: { items: RunHudState["items"] }) => {
+  if (!items.bag.length && !items.active.length) return null;
+  const use = boundKeys("useItem")[0]?.[0] ?? "Y";
+  const next = boundKeys("nextItem")[0]?.[0] ?? "U";
+  return (
+    <div className="run-items">
+      {items.active.length > 0 && (
+        <ul className="run-items-active">
+          {items.active.map((a) => (
+            <li key={a.id} title={a.name}>
+              <span className="icon">{a.icon}</span>
+              <span className="bar">
+                <span style={{ width: `${Math.round(Math.max(0, Math.min(1, a.charge)) * 100)}%` }} />
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {items.bag.length > 0 && (
+        <div className="run-items-bag">
+          {items.bag.map((item, i) => (
+            <div
+              key={`${i}/${item.id}`}
+              className={`slot${i === items.selected ? " selected" : ""}${item.auto ? " auto" : ""}`}
+              style={{ "--rarity": RARITIES[item.rarity].color } as CSSProperties}
+              title={`${item.name} · ${RARITIES[item.rarity].name}`}
+            >
+              <span className="icon">{item.icon}</span>
+              {item.charges > 1 && <span className="count">{item.charges}</span>}
+              {i === items.selected && <span className="name">{item.name}</span>}
+            </div>
+          ))}
+          <span className="keys">
+            {items.bag[items.selected]?.auto ? "works by itself" : <><kbd>{use}</kbd> use</>}
+            {items.bag.length > 1 && <> · <kbd>{next}</kbd> next</>}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+};
 
 /** "Level 3 · Coral Lagoon", over the land as you arrive */
 export const TitleCard = ({ level, length, biome }: { level: number; length: number; biome: BiomeId }) => (
@@ -135,21 +198,26 @@ export const FinishScreen = ({
   onMenu: () => void;
   testMode?: boolean;
 }) => {
+  const won = summary.completed;
   const verdict = testMode ? "test result · not saved" :
     best === null || summary.score > best ? "a new best on this run" : summary.score === best ? "ties your best" : `your best: ${best.toLocaleString()}`;
   const stats: [string, string][] = [
     ["Flying time", formatTime(summary.timeMs)],
-    ["Biomes", `${summary.levels} of 8`],
+    ["Biomes cleared", `${won ? summary.levels : summary.levels - 1} of ${RUN_LENGTH}`],
     ["Gates", summary.gates.toLocaleString()],
     ["Best chain", `×${summary.bestChain}`],
     ["Style", summary.style.toLocaleString()],
-    ["Crashes", summary.crashes.toLocaleString()],
+    // A finished run shows what it had to spare; a lost one, or the sandbox's endless lives, the crashes
+    won && Number.isFinite(summary.livesLeft) ? ["Feathers left", summary.livesLeft.toLocaleString()] : ["Crashes", summary.crashes.toLocaleString()],
   ];
+  const last = summary.path[summary.path.length - 1];
   return (
     <div className="run-finish">
       <section className="finish-card">
-        <small>{testMode ? "Test" : "Run"} #{summary.seed} · complete</small>
-        <h2>Journey's end</h2>
+        <small>
+          {testMode ? "Test" : "Run"} #{summary.seed} · {won ? "complete" : `fell in ${BIOMES[last].name}`}
+        </small>
+        <h2>{won ? "Journey's end" : "Out of feathers"}</h2>
         <div className="finish-score">
           <strong>{summary.score.toLocaleString()}</strong>
           <span>{verdict}</span>
@@ -221,7 +289,7 @@ export const UpgradePicker = ({
       <div className="cards">
         {offers.map((u, i) => (
           <button key={u.id} className={`card ${u.kind}`} onClick={() => onPick(u.id)}>
-            <span className="icon">{u.icon}</span>
+            <span className="icon">{icon(u.id)}</span>
             <strong>{u.name}</strong>
             <span className="kind">{u.kind === "ability" ? <>
               ability <span className="no-touch">· {abilityKey(u.id, u.key ?? "")}</span>

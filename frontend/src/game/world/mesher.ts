@@ -1,8 +1,10 @@
+import { clearOfItems } from "./itemClearance";
 import { Color } from "three";
 import { smoothstep } from "../math";
 import { hash3 } from "../rng";
 import { TUBE_RADIUS } from "./course";
 import type { Palette } from "./palette";
+import { Tree } from "./trees";
 import type { World } from "./World";
 import { cleanMesh, remapFaces } from "./meshCleanup";
 
@@ -212,7 +214,7 @@ export function meshChunk(world: World, ix: number, iy: number, iz: number): Chu
     // A pine now and then on flat grass, never in the way of the racing line
     if (up > 0.88 && !snowy && jitter < 0.08) {
       const height = 6 + 8 * hash3(Math.round(mx * 4), Math.round(mz * 4), 3);
-      if (world.course.distance(mx, my + height / 2, mz) > TUBE_RADIUS + height / 2 + 4) {
+      if (world.course.distance(mx, my + height / 2, mz) > TUBE_RADIUS + height / 2 + 4 && clearOfItems(world, mx, my, mz, height, height * 0.27, () => new Tree(mx, mz, my - 0.3, height, height * 0.27))) {
         trees.push(mx, my - 0.3, mz, height, height * 0.27);
         // The rock drawn there may now lie lower than the grid's face: reach down to it
         treeSink.push(Math.max(0, distance(mx, my, mz)));

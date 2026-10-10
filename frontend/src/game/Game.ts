@@ -19,10 +19,11 @@ import { TouchControls } from "./touch";
 import { FLIGHT, Flight, type FlightInput, type HitPart, hitboxWorld, touching } from "./flight";
 import { GlideIn } from "./glidein";
 import { Equipment } from "./items/equip";
+import { ItemFx } from "./items/fx";
 import type { ItemId, ItemSlot } from "./items/models";
 import { type GhostData, GhostRecorder, type GhostRun, ghostSamples } from "./ghost";
 import { type ControlSettings, type InputObserver, type TestAction, Input, controlsBlocked } from "./input";
-import { FX_LIGHT, Kind, Particles, fx, fxTime } from "./particles";
+import { FX_LIGHT, Kind, Particles, fx, fxTime, sceneryTime } from "./particles";
 import { PilotFx } from "./pilotfx";
 import { INTERPOLATION_DELAY_MS, Pilot, type PilotSample } from "./pilots";
 // import { Trail } from "./trail";
@@ -32,10 +33,12 @@ import { SpeedLines } from "./speedlines";
 import { TOON_LIGHT } from "./toon";
 import { FX, RANGES, RINGS, RUN, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveTuning } from "./tuning";
 import { ABILITY } from "./run/abilities";
+import { PICKUP } from "./run/pickups";
+import { ITEM, RUN_ITEMS, type RunItemId } from "./run/items";
 import { RunController, type RunEvents, type RunHost } from "./run/controller";
 import type { UpgradeId } from "./run/upgrades";
 import type { RunHud } from "./run/run";
-import { type Level, levelId, raceLevel } from "./world/biomes";
+import { type Level, levelId, seedLevel } from "./world/biomes";
 import type { WaterKind } from "./world/terrain/river";
 import { type WaterHit, World } from "./world/World";
 import { WorldView } from "./world/WorldView";
@@ -64,6 +67,7 @@ const QUALITY = [
   { pixelRatio: 2, particles: 1 },
 ] as const;
 const DRIFT_SPEED = 14; // m/s along the course, for the menu's camera
+const ATTRACT_KEEP = 2; // maps the menu's backdrop keeps built besides its own and the one on screen
 const MARKER_EDGE = 8; // px the ring marker keeps from the screen edge
 
 export type RaceState = "free" | "countdown" | "racing" | "finished";
@@ -124,7 +128,7 @@ export interface GameEvents {
 }
 
 export interface GameOptions {
-  /** A race or time trial on this seed (Sky Isles), unless `level` is given */
+  /** A race or time trial on the map this seed stands for, unless `level` is given */
   seed: number;
   level?: Level;
   /** Milliseconds; the server clock in rooms, so everyone starts together */
@@ -200,6 +204,10 @@ export class Game implements RunHost {
   private readonly abilityFx: AbilityFx;
   /** …and of the design list's abilities 11 to 20 */
   private readonly abilityFx2: AbilityFx2;
+  /** What the design list's items look like when used (items/fx.ts) */
+  private readonly itemFx: ItemFx;
+  /** Test mode's Shift+I hands out the items in turn */
+  private nextTestItem = 0;
   readonly particles: Particles;
   /** Particles that blend instead of glowing: snow, leaves, ash, mist */
   private readonly softParticles: Particles;
@@ -244,6 +252,12 @@ export class Game implements RunHost {
   private driftZ = 0;
   world!: World;
   view!: WorldView;
+  /**
+   * The menu's backdrop keeps maps it showed, parked (the map select goes back and forth, then back to
+   * the landing's own course, `home`, which is never let go); oldest first. Games keep none.
+   */
+  private readonly kept = new Map<string, { world: World; view: WorldView }>();
+  private home: string | null = null;
   /** The roguelike run, when this game is one (never in races) */
   private run: RunController | null = null;
   private frozen = false;
@@ -279,6 +293,7 @@ export class Game implements RunHost {
   private accumulator = 0;
   private lastFrame = 0;
   private elapsed = 0;
+  private sceneryClock = 0;
   private readonly testPlayback?: TestPlayback;
   private lastHud = 0;
   private frame = 0;
@@ -314,6 +329,8 @@ export class Game implements RunHost {
       if (action === "respawn") this.respawnNow();
       if (action === "barrelLeft" || action === "barrelRight") this.barrelRoll(action === "barrelLeft" ? -1 : 1);
       if ((action === "flap" || action === "hover" || action === "plunge" || action === "burst" || action === "resonance" || action === "ascend" || action === "stance") && this.crashedAt === null && !this.glide.active) this.run?.ability(action);
+      if (action === "useItem" && this.crashedAt === null && !this.glide.active) this.run?.useItem();
+      if (action === "nextItem") this.run?.nextItem();
     };
     if (options.testMode) {
       this.testPlayback = new TestPlayback(container.parentElement ?? container);
@@ -325,6 +342,9 @@ export class Game implements RunHost {
         else if (action === "win") {
           if (this.paused) this.togglePause();
           this.run?.testWin();
+        } else if (action === "item") {
+          const id = RUN_ITEMS[this.nextTestItem++ % RUN_ITEMS.length].id;
+          if (this.run && !this.run.giveItem(id)) this.nextTestItem--;
         } else if (!this.paused && this.crashedAt === null) this.run?.spawnTestPortal();
       };
     }
@@ -362,6 +382,10 @@ export class Game implements RunHost {
       sound: (kind, pitch) => this.audio.ability2(kind, pitch),
       turnGate: (index, normal) => this.view.gates.orient(index, normal),
     });
+    this.itemFx = new ItemFx(this.scene, this.avatar, this.equipment, this.particles, {
+      kick: (degrees) => this.rig.kick(degrees),
+      sound: (kind, pitch) => this.audio.item(kind, pitch),
+    });
     this.speedLines = new SpeedLines();
     this.debris = new Debris(options.color);
     this.scene.add(this.avatar.group, this.debris.mesh, this.particles.points, this.softParticles.points, this.speedLines.mesh, ...this.fx.meshes);
@@ -379,7 +403,7 @@ export class Game implements RunHost {
     this.whiteLight.className = "white-light";
     container.appendChild(this.whiteLight);
 
-    this.setLevel(options.level ?? raceLevel(options.seed));
+    this.setLevel(options.level ?? seedLevel(options.seed));
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
@@ -393,7 +417,10 @@ export class Game implements RunHost {
     // Lets browser tests drive the game in development
     if (import.meta.env.DEV) {
       Object.assign(window, { __game: this, __fxTime: fxTime, __tuning: Object.fromEntries(TUNING_GROUPS) });
-      void import("./devtools").then(({ installDevtools }) => installDevtools());
+      const itemShot = new URLSearchParams(location.search).get("itemShot");
+      void import("./devtools").then(({ installDevtools }) => {
+        if((window as unknown as {__game: Game}).__game===this)installDevtools(itemShot);
+      });
     }
   }
 
@@ -436,20 +463,20 @@ export class Game implements RunHost {
   // --- the roguelike run (RunHost) ---------------------------------------------------
 
   /** Turns this game into a roguelike run: levels, upgrades, portals (never used for races) */
-  startRun(seed: number, events: RunEvents, initial?: Level) {
+  startRun(seed: number, events: RunEvents, initial?: Level, lives?: number) {
     this.run?.dispose();
     this.autopiloting = false;
     this.clearWhiteFrom = null;
     this.whiteOut(0);
     if (this.paused) this.togglePause();
     this.freeze(false);
-    this.run = new RunController(seed, this, events);
+    this.run = new RunController(seed, this, events, lives);
     this.run.start(initial);
   }
 
   /**
    * After the finale's white light: the run is over, the default sky map
-   * (Sky Isles on `seed`, the menu's map) is built under the white, the pilot
+   * (today's map on `seed`, the menu's) is built under the white, the pilot
    * flies it on autopilot with every control locked, and the white clears
    */
   victoryLap(seed: number) {
@@ -458,7 +485,7 @@ export class Game implements RunHost {
     this.autopiloting = true;
     if (document.pointerLockElement) document.exitPointerLock();
     this.freeze(false);
-    this.setLevel(raceLevel(seed));
+    this.setLevel(seedLevel(seed));
     this.whiteOut(1);
     this.clearWhiteFrom = this.elapsed;
   }
@@ -476,6 +503,11 @@ export class Game implements RunHost {
   /** Dev tools: give the running run an upgrade now, e.g. `__game.grant("slipstream")` */
   grant(id: UpgradeId) {
     this.run?.grant(id);
+  }
+
+  /** Dev tools: put an item in the run's bag now, e.g. `__game.giveItem("anemoCatcher")` */
+  giveItem(id: RunItemId) {
+    this.run?.giveItem(id);
   }
 
   /** The upgrade chosen at a portal */
@@ -578,7 +610,8 @@ export class Game implements RunHost {
     this.view.group.visible = !on;
     this.abilityFx.group.visible = !on;
     this.abilityFx2.group.visible = !on;
-    this.abilityFx.inWormhole = this.abilityFx2.inWormhole = on;
+    this.itemFx.group.visible = !on;
+    this.abilityFx.inWormhole = this.abilityFx2.inWormhole = this.itemFx.inWormhole = on;
     this.softParticles.points.visible = !on;
     this.speedLines.mesh.visible = !on;
     if (on) this.debris.mesh.visible = false;
@@ -686,10 +719,10 @@ export class Game implements RunHost {
     return canvas.toDataURL("image/jpeg", 0.85);
   }
 
-  /** A race or time trial on `seed`: Sky Isles, the race map */
+  /** A race or time trial on `seed`: the map that seed stands for (`seedLevel`, any biome) */
   setSeed(seed: number) {
     if (this.world?.seed === seed && !this.world.level.run) return;
-    this.setLevel(raceLevel(seed));
+    this.setLevel(seedLevel(seed));
   }
 
   /** Builds the world for a level and puts you at the start, flying freely */
@@ -702,11 +735,31 @@ export class Game implements RunHost {
     }
     if (this.view) {
       this.scene.remove(this.view.group);
-      this.view.dispose();
+      if (this.attract) {
+        this.view.park();
+        this.kept.set(levelId(this.world.level.key), { world: this.world, view: this.view });
+      } else this.view.dispose();
     }
-    this.world = new World(level);
-    this.view = new WorldView(this.world, this.scene);
-    this.view.prepare(this.renderer);
+    const id = levelId(level.key);
+    const kept = this.attract ? this.kept.get(id) : undefined;
+    if (kept) {
+      this.kept.delete(id);
+      this.world = kept.world;
+      this.view = kept.view;
+      this.view.resume(this.scene);
+    } else {
+      this.world = new World(level);
+      this.view = new WorldView(this.world, this.scene);
+      this.view.prepare(this.renderer);
+    }
+    if (this.attract) {
+      this.home ??= id;
+      const others = [...this.kept.keys()].filter((key) => key !== this.home);
+      for (const key of others.slice(0, Math.max(0, others.length - ATTRACT_KEEP))) {
+        this.kept.get(key)!.view.dispose();
+        this.kept.delete(key);
+      }
+    }
     this.scene.add(this.view.group);
     // Compile the level's shaders now (behind the loading wait or the wormhole), not mid-flight;
     // compile() skips hidden objects, so the new land is hidden only afterwards
@@ -846,11 +899,14 @@ export class Game implements RunHost {
     this.gui?.destroy();
     this.run?.dispose();
     this.view.dispose();
+    this.kept.forEach(({ view }) => view.dispose());
+    this.kept.clear();
     this.live.forEach((p) => this.removePilot(p));
     this.ghosts.forEach((p) => this.removePilot(p));
     this.fx.dispose();
     this.abilityFx.dispose();
     this.abilityFx2.dispose();
+    this.itemFx.dispose();
     this.equipment.dispose();
     window.removeEventListener(APPEARANCE_EVENT, this.appearanceChanged);
     this.companion.dispose();
@@ -898,6 +954,7 @@ export class Game implements RunHost {
     this.proximity = 0;
     this.combo = 0;
     this.run?.abilities.reset();
+    this.run?.items.reset();
     this.avatar.revive();
     this.avatar.visible = true;
     this.fx.reset();
@@ -953,7 +1010,9 @@ export class Game implements RunHost {
     this.prevPosition.copy(this.flight.position);
     this.prevQuaternion.copy(this.flight.quaternion);
     this.prevVelocity.copy(this.flight.velocity);
-    this.flight.step(STEP, input, this.proximity * this.proximity, FLIGHT, this.run ? this.run.flightMods : null);
+    this.run?.items.beforeFlight(this.flight);
+    // In a run, some items take the controls a little (the input scored and recorded stays the player's)
+    this.flight.step(STEP, this.run ? this.run.steer(input) : input, this.proximity * this.proximity, FLIGHT, this.run ? this.run.flightMods : null);
 
     const { x, y, z } = this.flight.position;
     const rock = this.world.rock.distance(x, y, z);
@@ -962,7 +1021,18 @@ export class Game implements RunHost {
     // The hitbox: a ball for the body, a rectangle for each wing (flight.ts). The land collides as
     // drawn once it is on screen (before that, as the distance field), trees and water by their fields.
     // In a run, Acrobatic Recovery can turn a clipped wingtip into a roll away from the rock
-    const part = this.hitTest(other, distance);
+    let part: HitPart | null;
+    if(this.run?.items.invulnerable) part=null;
+    else if(this.run?.items.phasing){this.hitLand=false;part=touching(this.others,this.flight.position,this.flight.quaternion,other,hitLocal);}
+    else part=this.hitTest(other,distance);
+    if ((part || this.world.lost(y,z)) && this.run?.items.revive(this.flight)) {
+      this.prevPosition.copy(this.flight.position);
+      this.prevQuaternion.copy(this.flight.quaternion);
+      this.prevVelocity.copy(this.flight.velocity);
+      this.avatar.revive();
+      this.rig.snap(this.flight.position, this.flight.forward, this.flight.up, this.flight.speed);
+      return;
+    }
     if (part && this.run && this.rescue(part)) {
       // Rolled away, or the tornado took the hit
     } else if (part || this.world.lost(y, z)) {
@@ -975,7 +1045,7 @@ export class Game implements RunHost {
     if (this.proximity > 0.15) {
       this.combo += STEP;
       this.comboIdle = 0;
-    } else if ((this.comboIdle += STEP) > 1.2) {
+    } else if (!this.run?.items.frozenCombo && (this.comboIdle += STEP) > 1.2) {
       this.combo = 0;
     }
     this.style += this.proximity ** 2 * this.flight.speed * STEP * this.multiplier * 0.5;
@@ -1019,10 +1089,14 @@ export class Game implements RunHost {
       fieldNormal(this.field, hitPoint, normal);
     }
     const abilities = this.run!.abilities;
-    const how = abilities.save(part, normal, tmp.copy(f.velocity).normalize());
+    const items = this.run!.items;
+    const direction = tmp.copy(f.velocity).normalize();
+    // The abilities first (they come back by themselves), then an item that's used up by it
+    const how = abilities.save(part, normal, direction) ?? items.save(part, normal, direction);
     if (!how) return false;
     if (how === "roll") f.deflect(normal, ABILITY.recoverPush, ABILITY.recoverKeep);
-    else f.deflect(normal, ABILITY.weavePush, ABILITY.weaveKeep);
+    else if (how === "shield") f.deflect(normal, ABILITY.weavePush, ABILITY.weaveKeep);
+    else f.deflect(normal, ITEM.shieldPush, ITEM.shieldKeep);
     // Teleported out: no sweep from where we were, and a few more nudges if anything still touches
     for (let i = 0; ; i++) {
       this.prevPosition.copy(f.position);
@@ -1037,7 +1111,8 @@ export class Game implements RunHost {
       Object.assign(this.recoverRoll, FLIGHT, { dodgeDistance: 3, dodgeDuration: 0.55 });
       f.dodge(normal.dot(f.right) >= 0 ? 1 : -1, this.recoverRoll, true);
     }
-    abilities.saved(how, hitPoint, normal);
+    if (how === "roll" || how === "shield") abilities.saved(how, hitPoint, normal);
+    else items.saved(how, hitPoint, normal);
     return true;
   }
 
@@ -1391,10 +1466,15 @@ export class Game implements RunHost {
     }
     this.elapsed += dt;
     fxTime.value = this.elapsed;
+    const worldDt=dt * (this.run?.items.worldRate ?? 1);
+    this.sceneryClock+=worldDt;sceneryTime.value=this.sceneryClock;
     this.adaptQuality(realDt);
 
     const selfFlying = this.attract === "chase" || this.autopiloting;
-    if (!selfFlying) this.input0 = this.input.sample(dt);
+    if (!selfFlying) {
+      this.touch?.update();
+      this.input0 = this.input.sample(dt);
+    }
     if (this.clearWhiteFrom !== null) {
       // The white after the finale clears once the map is there (or after a few seconds)
       if (this.view.ready || this.elapsed - this.clearWhiteFrom > 4) {
@@ -1452,6 +1532,7 @@ export class Game implements RunHost {
     } else if (!crashed) {
       this.abilityFx.pose(dt, this.run && !waiting ? this.run.abilities : null);
       this.abilityFx2.pose(dt, this.run && !waiting ? this.run.abilities : null);
+      this.itemFx.pose(dt, this.run && !waiting ? this.run.items : null);
       this.avatar.setDodge(this.flight.dodgePhase);
       this.avatar.setSpeedControls(this.flight.boost, this.flight.brake);
       this.avatar.update(dt, this.flight.speed, this.smoothProximity);
@@ -1463,9 +1544,11 @@ export class Game implements RunHost {
       if (this.run) {
         this.abilityFx.update(dt, this.run.abilities, this.world, this.flight, this.rig.camera, this.passedGate, moving);
         this.abilityFx2.update(dt, this.run.abilities, this.world, this.flight, this.rig.camera, this.passedGate, moving);
+        this.itemFx.update(dt, this.run.items, this.flight, moving);
       } else {
         this.abilityFx.hide();
         this.abilityFx2.hide();
+        this.itemFx.hide();
       }
       this.rig.update(
         dt,
@@ -1489,6 +1572,7 @@ export class Game implements RunHost {
       body.quaternion.copy(this.death.quaternion);
       this.abilityFx.hide();
       this.abilityFx2.hide();
+      this.itemFx.hide();
       this.equipment.update(dt);
       this.deathEffects(dt);
       this.rig.fall(body.position, dt, this.field);
@@ -1499,7 +1583,7 @@ export class Game implements RunHost {
 
     const camera = this.rig.camera;
     camera.updateMatrixWorld();
-    this.view.update(camera, dt, crashed ? undefined : this.flight.velocity);
+    this.view.update(camera, worldDt, crashed ? undefined : this.flight.velocity);
     this.run?.frame(dt);
     if (!this.inWormhole) {
       this.gateMotes(dt);
@@ -1507,7 +1591,7 @@ export class Game implements RunHost {
     }
     const flying = !crashed && this.raceState !== "countdown" && !waiting && this.attract !== "drift";
     this.speedLines.update(dt, body.position, flying ? this.flight.velocity : tmp.set(0, 0, 0), camera, this.particles.budget);
-    if (!this.inWormhole) this.ambient.update(dt, camera.position, flying ? this.flight.velocity : tmp.set(0, 0, 0), this.particles.budget);
+    if (!this.inWormhole) this.ambient.update(worldDt, camera.position, flying ? this.flight.velocity : tmp.set(0, 0, 0), this.particles.budget);
 
     const liveTime = t - INTERPOLATION_DELAY_MS;
     this.live.forEach((pilot) => pilot.update(liveTime, dt, camera.position));
@@ -1798,6 +1882,12 @@ export class Game implements RunHost {
     const abilities = gui.addFolder("Run abilities (not saved)");
     for (const key of Object.keys(ABILITY) as (keyof typeof ABILITY)[]) abilities.add(ABILITY, key);
     abilities.close();
+    const items = gui.addFolder("Run items (not saved)");
+    for (const key of Object.keys(ITEM) as (keyof typeof ITEM)[]) items.add(ITEM, key);
+    const pickups = gui.addFolder("Island pickups (next level, not saved)");
+    for(const key of Object.keys(PICKUP) as (keyof typeof PICKUP)[]) pickups.add(PICKUP,key);
+    items.close();
+    pickups.close();
 
     for (const [title, group] of TUNING_GROUPS) {
       const folder = gui.addFolder(title);
@@ -1820,7 +1910,7 @@ export class Game implements RunHost {
     const actions = {
       barrelLeft: () => this.barrelRoll(-1),
       barrelRight: () => this.barrelRoll(1),
-      copy: () => void navigator.clipboard?.writeText(JSON.stringify({ FLIGHT, ABILITY, ...Object.fromEntries(TUNING_GROUPS) }, null, 2)),
+      copy: () => void navigator.clipboard?.writeText(JSON.stringify({ FLIGHT, ABILITY, ITEM, ...Object.fromEntries(TUNING_GROUPS) }, null, 2)),
       reset: () => {
         resetTuning();
         gui.controllersRecursive().forEach((c) => c.updateDisplay());

@@ -1,8 +1,11 @@
 import * as THREE from "three";
 import { fieldNormal } from "./death";
 import type { Game } from "./Game";
+import { RUN_ITEMS, type RunItemId } from "./run/items";
+import { pickupClear } from "./run/pickups";
+import { plainMods } from "./flight";
 import { fxTime } from "./particles";
-import { raceLevel } from "./world/biomes";
+import { skyIslesLevel } from "./world/biomes/index";
 import { meshChunk, rockChunks } from "./world/mesher";
 import { World } from "./world/World";
 
@@ -21,7 +24,7 @@ const settle = () =>
 /** Camera poses relative to the course: behind the start, or high above it looking down the line */
 type View = 0 | 1 | { position: [number, number, number]; target: [number, number, number] } | { along: number; height: number; side: number; ahead: number };
 
-export function installDevtools() {
+export function installDevtools(itemPreview: string | null = null) {
   /**
    * Freezes the loop, puts the camera at a pose, streams the land around it for
    * `ms`, fixes the shader clock and renders once. Take the screenshot after.
@@ -80,6 +83,57 @@ export function installDevtools() {
     g.render();
     return { ready: g.view.ready, biome: g.world.biome.name, mood: g.world.palette.name };
   };
+  /** Dev-only frozen previews: exercise actual item rules and equipment, with land streamed. */
+  const itemShot = async (id: RunItemId | "pickups") => {
+    const g = (window as unknown as { __game: Game }).__game as unknown as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    if(!g.run || (id!=="pickups" && !RUN_ITEMS.some(item=>item.id===id)))return;
+    const items=g.run.items;
+    let pickup=items.pickups[0];
+    const point=id==="pickups" && pickup ? pickup.position.clone() : g.world.course.rings[0].position.clone().add(new THREE.Vector3(0,3,-12));
+    if(id==="pickups")point.add(new THREE.Vector3(-16,0,-20));
+    if(id==="crystalUpdraft" && pickup)point.copy(pickup.position);
+    const camera=point.clone().add(new THREE.Vector3(15,9,-25));
+    await shot({position:camera.toArray() as [number,number,number],target:point.toArray() as [number,number,number]},3500);
+    if(id==="pickups" && pickup && !pickupClear(g.world,pickup.position)){
+      pickup=items.pickups.find((p: {position: THREE.Vector3})=>pickupClear(g.world,p.position));
+      if(pickup){
+        point.copy(pickup.position).add(new THREE.Vector3(-16,0,-20));
+        camera.copy(pickup.position).add(new THREE.Vector3(18,8,-24));
+        await shot({position:camera.toArray() as [number,number,number],target:pickup.position.toArray() as [number,number,number]},3500);
+      }
+    }
+    items.bag.length=0;items.active.clear();items.reset();
+    g.flight.reset(point,g.world.course.tangentAt(point.z),40);
+    if(id!=="pickups"){
+      items.give(id);items.use(g.flight);
+      if(id==="phoenixFeather")items.revive(g.flight);
+      if(id==="resonantChimes")items.gate(0);
+      if(id==="crystalUpdraft"){
+        g.flight.position.copy(items.pad).add(new THREE.Vector3(0,5,0));g.flight.velocity.y=-20;items.beforeFlight(g.flight);
+      }
+    }
+    g.avatar.group.position.copy(g.flight.position);g.avatar.group.quaternion.copy(g.flight.quaternion);
+    const moment: Partial<Record<RunItemId,number>> = { aeroBoots:0.2, sunNectar:0.4, crystalUpdraft:0.25, phoenixFeather:0.6, electroPrism:0.1, windTether:0.6 };
+    for(let i=0;i<Math.ceil((id==="pickups"?1:moment[id]??1.1)*60);i++){
+      const dt=1/60;fxTime.value=10+i*dt;
+      items.step(dt,{pitch:0,roll:0,use:1},id==="electroPrism"?0.9:0,g.flight,plainMods());
+      g.itemFx.pose(dt,items);g.avatar.update(dt,g.flight.speed,0);g.equipment.update(dt);
+      g.avatar.group.updateMatrixWorld(true);g.itemFx.update(dt,items,g.flight,true);g.particles.update();
+      if(i%12===0)await settle();
+    }
+    if(id==="pickups" && pickup){
+      g.avatar.group.visible=false;
+      g.rig.camera.position.copy(pickup.position).add(new THREE.Vector3(18,8,-24));
+      g.rig.camera.lookAt(pickup.floor.clone().lerp(pickup.position,0.6));
+    }else{
+      g.rig.camera.position.copy(g.flight.position).add(new THREE.Vector3(9,4,-13));
+      g.rig.camera.lookAt(g.flight.position);
+    }
+    g.rig.camera.updateMatrixWorld();g.render();await settle();g.render();
+    document.body.dataset.itemShot=id;
+    return {id,active:[...items.active.keys()],pickups:items.pickups.length};
+  };
+  if(itemPreview)void itemShot(itemPreview as RunItemId | "pickups").catch(console.error);
   /**
    * Runs the game loop by hand for `seconds` of game time at 60 fps (the tab's own
    * requestAnimationFrame doesn't run when it's hidden), yielding now and then so
@@ -254,7 +308,7 @@ export function installDevtools() {
     return { phase: r.phase, crossed: crossed !== null };
   };
 
-  Object.assign(window, { __shot: shot, __raceHashes: raceHashes, __run: run, __bench: bench, __crash: crash, __portal: portal });
+  Object.assign(window, { __itemShot: itemShot, __shot: shot, __raceHashes: raceHashes, __run: run, __bench: bench, __crash: crash, __portal: portal });
 }
 
 /**
@@ -264,7 +318,7 @@ export function installDevtools() {
  * their maps; mesh may change when the looks do. Expected values are in
  * docs/dev-snippets.js.
  */
-function raceHashes() {
+export function raceHashes() {
   const fnv = (h: number, array: Float32Array) => {
     const u = new Uint32Array(array.buffer, array.byteOffset, array.length);
     for (let i = 0; i < u.length; i++) {
@@ -275,7 +329,7 @@ function raceHashes() {
   };
   const out: Record<number, Record<string, string>> = {};
   for (const seed of [1, 7, 42]) {
-    const w = new World(raceLevel(seed));
+    const w = new World(skyIslesLevel(seed));
     const chunks = rockChunks(w).sort((a, b) => a.key - b.key);
     let mesh = 2166136261;
     let trees = 2166136261;

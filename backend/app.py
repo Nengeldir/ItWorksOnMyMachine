@@ -21,6 +21,7 @@ from models import (
     GhostRun,
     JoinRequest,
     LeaderboardEntry,
+    MapRequest,
     PickupClaimRequest,
     Me,
     RunFinishRequest,
@@ -154,7 +155,7 @@ def equip_cosmetic(body: EquipRequest, request: Request):
 @app.post("/api/rooms/{code}/join")
 async def join_room(code: str, body: JoinRequest, request: Request):
     user = extract_user(request, body.client_id, body.nickname)
-    room = rooms.get_or_create(room_code(code))
+    room = rooms.get_or_create(room_code(code), body.seed)
     try:
         player = room.join(user.id, user.name)
     except RoomError as e:
@@ -209,10 +210,10 @@ async def start_race(code: str, body: TokenRequest):
 
 
 @app.post("/api/rooms/{code}/map", status_code=status.HTTP_204_NO_CONTENT)
-async def new_map(code: str, body: TokenRequest):
+async def new_map(code: str, body: MapRequest):
     room, _ = room_player(code, body.token)
     try:
-        room.new_map()
+        room.new_map(seed=body.seed)
     except RoomError as e:
         raise room_error(e)
 

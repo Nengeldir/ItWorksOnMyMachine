@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
-import { ACTION_LABELS, bindingActions, bindable, defaultBindings, keyLabel, type BindingAction } from "../game/bindings";
+import { ACTION_LABELS, bindingActions, bindable, defaultBindings, keyboardBinding, keyLabel, type BindingAction } from "../game/bindings";
 import { defaultSettings, type Settings } from "../storage";
 import "./SettingsPanel.css";
 
@@ -14,7 +14,8 @@ export default function SettingsPanel({ settings, onSettings, onClose }: Props) 
   const capture = useEffectEvent((event: KeyboardEvent) => {
     // The modal owns keyboard input; game and menu shortcuts must not see it.
     event.stopPropagation();
-    if (event.code === "Escape") {
+    const binding = keyboardBinding(event);
+    if (binding === "Escape") {
       event.preventDefault();
       if (waiting) { setWaiting(null); setMessage("Binding cancelled."); }
       else onClose();
@@ -23,15 +24,15 @@ export default function SettingsPanel({ settings, onSettings, onClose }: Props) 
     if (!waiting) return;
     event.preventDefault();
     if (event.repeat) return;
-    if (event.metaKey || (!event.code.startsWith("Control") && event.ctrlKey) || (!event.code.startsWith("Alt") && event.altKey) || !bindable(event.code)) {
+    if (event.metaKey || (!binding.startsWith("Control") && event.ctrlKey) || (!binding.startsWith("Alt") && event.altKey) || !bindable(binding)) {
       setMessage("That key is reserved for menus, upgrades, the browser or world switching. Choose another key.");
       return;
     }
-    const conflict = bindingActions.find(action => bindings[action].some((code, slot) => code === event.code && (action !== waiting.action || slot !== waiting.slot)));
-    if (conflict) { setMessage(`${keyLabel(event.code)} is already used for ${ACTION_LABELS[conflict]}. Change that binding first.`); return; }
-    const codes = [...bindings[waiting.action]]; codes[waiting.slot] = event.code;
+    const conflict = bindingActions.find(action => bindings[action].some((code, slot) => code === binding && (action !== waiting.action || slot !== waiting.slot)));
+    if (conflict) { setMessage(`${keyLabel(binding)} is already used for ${ACTION_LABELS[conflict]}. Change that binding first.`); return; }
+    const codes = [...bindings[waiting.action]]; codes[waiting.slot] = binding;
     update({ bindings: { ...bindings, [waiting.action]: codes } });
-    setMessage(`${ACTION_LABELS[waiting.action]} bound to ${keyLabel(event.code)}.`); setWaiting(null);
+    setMessage(`${ACTION_LABELS[waiting.action]} bound to ${keyLabel(binding)}.`); setWaiting(null);
   });
   useEffect(() => {
     const el = dialog.current!;
@@ -44,7 +45,7 @@ export default function SettingsPanel({ settings, onSettings, onClose }: Props) 
   const toggle = (key: "invertPitch" | "invertMouse" | "invertGamepad" | "invertTouch" | "reducedMotion" | "muted", label: string) => (
     <label className="check"><input type="checkbox" checked={!!settings[key]} onChange={e => update({ [key]: e.target.checked })} />{label}</label>
   );
-  const slider = (key: "mouseSensitivity" | "tiltSensitivity" | "deadZone" | "musicVolume" | "effectsVolume", label: string, min: number, max: number, step: number, fallback: number) => (
+  const slider = (key: "mouseSensitivity" | "deadZone" | "musicVolume" | "effectsVolume", label: string, min: number, max: number, step: number, fallback: number) => (
     <label className="field"><span>{label} <output>{(settings[key] ?? fallback).toFixed(2)}</output></span>
       <input type="range" aria-label={label} min={min} max={max} step={step} value={settings[key] ?? fallback} onChange={e => update({ [key]: Number(e.target.value) })} />
     </label>
@@ -58,12 +59,11 @@ export default function SettingsPanel({ settings, onSettings, onClose }: Props) 
       {toggle("invertGamepad", "Invert gamepad up / down")}
       {toggle("invertPitch", "Invert keyboard pitch")}
       {slider("deadZone", "Gamepad stick dead zone", 0, 0.4, 0.01, 0.12)}
-      <h3>Touch and tilt</h3>
-      <p className="settings-help">On a phone or tablet, drag anywhere on the view to steer and use the on-screen buttons. The Tilt button in the game steers by tilting the device instead; level is how you hold it when you turn it on or resume.</p>
-      {slider("tiltSensitivity", "Tilt sensitivity", 0.4, 2.5, 0.1, 1)}
-      {toggle("invertTouch", "Invert touch and tilt up / down")}
+      <h3>Touch</h3>
+      <p className="settings-help">On a phone or tablet, drag anywhere on the view to steer and use the on-screen buttons.</p>
+      {toggle("invertTouch", "Invert touch up / down")}
       <h3>Keyboard bindings</h3>
-      <p className="settings-help">Select a key, then press its replacement. Escape cancels. Gamepad buttons keep their standard layout.</p>
+      <p className="settings-help">Letters and symbols follow your keyboard layout. Select a key, then press its replacement. Escape cancels. Gamepad buttons keep their standard layout.</p>
       <p className="binding-message" role="status">{waiting ? `Press a key for ${ACTION_LABELS[waiting.action]}. ${message}` : message || "You can set a primary and an alternate key."}</p>
       <div className="binding-list">{bindingActions.map(action => <div className="binding-row" key={action}>
         <span>{ACTION_LABELS[action]}</span>
@@ -74,7 +74,7 @@ export default function SettingsPanel({ settings, onSettings, onClose }: Props) 
         </button>)}
         {bindings[action][1] && <button className="binding-remove" aria-label={`Remove ${ACTION_LABELS[action]} alternate key`} onClick={() => update({bindings:{...bindings,[action]:[bindings[action][0]]}})}>×</button>}
       </div>)}</div>
-      <button onClick={() => { const defaults = defaultSettings(); update({bindings:defaultBindings(),mouseSensitivity:2,invertPitch:false,invertMouse:false,invertGamepad:false,invertTouch:false,tiltSensitivity:1,deadZone:defaults.deadZone}); setWaiting(null); setMessage("Flight controls reset."); }}>Reset controls</button>
+      <button onClick={() => { const defaults = defaultSettings(); update({bindings:defaultBindings(),mouseSensitivity:2,invertPitch:false,invertMouse:false,invertGamepad:false,invertTouch:false,deadZone:defaults.deadZone}); setWaiting(null); setMessage("Flight controls reset."); }}>Reset controls</button>
     </section>
     <section><h3>Sound</h3>
       {toggle("muted", "Mute all audio")}

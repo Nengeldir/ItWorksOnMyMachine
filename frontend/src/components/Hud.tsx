@@ -23,8 +23,9 @@ function skimLabel(hud: HudState, points: boolean): string {
   return rate >= 1 ? `Gaining ${rate} km/h per second` : "Skim the rock for speed";
 }
 
-/** Where a crash puts you back: the last ring in a race, the last gate in a run, else the start */
+/** Where a crash puts you back: the last ring in a race, the last gate in a run, else the start (nowhere once a run is out of lives) */
 function respawnLabel(hud: HudState): string {
+  if (hud.run?.phase === "lost") return "The journey ends here";
   if (hud.run) return hud.run.checkpoint > 0 ? `Back to gate ${hud.run.checkpoint}` : "Back to the start";
   return hud.raceState !== "free" && hud.checkpoints > 0 ? `Back to ring ${hud.checkpoints}` : "Back to the start";
 }
@@ -64,7 +65,7 @@ const Hud = ({ hud, settings, showStyle = false }: { hud: HudState; settings: Se
       {!hud.paused && go && <div className="hud-big glass go">GO!</div>}
       {!hud.paused && hud.crashed && (
         <div className="hud-crash glass">
-          Crashed!
+          {hud.run?.phase === "lost" ? "Out of feathers" : "Crashed!"}
           <small>
             {respawnLabel(hud)}
           </small>

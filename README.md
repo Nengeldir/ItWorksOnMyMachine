@@ -7,23 +7,25 @@ same seed. Every couple of seconds the racing line threads a gate. Dive for
 speed, skim the rock for style points and a boost, and beat your friends to
 the last ring.
 
-- **Race friends:** create a room, share its code, everyone flies the same map
-  at the same time and sees each other live.
+- **Race friends:** create a room on a map from the map select, share its
+  code, everyone flies the same map at the same time and sees each other
+  live. In the lobby, `N` opens the map select again for the next race.
 - **Time trial:** race the clock on today's course, or choose one in the map
-  select (a course for each of Sky Isles' moods, a random one or any seed),
+  select (a course on each of the nine maps, a random one or any seed),
   against the ghosts of the fastest runs. Leaderboards per seed.
-- **Adventure:** a roguelike run through eight biomes linked by portals:
-  Sky Isles, Verdant Highlands, then the Sunken Reef (a dive under the sea)
-  and four of Glacier Peaks, Sky Archipelago, Coral Lagoon, Twilight Forest
-  and Ember Wastes in an order the run's seed decides, and the Aurora Summit
-  last. Chain gates, skim for style, and pick an upgrade at every portal
-  (stronger boost, wingbeats, glide lock, and abilities like Hover-Stall,
-  Plunging Attack, Gale Force, a spirit manta to draft behind, Resonance,
-  Ascension and the falcon and butterfly gliding stances).
-  A map select on the Adventure tab shows every biome.
+- **Adventure:** a roguelike run across eight different maps linked by
+  portals. It starts on the map you pick (today's run, one of the nine, a
+  random one or any seed), then flies seven of the other eight in an order
+  the run's seed decides, so every level is a new biome. Chain gates, skim
+  for style, and pick an upgrade at every portal (stronger boost,
+  wingbeats, glide lock, and abilities like Hover-Stall, Plunging Attack,
+  Gale Force, a spirit manta to draft behind, Resonance, Ascension and the
+  falcon and butterfly gliding stances). Today's run has its own seed,
+  apart from today's course.
 
-Races and time trials always fly Sky Isles, so recorded ghosts and
-leaderboards stay valid; the other biomes are for the adventure.
+All three modes share one pool of maps: a seed stands for one of the nine
+biomes, its layout and its light, the same in a time trial, a room and an
+adventure level.
 
 Built on the VIScon hackathon template: React + Three.js in the browser,
 FastAPI behind Caddy on the team VM.
@@ -82,7 +84,7 @@ docker compose up -d --build
 | `Enter` in the finale     | Skip the cutscene                                  |
 | `Backspace` at the end    | Back to the menu from the finish screen            |
 | `Enter`                   | Start the run / the race, fly again                |
-| `N`                       | New map (in a room's lobby)                        |
+| `N`                       | Change map (in a room's lobby: the map select)     |
 | `←` `→` / `A` `D`         | Switch course in the map select (`Esc` goes back)  |
 | `Esc`                     | Free the mouse                                     |
 | `Shift+P` in `?test`       | Spawn a usable portal ahead of the pilot            |
@@ -101,15 +103,13 @@ on Android the first tap goes full screen and turns the screen for you.
 | Touch                     | Action                                             |
 | :------------------------ | :------------------------------------------------- |
 | Drag anywhere on the view | A stick appears under your thumb: pitch and turn   |
-| **Tilt**                  | Steer by tilting the device instead: turn it like a wheel to bank, lean it away to dive. Level is how you hold it when you turn Tilt on or resume from pause. Needs an https page; iOS asks for permission |
 | Hold **Boost** / **Brake** | Boost / air brake                                 |
 | `‹` `›`                   | 5 m sideways dodge                                 |
 | **Flap** / **Hover** / **Plunge** / **Gale** | Tap to use the adventure ability once you have its upgrade |
 | **Respawn**, **Pause**    | As `R` and `P`                                     |
 
-Tilt sensitivity and "Invert touch and tilt up / down" are in Settings.
-The tutorial follows touch and tilt as well as keys and gamepad. Tilt works
-on either side of a flat hold; enabling it or resuming calibrates both axes.
+"Invert touch up / down" is in Settings. The tutorial follows touch as well
+as keys and gamepad.
 In test mode, touch buttons open a portal, preview victory and change speed.
 
 Pitch can be inverted in the menu. Diving turns height into speed, climbing
@@ -128,6 +128,10 @@ Open **Settings** from the main menu or the paused screen to change controls.
 Keyboard actions support a primary and an alternate key, with conflict detection
 and reset-to-default controls. Escape cancels rebinding or closes Settings;
 closing Settings returns to the paused screen. HUD hints reflect your bindings.
+Letters and symbols follow your active keyboard layout: press the displayed
+character wherever it is on your keyboard (including AZERTY, QWERTZ or Dvorak).
+Letter bindings ignore Shift and Caps Lock. Rebinding also supports characters
+such as `é` or `ü`; existing saved bindings keep their displayed letters.
 Menu/navigation keys, upgrade keys 1–4 and world-switching keys N/B/V are reserved.
 
 Mouse, keyboard and gamepad pitch can be inverted independently. Default mouse
@@ -147,8 +151,11 @@ yourself, with your run's stats and what to do next.
 
 In an adventure there is no clock. Gates score more in a chain without a
 crash, and skimming earns style points. The arrow at the top of the screen
-points to the portal. A crash puts you back at the last gate and breaks your
-gate chain.
+points to the portal. You start with three lives (the golden feathers at the
+top left). A crash costs one, puts you back at the last gate and breaks your gate
+chain; the crash on your last life ends the run where you fell, and the
+finish screen shows how far you got. The Spare feather upgrade adds a life (up
+to three times).
 
 Boost starts with a 2.5-second reserve and recharges in roughly 4.5 seconds
 when released. The blue bar in the HUD shows the reserve, labelled Boost
@@ -189,6 +196,18 @@ through normal collision checks, and leaves the forward heading unchanged.
 The roll animation follows the same physics timing, including for other players
 and ghosts. The camera carries its previous orientation through vertical flight
 and restores the horizon gradually.
+
+Adventure items use a bag of three: **Y** (or right mouse button while flying)
+uses the selected item; **U** (or the mouse wheel) cycles it. Gamepad d-pad right
+uses and left cycles. Boots have three charges; the Phoenix feather works
+by itself when carried. `Shift+I` in test mode gives the next design-list item.
+The full set of 20 items spawns over clear terrain along adventure routes.
+Common, uncommon, rare and legendary pickups float 8, 13, 20 and 29 metres above
+the island. Spinning, bobbing models have a small rarity-colored spotlight beneath
+them. Fly within 3.2 metres to collect one; a full bag leaves it available.
+The gallery (`/?gallery`) folds its controls on small screens.
+Item rules appear under **Run items**, placement under **Island pickups** (takes
+effect next level), and looks under **Item looks** in `?tune`.
 
 ## How It Works
 
@@ -392,7 +411,7 @@ capes have distinct embroidered hems.
 | `backend/tests/`                       | pytest tests for rooms and the API                       |
 | `frontend/src/game/Game.ts`            | The game: loop, physics steps, race state, HUD data      |
 | `frontend/src/game/input.ts`           | Input, actions and shared keyboard bindings (including pause) |
-| `frontend/src/game/touch.ts`, `tilt.ts` | Phones and tablets: on-screen stick and buttons, tilt steering |
+| `frontend/src/game/touch.ts`           | Phones and tablets: on-screen stick and buttons          |
 | `frontend/src/game/world/`             | Racing line, rock field, meshing workers, palettes, view |
 | `frontend/src/game/world/meshCleanup.ts` | Preserves compact stones, removes closed slivers and trims narrow tips; protects chunk borders |
 | `frontend/src/game/world/landCollider.ts` | Collisions with the land exactly as drawn             |
@@ -401,7 +420,11 @@ capes have distinct embroidered hems.
 | `frontend/src/game/flight.ts`          | Flight model and the pilot's hitbox                      |
 | `frontend/src/game/avatar.ts`          | The pilot's model and animation                          |
 | `frontend/src/game/death.ts`           | Crash animations: how a crash plays out (looks only)     |
-| `frontend/src/game/items/`             | Item models and animations; `/?gallery` shows them all   |
+| `frontend/src/game/items/`             | Toon models, equipment and adventure item effects; `/?gallery` shows them all |
+| `frontend/src/game/run/items.ts`       | Three-slot adventure bag, all 20 item rules, bonus gates and loose collectibles |
+| `frontend/src/game/run/pickups.ts`     | Seeded terrain pickups, rarity heights and approach clearance |
+| `frontend/src/game/items/pickups.ts`   | Nearby floating models and instanced ground spotlights/shafts |
+| `frontend/src/game/world/itemClearance.ts` | Adventure-only groves that keep pickup approaches clear of vegetation |
 | `frontend/src/game/run/abilities.ts`   | The adventure abilities' rules (run mode only)           |
 | `frontend/src/game/abilities/`         | The abilities' models and animations (looks only)        |
 | `frontend/src/game/tuning.ts`          | Every look-and-feel constant, for the `?tune` panel      |
@@ -427,11 +450,11 @@ All routes start with `/api`; interactive docs are at `/api/docs`.
 | :----- | :------------------------- | :------------------------------------------------------- |
 | `GET`  | `/api/me`                  | The current user (portal login or guest), `has_played`   |
 | `GET`  | `/api/time`                | Server clock in ms, for clock sync                       |
-| `POST` | `/api/rooms/{code}/join`   | Join (or create) a room; returns your id and token       |
+| `POST` | `/api/rooms/{code}/join`   | Join (or create, on `seed` if given) a room; id, token   |
 | `GET`  | `/api/rooms/{code}/stream` | SSE: room events and position snapshots                  |
 | `POST` | `/api/rooms/{code}/state`  | Your position, rotation, speed and rings passed          |
 | `POST` | `/api/rooms/{code}/start`  | Start a race (5 s countdown)                             |
-| `POST` | `/api/rooms/{code}/map`    | New random seed (lobby only)                             |
+| `POST` | `/api/rooms/{code}/map`    | Another map: `seed` if given, else random (lobby only)   |
 | `POST` | `/api/rooms/{code}/finish` | Report your finish time and ghost                        |
 | `POST` | `/api/rooms/{code}/leave`  | Leave the room                                           |
 | `GET`  | `/api/rooms/{code}`        | Room state, for debugging                                |

@@ -14,7 +14,8 @@ test("held controls, repeat handling, focus loss and gamepad disconnect", () => 
   const actions = []; input.onAction = action => actions.push(action);
   const key = (code, type = "keydown", repeat = false) => {
     const e = new Event(type, {cancelable:true});
-    Object.defineProperties(e, {code:{value:code}, repeat:{value:repeat}});
+    const character = code.startsWith("Key") ? code.slice(3).toLowerCase() : code === "Space" ? " " : code.startsWith("Shift") ? "Shift" : code;
+    Object.defineProperties(e, {code:{value:code}, key:{value:character}, repeat:{value:repeat}});
     win.dispatchEvent(e); return e;
   };
   try {
@@ -58,7 +59,7 @@ test("held controls, repeat handling, focus loss and gamepad disconnect", () => 
     doc.querySelector=()=>({open:true});
     const before=actions.length; key("KeyO"); key("KeyG");
     pads=[{connected:true,axes:[1,1],buttons:Array.from({length:8},()=>({pressed:true,value:1}))}];
-    assert.deepEqual(input.sample(0),{pitch:0,roll:0,boost:0,brake:0});
+    assert.deepEqual(input.sample(0),{pitch:0,roll:0,boost:0,brake:0,use:0});
     assert.equal(actions.length,before,"a settings dialog blocks keyboard and gamepad actions");
   } finally {
     input.dispose(); delete globalThis.window; delete globalThis.document;
@@ -67,57 +68,28 @@ test("held controls, repeat handling, focus loss and gamepad disconnect", () => 
   }
 });
 
-test("touch stick and buttons, and tilt angles from the direction of gravity", async () => {
-  const { tiltAngles } = await import("../src/game/tilt.ts");
+test("touch stick and buttons, with or without page focus", () => {
   const win = new EventTarget(), doc = new EventTarget();
-  doc.body = win; doc.hasFocus = () => true;
+  let focused = true;
+  doc.body = win; doc.hasFocus = () => focused;
   globalThis.window = win; globalThis.document = doc;
   const input = new Input({}, {invertPitch:false, mouseSensitivity:1});
+  const actions = []; input.onAction = action => actions.push(action);
   try {
     input.touchX = 0.5; input.touchY = -1; input.touchBoost = true;
-    assert.deepEqual(input.sample(0), {pitch:-1, roll:0.5, boost:1, brake:0}, "thumb up dives, like a stick pushed forward");
+    assert.deepEqual(input.sample(0), {pitch:-1, roll:0.5, boost:1, brake:0, use:0}, "thumb up dives, like a stick pushed forward");
     input.settings.invertTouch = true;
     assert.equal(input.sample(0).pitch, 1);
     input.reset();
-    assert.deepEqual(input.sample(0), {pitch:0, roll:0, boost:0, brake:0});
+    assert.deepEqual(input.sample(0), {pitch:0, roll:0, boost:0, brake:0, use:0});
+    // Some phone browsers report no focus: a finger on a button counts anyway
+    focused = false;
+    input.touchBrake = true; assert.equal(input.sample(0).brake, 1);
+    input.touchBrake = false; input.touchBoost = true; assert.equal(input.sample(0).boost, 1);
+    input.dispatchAction("barrelLeft", true); input.dispatchAction("barrelRight");
+    assert.deepEqual(actions, ["barrelLeft"]);
   } finally {
     input.dispose(); delete globalThis.window; delete globalThis.document;
-  }
-
-  const deg = radians => radians * 180 / Math.PI, out = {roll:0, lean:0};
-  const near = (a, b, what) => assert.ok(Math.abs(a - b) < 1e-6, `${what}: ${a} vs ${b}`);
-  // Portrait, flat on a table, then stood upright
-  tiltAngles(0, 0, 0, out); near(deg(out.lean), 0, "flat"); near(deg(out.roll), 0, "flat roll");
-  tiltAngles(90, 0, 0, out); near(deg(out.lean), 90, "upright");
-  // Landscape (turned anticlockwise, angle 90), leaning back 50° from flat: no roll
-  tiltAngles(0, -50, 90, out); near(deg(out.lean), 50, "landscape lean"); near(deg(out.roll), 0, "landscape roll");
-  // ...then its right edge dipped: beta is the wheel there, and turns right
-  tiltAngles(20, -50, 90, out); assert.ok(out.roll > 0.1, "right edge down turns right");
-  tiltAngles(-20, -50, 90, out); assert.ok(out.roll < -0.1);
-  // The other landscape mirrors both sensor axes; the screen's own angles agree
-  tiltAngles(0, 50, 270, out); near(deg(out.lean), 50, "other landscape lean");
-  tiltAngles(-20, 50, 270, out); assert.ok(out.roll > 0.1, "other landscape, right edge down");
-  // Past upright (gamma flips sign and beta jumps by 180 there): the lean carries on smoothly
-  tiltAngles(180, 80, 90, out); near(deg(out.lean), 100, "past upright");
-});
-
-
-test("signed tilt separates both sides of flat and keeps landscape wheel turns independent of pitch", async () => {
-  const { tiltAngles } = await import("../src/game/tilt.ts");
-  const out = { roll: 0, lean: 0 }, rad = Math.PI / 180;
-  for (const [screenAngle, sign] of [[0, 1], [90, -1], [270, 1]]) {
-    for (const degrees of [-60, -15, 0, 15, 60]) {
-      const beta = screenAngle === 0 ? degrees : 0;
-      const gamma = screenAngle === 0 ? 0 : degrees * sign;
-      tiltAngles(beta, gamma, screenAngle, out);
-      assert.ok(Math.abs(out.lean - degrees * rad) < 1e-9, `signed lean at ${screenAngle} / ${degrees}`);
-    }
-  }
-  tiltAngles(0, -50, 90, out);
-  const lean = out.lean;
-  for (const beta of [-30, 30]) {
-    tiltAngles(beta, -50, 90, out);
-    assert.ok(Math.abs(out.lean - lean) < 1e-9, "banking alone does not pitch");
   }
 });
 
@@ -147,34 +119,5 @@ test("tutorial observes merged input and real one-off actions, and unsubscribes 
     assert.equal(actions.at(-1), "hover", "removing coach leaves gameplay intact");
   } finally {
     stop(); input.dispose(); delete globalThis.window; delete globalThis.document;
-  }
-});
-
-test("tilt calibrates both axes, reads flat-hold pitch both ways, and recenters on rotation", async () => {
-  const { tilt } = await import("../src/game/tilt.ts");
-  const win = new EventTarget(); win.DeviceOrientationEvent = class {};
-  const saved = Object.fromEntries(["window", "DeviceOrientationEvent", "screen", "localStorage"].map(k => [k, Object.getOwnPropertyDescriptor(globalThis, k)]));
-  globalThis.window = win; globalThis.DeviceOrientationEvent = win.DeviceOrientationEvent;
-  globalThis.screen = { orientation: { angle: 90 } };
-  globalThis.localStorage = { setItem() {}, getItem() { return "0"; } };
-  const reading = (beta, gamma) => {
-    const e = new Event("deviceorientation"); Object.assign(e, { beta, gamma }); win.dispatchEvent(e);
-  };
-  try {
-    assert.equal(await tilt.enable(), true);
-    reading(12, 0);
-    assert.equal(tilt.roll, 0); assert.equal(tilt.pitch, 0, "initial bank and pitch are neutral");
-    reading(12, -20); assert.ok(tilt.pitch > 0, "top towards you climbs from flat");
-    tilt.recenter(); reading(0, 0); reading(0, 20);
-    assert.ok(tilt.pitch < 0, "top away dives from flat");
-    tilt.recenter(); reading(10, -50);
-    assert.equal(tilt.pitch, 0); assert.equal(tilt.roll, 0);
-    screen.orientation.angle = 270; reading(-10, 50);
-    assert.equal(tilt.pitch, 0); assert.equal(tilt.roll, 0, "rotation recalibrates the new hold");
-  } finally {
-    tilt.disable();
-    for (const [k, descriptor] of Object.entries(saved)) {
-      if (descriptor) Object.defineProperty(globalThis, k, descriptor); else delete globalThis[k];
-    }
   }
 });

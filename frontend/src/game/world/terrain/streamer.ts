@@ -340,9 +340,8 @@ export class LandStreamer {
     this.trimCache();
   }
 
-  private trimCache() {
-    const budget = TERRAIN.cacheMiB * 1024 * 1024;
-    while (this.cacheBytes > budget || this.cache.size > 256) {
+  private trimCache(budget = TERRAIN.cacheMiB * 1024 * 1024, entries = 256) {
+    while (this.cacheBytes > budget || this.cache.size > entries) {
       const entry = this.cache.values().next().value;
       if (!entry) break;
       const { node, bytes } = entry;
@@ -390,6 +389,13 @@ export class LandStreamer {
     for (const child of node.children) if (inside(child.box, x, y, z)) return this.coveredIn(child, x, y, z);
     // No finer node holds this spot: no land there
     return true;
+  }
+
+  /** Set aside (its workers stopped): what was asked for is asked again later, hidden meshes go */
+  park() {
+    for (const node of this.byKey.values()) if (node.state === "pending") node.state = "idle";
+    this.arrived.length = 0;
+    this.trimCache(0, 0);
   }
 
   dispose() {

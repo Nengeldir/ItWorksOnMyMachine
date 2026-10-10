@@ -58,6 +58,22 @@ def test_room_flow():
     assert client.get("/api/rooms/RACE1").json()["players"] == []
 
 
+def test_room_map_from_the_map_select():
+    # The first to join creates the room on the map they picked; later joiners can't change it
+    made = client.post("/api/rooms/pick1/join", json={"client_id": "p1", "seed": 13}).json()
+    assert made["room"]["seed"] == 13
+    joined = client.post("/api/rooms/pick1/join", json={"client_id": "p2", "seed": 6}).json()
+    assert joined["room"]["seed"] == 13
+    # In the lobby, any player can switch to a picked map, or to a random one
+    assert client.post("/api/rooms/PICK1/map", json={"token": made["token"], "seed": 6}).status_code == 204
+    assert client.get("/api/rooms/PICK1").json()["seed"] == 6
+    assert client.post("/api/rooms/PICK1/map", json={"token": made["token"]}).status_code == 204
+    assert client.get("/api/rooms/PICK1").json()["seed"] != 6
+    # Seeds are checked like everywhere else
+    assert client.post("/api/rooms/PICK1/map", json={"token": made["token"], "seed": 0}).status_code == 422
+    assert client.post("/api/rooms/pick2/join", json={"client_id": "p3", "seed": 2**31}).status_code == 422
+
+
 def test_bad_room_code():
     assert client.post("/api/rooms/no!/join", json={"client_id": "c1"}).status_code == 400
     assert client.post("/api/rooms/ABC%0A/join", json={"client_id": "c1"}).status_code == 400

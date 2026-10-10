@@ -33,6 +33,7 @@ An unknown world falls back to Sky Isles. Once open, the URL is rewritten to
 | :-- | :-- |
 | `Shift+P` | Replaces this level's portal with one straight ahead (at least 3 portal radii, or 1.5 s of flight) |
 | `Shift+O` | Ends the run now: the real finish screen ("test result · not saved") over the victory lap |
+| `Shift+I` | Gives the next of the twenty design-list items, in order; a full bag must be used first |
 | `Shift+S` | Half speed / normal speed for physics, animation, shaders, camera and CSS animations; the panel shows which |
 | `Enter` | Skips the finale; on the finish screen, flies the test again |
 | `Backspace` | On the finish screen, back to the menu |
@@ -46,8 +47,9 @@ finale and the finish screen.
 
 - `route.ts`: `screenFromSearch` gives a `{ kind: "test", biome, seed }` screen.
 - `ExploreSession` (with `testMode`) starts a `RunController` on the chosen
-  level (`Game.startRun(seed, events, level)`). Its `ended` event never
-  reaches `RunSession`'s bests or the server.
+  level (`Game.startRun(seed, events, level, Infinity)`: the sandbox never
+  runs out of lives). Its `ended` event never reaches `RunSession`'s bests or
+  the server.
 - `Input.onTestAction` (installed only by `Game` in test mode) and
   `RunController.spawnTestPortal` / `testWin`.
 - `testPlayback.ts`: the playback rate. `Game.loop` scales its frame delta
@@ -55,10 +57,22 @@ finale and the finish screen.
   the Web Animations API.
 - Tests: `frontend/tests/test-mode.test.mjs` (URL parsing, chord handling).
 
+## Frozen item previews (dev server only)
+
+Add `&itemShot=<id>` to a test URL to stream the terrain, exercise the actual
+item rules and equipment, and freeze the effect for inspection. For example:
+`/?test=verdant&seed=2&itemShot=stormKite` or
+`/?test=verdant&seed=3&itemShot=mothCape` (moonlit).
+`itemShot=pickups` frames a clear floating pickup and its ground spotlight.
+These are visual fixtures, not recorded flights; reload the normal test URL to
+resume play. `window.__itemShot(id)` is the equivalent console helper. The dev
+fixture signals completion with `document.body.dataset.itemShot`; it is absent
+from the production build. `/?gallery` shows every model without terrain.
+
 ## Collection fitting room
 
-Choose **Try items, pets & cosmetics** in the test panel. All 46 model choices
-are available offline: twelve carried items, capes, hats, shoes, wings and all
+Choose **Try items, pets & cosmetics** in the test panel. All 65 model choices
+are available offline: thirty-one carried items, capes, hats, shoes, wings and all
 eight pets. Inspect front/back previews, try a style in flight, carry/use an item,
 light the firework, put it away, unequip a companion or restore your profile look.
 Flight pauses while the dialog is open; closing resumes only if it was flying

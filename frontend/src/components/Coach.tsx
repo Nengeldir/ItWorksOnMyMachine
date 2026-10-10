@@ -13,7 +13,7 @@ const STICK = 0.5; // merged steering and speed input past this counts
 interface Step {
   label: string;
   actions: BindingAction[];
-  /** Merged flight axis to watch, including touch and tilt. */
+  /** Merged flight axis to watch, including touch. */
   axis?: "x" | "dive" | "climb";
   /** Instruction shown instead of keyboard hints on phones. */
   touchHint: string;
@@ -23,9 +23,9 @@ function steps(): Step[] {
   // "Invert pitch" swaps what the pitch keys do
   const invert = loadSettings().invertPitch;
   return [
-    { label: "Turn", actions: ["turnLeft", "turnRight"], axis: "x", touchHint: "Drag sideways or turn Tilt like a wheel" },
-    { label: "Dive", actions: [invert ? "pitchUp" : "pitchDown"], axis: "dive", touchHint: "Drag up or lean the top away with Tilt" },
-    { label: "Climb", actions: [invert ? "pitchDown" : "pitchUp"], axis: "climb", touchHint: "Drag down or lean the top towards you with Tilt" },
+    { label: "Turn", actions: ["turnLeft", "turnRight"], axis: "x", touchHint: "Drag sideways" },
+    { label: "Dive", actions: [invert ? "pitchUp" : "pitchDown"], axis: "dive", touchHint: "Drag up" },
+    { label: "Climb", actions: [invert ? "pitchDown" : "pitchUp"], axis: "climb", touchHint: "Drag down" },
     { label: "Boost", actions: ["boost"], touchHint: "Hold Boost" },
     { label: "Brake", actions: ["brake"], touchHint: "Hold Brake" },
     { label: "Dodge", actions: ["barrelLeft", "barrelRight"], touchHint: "Tap ‹ or ›" },
@@ -34,7 +34,7 @@ function steps(): Step[] {
 
 /**
  * The tutorial: a card at the top asks for one control at a time (the player's own keys) and moves on
- * once it's used, keys, mouse, gamepad, touch or tilt alike. Six steps, then "You're ready!"; Skip (or Esc) any time.
+ * once it's used, keys, mouse, gamepad or touch alike. Six steps, then "You're ready!"; Skip (or Esc) any time.
  * The game flies on underneath: this only watches the controls.
  */
 const Coach = ({ onEnd, observeInput }: {
@@ -108,9 +108,9 @@ const Coach = ({ onEnd, observeInput }: {
             </span>
             <strong>{step.label}</strong>
             <span className="coach-touch touch-only">{step.axis === "dive" && loadSettings().invertTouch
-              ? "Drag down or lean the top towards you with Tilt"
+              ? "Drag down"
               : step.axis === "climb" && loadSettings().invertTouch
-                ? "Drag up or lean the top away with Tilt" : step.touchHint}</span>
+                ? "Drag up" : step.touchHint}</span>
             {done && <IconCheck className="coach-tick" size={22} stroke={3} />}
           </>
         )}

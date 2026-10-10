@@ -12,6 +12,15 @@ export function ordinal(n: number): string {
   return `${n}${suffix}`;
 }
 
+/** Until the next UTC midnight, when today's course and run change: "7:05:09" */
+export function untilTomorrow(): string {
+  const now = new Date();
+  const ms = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1) - now.getTime();
+  const s = Math.floor(ms / 1000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${Math.floor(s / 3600)}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}`;
+}
+
 const CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export function randomRoomCode(): string {

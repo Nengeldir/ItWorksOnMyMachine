@@ -32,8 +32,8 @@ test("decorated wings have distinct bounded geometry, mirrored fans and finite t
 });
 
 test("the offline sandbox exposes every item, cosmetic and existing pet without a solo-flight entry", async () => {
-  assert.equal(SANDBOX_COLLECTION.length,46);
-  assert.equal(new Set(SANDBOX_COLLECTION.map(e=>e.key)).size,46);
+  assert.equal(SANDBOX_COLLECTION.length,65);
+  assert.equal(new Set(SANDBOX_COLLECTION.map(e=>e.key)).size,65);
   assert.equal(SANDBOX_COLLECTION.filter(e=>e.kind==="pet").length,8);
   assert.ok(!SANDBOX_COLLECTION.some(e=>e.key==="pet:none"));
   assert.ok(SANDBOX_COLLECTION.every(e=>e.xp===0));
