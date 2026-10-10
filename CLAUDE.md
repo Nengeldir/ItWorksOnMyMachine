@@ -129,7 +129,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/tilt.ts` | `tilt`, the one device-orientation sensor: `tiltAngles()` gets roll and lean from the direction of gravity (no jumps where the event's angles flip), `enable()` asks iOS for permission (from a tap), `recenter()` makes the current hold level flight. On/off is kept in `wingrace.tilt`, outside `Settings` (the in-game button owns it). `Input.sample` adds it to pitch and roll (`TILT_*` in `input.ts`) |
 | `game/pilots.ts` | Remote players and ghosts: interpolated samples driving an `Avatar` and `PilotFx` |
 | `game/ghost.ts` | Recording and decoding ghost runs (15 Hz) |
-| `game/autopilot.ts` | `Autopilot`: while nobody plays (the menu's `chase` backdrop, the victory lap) the pilot flies the racing line on rails (`Flight.place`), through the middle of every gate and inside the 11 m tube the land is carved away from; speed from the slope against drag, bank from the line's curve (`AUTOPILOT` in `tuning.ts`). Never scored; Game loops it 40 m past the finish |
+| `game/autopilot.ts` | `Autopilot`: while nobody plays (the menu's `chase` backdrop, the Adventure opening preview, the victory lap) the pilot flies the racing line on rails (`Flight.place`), through the middle of every gate and inside the 11 m tube the land is carved away from; speed from the slope against drag, bank from the line's curve (`AUTOPILOT` in `tuning.ts`). Never scored; Game loops it 40 m past the finish |
 | `game/glidein.ts` | `GlideIn`: while the land near you is loading (free flight, runs, explore; never races), the pilot glides in on rails instead of hanging frozen: no input, no physics step, no scoring; at most 70 m and never within 30 m of the next gate, slowing before rock; control comes back at `START_SPEED` when the land is ready, and a run's level clock keeps running meanwhile |
 | `game/hold.ts` | `holdGame()`: an overlay over the game (How to fly, the newcomer's question) pauses it while open; `Game.hold` resumes only a pause it made, and the HUD shows no "Paused" for it |
 | `game/items/` | Items, models and animations only (what they do comes later). `models.ts`: `ITEMS` (id, name, kind, slot) and `buildItem(id)`: the giant firework (worn on the back like a jetpack, with `fireworkFlame`), three candies, the golden feather, two helmets, five fruits, all primitives painted per vertex with the toon material and ink. `equip.ts`: `Equipment` (pull an item out with a sparkle; the firework from the hand over the shoulder onto the back, helmets drop onto the head, hand items are held up; `use()` eats; `setThrust()` lights the firework) and `ItemDisplay` (a floating pickup). `gallery.ts`: the `/?gallery` scene. `Game.equip/unequip/useItem/thrust` drive it on your pilot; `Avatar.slots` and `Avatar.armPose` are the hooks |
@@ -227,6 +227,29 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Adventure opening autopilot and glowing map titles
+
+- `Game.ts`, `RunSession.ts`: the opening Take off screen now flies the same
+  safe rail autopilot as the victory lap. Flight inputs are locked, pointer lock
+  is released and run frame/physics progress stays stopped. Preview gates are
+  shown in free mode and the route loops; taking off resets flight, camera,
+  gate visuals, input, run clock and arrival-title timing at the first start.
+- `RunHud.css`: thin warm outline and restrained glow around biome-title
+  lettering, preserving the existing arrival animation. Updated README and
+  architecture notes. This is the authorized Adventure start behavior change;
+  races and victory laps retain their existing behavior.
+- Verified production build, lint and all 82 frontend tests on current main.
+  Two new tests exercise actual rail flight past gates without run progress and
+  the real take-off reset. Local Node 22.14 uses type stripping and the equivalent
+  asynchronous resolver. Existing bundle-size warning remains; backend untouched.
+- Browser inspection unavailable: cua lists no connected browsers. Title
+  readability, start-screen motion and keyboard/touch feel remain in Next up.
+- Implemented in `/private/tmp/wind-rider-adventure-intro`, branch
+  `feature/adventure-title-intro`, from `origin/main` (`db8c8f9`). Original
+  Pengyue checkout and its unfinished lighting changes are preserved; existing
+  cosmetics/profile PR #43 is separate from this focused PR.
+
 
 ### 2026-10-10: The map select without islands popping in (Claude)
 
@@ -2483,6 +2506,10 @@ ported to the islands world:
   through islands and gates, no console errors.
 
 ## Next up
+
+- Adventure intro/title polish: inspect the thin glowing title outline in day/night,
+  opening autopilot motion, Take off/Enter and touch handover in a browser. No
+  browser was connected during verification; measure in a focused window.
 
 - Extreme flare pose: the coat can still expose a body ink outline through
   its surface (also present before the ribbon fix). Ribbon/coat and leg/cloth
