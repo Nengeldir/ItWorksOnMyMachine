@@ -220,6 +220,15 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Rebased onto main's Pengyue adventure (Claude)
+
+PR #31 conflicted with `main` (`e374fef`); rebased (no merge commits allowed).
+Conflicts in `CLAUDE.md`, `README.md` (both sides kept) and `App.tsx` (main's
+`route.ts` imports plus the tutorial's storage imports). Main renamed Hover to
+`hoverStall` and added `plunge` and `galeForce`, so `RunHud`'s
+`ABILITY_ACTIONS` maps them to the bound keys. Verified: build, lint and 48
+frontend tests pass. Not checked in a browser.
+
 ### 2026-10-10: Merged `main` (Sunken Reef, Lagoon sea, portal rework, Wind Rider) into `Pengyue` (Claude)
 
 For PR #30. Conflicts, both sides kept: `audio.ts` has the abilities'
