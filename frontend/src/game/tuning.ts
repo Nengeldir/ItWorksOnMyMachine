@@ -185,7 +185,6 @@ export const ITEMS_FX = {
   wind: 1, // the Anemo Catcher's updraft
   shield: 1, // the Starflake Shield's aura of ice
   wax: 1, // the Glider Wax's golden wingtip ribbons and glitter
-  lights: 2.5, // size of the collectible lights (points, energy); looks only, pickup range is unchanged
 };
 
 /** Music and sound levels */
