@@ -387,11 +387,31 @@ ported to the islands world:
 
 ## Next up
 
-**Resume here:** the roguelike milestones below. Milestones 1 and 2 are done,
-and milestone 3's systems for Verdant Highlands (part 1). Next: soft clouds
-for v2 biomes, then every other planned biome (Glacier Peaks, Sky
-Archipelago, Coral Lagoon with a sea, Twilight Forest, Ember Wastes with lava,
-Aurora Summit), each with a day and a night mood.
+**Resume here:** milestones 1 and 2 are done, and milestone 3's systems for
+Verdant Highlands (part 1). In progress: the other six biomes. Done so far:
+`biomes/types.ts` declares the new gate kinds (`shards`, `mushroom`, `roots`),
+features (`shards`, `trunks`, `mushrooms`, `islets`, `rings`, `volcano`,
+`summit`), `SeaSpec` and `IslandFallsSpec` (types only; nothing builds them
+yet). Next steps, in order:
+1. `terrain/recipes.ts`: build the new gate kinds and features (pillars get a
+   wave-cut notch at sea level when there is a sea; a `Volcano` shape with a
+   crater in `shapes.ts`; expose `NoiseIsland`'s center and size).
+2. `World`: `sea` (collision `y - level`, valley mist at sea level, wet beaches
+   in `terrain/mesh.ts`, no plants below it) and island falls (find each lip
+   by marching out from the island's top); `WaterView`: a sea grid with depth
+   over the ground, curtains for island falls fading into the void.
+3. Sky shader: `aurora` and `underglow` on `Palette`; soft billboard clouds
+   for v2 biomes (the faceted puffs look like dark discs at night).
+4. Biome files with a day and a night mood each, as planned: Glacier Peaks
+   (ice river steps, crevasses, ice spires, snowy firs, snow, aurora at
+   night), Sky Archipelago (no ground: noise islands with tunnels, falls into
+   the void, cloud banks, golden hour), Coral Lagoon (sea, notched stacks,
+   islets, palms), Twilight Forest (glowing ponds, giant trunks and mushrooms,
+   root arches, fireflies and spores), Ember Wastes (lava steps and falls,
+   terraced basalt, obsidian shards, volcano, embers and ash), Aurora Summit
+   (summit spire, crystal rings, starfall). Register them in `biomes/index.ts`
+   and check each in a day and a night mood with `/?explore=<id>&seed=<n>`.
+5. Then milestones 4 and 5.
 
 - The faceted cloud puffs look like dark discs at night; v2 biomes want soft
   clouds.

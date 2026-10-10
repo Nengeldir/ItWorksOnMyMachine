@@ -37,22 +37,55 @@ export interface Layers {
   glow: string; // color of glowing cracks and spots
 }
 
-export type GateKind = "arch" | "pillars" | "needles" | "spur" | "overhang" | "tunnel" | "squeeze";
+export type GateKind =
+  | "arch" // a ring of rock standing over the line (or floating, without ground)
+  | "pillars" // two columns either side (sea stacks where there is a sea)
+  | "needles" // a slalom of thin spires
+  | "shards" // a slalom of leaning, sharp spikes (ice, obsidian)
+  | "spur" // a ridge across the valley, tunnelled through
+  | "overhang" // a shelf reaching over the line from one side
+  | "tunnel" // a floating island on the line, tunnelled through
+  | "squeeze" // one island above, one below
+  | "mushroom" // two giant mushrooms whose caps meet over the line
+  | "roots"; // tangled root arches
 
-/** Scenery placed around the line */
+type Range = [number, number];
+
+/** Scenery placed around the line. `lateral`: metres either side of the line; `rise`: metres above the ground (or the line, for floating things) */
 export type Feature =
-  | { kind: "pillars"; count: number; radius: [number, number]; rise: [number, number]; lateral: [number, number]; surface: number }
-  | { kind: "boulders"; count: number; size: [number, number]; lateral: [number, number]; surface: number }
-  | { kind: "arches"; count: number; radius: [number, number]; lateral: [number, number]; surface: number }
-  | { kind: "islands"; count: number; size: [number, number]; lateral: [number, number]; rise: [number, number]; surface: number; holes: number }
-  | { kind: "mesas"; count: number; radius: [number, number]; rise: [number, number]; lateral: [number, number]; step: number; surface: number };
+  | { kind: "pillars"; count: number; radius: Range; rise: Range; lateral: Range; surface: number }
+  | { kind: "boulders"; count: number; size: Range; lateral: Range; surface: number }
+  | { kind: "arches"; count: number; radius: Range; lateral: Range; surface: number }
+  | { kind: "islands"; count: number; size: Range; lateral: Range; rise: Range; surface: number; holes: number; terraces?: number }
+  | { kind: "mesas"; count: number; radius: Range; rise: Range; lateral: Range; step: number; surface: number }
+  | { kind: "shards"; count: number; radius: Range; rise: Range; lateral: Range; tilt: number; surface: number }
+  | { kind: "trunks"; count: number; radius: Range; rise: Range; lateral: Range; surface: number; canopy: number }
+  | { kind: "mushrooms"; count: number; cap: Range; rise: Range; lateral: Range; stem: number; surface: number }
+  | { kind: "islets"; count: number; radius: Range; lateral: Range; surface: number }
+  | { kind: "rings"; count: number; radius: Range; lateral: Range; rise: Range; surface: number }
+  | { kind: "volcano"; lateral: number; radius: number; rise: number; surface: number }
+  | { kind: "summit"; along: number; lateral: number; radius: number; rise: number; surface: number };
 
 export interface LandRecipe {
   /** What each gate makes you thread, by weight */
   gates: Partial<Record<GateKind, number>>;
   /** Surface of the rock the gates are made of */
   gateSurface: number;
+  /** Surfaces for gates made of something else: giant mushrooms' stems and caps */
+  named?: { stem?: number; cap?: number };
   features: Feature[];
+}
+
+/** A sea at a fixed height: solid water to skim, with the ground as its floor */
+export interface SeaSpec {
+  level: number; // metres above the lowest point of the racing line
+  colors: { deep: string; shallow: string; foam: string };
+}
+
+/** Waterfalls pouring off the rims of floating islands into the void */
+export interface IslandFallsSpec {
+  chance: number; // share of big islands with a fall
+  colors: { deep: string; shallow: string; foam: string };
 }
 
 /** How the land is shaped */
@@ -60,7 +93,16 @@ export type TerrainRecipe =
   /** The race map, kept bit for bit so ghosts and leaderboards stay valid */
   | { kind: "legacyIslands" }
   /** Generator v2: a ground heightfield (or none) plus rock shapes, one distance field */
-  | { kind: "v2"; ground: GroundSpec | null; groundSurface: number; surfaces: Surface[]; layers: Layers; land: LandRecipe };
+  | {
+      kind: "v2";
+      ground: GroundSpec | null;
+      groundSurface: number;
+      surfaces: Surface[];
+      layers: Layers;
+      land: LandRecipe;
+      sea?: SeaSpec;
+      islandFalls?: IslandFallsSpec;
+    };
 
 /** One species in a biome's flora, with its colors and where it grows */
 export interface FloraSpecies {
