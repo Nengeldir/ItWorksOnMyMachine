@@ -303,7 +303,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
   return (
     <div className="game">
       <div ref={ref} className="game-view" />
-      {hud && stage !== "pick" && <Hud hud={hud} />}
+      {hud && (stage !== "pick" || hud.paused) && <Hud hud={hud} />}
       {run && stage !== "intro" && stage !== "summary" && stage !== "pick" && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
       {showTitle && arrived && <TitleCard level={arrived.level} length={run!.length} biome={arrived.biome} />}
       <TopBar
@@ -334,7 +334,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
         </aside>
       )}
 
-      {stage === "pick" && <UpgradePicker offers={offers} next={next} onPick={(id) => session.pick(id)} />}
+      {stage === "pick" && !hud?.paused && <UpgradePicker offers={offers} next={next} onPick={(id) => session.pick(id)} />}
 
       {stage === "summary" && summary && (
         <aside className="panel glass results">

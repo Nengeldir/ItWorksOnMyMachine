@@ -1,4 +1,5 @@
 import type { Settings } from "../storage";
+import { KEY_BINDINGS, keyLabel } from "../game/input";
 
 interface ControlsProps {
   settings: Settings;
@@ -19,6 +20,9 @@ const Controls = ({ settings, onSettings }: ControlsProps) => (
       </li>
       <li>
         <kbd>R</kbd> respawn · <kbd>M</kbd> mute · <kbd>Esc</kbd> free the mouse
+      </li>
+      <li>
+        <kbd>{keyLabel(KEY_BINDINGS.pause)}</kbd> pause / resume
       </li>
     </ul>
     <label className="check">

@@ -9,6 +9,7 @@ export class GameAudio {
   private rushGain: GainNode | null = null;
   private noise: AudioBuffer | null = null;
   private muted = false;
+  private paused = false;
 
   get isMuted(): boolean {
     return this.muted;
@@ -22,7 +23,7 @@ export class GameAudio {
     const ctx = new AudioContext();
     this.ctx = ctx;
     this.master = ctx.createGain();
-    this.master.gain.value = this.muted ? 0 : 0.8;
+    this.master.gain.value = this.muted || this.paused ? 0 : 0.8;
     this.master.connect(ctx.destination);
 
     const length = ctx.sampleRate * 2;
@@ -69,8 +70,18 @@ export class GameAudio {
 
   toggleMute(): boolean {
     this.muted = !this.muted;
-    if (this.master && this.ctx) this.master.gain.setTargetAtTime(this.muted ? 0 : 0.8, this.ctx.currentTime, 0.05);
+    this.updateVolume();
     return this.muted;
+  }
+
+  /** Silence gameplay during pause without changing the player's mute setting. */
+  setPaused(paused: boolean) {
+    this.paused = paused;
+    this.updateVolume();
+  }
+
+  private updateVolume() {
+    if (this.master && this.ctx) this.master.gain.setTargetAtTime(this.muted || this.paused ? 0 : 0.8, this.ctx.currentTime, 0.05);
   }
 
   /** Per frame: speed in m/s, proximity 0..1, flying = false while crashed or frozen */

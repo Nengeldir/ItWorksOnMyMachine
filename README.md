@@ -62,6 +62,7 @@ docker compose up -d --build
 | Gamepad left stick        | Pitch and roll. `Y` respawns.                      |
 | `R`                       | Respawn at the last ring                           |
 | `M`                       | Mute                                               |
+| `P`                       | Pause / resume local gameplay                      |
 | `Shift` / gamepad `X`     | Dash (adventure, with the upgrade)                 |
 | `Space` / gamepad `A`     | Wingbeat (adventure, with the upgrade)             |
 | Hold `F` / gamepad `B`    | Hover (adventure, with the upgrade)                |
@@ -76,6 +77,14 @@ the proximity bar: you get style points with a growing multiplier and extra
 acceleration, so risky lines are faster. Crash, or drop into the sea of clouds
 below the islands, and you respawn at your last ring, with the clock still
 running.
+
+Press `P` to pause and press it again to resume. Flight, effects and adventure
+timers freeze, and gameplay audio is silenced. In time trials and multiplayer,
+the official race clock keeps running during a pause; other players keep racing.
+To change the pause key, edit `KEY_BINDINGS.pause` in
+[`frontend/src/game/input.ts`](frontend/src/game/input.ts) using a
+`KeyboardEvent.code` (for example, `KeyO`). The in-game controls and resume hint
+automatically use that binding.
 
 In an adventure there is no clock. Gates score more in a chain without a
 crash, and skimming earns style points. The arrow at the top of the screen
@@ -192,6 +201,7 @@ doesn't fly the course itself.
 | `backend/models.py`                    | Request and response models (Pydantic)                   |
 | `backend/tests/`                       | pytest tests for rooms and the API                       |
 | `frontend/src/game/Game.ts`            | The game: loop, physics steps, race state, HUD data      |
+| `frontend/src/game/input.ts`           | Input, actions and shared keyboard bindings (including pause) |
 | `frontend/src/game/world/`             | Racing line, rock field, meshing workers, palettes, view |
 | `frontend/src/game/flight.ts`          | Flight model                                             |
 | `frontend/src/game/avatar.ts`          | The pilot's model and animation                          |
