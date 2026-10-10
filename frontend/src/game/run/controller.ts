@@ -323,6 +323,7 @@ export class RunController {
     m.ascend = 0;
     if (this.phase !== "explore" && this.phase !== "arrive") return;
     if (!this.items.frozenCombo) this.levelTime += dt;
+    this.abilities.worldRate=this.items.worldRate;
     this.abilities.step(dt, input, proximity, flight, m);
     this.items.step(dt, input, proximity, flight, m);
     if (this.items.points > 0) {

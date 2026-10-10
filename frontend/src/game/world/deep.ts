@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { fxTime } from "../particles";
+import { sceneryTime as fxTime } from "../particles";
 import { makeRng, range } from "../rng";
 import { TOON_LIGHT } from "../toon";
 import { ATMOSPHERE } from "./atmosphere";

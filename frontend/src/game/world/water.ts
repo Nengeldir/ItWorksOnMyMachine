@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { FX_LIGHT, fxTime } from "../particles";
+import { FX_LIGHT, sceneryTime as fxTime } from "../particles";
 import { TOON_LIGHT } from "../toon";
 import { WATER } from "../tuning";
 import { ATMOSPHERE, MIST } from "./atmosphere";
