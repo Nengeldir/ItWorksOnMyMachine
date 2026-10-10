@@ -244,7 +244,7 @@ export function installDevtools() {
       t += 1000 / 60;
       g.loop(t);
       cancelAnimationFrame(g.frame);
-      if (crossed === null && r.phase === "portal") crossed = g.elapsed;
+      if (crossed === null && (r.phase === "portal" || r.phase === "finale")) crossed = g.elapsed;
       if (crossed !== null && g.elapsed - crossed >= after) break;
       if (i % 6 === 0) await settle();
     }

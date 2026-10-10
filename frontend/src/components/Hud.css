@@ -275,6 +275,15 @@
 .hud-boost-keys { opacity: 0.75; }
 .hud-boost progress { width: 100%; height: 6px; accent-color: #78dce8; }
 
+/* The end of a run's finale: everything fades into warm white light */
+.white-light {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, #ffffff 0%, #fffaf0 55%, #fff1dc 100%);
+}
+
 /* Passing through a portal: the view blurs, brightens a little and fills with sparkles (--veil 0..1) */
 .portal-veil {
   --veil: 0;

@@ -8,6 +8,7 @@ import { ATMOSPHERE } from "../world/atmosphere";
 import { BIOMES, type BiomeId, type Level, runLevel } from "../world/biomes";
 import type { World } from "../world/World";
 import type { WorldView } from "../world/WorldView";
+import { Finale } from "./finale";
 import { Portal, Wormhole, screenSparkle } from "./portal";
 import {
   CHAIN_MAX,
@@ -50,6 +51,8 @@ export interface RunHost {
   veil(amount: number): void;
   /** Inside the wormhole: the land, sky, weather and other effects of the level are hidden */
   insideWormhole(on: boolean): void;
+  /** White light over the screen (the end of the finale), 0..1 */
+  whiteOut(amount: number): void;
   /** The drawing buffer's height in pixels (for sizing point sprites) */
   readonly pixelHeight: number;
   gateBurst(index: number): void;
@@ -156,6 +159,8 @@ export class RunController {
   private waited = 0; // seconds in the wormhole waiting for the next land
   private unfrozen = false;
   private sparkled = false;
+  /** The last portal's cutscene */
+  private finale: Finale | null = null;
 
   constructor(seed: number, host: RunHost, events: RunEvents) {
     this.seed = seed;
@@ -181,7 +186,7 @@ export class RunController {
   }
 
   get frozen(): boolean {
-    return this.phase === "portal" || this.phase === "pick" || this.phase === "won";
+    return this.phase === "portal" || this.phase === "pick" || this.phase === "finale" || this.phase === "won";
   }
 
   start() {
@@ -320,7 +325,7 @@ export class RunController {
     this.styleBanked = true;
     this.host.stinger("portal");
     if (this.level >= RUN_LENGTH) {
-      this.finish();
+      this.startFinale();
       return;
     }
     // The offer is drawn now, from this level, so building the next one early doesn't change it
@@ -367,6 +372,21 @@ export class RunController {
     this.unfrozen = false;
   }
 
+  /** The last portal: out into space under the Milky Way, then white light */
+  private startFinale() {
+    this.phase = "finale";
+    this.phaseTime = 0;
+    this.sparkled = false;
+    this.host.freeze(true);
+    this.finale = new Finale();
+    this.host.scene.add(this.finale.group);
+  }
+
+  /** Enter during the finale: straight to the white light */
+  skipFinale() {
+    this.finale?.skip();
+  }
+
   private finish() {
     if (this.ended) return;
     this.ended = true;
@@ -396,6 +416,20 @@ export class RunController {
       for (let i = 0; i < 3; i++) {
         particles.emit(this.host.flight.position, tmp.copy(this.host.flight.velocity).multiplyScalar(-0.2).add(forward.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5)), fx(0.5, 1, DASH_COLOR, Kind.Wisp, 0, 2, 1.4));
       }
+    }
+
+    if (this.phase === "finale" && this.finale) {
+      if (!this.sparkled) {
+        this.sparkled = true;
+        screenSparkle(particles, camera, forward.set(0, 0, -1).applyQuaternion(camera.quaternion), SPARKLE.set("#ffe9a0"));
+      }
+      const f = this.finale.update(dt, camera, this.host.flight.position, particles);
+      this.host.veil(f.veil);
+      this.host.insideWormhole(f.space);
+      this.host.whiteOut(f.white);
+      this.group.visible = !f.space;
+      if (f.done) this.finish();
+      return;
     }
 
     // Through a portal: the screen blurs into sparkles, clears inside the wormhole, the
@@ -534,7 +568,9 @@ export class RunController {
   dispose() {
     this.disposeLevel();
     this.wormhole.dispose();
+    this.finale?.dispose();
     this.group.removeFromParent();
+    this.host.whiteOut(0);
     this.host.insideWormhole(false);
     this.host.veil(0);
   }
