@@ -106,6 +106,8 @@ interface Afterimage {
 export class AbilityFx {
   /** Everything placed in the world (the level's): hidden with it inside a wormhole */
   readonly group = new THREE.Group();
+  /** Inside a wormhole the level is hidden, and so is everything in `group` */
+  inWormhole = false;
   private readonly avatar: Avatar;
   private readonly particles: Particles;
   private readonly soft: Particles;
@@ -268,7 +270,7 @@ export class AbilityFx {
   /** After the avatar and its effects animated: everything else */
   update(dt: number, abilities: Abilities, world: World, flight: Flight, camera: THREE.Camera, passed: (gate: number) => boolean, flying: boolean) {
     this.active = true;
-    this.group.visible = true;
+    this.group.visible = !this.inWormhole;
     this.time += dt;
     const a = abilities;
     const avatar = this.avatar;

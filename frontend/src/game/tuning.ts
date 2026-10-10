@@ -168,6 +168,11 @@ export const ABILITIES_FX = {
   thrill: 1, // Skim-Booster's wingtip flares, ribbons and sparks
   thermal: 1, // Thermal Vision's rings over the gates and its rising warm air
   gale: 1, // the Gale Force tunnel and the rings round the gates it widens
+  moths: 1, // Moth's Attraction's moths and the glow at the next gate's heart
+  wind: 1, // Zenith's updraft, Aero-Braking's cushion, the Draft-Weaving tornado, Ascension's column
+  song: 1, // Resonance's wave and the rings of notes on the gates it turned
+  ley: 1, // the ley line along the course and its wingtip ribbons
+  echo: 1, // the Echo-Trail ribbon and its wind rings
 };
 
 /** Music and sound levels */

@@ -22,9 +22,9 @@ test("bindings and preferences survive save/reload without sharing default array
   const old=globalThis.localStorage; let data;
   globalThis.localStorage={getItem:()=>data,setItem:(_key,value)=>{data=value;}};
   try {
-    const s=defaultSettings(); s.bindings.boost=["KeyG"]; s.invertMouse=true;
+    const s=defaultSettings(); s.bindings.boost=["KeyJ"]; s.invertMouse=true;
     saveSettings(s); const loaded=loadSettings();
-    assert.deepEqual(loaded,s); assert.equal(bindingLabel(loaded.bindings,"boost"),"G");
+    assert.deepEqual(loaded,s); assert.equal(bindingLabel(loaded.bindings,"boost"),"J");
     assert.deepEqual(defaultSettings().bindings.boost,["ShiftLeft","ShiftRight"]);
     data="{bad json"; assert.deepEqual(loadSettings(),defaultSettings());
     globalThis.localStorage={getItem:()=>{throw Error();},setItem:()=>{throw Error();}};
@@ -48,4 +48,14 @@ test("bindings saved before an action existed keep their keys, and the new actio
   const s = normalizeSettings({ bindings });
   assert.deepEqual(s.bindings.boost, ["KeyO"]);
   assert.deepEqual(s.bindings.plunge, ["KeyX"]); assert.deepEqual(s.bindings.burst, ["KeyZ"]);
+});
+test("a new action whose default key is already taken gets a spare key, and nothing else changes", () => {
+  const bindings = defaultBindings(); bindings.boost = ["KeyG"]; delete bindings.ascend; delete bindings.resonance;
+  const s = normalizeSettings({ bindings });
+  assert.deepEqual(s.bindings.boost, ["KeyG"]);
+  assert.deepEqual(s.bindings.resonance, ["KeyT"]);
+  assert.equal(s.bindings.ascend.length, 1);
+  assert.notEqual(s.bindings.ascend[0], "KeyG");
+  const all = Object.values(s.bindings).flat();
+  assert.equal(new Set(all).size, all.length, "no key bound twice");
 });

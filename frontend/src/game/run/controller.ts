@@ -8,7 +8,7 @@ import { ATMOSPHERE } from "../world/atmosphere";
 import { BIOMES, type BiomeId, type Level, runLevel } from "../world/biomes";
 import type { World } from "../world/World";
 import type { WorldView } from "../world/WorldView";
-import { Abilities } from "./abilities";
+import { Abilities, type AbilityPress } from "./abilities";
 import { Finale } from "./finale";
 import { Portal, Wormhole, WormholeCamera, screenSparkle } from "./portal";
 import {
@@ -251,8 +251,8 @@ export class RunController {
 
   // --- the pilot's moves ----------------------------------------------------------
 
-  /** C: wingbeat; X: plunge; G: Gale Force; F: hover-stall (each needs its upgrade) */
-  ability(action: "flap" | "plunge" | "burst" | "hover") {
+  /** C: wingbeat; X: plunge; Z: Gale Force; F: hover-stall; T: Resonance; G: Ascension; H: stance (each needs its upgrade) */
+  ability(action: "flap" | AbilityPress) {
     if (this.frozen || (this.phase !== "explore" && this.phase !== "arrive")) return;
     if (action === "flap") {
       if (this.stats.flap > 0 && this.stamina >= 1 && this.abilities.hang < 0) {
@@ -281,6 +281,9 @@ export class RunController {
     m.thrust = 0;
     m.dive = 0;
     m.hang = false;
+    m.turn = 1;
+    m.climb = 1;
+    m.ascend = 0;
     if (this.phase !== "explore" && this.phase !== "arrive") return;
     this.levelTime += dt;
     this.abilities.step(dt, input, proximity, flight, m);
@@ -294,19 +297,25 @@ export class RunController {
     for (let i = 0; i < rings.length - 1; i++) {
       if (this.passed.has(i)) continue;
       const ring = rings[i];
-      const before = tmp.subVectors(prevPosition, ring.position).dot(ring.normal);
-      const after = tmp.subVectors(flight.position, ring.position).dot(ring.normal);
+      // Resonance may have turned the gate to face you
+      const normal = this.abilities.gateNormal(ring);
+      const before = tmp.subVectors(prevPosition, ring.position).dot(normal);
+      const after = tmp.subVectors(flight.position, ring.position).dot(normal);
       if (before >= 0 || after < 0) continue;
       tmp.lerpVectors(prevPosition, flight.position, before / (before - after));
-      if (tmp.distanceTo(ring.position) > ring.radius + 1 + this.stats.magnet + this.abilities.widening(ring)) continue;
+      const offset = tmp.distanceTo(ring.position);
+      if (offset > ring.radius + 1 + this.stats.magnet + this.abilities.widening(ring)) continue;
       this.passed.add(i);
       this.chain = Math.min(CHAIN_MAX, this.chain + 1);
       this.bestChain = Math.max(this.bestChain, this.chain);
       this.gates++;
       this.lastGate = Math.max(this.lastGate, i + 1);
       this.score += (GATE_POINTS + this.stats.gateBonus) * this.chain;
+      const leys = this.abilities.cue.ley;
       const strike = this.abilities.gate(i, this.chain);
       if (strike > 0) this.notify("Plunge strike!", strike);
+      else if (this.abilities.cue.ley !== leys) this.notify("A ley line wakes: endless boost", 0);
+      else if (this.abilities.threaded(i, offset, ring.radius, flight)) this.notify("Through the heart", 0);
       // Every gate refills a wingbeat
       this.stamina = Math.min(2 + this.stats.flap, this.stamina + 1);
       let next = 0;

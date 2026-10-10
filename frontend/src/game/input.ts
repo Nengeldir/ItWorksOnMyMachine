@@ -24,8 +24,8 @@ export interface ControlSettings {
 /** URL test mode only: Shift+P, Shift+O, Shift+S */
 export type TestAction = "portal" | "win" | "speed";
 
-/** One-off presses. Wingbeat, hover-stall, plunge and Gale Force need their adventure upgrades. */
-export type InputAction = "pause" | "respawn" | "mute" | "barrelLeft" | "barrelRight" | "flap" | "hover" | "plunge" | "burst";
+/** One-off presses. Wingbeat, hover-stall, plunge, Gale Force, Resonance, Ascension and the stances need their adventure upgrades. */
+export type InputAction = "pause" | "respawn" | "mute" | "barrelLeft" | "barrelRight" | "flap" | "hover" | "plunge" | "burst" | "resonance" | "ascend" | "stance";
 
 export interface InputObserver {
   sample?: (input: FlightInput) => void;
@@ -35,7 +35,7 @@ export interface InputObserver {
 export function controlsBlocked(): boolean {
   return !!document.querySelector?.("dialog[open]");
 }
-const ACTIONS: InputAction[] = ["pause", "respawn", "mute", "barrelLeft", "barrelRight", "flap", "hover", "plunge", "burst"];
+const ACTIONS: InputAction[] = ["pause", "respawn", "mute", "barrelLeft", "barrelRight", "flap", "hover", "plunge", "burst", "resonance", "ascend", "stance"];
 
 function deadZone(value: number, threshold = 0.12): number {
   if (Math.abs(value) < threshold) return 0;
@@ -224,12 +224,16 @@ export class Input {
       if (pressed[3] && !this.padButtons[3]) this.dispatchAction("respawn");
       if (pressed[4] && !this.padButtons[4]) this.dispatchAction("barrelLeft");
       if (pressed[5] && !this.padButtons[5]) this.dispatchAction("barrelRight");
-      // In adventure: A flaps, B hover-stalls, X plunges, the right stick's click is Gale Force.
+      // In adventure: A flaps, B hover-stalls, X plunges, the right stick's click is Gale Force,
+      // the left stick's click sings (Resonance), d-pad up ascends, d-pad down changes stance.
       // Triggers control speed in every mode.
       if (pressed[0] && !this.padButtons[0]) this.dispatchAction("flap");
       if (pressed[1] && !this.padButtons[1]) this.dispatchAction("hover");
       if (pressed[2] && !this.padButtons[2]) this.dispatchAction("plunge");
       if (pressed[11] && !this.padButtons[11]) this.dispatchAction("burst");
+      if (pressed[10] && !this.padButtons[10]) this.dispatchAction("resonance");
+      if (pressed[12] && !this.padButtons[12]) this.dispatchAction("ascend");
+      if (pressed[13] && !this.padButtons[13]) this.dispatchAction("stance");
       boost = Math.max(boost, deadZone(pad.buttons[7]?.value ?? 0));
       brake = Math.max(brake, deadZone(pad.buttons[6]?.value ?? 0));
       this.padButtons = pressed;

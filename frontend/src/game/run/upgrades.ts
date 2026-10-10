@@ -26,6 +26,16 @@ export interface RunStats {
   galeForce: number; // ability (G): an elemental burst, a wind tunnel ahead
   acrobatic: number; // passive: a clipped wing rolls away instead of crashing
   hoverStall: number; // ability (F): stop, hang and turn, then off again
+  moth: number; // passive: a gate passed near its heart sends you out faster
+  zenith: number; // passive: climbs keep their speed longer
+  resonance: number; // ability (T): a song that turns the gates ahead to face you
+  leyLine: number; // passive: five gates in quick succession, then endless boost until the chain breaks
+  aeroBrake: number; // ability (brake): a hard flare of cape and wings, and much tighter turns for a moment
+  draftWeave: number; // passive: tight spirals spin up a little tornado that shields one glancing hit
+  ascension: number; // ability (G): all of the speed, turned straight up
+  falcon: number; // stance (H): wings tucked, fast and stiff
+  butterfly: number; // stance (H): cape spread, slow, floaty and nimble
+  echoTrail: number; // passive: close a circle across your own ribbon of light for a wind ring
 }
 
 export type UpgradeId =
@@ -45,7 +55,17 @@ export type UpgradeId =
   | "slipstream"
   | "galeForce"
   | "acrobatic"
-  | "hoverStall";
+  | "hoverStall"
+  | "moth"
+  | "zenith"
+  | "resonance"
+  | "leyLine"
+  | "aeroBrake"
+  | "draftWeave"
+  | "ascension"
+  | "falcon"
+  | "butterfly"
+  | "echoTrail";
 
 export interface Upgrade {
   id: UpgradeId;
@@ -78,6 +98,16 @@ export const UPGRADES: readonly Upgrade[] = [
   { id: "galeForce", name: "Gale Force", icon: "🌀", kind: "ability", key: "G", max: 1, effect: { galeForce: 1 }, description: "Elemental burst: gates charge it. Unleash a wind tunnel ahead that hurls you forward and widens every gate inside." },
   { id: "acrobatic", name: "Acrobatic Recovery", icon: "🤸", kind: "passive", max: 1, effect: { acrobatic: 1 }, description: "Clip rock with a wingtip and you barrel roll away instead of crashing. Recharges in a few seconds." },
   { id: "hoverStall", name: "Hover-Stall", icon: "🕊️", kind: "ability", key: "F", max: 1, effect: { hoverStall: 1 }, description: "Stop dead and hover for two seconds to turn on the spot, then launch off where you look." },
+  { id: "moth", name: "Moth's Attraction", icon: "🦋", kind: "passive", max: 1, effect: { moth: 1 }, description: "Spirit moths gather at every gate's heart. The closer to it you pass, the faster you fly out." },
+  { id: "zenith", name: "Zenith Climber", icon: "🌄", kind: "passive", max: 1, effect: { zenith: 1 }, description: "Climbs hold their speed 20% longer: point the nose at the sky and scale the cliffs." },
+  { id: "resonance", name: "Resonance", icon: "🎶", kind: "ability", key: "T", max: 1, effect: { resonance: 1 }, description: "Sing out a wave of light. Every gate it reaches ahead turns to face you." },
+  { id: "leyLine", name: "Ley-Line Surger", icon: "🔮", kind: "passive", max: 1, effect: { leyLine: 1 }, description: "Fly five gates in quick succession to wake a ley line: endless boost until the chain breaks." },
+  { id: "aeroBrake", name: "Aero-Braking", icon: "🪂", kind: "ability", key: "Space", max: 1, effect: { aeroBrake: 1 }, description: "Brake throws your cape and wings forward: a hard stop and much tighter turns, for hairpins." },
+  { id: "draftWeave", name: "Draft-Weaving", icon: "🌪️", kind: "passive", max: 1, effect: { draftWeave: 1 }, description: "Spiral tightly or barrel roll to spin up a little tornado. It shields you from one glancing hit." },
+  { id: "ascension", name: "Ascension", icon: "⬆️", kind: "ability", key: "G", max: 1, effect: { ascension: 1 }, description: "Give up all your forward speed to shoot straight up on a column of wind." },
+  { id: "falcon", name: "Falcon Stance", icon: "🦅", kind: "ability", key: "H", max: 1, effect: { falcon: 1 }, description: "Toggle: wings tucked like a stooping falcon. You fall much faster and go faster, but steer stiffly." },
+  { id: "butterfly", name: "Butterfly Stance", icon: "🌸", kind: "ability", key: "H", max: 1, effect: { butterfly: 1 }, description: "Toggle: cape and wings spread wide. You fall slowest and turn tightest, but slowly." },
+  { id: "echoTrail", name: "Echo-Trail", icon: "➰", kind: "passive", max: 1, effect: { echoTrail: 1 }, description: "You leave a ribbon of light. Close a full circle across it and it becomes a wind ring that hurls you on." },
 ];
 
 const MULTIPLIED: (keyof RunStats)[] = ["drag", "sink", "stall", "proximity"];
@@ -86,6 +116,7 @@ export function baseStats(): RunStats {
   return {
     dash: 0, flap: 0, glideLock: 0, drag: 1, sink: 1, stall: 1, proximity: 1, magnet: 0, multiplier: 0, gateBonus: 0,
     featherfalling: 0, skimBooster: 0, cloudSurf: 0, plunge: 0, windShear: 0, thermalVision: 0, slipstream: 0, galeForce: 0, acrobatic: 0, hoverStall: 0,
+    moth: 0, zenith: 0, resonance: 0, leyLine: 0, aeroBrake: 0, draftWeave: 0, ascension: 0, falcon: 0, butterfly: 0, echoTrail: 0,
   };
 }
 

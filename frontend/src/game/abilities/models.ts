@@ -208,10 +208,17 @@ const ringFragment = /* glsl */ `
       // A shockwave: a hard bright edge, light streaming in behind it
       float streaks = 0.7 + 0.3 * sin(a * 23.0 + vSeed * 9.0);
       light = band * 1.4 + smoothstep(0.86, 0.3, r) * smoothstep(0.0, 0.7, r) * 0.12 * streaks;
-    } else {
+    } else if (vRing.w < 2.5) {
       // A ring of wind: streaks chasing round it
       float swirl = smoothstep(0.2, 1.0, sin(a * 5.0 - time * 7.0 + r * 9.0 + vSeed * 4.0));
       light = band * (0.45 + 0.9 * swirl) * 1.5;
+    } else if (vRing.w < 3.5) {
+      // A clean ring: the shockwave's edge with nothing inside (a fill tips a bright day sky into bloom)
+      light = band * 1.3;
+    } else {
+      // A ring of ticks turning, nothing inside
+      float ticks = 0.4 + 0.6 * smoothstep(0.3, 1.0, sin(a * 16.0 + time * 1.6 + vSeed * 6.0));
+      light = band * ticks * 1.4;
     }
     float edge = smoothstep(1.0, 0.94, r);
     gl_FragColor = vec4(vTint * light * vRing.y * edge * boost, 1.0);
@@ -220,8 +227,9 @@ const ringFragment = /* glsl */ `
 
 /**
  * Up to `capacity` rings of light in one draw call: each faces the camera or
- * lies across an axis, in one of three styles (0 a marker of ticks, 1 a
- * shockwave, 2 a ring of wind). `depthTest` false shows them through rock
+ * lies across an axis, in one of five styles (0 a marker of ticks, 1 a
+ * shockwave, 2 a ring of wind, 3 a clean ring, 4 ticks without the glow
+ * inside). `depthTest` false shows them through rock
  */
 export class RingQuads {
   readonly mesh: THREE.Mesh<THREE.InstancedBufferGeometry, THREE.ShaderMaterial>;
@@ -268,7 +276,7 @@ export class RingQuads {
     this.count = 0;
   }
 
-  /** A ring at `center`; `axis` null faces the camera. `style` 0 marker, 1 shockwave, 2 wind */
+  /** A ring at `center`; `axis` null faces the camera. `style` 0 marker, 1 shockwave, 2 wind, 3 clean, 4 ticks */
   add(center: THREE.Vector3, axis: THREE.Vector3 | null, radius: number, opacity: number, width: number, style: number, tint: THREE.Color) {
     const i = this.count;
     if (i >= this.center.count || opacity <= 0.002) return;
