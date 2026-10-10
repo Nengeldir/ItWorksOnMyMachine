@@ -15,6 +15,7 @@ import { SoftClouds } from "./clouds";
 import { Tree } from "./trees";
 import { sunDirection } from "./palette";
 import type { World } from "./World";
+import { reloadForNewBuild } from "../../staleBuild";
 
 export const VIEW_DISTANCE = 1400;
 const FOG_NEAR = 250;
@@ -201,6 +202,8 @@ export class WorldView {
         if (result.kind === "node") this.land?.receive(result);
         else this.receive(result);
       };
+      // Fires when the worker's script can't be loaded, e.g. it belongs to an older build
+      worker.onerror = (event) => reloadForNewBuild(event.message || "mesher worker failed to load");
       this.workers.push(worker);
       this.busy.push(0);
     }

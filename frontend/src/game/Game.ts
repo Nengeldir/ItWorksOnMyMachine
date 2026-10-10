@@ -24,6 +24,7 @@ import { type Level, levelId, raceLevel } from "./world/biomes";
 import type { WaterKind } from "./world/terrain/river";
 import { type WaterHit, World } from "./world/World";
 import { WorldView } from "./world/WorldView";
+import { reloadForNewBuild } from "../staleBuild";
 
 const STEP = 1 / 120; // physics runs at a fixed rate, rendering interpolates
 const MAX_STEPS_PER_FRAME = 12;
@@ -1097,12 +1098,20 @@ export class Game implements RunHost {
   private async createComposer() {
     if (this.composerLoading) return;
     this.composerLoading = true;
-    const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }] = await Promise.all([
-      import("three/examples/jsm/postprocessing/EffectComposer.js"),
-      import("three/examples/jsm/postprocessing/RenderPass.js"),
-      import("three/examples/jsm/postprocessing/UnrealBloomPass.js"),
-      import("three/examples/jsm/postprocessing/OutputPass.js"),
-    ]);
+    let modules;
+    try {
+      modules = await Promise.all([
+        import("three/examples/jsm/postprocessing/EffectComposer.js"),
+        import("three/examples/jsm/postprocessing/RenderPass.js"),
+        import("three/examples/jsm/postprocessing/UnrealBloomPass.js"),
+        import("three/examples/jsm/postprocessing/OutputPass.js"),
+      ]);
+    } catch (error) {
+      // Leaves composerLoading set, so this frame loop doesn't retry every frame
+      reloadForNewBuild(error);
+      return;
+    }
+    const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }] = modules;
     this.composerLoading = false;
     if (!this.bloomOn || this.composer) return;
     const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
@@ -1165,7 +1174,10 @@ export class Game implements RunHost {
   }
 
   private async openTuning() {
-    const { default: GUI } = await import("lil-gui");
+    const { default: GUI } = await import("lil-gui").catch((error: unknown) => {
+      reloadForNewBuild(error);
+      throw error;
+    });
     const gui = new GUI({ title: "Tuning (?tune)", width: 300 });
     const save = () => saveTuning();
 
