@@ -282,6 +282,7 @@ export class RunController {
   useItem() {
     if (this.frozen || (this.phase !== "explore" && this.phase !== "arrive")) return;
     this.items.use(this.host.flight);
+    if(this.items.restore>0){this.stamina=Math.min(2+this.stats.flap,this.stamina+this.items.restore);this.items.restore=0;}
   }
 
   /** U (or the mouse wheel): the next item in the bag */

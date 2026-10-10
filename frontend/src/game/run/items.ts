@@ -31,6 +31,7 @@ export const ITEM = {
   kiteTime: 5,
   kiteLift: 18,
   prismTime: 5,
+  nectarStamina: 9,
   bag: 3, // items carried at once
   // Anemo Catcher: a bottled updraft
   updraftTime: 1.6, // seconds
@@ -54,7 +55,7 @@ export const ITEM = {
   fireWobble: 0.45, // how hard it yanks the controls about
 };
 
-export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism";
+export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar";
 
 /** How an item saved the pilot from a hit */
 export type ItemSave = "starflake";
@@ -95,12 +96,14 @@ export const RUN_ITEMS: readonly RunItemInfo[] = [
   { id: "aeroBoots", model: "aeroBoots", name: "Aero-Boots of the Adepti", icon: "🥾", rarity: 2, charges: 3, description: "Three steps on the air. Each press gives a quick upward correction." },
   { id: "stormKite", model: "stormKite", name: "Stormcaller's Kite", icon: "🪁", rarity: 1, charges: 1, description: "An enchanted kite catches the high wind and tows you upward for five seconds." },
   { id: "glacialPrism", model: "glacialPrism", name: "Glacial Prism", icon: "🧊", rarity: 2, charges: 1, description: "Freeze the adventure level timer and the decay of your skim combo for five seconds." },
+  { id: "sunNectar", model: "sunNectar", name: "Sun-Kissed Nectar", icon: "🌼", rarity: 0, charges: 1, description: "Drink golden nectar to refill your boost reserve and wingbeat stamina immediately." },
 ];
 
 export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.id === id)!;
 
 /** How long each item's effect lasts once used (seconds) */
 const DURATION: Record<RunItemId, () => number> = {
+  sunNectar: () => 0.8,
   glacialPrism: () => ITEM.prismTime,
   stormKite: () => ITEM.kiteTime,
   aeroBoots: () => ITEM.bootTime,
@@ -154,6 +157,8 @@ export class Items {
   used: RunItemId | null = null;
   /** Bonus points earned since the controller last took them */
   points = 0;
+  /** Wingbeat stamina to hand back to the controller. */
+  restore = 0;
   /** Bumped when the level changes, so the looks rebuild what depends on it */
   version = 0;
   /** Where the last save happened, and the surface's normal there */
@@ -242,6 +247,7 @@ export class Items {
       if (!this.path.length) return false;
     }
     if(id === "aeroBoots" && this.active.has(id)) return false;
+    if(id === "sunNectar"){ flight.refillBoost(1); this.restore=ITEM.nectarStamina; }
     // ITEM STARTS
     // A shield already up would be wasted
     if (id === "starflakeShield" && this.active.has(id)) return false;

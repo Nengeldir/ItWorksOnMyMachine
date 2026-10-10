@@ -37,6 +37,13 @@ export class RelicFx {
     this.group.add(this.markers.mesh, this.ribbon.mesh, this.lights, this.kite, this.cord);
   }
   used(id: RunItemId) {
+    if(id === "sunNectar"){
+      this.avatar.slots.hand.getWorldPosition(at);
+      for(let i=0;i<Math.round(24*this.particles.budget);i++){
+        vel.set(Math.sin(i)*2,1,Math.cos(i)*2);
+        this.particles.emit(at,vel,fx(0.9,0.2,GOLD,Kind.Star,-1,1,1.5));
+      }
+    }
     if(id === "aeroBoots"){
       for(const foot of this.avatar.feet){
         foot.getWorldPosition(at);
