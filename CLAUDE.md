@@ -160,6 +160,16 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Rebase speed controls onto current main
+
+- Rebased onto `e20b112`, preserving pause controls, biome music, wingbeat
+  samples and explore debug mode while resolving overlapping input/audio/docs.
+- Kept one input reset implementation, retained the pause action, and made
+  disconnected gamepad hover return false. Extended input coverage for the
+  pause key, repeats and reset alongside held speed controls.
+- Verified frontend build, lint and 17 tests; backend 22 tests pass. Browser
+  integration and real-gamepad/two-client playtests remain outstanding.
+
 ### 2026-10-10: Upright recovery and 80° steering bank
 
 - `flight.ts`: raised the bank cap to 80°. The unbanked pitch frame now
