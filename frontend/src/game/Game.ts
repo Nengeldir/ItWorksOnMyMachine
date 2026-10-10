@@ -469,8 +469,14 @@ export class Game implements RunHost {
     }
   }
 
-  stinger(kind: "portal" | "upgrade" | "dash") {
-    this.audio.stinger(kind);
+  stinger(kind: "portal" | "upgrade" | "dash" | "gate" | "finish") {
+    if (kind === "gate") this.audio.ring();
+    else if (kind === "finish") this.audio.finish();
+    else this.audio.stinger(kind);
+  }
+
+  portalHum(near: number) {
+    this.audio.portalHum(near);
   }
 
   veil(amount: number) {
