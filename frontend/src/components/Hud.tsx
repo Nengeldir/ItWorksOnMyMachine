@@ -34,7 +34,7 @@ const Hud = ({ hud }: { hud: HudState }) => {
           {racing && <small>The race clock keeps running</small>}
         </div>
       )}
-      {!hud.paused && hud.loading && hud.raceState === "free" && <div className="hud-loading glass">Building islands…</div>}
+      {!hud.paused && hud.loading && hud.raceState === "free" && <div className="hud-loading glass">Gliding in while the land loads…</div>}
 
       {hud.standings.length > 1 && (
         <ol className="hud-standings glass">
@@ -51,6 +51,11 @@ const Hud = ({ hud }: { hud: HudState }) => {
       )}
 
       <div className="hud-flight glass">
+        <div className="hud-boost" aria-label={`Boost reserve ${Math.round(hud.boostCharge * 100)} percent`}>
+          <span>{hud.braking ? "Braking" : hud.boosting ? "Boosting" : hud.boostCharge < 0.999 ? "Recharging" : "Ready"}</span>
+          <progress aria-label="Boost reserve" max={1} value={hud.boostCharge} />
+          <span className="hud-boost-keys">Shift · boost / Space · brake</span>
+        </div>
         <div className="hud-speed">
           <strong>{hud.speedKmh}</strong> km/h
         </div>

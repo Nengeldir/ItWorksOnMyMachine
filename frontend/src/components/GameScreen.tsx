@@ -3,13 +3,13 @@ import { type ReactNode, useEffect, useEffectEvent, useRef, useState, useSyncExt
 import type { Screen } from "../App";
 import { formatTime, ordinal } from "../format";
 import { webglAvailable } from "../game/webgl";
-import type { BiomeId } from "../game/world/biomes";
+import { BIOMES, type BiomeId } from "../game/world/biomes";
 import { RUN } from "../game/tuning";
-import { UPGRADES } from "../game/run/upgrades";
-import { BIOMES } from "../game/world/biomes";
 import { ExploreSession } from "../session/ExploreSession";
 import { RunSession } from "../session/RunSession";
-import { RunHud, TitleCard, UpgradePicker } from "./RunHud";
+import { ITEMS } from "../game/items/models";
+import type { ItemGallery } from "../game/items/gallery";
+import { FinishScreen, RunHud, TitleCard, UpgradePicker } from "./RunHud";
 import { RoomSession } from "../session/RoomSession";
 import { SoloSession } from "../session/SoloSession";
 import { type Settings, clientId } from "../storage";
@@ -328,8 +328,10 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
     Enter: () => {
       if (stage === "intro") session.begin();
       else if (stage === "summary") session.again();
+      else if (run?.phase === "finale") session.skip();
     },
     KeyN: () => stage === "summary" && onNewRun(),
+    Backspace: () => stage === "summary" && onExit(),
   });
 
   // The title card shows for the run's "arrive" phase, its first seconds in a biome
@@ -338,13 +340,21 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
   return (
     <div className="game">
       <div ref={ref} className="game-view" />
-      {hud && (stage !== "pick" || hud.paused) && <Hud hud={hud} />}
-      {run && stage !== "intro" && stage !== "summary" && stage !== "pick" && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
+      {/* Nothing but the wormhole while passing through a portal */}
+      {hud && (hud.paused || (stage !== "pick" && stage !== "summary" && run?.phase !== "portal" && run?.phase !== "finale" && run?.phase !== "won")) && <Hud hud={hud} />}
+      {run && stage !== "intro" && stage !== "summary" && stage !== "pick" && run.phase !== "finale" && run.phase !== "won" && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
+      {run?.phase === "finale" && (
+        <div className="finale-skip">
+          <kbd>Enter</kbd> skip
+        </div>
+      )}
       {showTitle && arrived && <TitleCard level={arrived.level} length={run!.length} biome={arrived.biome} />}
-      <TopBar
-        title={`Run #${seed}${run ? ` · level ${run.level}/${run.length} · ${run.biome} · ${run.mood}` : ""}`}
-        onExit={onExit}
-      />
+      {stage !== "summary" && (
+        <TopBar
+          title={`Run #${seed}${run ? ` · level ${run.level}/${run.length} · ${run.biome} · ${run.mood}` : ""}`}
+          onExit={onExit}
+        />
+      )}
       {error && <div className="banner">{error}</div>}
 
       {stage === "intro" && !error && (
@@ -355,8 +365,8 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
             and choose an upgrade. Gates score more in a chain, and skimming the land earns style.
           </p>
           <p className="hint">
-            A crash puts you back at the last gate and breaks your gate chain. Abilities you pick up: <kbd>Shift</kbd> dash, <kbd>Space</kbd>{" "}
-            wingbeat, hold <kbd>F</kbd> to hover. The arrow at the top points to the portal.
+            A crash puts you back at the last gate and breaks your gate chain. Hold <kbd>Shift</kbd> to boost or <kbd>Space</kbd> to brake.
+            Adventure upgrades add <kbd>C</kbd> wingbeat and hold <kbd>F</kbd> hover. The arrow at the top points to the portal.
           </p>
           {best !== null && <p>Your best on this run: {best.toLocaleString()}</p>}
           <button className="primary" onClick={() => session.begin()}>
@@ -372,28 +382,62 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
       {stage === "pick" && !hud?.paused && <UpgradePicker offers={offers} next={next} onPick={(id) => session.pick(id)} />}
 
       {stage === "summary" && summary && (
-        <aside className="panel glass results">
-          <h2>The summit!</h2>
-          <p>
-            <strong>{summary.score.toLocaleString()}</strong> points
-            {best === null || summary.score > best ? " · a new best on this run!" : ` · your best is ${best.toLocaleString()}`}
-          </p>
-          <p>
-            {summary.levels} of 8 biomes: {summary.path.map((b) => BIOMES[b].name).join(" → ")}
-          </p>
-          <p>
-            {summary.upgrades.length > 0 && <>Upgrades: {summary.upgrades.map((id) => UPGRADES.find((u) => u.id === id)?.icon).join(" ")}</>}
-          </p>
-          <div className="row">
-            <button className="primary" onClick={() => session.again()}>
-              Fly it again <kbd>Enter</kbd>
-            </button>
-            <button onClick={onNewRun}>
-              New run <kbd>N</kbd>
-            </button>
-          </div>
-        </aside>
+        <FinishScreen summary={summary} best={best} onAgain={() => session.again()} onNewRun={onNewRun} onMenu={onExit} />
       )}
+    </div>
+  );
+};
+
+// --- Item gallery ------------------------------------------------------------------
+
+/** Every item model, and the pilot showing how they're taken out, worn and used */
+const GalleryScreen = ({ onExit }: { onExit: () => void }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const gallery = useRef<ItemGallery | null>(null);
+  const [demo, setDemo] = useState(true);
+  useEffect(() => {
+    let disposed = false;
+    void import("../game/items/gallery").then(({ ItemGallery }) => {
+      if (disposed || !ref.current) return;
+      gallery.current = new ItemGallery(ref.current);
+      if (import.meta.env.DEV) Object.assign(window, { __gallery: gallery.current });
+    });
+    return () => {
+      disposed = true;
+      gallery.current?.dispose();
+      gallery.current = null;
+    };
+  }, []);
+  const act = (f: (g: ItemGallery) => void) => {
+    if (!gallery.current) return;
+    f(gallery.current);
+    setDemo(false);
+  };
+  return (
+    <div className="game">
+      <div ref={ref} className="game-view" />
+      <TopBar title="Item gallery" onExit={onExit} />
+      <aside className="panel glass gallery-panel">
+        <header className="panel-head">
+          <small>Models and animations{demo ? " · demo playing" : ""}</small>
+          <h2>Items</h2>
+        </header>
+        <p className="hint">Put one on the pilot. What they do in a run comes later.</p>
+        <div className="gallery-items">
+          {ITEMS.map((item) => (
+            <button key={item.id} onClick={() => act((g) => g.equip(item.id))}>
+              {item.name}
+              <small>{item.slot === "back" ? "on the back" : item.slot === "head" ? "on the head" : "in hand"}</small>
+            </button>
+          ))}
+        </div>
+        <div className="row">
+          <button onClick={() => act((g) => g.use())}>Eat / use</button>
+          <button onClick={() => act((g) => g.thrust(true))}>Firework on</button>
+          <button onClick={() => act((g) => g.thrust(false))}>Off</button>
+          <button onClick={() => act((g) => g.clear())}>Put away</button>
+        </div>
+      </aside>
     </div>
   );
 };
@@ -433,6 +477,7 @@ const GameScreen = ({ screen, onNewRun, ...props }: ScreenProps & { screen: Excl
   if (!webglAvailable()) return <NoWebGL onExit={props.onExit} />;
   if (screen.kind === "explore") return <ExploreScreen biome={screen.biome} seed={screen.seed} {...props} />;
   if (screen.kind === "run") return <RunScreen seed={screen.seed} onNewRun={onNewRun} {...props} />;
+  if (screen.kind === "gallery") return <GalleryScreen onExit={props.onExit} />;
   return screen.kind === "solo" ? (
     <SoloScreen seed={screen.seed} {...props} />
   ) : (

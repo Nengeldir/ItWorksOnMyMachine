@@ -14,7 +14,7 @@ the last ring.
 - **Adventure:** a roguelike run through eight biomes linked by portals:
   Sky Isles, Verdant Highlands, Glacier Peaks, Sky Archipelago, Coral Lagoon,
   Twilight Forest, Ember Wastes and the Aurora Summit. Chain gates, skim for
-  style, and pick an upgrade at every portal (dash, wingbeats, hover, glide lock and more).
+  style, and pick an upgrade at every portal (stronger boost, wingbeats, hover, glide lock and more).
 
 Races and time trials always fly Sky Isles, so recorded ghosts and
 leaderboards stay valid; the other biomes are for the adventure.
@@ -55,18 +55,21 @@ docker compose up -d --build
 
 | Input                     | Action                                             |
 | :------------------------ | :------------------------------------------------- |
-| Mouse (click the view)    | Pitch and roll. The mouse acts like a stick.       |
+| Mouse (click the view)    | Pitch and turn; bank is limited to 80°.       |
 | `W` `S` / `↑` `↓`         | Dive / pull up (flight-stick style)                |
-| `A` `D` / `←` `→`         | Roll left / right. Banking turns you.              |
-| `Q` `E`, double-tap `A` `D` | Barrel roll (just for show; gamepad: `LB` `RB`)  |
-| Gamepad left stick        | Pitch and roll. `Y` respawns.                      |
+| `A` `D` / `←` `→`         | Turn left / right; maximum bank 80°.              |
+| `Q` `E` | 5 m sideways dodge + roll (gamepad: `LB` `RB`)  |
+| Gamepad left stick        | Pitch and turn. `Y` respawns.                      |
 | `R`                       | Respawn at the last ring                           |
 | `M`                       | Mute                                               |
 | `P`                       | Pause / resume local gameplay                      |
-| `Shift` / gamepad `X`     | Dash (adventure, with the upgrade)                 |
-| `Space` / gamepad `A`     | Wingbeat (adventure, with the upgrade)             |
+| Hold `Shift` / gamepad `RT` | Boost (all modes; release to recharge)          |
+| Hold `Space` / gamepad `LT` | Air brake (all modes; takes priority over boost) |
+| `C` / gamepad `A`         | Wingbeat (adventure, with the upgrade)             |
 | Hold `F` / gamepad `B`    | Hover (adventure, with the upgrade)                |
 | `1` to `4`                | Choose an upgrade at a portal                      |
+| `Enter` in the finale     | Skip the cutscene                                  |
+| `Backspace` at the end    | Back to the menu from the finish screen            |
 | `Enter`                   | Start the run / the race, fly again                |
 | `N`                       | New map (in a room's lobby)                        |
 | `Esc`                     | Free the mouse                                     |
@@ -76,7 +79,8 @@ turns speed back into height. Flying within a few metres of rock or trees fills
 the proximity bar: you get style points with a growing multiplier and extra
 acceleration, so risky lines are faster. Crash, or drop into the sea of clouds
 below the islands, and you respawn at your last ring, with the clock still
-running.
+running. While the land around you is still loading (outside races), the
+pilot glides in slowly by itself and you get control once it has arrived.
 
 Press `P` to pause and press it again to resume. Flight, effects and adventure
 timers freeze, and gameplay audio is silenced. In time trials and multiplayer,
@@ -86,10 +90,38 @@ To change the pause key, edit `KEY_BINDINGS.pause` in
 `KeyboardEvent.code` (for example, `KeyO`). The in-game controls and resume hint
 automatically use that binding.
 
+Flying into a portal blurs the view into sparkles and drops you into a
+wormhole: a dark tube of twisting stars and drifting spirits, where you pick
+an upgrade while the next biome is built.
+
+The last portal opens onto empty space under the Milky Way: a short
+cutscene, then white light, and you're back over the sky isles, flying by
+yourself, with your run's stats and what to do next.
+
 In an adventure there is no clock. Gates score more in a chain without a
 crash, and skimming earns style points. The arrow at the top of the screen
 points to the portal. A crash puts you back at the last gate and breaks your
 gate chain.
+
+Boost starts with a 2.5-second reserve and recharges in roughly 4.5 seconds
+when released. The HUD shows charge. Gamepad triggers are analog. Braking adds
+drag that fades near 22 m/s, while climbing can still cause a stall. Braking
+wins when both controls are held. The Gale boost upgrade strengthens the same
+held boost by 25% per stack; it no longer adds a separate dash action.
+
+The camera follows a blend of the nose and travel direction with restrained
+bank and FOV, and checks the whole player-to-camera segment for rock. Automatic
+and double-tap barrel rolls are disabled. A/D, the mouse and left stick target
+a bank of at most 80° and level smoothly on release. Pitch remains unrestricted.
+Release pitch after inverted flight to roll smoothly upright without changing
+the nose direction; recovery fades near vertical flight to avoid sudden flips.
+Q/E or LB/RB perform a 5 m sideways dodge over 0.6 s, with 1 s between starts.
+Dodge movement uses the unbanked right axis captured at activation, passes
+through normal collision checks, and leaves the forward heading unchanged.
+The roll animation follows the same physics timing, including for other players
+and ghosts. The camera carries its previous orientation through vertical flight
+and restores the horizon gradually. The boost panel keeps a fixed size across
+Ready, Boosting, Recharging and Braking states.
 
 ## How It Works
 
@@ -165,7 +197,10 @@ glowing ponds), soft clouds, valley mist, auroras and ambient particles
 **Flight model** ([`frontend/src/game/flight.ts`](frontend/src/game/flight.ts)):
 an arcade, energy-based wingsuit. The nose points where you go, gravity along
 the flight path speeds you up or slows you down, drag caps the speed, and
-banking turns you. Physics runs at a fixed 120 Hz. Open the game with `?tune`
+banking turns you. Physics runs at a fixed 120 Hz. What you can hit is a small
+ball for the body and a rectangle for each wing, tilted up like the wings
+drawn, a little smaller than the pilot so near misses stay graceful; the land
+you see is snapped onto the same surface the collisions use. Open the game with `?tune`
 (e.g. `http://localhost:5173/?seed=42&tune`) to tune every constant live:
 flight physics, the pilot's animation, trails and particles, the crystal gates,
 the camera and the render quality. Look tweaks are remembered in the browser;
@@ -176,8 +211,13 @@ friends): the pilot is a cel-shaded little flyer with outlines, a cape, a scarf
 and feathered wings, all built from primitives at runtime. Its animation sits on
 top of the flight model and never changes it: the body leans into turns ahead
 of the physics, the wings flap harder when climbing, turning or slow and fold
-back in a dive, the cloth ripples with speed, and hard turns throw a barrel
-roll. Gates are cohorts of floating crystals that flare and burst when you fly
+back in a dive, the cloth ripples with speed, and Q/E trigger deliberate barrel rolls. Boost sweeps the wings back;
+braking spreads them into the airflow. A crash plays out on screen before you respawn: hit a wall head-on and
+the pilot bounces off and tumbles head over heels; graze a slope and they roll
+down it in a trail of dust; clip a wing and they spin down like a seed; then
+they dissolve into light. The camera arcs up over the pilot to watch the fall
+from above, and the tumbling body (head, hips, feet and both wings) stays out
+of the rock. Gates are cohorts of floating crystals that flare and burst when you fly
 through. One GPU particle system draws every mote, star and shard, and bright
 things bloom (High quality). Each palette is a lighting mood as well: sun
 position, valley mist, painted clouds, stars at night, and how brightly trims
@@ -203,14 +243,25 @@ doesn't fly the course itself.
 | `frontend/src/game/Game.ts`            | The game: loop, physics steps, race state, HUD data      |
 | `frontend/src/game/input.ts`           | Input, actions and shared keyboard bindings (including pause) |
 | `frontend/src/game/world/`             | Racing line, rock field, meshing workers, palettes, view |
-| `frontend/src/game/flight.ts`          | Flight model                                             |
+| `frontend/src/game/world/snap.ts`      | Snaps meshed land onto the collision surface             |
+| `frontend/src/game/flight.ts`          | Flight model and the pilot's hitbox                      |
 | `frontend/src/game/avatar.ts`          | The pilot's model and animation                          |
+| `frontend/src/game/death.ts`           | Crash animations: how a crash plays out (looks only)     |
+| `frontend/src/game/items/`             | Item models and animations; `/?gallery` shows them all   |
 | `frontend/src/game/tuning.ts`          | Every look-and-feel constant, for the `?tune` panel      |
 | `frontend/src/game/pilots.ts`          | Remote players and ghosts, with interpolation            |
 | `frontend/src/net/`                    | Server clock and the room connection (SSE + POST)        |
 | `frontend/src/session/`                | Solo and room sessions: wire a Game to the network and UI |
 | `frontend/src/components/`             | React screens: menu, HUD, lobby and result panels        |
 | `frontend/Caddyfile`                   | Static files, compression, `/api` to the backend         |
+
+Race results now use the `speed-control-v3` flight rules. SQLite migration
+preserves original rows as `legacy` and leaves v1/v2 scores intact; current
+leaderboards, personal bests and ghost queries use only v3 results (body-and-wing hitboxes). Deploy frontend and backend together.
+Gameplay POSTs carry `X-Flight-Rules: speed-control-v3`; stale clients receive
+409 and a reload message. Ghost playback accepts both the old eight-number
+samples, ten-number boost/brake samples, and new eleven-number samples
+including signed dodge progress.
 
 ## API
 
@@ -258,6 +309,7 @@ npm install
 npm run dev        # http://localhost:5173, forwards /api to :8000
 npm run lint
 npm run build
+npm test       # Node 22.18+; flight, camera, controls and ghost regressions
 ```
 
 To test multiplayer on one machine, open the room in two different browsers

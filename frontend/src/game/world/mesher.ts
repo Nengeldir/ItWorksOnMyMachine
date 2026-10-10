@@ -3,6 +3,7 @@ import { smoothstep } from "../math";
 import { hash3 } from "../rng";
 import { TUBE_RADIUS } from "./course";
 import type { Palette } from "./palette";
+import { SurfaceCutter, snapToSurface } from "./snap";
 import type { World } from "./World";
 
 // Surface nets: sample the rock's distance field on a grid, put one vertex in
@@ -18,6 +19,8 @@ export interface ChunkMesh {
   positions: Float32Array; // flat-shaded triangles, world coordinates
   colors: Float32Array;
   trees: Float32Array; // [x, ground, z, height, radius] per tree
+  /** Per tree, how far below `ground` its trunk is drawn: down to the snapped rock, never changing its collider */
+  treeSink: Float32Array;
 }
 
 const CORNERS = [
@@ -117,11 +120,12 @@ export function meshChunk(world: World, ix: number, iy: number, iz: number): Chu
     }
   }
   if (inside === 0 || inside === field.length) {
-    return { positions: new Float32Array(0), colors: new Float32Array(0), trees: new Float32Array(0) };
+    return { positions: new Float32Array(0), colors: new Float32Array(0), trees: new Float32Array(0), treeSink: new Float32Array(0) };
   }
 
   // One vertex per crossed cell, at the average of where its edges cross the surface
   const vertices = new Float32Array(C * C * C * 3);
+  const used: number[] = [];
   const values = new Float32Array(8);
   for (let k = 0; k < C; k++) {
     for (let j = 0; j < C; j++) {
@@ -153,27 +157,40 @@ export function meshChunk(world: World, ix: number, iy: number, iz: number): Chu
         vertices[v] = ox + (i + sx / count) * S;
         vertices[v + 1] = oy + (j + sy / count) * S;
         vertices[v + 2] = oz + (k + sz / count) * S;
+        used.push(v);
       }
     }
   }
+  // The rock drawn goes onto the surface collisions use. Trees and colors still come from the
+  // grid's own vertices (`grid`): the race map's tree colliders must never move
+  const grid = vertices.slice();
+  const distance = (x: number, y: number, z: number) => world.legacy!.distance(x, y, z);
+  snapToSurface(vertices, used, distance, S);
+  const cutter = new SurfaceCutter(distance);
 
   const positions: number[] = [];
   const colors: number[] = [];
   const trees: number[] = [];
+  const treeSink: number[] = [];
   const palette = colorsFor(world.palette);
   const color = new Color();
   const cell = (i: number, j: number, k: number) => (i + C * (j + C * k)) * 3;
+  // Every piece of a cut face gets the face's color
+  cutter.emit = (ax, ay, az, bx, by, bz, cx, cy, cz) => {
+    positions.push(ax, ay, az, bx, by, bz, cx, cy, cz);
+    for (let i = 0; i < 3; i++) colors.push(color.r, color.g, color.b);
+  };
 
   const triangle = (a: number, b: number, c: number) => {
-    const ax = vertices[a];
-    const ay = vertices[a + 1];
-    const az = vertices[a + 2];
-    const e1x = vertices[b] - ax;
-    const e1y = vertices[b + 1] - ay;
-    const e1z = vertices[b + 2] - az;
-    const e2x = vertices[c] - ax;
-    const e2y = vertices[c + 1] - ay;
-    const e2z = vertices[c + 2] - az;
+    const ax = grid[a];
+    const ay = grid[a + 1];
+    const az = grid[a + 2];
+    const e1x = grid[b] - ax;
+    const e1y = grid[b + 1] - ay;
+    const e1z = grid[b + 2] - az;
+    const e2x = grid[c] - ax;
+    const e2y = grid[c + 1] - ay;
+    const e2z = grid[c + 2] - az;
     const nx = e1y * e2z - e1z * e2y;
     const ny = e1z * e2x - e1x * e2z;
     const nz = e1x * e2y - e1y * e2x;
@@ -195,16 +212,15 @@ export function meshChunk(world: World, ix: number, iy: number, iz: number): Chu
     if (world.course.distance(mx, my, mz) < TUBE_RADIUS + 3) color.lerp(palette.tunnel, 0.6);
     color.multiplyScalar(0.92 + 0.16 * jitter);
 
-    for (const v of [a, b, c]) {
-      positions.push(vertices[v], vertices[v + 1], vertices[v + 2]);
-      colors.push(color.r, color.g, color.b);
-    }
+    cutter.triangle(vertices[a], vertices[a + 1], vertices[a + 2], vertices[b], vertices[b + 1], vertices[b + 2], vertices[c], vertices[c + 1], vertices[c + 2]);
 
     // A pine now and then on flat grass, never in the way of the racing line
     if (up > 0.88 && !snowy && jitter < 0.08) {
       const height = 6 + 8 * hash3(Math.round(mx * 4), Math.round(mz * 4), 3);
       if (world.course.distance(mx, my + height / 2, mz) > TUBE_RADIUS + height / 2 + 4) {
         trees.push(mx, my - 0.3, mz, height, height * 0.27);
+        // The rock drawn there may now lie lower than the grid's face: reach down to it
+        treeSink.push(Math.max(0, distance(mx, my, mz)));
       }
     }
   };
@@ -247,5 +263,6 @@ export function meshChunk(world: World, ix: number, iy: number, iz: number): Chu
     positions: new Float32Array(positions),
     colors: new Float32Array(colors),
     trees: new Float32Array(trees),
+    treeSink: new Float32Array(treeSink),
   };
 }

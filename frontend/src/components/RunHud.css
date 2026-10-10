@@ -256,7 +256,10 @@
 .run-picker {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse at center, rgba(12, 8, 32, 0.7) 0%, rgba(12, 8, 32, 0.35) 70%, rgba(12, 8, 32, 0.15) 100%);
+  /* Over the dark wormhole: light text, a soft dark pool behind the cards */
+  color: #f4f0ff;
+  background: radial-gradient(ellipse at center, rgba(8, 6, 24, 0.45) 0%, rgba(8, 6, 24, 0.15) 60%, rgba(8, 6, 24, 0) 100%);
+  animation: run-picker-in 0.8s ease-out both;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -280,6 +283,21 @@
   margin-top: 0.6rem;
 }
 
+@keyframes run-picker-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.run-picker p {
+  color: rgba(244, 240, 255, 0.8);
+}
+
 .run-picker .card {
   position: relative;
   width: 14rem;
@@ -290,8 +308,10 @@
   gap: 0.4rem;
   padding: 1.1rem 1rem 1.6rem;
   border-radius: 16px;
-  background: rgba(20, 16, 40, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(24, 20, 52, 0.62);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 30px rgba(140, 170, 255, 0.12) inset;
   color: inherit;
   text-shadow: none;
   cursor: pointer;
@@ -320,7 +340,13 @@
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: var(--ink-70);
+  color: rgba(244, 240, 255, 0.6);
+}
+
+.run-picker .card kbd {
+  color: #f4f0ff;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
 .run-picker .card .text {
@@ -332,6 +358,173 @@
   position: absolute;
   bottom: 0.5rem;
   right: 0.6rem;
+}
+
+.finale-skip {
+  position: absolute;
+  right: 1.2rem;
+  bottom: 1.2rem;
+  color: rgba(244, 240, 255, 0.55);
+  font-size: 0.8rem;
+  pointer-events: none;
+  animation: run-picker-in 2s ease-out 2s both;
+}
+
+/* --- The finish screen ----------------------------------------------------------- */
+
+/* The card on the left, the actions on the right edge: the pilot flies on in the middle */
+.run-finish {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.2rem;
+  padding: 1rem clamp(1rem, 5vw, 5rem);
+  pointer-events: none;
+  /* Waits for the white light to clear a little */
+  animation: finish-in 1.2s ease-out 1.4s both;
+}
+
+@keyframes finish-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.8rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.finish-card {
+  pointer-events: auto;
+  width: min(27rem, 100%);
+  padding: 1.6rem 1.8rem;
+  border-radius: 28px;
+  background: color-mix(in srgb, #fff 28%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(14px) saturate(1.2);
+  box-shadow: 0 24px 60px color-mix(in srgb, var(--ink) 18%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.4);
+}
+
+.finish-card small {
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-70);
+  font-size: 0.72rem;
+}
+
+.finish-card h2 {
+  font-size: clamp(2rem, 5vw, 2.8rem);
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: -0.02em;
+  margin-top: -0.4rem;
+}
+
+.finish-score {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.finish-score strong {
+  font-size: 2.6rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.finish-score span {
+  color: var(--warm-deep);
+  font-weight: 700;
+}
+
+.finish-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.finish-stats div {
+  padding: 0.55rem 0.7rem;
+  border-radius: 14px;
+  background: color-mix(in srgb, #fff 35%, transparent);
+}
+
+.finish-stats dt {
+  font-size: 0.72rem;
+  color: var(--ink-70);
+  font-weight: 600;
+}
+
+.finish-stats dd {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.finish-path {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.35rem;
+  font-size: 0.82rem;
+  color: var(--ink-70);
+}
+
+.finish-path li:not(:last-child)::after {
+  content: " →";
+  color: var(--ink-45);
+}
+
+.finish-upgrades {
+  display: flex;
+  gap: 0.3rem;
+  font-size: 1.25rem;
+}
+
+.finish-actions {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 13rem;
+}
+
+.finish-actions button {
+  justify-content: space-between;
+  height: 3rem;
+  border-radius: 999px;
+  padding: 0 1.1rem;
+  backdrop-filter: blur(10px);
+}
+
+.finish-actions button:not(.primary) {
+  background: color-mix(in srgb, #fff 45%, transparent);
+}
+
+@media (max-width: 720px) {
+  .run-finish {
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow: auto;
+    padding-top: 1.5rem;
+  }
+
+  .finish-actions {
+    width: min(27rem, 100%);
+  }
 }
 
 @media (max-width: 640px) {

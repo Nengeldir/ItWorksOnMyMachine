@@ -47,6 +47,7 @@ export class GameAudio {
   private noise: AudioBuffer | null = null;
   private muted = false;
   private paused = false;
+  private boosting = false;
 
   get isMuted(): boolean {
     return this.muted;
@@ -160,13 +161,15 @@ export class GameAudio {
   }
 
   /** Per frame: speed in m/s, proximity 0..1, flying = false while crashed or frozen */
-  update(speed: number, proximity: number, flying: boolean) {
+  update(speed: number, proximity: number, flying: boolean, boost = 0, brake = 0) {
     if (!this.ctx || !this.windGain || !this.windFilter || !this.rushGain) return;
+    if (flying && boost > 0.1 && !this.boosting) this.flap();
+    this.boosting = flying && boost > 0.1;
     const now = this.ctx.currentTime;
     const s = Math.min(1, Math.max(0, (speed - 10) / 90));
-    this.windGain.gain.setTargetAtTime(flying ? 0.08 + 0.5 * s * s : 0.03, now, 0.1);
+    this.windGain.gain.setTargetAtTime(flying ? 0.08 + 0.5 * s * s + boost * 0.12 : 0.03, now, 0.1);
     this.windFilter.frequency.setTargetAtTime(250 + 2200 * s, now, 0.1);
-    this.rushGain.gain.setTargetAtTime(flying ? 0.25 * proximity * proximity * (0.3 + s) : 0, now, 0.05);
+    this.rushGain.gain.setTargetAtTime(flying ? 0.25 * proximity * proximity * (0.3 + s) + brake * s * 0.12 : 0, now, 0.05);
     this.music?.update();
   }
 
