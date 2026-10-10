@@ -78,7 +78,7 @@ export function chunkKey(ix: number, iy: number, iz: number): number {
 /** Every chunk that might hold rock: the ones overlapping a shape */
 export function rockChunks(world: World): { ix: number; iy: number; iz: number; key: number }[] {
   const found = new Map<number, { ix: number; iy: number; iz: number; key: number }>();
-  for (const shape of world.rock.shapes) {
+  for (const shape of world.legacy!.shapes) {
     const r = shape.bound + VOXEL;
     const range = (c: number) => [Math.floor((c - r) / CHUNK_SIZE), Math.floor((c + r) / CHUNK_SIZE)];
     const [x0, x1] = range(shape.cx);
@@ -110,7 +110,7 @@ export function meshChunk(world: World, ix: number, iy: number, iz: number): Chu
   for (let k = 0; k < D; k++) {
     for (let j = 0; j < D; j++) {
       for (let i = 0; i < D; i++) {
-        const v = world.rock.distance(ox + i * S, oy + j * S, oz + k * S);
+        const v = world.legacy!.distance(ox + i * S, oy + j * S, oz + k * S);
         field[i + D * (j + D * k)] = v;
         if (v < 0) inside++;
       }

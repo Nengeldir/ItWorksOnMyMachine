@@ -1,13 +1,18 @@
 import { useEffect, useState } from "react";
 import { type User, getMe } from "./api";
+import type { BiomeId } from "./game/world/biomes";
+import { ExploreSession } from "./session/ExploreSession";
 import GameScreen from "./components/GameScreen";
+import { randomSeed } from "./game/rng";
 import Menu from "./components/Menu";
 import { type Settings, loadSettings, saveSettings } from "./storage";
 
 export type Screen =
   | { kind: "menu"; joinCode?: string }
   | { kind: "solo"; seed: number }
-  | { kind: "room"; code: string };
+  | { kind: "room"; code: string }
+  | { kind: "explore"; biome: BiomeId; seed: number }
+  | { kind: "run"; seed: number };
 
 // Screens live in the URL, so a room link can be shared and reloads keep you in place
 function screenFromUrl(): Screen {
@@ -18,6 +23,12 @@ function screenFromUrl(): Screen {
     return loadSettings().nickname ? { kind: "room", code: room } : { kind: "menu", joinCode: room };
   }
   const seed = Number(params.get("seed"));
+  const run = Number(params.get("run"));
+  if (Number.isInteger(run) && run >= 1 && run < 2 ** 31) return { kind: "run", seed: run };
+  const explore = params.get("explore");
+  if (explore && ExploreSession.valid(explore)) {
+    return { kind: "explore", biome: explore, seed: Number.isInteger(seed) && seed >= 1 ? seed : 1 };
+  }
   if (Number.isInteger(seed) && seed >= 1 && seed < 2 ** 31) return { kind: "solo", seed };
   return { kind: "menu" };
 }
@@ -25,6 +36,8 @@ function screenFromUrl(): Screen {
 function urlFor(screen: Screen): string {
   if (screen.kind === "solo") return `/?seed=${screen.seed}`;
   if (screen.kind === "room") return `/?room=${screen.code}`;
+  if (screen.kind === "explore") return `/?explore=${screen.biome}&seed=${screen.seed}`;
+  if (screen.kind === "run") return `/?run=${screen.seed}`;
   return "/";
 }
 
@@ -62,6 +75,7 @@ const App = () => {
       settings={settings}
       onSettings={updateSettings}
       onExit={() => go({ kind: "menu" })}
+      onNewRun={() => go({ kind: "run", seed: randomSeed() })}
     />
   );
 };

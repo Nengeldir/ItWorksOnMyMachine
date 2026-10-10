@@ -1,4 +1,4 @@
-import { makeRng, pick } from "../rng";
+import { MathUtils, Vector3 } from "three";
 
 export interface Palette {
   name: string;
@@ -14,87 +14,20 @@ export interface Palette {
   sun: string;
   sunIntensity: number;
   ambient: number;
+  // Lighting mood
+  sunElevation: number; // degrees above the horizon
+  sunAzimuth: number; // degrees; 0 = straight down the course (ahead of you), so low suns backlight the run
+  night: number; // 0 = day … 1 = night: stars, glowing trims, stronger bloom
+  mist: string; // haze that thickens below you, towards the sea of clouds
+  mistDensity: number; // 0..1
+  glow: number; // brightness of particles and trails; bright scenes need more to read
+  aurora?: number; // 0..1: curtains of light across the night sky
+  underglow?: string; // light from below the horizon (lava), if any
 }
 
-// Each map picks one from its seed
-export const PALETTES: readonly Palette[] = [
-  {
-    name: "Alpine",
-    horizon: "#cdeaf6",
-    zenith: "#3f8fd2",
-    grass: "#8cb648",
-    forest: "#3f7a3a",
-    trunk: "#6b4a2f",
-    rock: "#93694a",
-    snow: "#f4f6f8",
-    cloud: "#ffffff",
-    accent: "#ff4f9a",
-    sun: "#fffaf0",
-    sunIntensity: 2.4,
-    ambient: 1.5,
-  },
-  {
-    name: "Misty pines",
-    horizon: "#e2e9d6",
-    zenith: "#9fbcac",
-    grass: "#6e8e55",
-    forest: "#355a3e",
-    trunk: "#5a4634",
-    rock: "#b3ab8e",
-    snow: "#eeeee2",
-    cloud: "#f4f6ee",
-    accent: "#ff7a3d",
-    sun: "#fff8e8",
-    sunIntensity: 2.0,
-    ambient: 1.7,
-  },
-  {
-    name: "Autumn",
-    horizon: "#ffe2bd",
-    zenith: "#5f9bd6",
-    grass: "#a9a24c",
-    forest: "#c4642c",
-    trunk: "#5a3b25",
-    rock: "#8a6b58",
-    snow: "#fffaf2",
-    cloud: "#fff8ee",
-    accent: "#2b7fff",
-    sun: "#fff1d6",
-    sunIntensity: 2.3,
-    ambient: 1.5,
-  },
-  {
-    name: "Dusk",
-    horizon: "#ffb894",
-    zenith: "#5a4fc0",
-    grass: "#6f8a4c",
-    forest: "#36503c",
-    trunk: "#4a3530",
-    rock: "#8a5c5e",
-    snow: "#ffe8e2",
-    cloud: "#ffd6cc",
-    accent: "#00f0ff",
-    sun: "#ffe0c8",
-    sunIntensity: 2.0,
-    ambient: 1.5,
-  },
-  {
-    name: "Winter",
-    horizon: "#dde8f4",
-    zenith: "#5e86c2",
-    grass: "#e6edf4",
-    forest: "#2e4f48",
-    trunk: "#4d3b30",
-    rock: "#7a8594",
-    snow: "#ffffff",
-    cloud: "#ffffff",
-    accent: "#ff3d5a",
-    sun: "#ffffff",
-    sunIntensity: 2.3,
-    ambient: 1.6,
-  },
-];
-
-export function paletteFor(seed: number): Palette {
-  return pick(makeRng(seed, "palette"), PALETTES);
+/** Unit vector towards the sun (or moon) */
+export function sunDirection(palette: Palette): Vector3 {
+  const el = MathUtils.degToRad(palette.sunElevation);
+  const az = MathUtils.degToRad(palette.sunAzimuth);
+  return new Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
 }

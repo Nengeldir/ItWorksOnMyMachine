@@ -5,8 +5,10 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   build: {
-    // three.js alone is ~700 kB (~180 kB gzipped), and the game needs all of it up front
-    chunkSizeWarningLimit: 1000,
+    // three.js alone is ~700 kB (~180 kB gzipped) and the game (biomes, terrain,
+    // plants, water, the run) another ~380 kB, all needed up front; bloom and the
+    // tuning panel load on demand
+    chunkSizeWarningLimit: 1200,
   },
   server: {
     proxy: {

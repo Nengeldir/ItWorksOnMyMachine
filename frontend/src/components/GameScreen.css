@@ -143,6 +143,21 @@
   background: var(--ink-06);
 }
 
+.panel.no-webgl {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(32rem, calc(100% - 1.5rem));
+}
+
+.panel.no-webgl ol {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
 .panel details summary {
   cursor: pointer;
   font-weight: 600;
