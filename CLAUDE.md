@@ -104,6 +104,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/world/crystals.ts` | Crystal gates: instanced crystals (bob, spin, pass flare and burst in the shader), veil discs with the pass shockwave, light pillars over the next gate and the finish |
 | `session/` | Solo, room, explore and run sessions wiring a `Game` to the network and UI. `ExploreSession`: free flight through any biome (`/?explore=verdant&seed=2`), nothing saved. `RunSession`: a roguelike run (`/?run=<seed>`), best score per run seed in localStorage |
 | `net/` | Server clock sync and the room connection (SSE down, POST up) |
+| `staleBuild.ts` | After a redeploy, an open tab's lazy chunks (bloom, `?tune`) and mesher worker are 404s: `reloadForNewBuild` reloads the page once (at most every 30 s, production only) |
 | `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, controls, and the run's HUD, title card and upgrade picker (`RunHud.tsx`) |
 
 Backend (`backend/`): `app.py` endpoints, `rooms.py` race state machine and
@@ -158,6 +159,26 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Stale builds after a rebuild (Claude)
+
+Reported: after a rebuild the game sometimes didn't load (blank page,
+localhost "not connecting") until the browser cache was cleared.
+- `Pengyue` was missing `main`'s Caddy fix (`e1b63df`): `index.html` was
+  cached heuristically, so browsers kept asking for the previous build's
+  hashed JS, and the SPA fallback answered with HTML. Merged `main`:
+  `index.html` is now `no-cache`, and a missing `/assets/*` file is a 404.
+- A tab left open across a rebuild still failed: the bloom chunk, the
+  `?tune` panel and the mesher worker of the old build are gone, so bloom
+  threw and the land never arrived. New `staleBuild.ts` reloads the page
+  once when one of them fails to load (`vite:preloadError`, the bloom and
+  lil-gui imports, `worker.onerror` in `WorldView`), at most once every 30 s
+  so a really missing file can't cause a reload loop.
+- Port 8080 is Colima's forward of the Docker port, IPv4 only (`::1` refuses).
+  Browsers fall back to 127.0.0.1, so this isn't the cause.
+- Verified: build and lint pass. In a test container from the new image:
+  `/` and `/explore` return `no-cache`, hashed assets return `immutable`, and
+  a missing asset returns 404. The reload itself wasn't triggered in a browser.
 
 ### 2026-10-10: Merged main's menu and UI redesign (Claude)
 
