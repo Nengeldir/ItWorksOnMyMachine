@@ -106,6 +106,8 @@ export class ExploreSession {
 
   private updateUrl(biome: BiomeId) {
     const url = new URL(location.href);
+    // Test mode may have been opened as ?explore=…&test or ?run=…&test: keep one spelling
+    if (this.testMode) ["explore", "run"].forEach((name) => url.searchParams.delete(name));
     url.searchParams.set(this.testMode ? "test" : "explore", biome);
     url.searchParams.set("seed", String(this.seed));
     history.replaceState(null, "", url.pathname + url.search + url.hash);
@@ -153,9 +155,5 @@ export class ExploreSession {
   stepMood(direction: 1 | -1) {
     const { biome, mood } = this.store.get();
     this.show(biome, mood + direction);
-  }
-
-  static valid(biome: string): biome is BiomeId {
-    return Object.hasOwn(BIOMES, biome);
   }
 }

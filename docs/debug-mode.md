@@ -1,81 +1,56 @@
-# Debug playtest mode
+# Test mode
 
-The mode requires a development server or an explicit `VITE_ENABLE_DEBUG=true`
-build, plus a `?debug` URL opt-in. `vite.config.ts` compiles this policy into
-the boolean `__PLAYTEST__` so default public builds exclude the panel and
-actions. Settings belong to that game instance; they neither persist nor
-apply to rooms or the menu backdrop. The private Docker configuration and
-commands are documented in the README's Debug playtesting section.
+A sandbox for playtesting the adventure: portals, the upgrade picker,
+biome transitions and the finish screen, without flying eight levels and
+without saving anything. It is part of the normal build (dev, `vite
+preview`, Docker); the URL alone turns it on.
 
-After take-off, `Shift+P` spawns a temporary adventure portal ahead of the
-pilot, 40 m by default. The panel's portal-distance setting adjusts this.
-Repeated presses replace the temporary portal, retaining the normal exit.
-Entering it uses the normal upgrade and biome-transition flow; changing
-levels removes it.
+## Opening it
 
-`Shift+O` opens the adventure victory screen immediately, including from
-pause, intro or the upgrade picker. It banks current style once, clears
-portal effects and uses the existing victory event. The summary reports the
-actual score, upgrades and visited biomes. Test adventures never save best
-scores; test time trials never submit times or ghosts.
+`test` can be added to any single-player URL (`frontend/src/route.ts`):
 
-Both actions have panel buttons and share the `DEBUG_ACTIONS` registry in
-`frontend/src/game/debug/actions.ts`. `Input.onShortcut` gives these chords
-precedence over pause. Plain P retains pause/resume; repeated keydowns do
-not repeat actions, and typing in editable fields is ignored.
+| URL | Opens |
+| :-- | :-- |
+| `/?test` | Sky Isles, seed 1 |
+| `/?test=verdant&seed=2` | Verdant Highlands, seed 2 |
+| `/?explore=verdant&seed=2&test` | the same: `explore=` names the world when `test` has none |
+| `/?seed=42&test` | Sky Isles, seed 42 |
+| `/?run=5&test` | Sky Isles, run seed 5 (not a saved run) |
+| `/?room=ABCD&test`, `/?gallery&test` | the room or gallery as usual: test mode is single-player only |
 
-To extend the mode, add a setting to `debugMode.ts`, its default and control
-descriptor to `tuning.ts`, and a `__PLAYTEST__`-guarded consumer. Add actions
-to `DEBUG_ACTIONS` and handle them in `Game.performDebugAction`. The same
-controls appear in `?debug&tune` without persisting gameplay overrides.
+An unknown world falls back to Sky Isles. Once open, the URL is rewritten to
+`?test=<world>&seed=<n>` and follows the world as portals change it.
 
-## 2026-10-10: Docker playtesting
+## What's on screen
 
-Docker builds set Vite's `DEV` flag to false. That previously disabled URL
-preservation, panel loading and both actions. The shared `__PLAYTEST__`
-constant now covers all those paths, as well as session score isolation.
-The Dockerfile defaults `VITE_ENABLE_DEBUG` to `false`; the explicit
-`docker-compose.debug.yml` override builds with it enabled and replaces the
-public port mapping with `127.0.0.1:8081:8080`. Using the separate project
-name in the README keeps the normal deployment and its data independent.
+- The flight panel with style points, and the run HUD: score, gate chain,
+  "Reach the portal" with its distance, and the compass.
+- The top bar: `Test · #seed · level n/8 · world · mood · speed`.
+- The test panel (bottom left; below 840 px wide it moves to the right,
+  under the compass, to stay clear of the flight panel):
 
-`?debug` and `?debug=` both opt in; the parameter is not a password.
-General development hooks stay disabled in optimized playtest builds.
-Current verification and follow-ups are recorded in `CLAUDE.md`.
+| Keys | Does |
+| :-- | :-- |
+| `Shift+P` | Replaces this level's portal with one straight ahead (at least 3 portal radii, or 1.5 s of flight) |
+| `Shift+O` | Ends the run now: the real finish screen ("test result · not saved") over the victory lap |
+| `Shift+S` | Half speed / normal speed for physics, animation, shaders, camera and CSS animations; the panel shows which |
+| `Enter` | Skips the finale; on the finish screen, flies the test again |
+| `Backspace` | On the finish screen, back to the menu |
 
-## 2026-10-10: Remove flight telemetry
+The chords are taken before ordinary bindings (Shift boost, P pause, S
+pitch), fire once per press, and are ignored while typing or with a
+settings dialog open. The panel hides during portals, the picker, the
+finale and the finish screen.
 
-Removed all flight readouts, the visibility toggle, the telemetry sampler,
-and its respawn, fixed-step and HUD hooks, as requested. The panel now
-contains only playtest controls, with no telemetry sampling overhead.
+## How it's built
 
-Changed `frontend/src/game/debug/{panel.ts,panel.css,telemetry.ts}`,
-`debugMode.ts`, `tuning.ts`, `Game.ts`, the debug tests and README. Removed
-the obsolete telemetry tests; updated the remaining test fixture for the
-current wormhole host methods and upgrade-picker timing. The portal and
-victory implementations are unchanged.
-
-This dated record and the README carry the documentation updates because
-the user explicitly requested that `CLAUDE.md` remain unchanged.
-
-Verification:
-
-- `npm run build` and `npm run lint` pass.
-- `npm run test:debug`: all six remaining tests pass, covering development
-  gating, shortcuts and typing/repeat guards, portal placement/replacement,
-  upgrades and biome transitions, victory idempotency and wormhole cleanup.
-- Headless Firefox: one panel with exactly three controls and no flight
-  readouts or telemetry setting, including with `?debug&tune`. Real Shift+P
-  spawns a portal 40 m ahead and replaces it on another press; plain P
-  pauses; Shift+O from pause opens the finish screen without saving scores
-  or uploading results. The finish screen fades in normally. Games without
-  `?debug` have no panel or victory shortcut. No game JavaScript errors.
-- Inspected screenshots of the compact panel and finish screen at 1200×800.
-- No telemetry references remain in frontend source or current README.
-  `CLAUDE.md`, flight physics, input and portal/victory logic have no diff.
-
-Follow-ups: focused-window mouse/gamepad playtesting and narrow-screen
-layout checks were not performed. This change was validated with the
-targeted debug suite, not the complete frontend test glob; the existing
-camera, flight-realism and input fixture issues noted in `CLAUDE.md` remain
-outside this removal.
+- `route.ts`: `screenFromSearch` gives a `{ kind: "test", biome, seed }` screen.
+- `ExploreSession` (with `testMode`) starts a `RunController` on the chosen
+  level (`Game.startRun(seed, events, level)`). Its `ended` event never
+  reaches `RunSession`'s bests or the server.
+- `Input.onTestAction` (installed only by `Game` in test mode) and
+  `RunController.spawnTestPortal` / `testWin`.
+- `testPlayback.ts`: the playback rate. `Game.loop` scales its frame delta
+  (adaptive quality still reads the real one); CSS animations follow through
+  the Web Animations API.
+- Tests: `frontend/tests/test-mode.test.mjs` (URL parsing, chord handling).
