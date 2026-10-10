@@ -522,12 +522,12 @@ const GalleryScreen = ({ onExit }: { onExit: () => void }) => {
           <small>Models and animations{demo ? " · demo playing" : ""}</small>
           <h2>Items</h2>
         </header>
-        <p className="hint">Put one on the pilot. What they do in a run comes later.</p>
+        <p className="hint">Preview the models here. Adventure items have their own effects in a run.</p>
         <div className="gallery-items">
           {ITEMS.map((item) => (
             <button key={item.id} onClick={() => act((g) => g.equip(item.id))}>
               {item.name}
-              <small>{item.slot === "back" ? "on the back" : item.slot === "head" ? "on the head" : "in hand"}</small>
+              <small>{item.slot === "back" ? "on the back" : item.slot === "head" ? "on the head" : item.slot === "feet" ? "on the feet" : "in hand"}</small>
             </button>
           ))}
         </div>

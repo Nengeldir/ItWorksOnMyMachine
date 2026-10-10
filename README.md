@@ -195,6 +195,12 @@ The roll animation follows the same physics timing, including for other players
 and ghosts. The camera carries its previous orientation through vertical flight
 and restores the horizon gradually.
 
+Adventure items use a bag of three: **Y** (or right mouse button while flying)
+uses the selected item; **U** (or the mouse wheel) cycles it. Gamepad d-pad right
+uses and left cycles. Boots have three charges; the Phoenix feather works
+by itself when carried. `Shift+I` in test mode gives the next design-list item.
+Item rules appear under **Run items**, their looks under **Item looks** in `?tune`.
+
 ## How It Works
 
 ```
@@ -375,7 +381,8 @@ doesn't fly the course itself.
 | `frontend/src/game/flight.ts`          | Flight model and the pilot's hitbox                      |
 | `frontend/src/game/avatar.ts`          | The pilot's model and animation                          |
 | `frontend/src/game/death.ts`           | Crash animations: how a crash plays out (looks only)     |
-| `frontend/src/game/items/`             | Item models and animations; `/?gallery` shows them all   |
+| `frontend/src/game/items/`             | Toon models, equipment and adventure item effects; `/?gallery` shows them all |
+| `frontend/src/game/run/items.ts`       | Adventure bag, item rules, bonus gates and loose collectibles |
 | `frontend/src/game/run/abilities.ts`   | The adventure abilities' rules (run mode only)           |
 | `frontend/src/game/abilities/`         | The abilities' models and animations (looks only)        |
 | `frontend/src/game/tuning.ts`          | Every look-and-feel constant, for the `?tune` panel      |
