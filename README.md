@@ -259,10 +259,10 @@ doesn't fly the course itself.
 | `frontend/src/components/`             | React screens: menu, HUD, lobby and result panels        |
 | `frontend/Caddyfile`                   | Static files, compression, `/api` to the backend         |
 
-Race results now use the `speed-control-v2` flight rules. SQLite migration
-preserves original rows as `legacy` and leaves v1 scores intact; current
-leaderboards, personal bests and ghost queries use only v2 results. Deploy frontend and backend together.
-Gameplay POSTs carry `X-Flight-Rules: speed-control-v2`; stale clients receive
+Race results now use the `speed-control-v3` flight rules. SQLite migration
+preserves original rows as `legacy` and leaves v1/v2 scores intact; current
+leaderboards, personal bests and ghost queries use only v3 results (body-and-wing hitboxes). Deploy frontend and backend together.
+Gameplay POSTs carry `X-Flight-Rules: speed-control-v3`; stale clients receive
 409 and a reload message. Ghost playback accepts both the old eight-number
 samples, ten-number boost/brake samples, and new eleven-number samples
 including signed dodge progress.

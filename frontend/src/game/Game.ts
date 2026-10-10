@@ -779,6 +779,7 @@ export class Game implements RunHost {
     this.glide.update(dt, this.flight, this.field);
     this.prevPosition.copy(this.flight.position);
     this.prevQuaternion.copy(this.flight.quaternion);
+    this.prevVelocity.copy(this.flight.velocity);
     this.accumulator = 0;
     this.proximity = 0;
     this.run?.wait(dt);
@@ -790,6 +791,7 @@ export class Game implements RunHost {
     this.flight.reset(this.flight.position, this.glide.heading, START_SPEED);
     this.prevPosition.copy(this.flight.position);
     this.prevQuaternion.copy(this.flight.quaternion);
+    this.prevVelocity.copy(this.flight.velocity);
     this.accumulator = 0;
   }
 

@@ -248,7 +248,6 @@ const localOmega = new THREE.Vector3();
 const dq = new THREE.Quaternion();
 const prevInverse = new THREE.Quaternion();
 const forwardTmp = new THREE.Vector3();
-const rightTmp = new THREE.Vector3();
 const elbowTmp = new THREE.Vector3();
 
 function springStep(value: number, velocity: number, target: number, stiffness: number, damping: number, dt: number) {
