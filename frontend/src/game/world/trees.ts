@@ -63,6 +63,9 @@ export class Plant implements Collider {
   private readonly gr: number;
   private readonly gy: number;
   private readonly gb: number;
+  private readonly hx: number;
+  private readonly hy: number;
+  private readonly hz: number;
 
   constructor(x: number, ground: number, z: number, height: number, radius: number, yaw: number, shape: ColliderShape) {
     this.x = x;
@@ -98,7 +101,10 @@ export class Plant implements Collider {
     this.gr = (shape.gate?.r ?? 0) * height;
     this.gy = (shape.gate?.y ?? 0) * height;
     this.gb = (shape.gate?.bar ?? 0) * height;
-    this.radius = Math.max(radius, Math.abs(lean) + radius * 0.9);
+    this.hx = (shape.hall?.x ?? 0) * height;
+    this.hy = (shape.hall?.y ?? 0) * height;
+    this.hz = (shape.hall?.z ?? 0) * height;
+    this.radius = Math.max(radius, Math.abs(lean) + radius * 0.9, Math.hypot(this.hx, this.hz));
   }
 
   distance(px: number, py: number, pz: number): number {
@@ -142,6 +148,15 @@ export class Plant implements Collider {
       const post = Math.hypot(Math.abs(u) - this.gx, w, v - clamp(v, 0, this.gy)) - this.gr;
       const bar = Math.hypot(u - clamp(u, -this.gx, this.gx), w, v - this.gy) - this.gb;
       d = Math.min(d, post, bar);
+    }
+    if (this.hx > 0) {
+      // A hall: a box in the building's own frame, standing on the ground
+      const qx = px - this.x;
+      const qz = pz - this.z;
+      const u = Math.abs(qx * this.nz - qz * this.nx) - this.hx;
+      const w = Math.abs(qx * this.nx + qz * this.nz) - this.hz;
+      const v = py - this.ground - this.hy;
+      d = Math.min(d, Math.min(Math.max(u, v, w), 0) + Math.hypot(Math.max(u, 0), Math.max(v, 0), Math.max(w, 0)));
     }
     return d;
   }

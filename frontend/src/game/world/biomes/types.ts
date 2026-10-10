@@ -160,7 +160,7 @@ export interface StructureSpec {
   spacing: number; // metres between candidate sites (a jittered grid)
   chance: number; // share of candidates tried
   height: [number, number]; // metres
-  /** A landmark: at most one per this many metres of the course, on the best site there (`chance` is ignored; `where.lateral` bounds the search). List landmarks first */
+  /** A landmark: at most one per this many metres of the course, on the best site there (`chance`: how likely each stretch has one; `where.lateral` bounds the search). List landmarks first */
   landmark?: number;
   colors: {
     stone: string; // walls

@@ -241,6 +241,7 @@ export function placeFlora(world: World, box: Box, withTufts: boolean): { plants
       // One per stretch of the course: the candidate with the lowest draw that can stand
       const reach = info.foot * spec.height[1] + 1.5 + SITE_MARGIN;
       for (let band = Math.floor((box.z0 - reach) / spec.landmark); band <= Math.floor((box.z1 + reach) / spec.landmark); band++) {
+        if (hash3(band, index, s0 + 7) > spec.chance) continue;
         const found = landmark(world, index, band, spec.landmark, step, spec.where?.lateral?.[1] ?? 400, s0, siteAt);
         if (!found) continue;
         if (found[0] < box.x0 - reach || found[0] >= box.x1 + reach || found[2] < box.z0 - reach || found[2] >= box.z1 + reach) continue;

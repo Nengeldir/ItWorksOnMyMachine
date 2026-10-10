@@ -128,9 +128,9 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/world/islands.ts` | `RockField`: the floating islands as one signed distance field (shapes melted with `smin`, roughened, a tube carved along the racing line) |
 | `game/world/mesher.ts`, `mesher.worker.ts` | Cuts chunks of the rock field into flat-shaded meshes in Web Workers, and places trees (from the grid's own vertices, so the race map's tree colliders never move; `treeSink` stretches a trunk down to snapped rock, drawn only). Workers rebuild the World from a `LevelKey` |
 | `game/world/snap.ts` | Makes the land drawn match the land you hit: `snapToSurface` moves surface-nets vertices onto the field's zero surface (Newton steps), `SurfaceCutter` splits faces whose edges or middles still stray more than 0.5 m (crack-free: an edge's split depends only on its ends). Used by both meshers (v2 at full detail only) |
-| `game/world/trees.ts` | Tree colliders and their lookup index. `Plant` is the collider of generator-v2 plants and structures: a tapered trunk, an optional canopy ellipsoid, an optional upright disc (a windmill's sails) and an optional gate (two posts and a bar, open in between) |
+| `game/world/trees.ts` | Tree colliders and their lookup index. `Plant` is the collider of generator-v2 plants and structures: a tapered trunk, an optional canopy ellipsoid, an optional upright disc (a windmill's sails) an optional gate (two posts and a bar, open in between) and an optional hall (a long box: the ETH building's wings) |
 | `game/world/flora/` | Generator-v2 vegetation: `species.ts` (sizes, colliders), `meshes.ts` (models from primitives), `placement.ts` (`placeFlora`, run in the mesher workers: structures first, then plants keeping clear of them, then grass), `view.ts` (`FloraView`: one instanced pool per kind, impostor atlas, grass), `pool.ts` |
-| `game/world/structures/` | Built things (18 kinds: towers, lanterns, windmills, a monastery, a lighthouse, shrine gates…) riding the flora pipeline as extra kinds after a biome's species. `kinds.ts`: `StructureId`, `STRUCTURE_INFO` (collider, footprint, plinth depth, spinning parts), `kindInfo(biome, kind)`. `models.ts`: `structureGeometry` (1 m tall, true proportions, vertex color / sway / glow / spin). A biome lists them in `Biome.structures` (`StructureSpec`: spacing, chance, height, colors, `landmark` for one per stretch of the course, `where` site rules: above, lateral, wet, `water` depth, forest, hilltop, `on` ground or rock, facing the line). Species plus structures must fit the impostor atlas (16). Run biomes only; they collide |
+| `game/world/structures/` | Built things (19 kinds: towers, lanterns, windmills, a monastery, a lighthouse, shrine gates…) riding the flora pipeline as extra kinds after a biome's species. `kinds.ts`: `StructureId`, `STRUCTURE_INFO` (collider, footprint, plinth depth, spinning parts), `kindInfo(biome, kind)`. `models.ts`: `structureGeometry` (1 m tall, true proportions, vertex color / sway / glow / spin). A biome lists them in `Biome.structures` (`StructureSpec`: spacing, chance, height, colors, `landmark` for one per stretch of the course, `where` site rules: above, lateral, wet, `water` depth, forest, hilltop, `on` ground or rock, facing the line). Species plus structures must fit the impostor atlas (16). Run biomes only; they collide |
 | `game/world/course.ts` | The racing line (a descending curve in z) and the gates along it |
 | `game/world/palette.ts` | The `Palette` type: a lighting mood (colors, sun elevation and azimuth, night factor, mist, effect glow), and `sunDirection(palette)`. Each biome lists its moods |
 | `game/world/atmosphere.ts` | `ATMOSPHERE` light uniforms shared per biome; `atmospheric()` patches Lambert materials (sun-tinted haze matching the sky, valley mist, backlit rims, rock strata); `skyMaterial()` (gradient, HDR sun or moon disc and halo, painted clouds, twinkling stars at night) |
@@ -193,6 +193,40 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: The ETH main building as a rare Easter egg; structures, step 4 so far (Claude)
+
+Asked for: ETH as a rare Easter egg, with a link to a Sketchfab model of the
+Hauptgebäude; and to go on with step 4 (the day and night check).
+- **ETH main building** (`ethMainBuilding`): built from primitives in the
+  game's style, not imported. The Sketchfab model (by HMQ AG, a laser-scan
+  CAD model, 13.3 million triangles) shows no license and no download, and a
+  scan would break the art direction (no realistic assets) and the triangle
+  budget. Ours: the long sandstone hall on a rusticated ground floor, end
+  pavilions, the rotunda with its columns, the drum and the green ribbed
+  dome, two storeys of lit windows, banners in ETH blue. About 32 m tall and
+  70 m long.
+- **Where**: Verdant Highlands only, a landmark with `chance: 0.1` per
+  stretch: 8 of explore seeds 1 to 60 have one (5, 6, 13, 27, 41, 43, 49,
+  50). `/?explore=verdant&seed=6` (Morning) and `seed=27` (Moonlit) show it.
+  Landmarks now honor `chance`.
+- **Collider** (`trees.ts`): `ColliderShape.hall`, a box along the model's x
+  axis, so the wings collide along their whole length.
+- Adding it first in Verdant's list moved Verdant's other structures (their
+  draws depend on their place in the list).
+- **Step 4, checked so far** (headless Chrome, `__shot`): the kinds not yet
+  looked at (obelisk, brazier, ruined columns, pylon, star altar), and second
+  moods: Lagoon by day, Archipelago and Aurora at night, Ember by day.
+  Fixes: the pylon's crystal and the star altar's star were blown out to
+  white at night (glow down from about 2 to under 1); Ember's stone was too
+  dark to read against its ground (lighter stone for the temple, obelisks
+  and columns); the lighthouse's beam was a white blob (thinner, dimmer).
+- A warning for whoever takes screenshots: `__shot` needs about 7 s of
+  streaming before a structure near the camera is drawn in full detail;
+  at 3.5 s some shots show bare ground where the structure stands.
+- Verified: build and lint pass; 26 frontend tests (new: the hall collider,
+  turned by its yaw; seeds 2 and 3 have no ETH, seed 6 has one). ETH seen by
+  day and night (`docs/screenshots/structures-biomes/`). Not flown by hand.
 
 ### 2026-10-10: Structures, step 3: a landmark and scattered kinds in every run biome (Claude)
 
@@ -1090,10 +1124,11 @@ ported to the islands world:
 
 ## Next up
 
-- **Structures, next steps** (plan: "Structures per biome"): step 4 is the
-  day and night browser check per biome, and the moving parts. Open from
-  step 3: look closely at the kinds listed as not looked at in the change
-  log, and at every biome in its other mood; the plan's pieces that need two
+- **Structures, next steps** (plan: "Structures per biome"): step 4 is
+  partly done (see the change log). Still to check: Twilight's Midnight
+  bloom mood, Verdant's shrine gates, and every moving part in motion
+  (sails, the lighthouse's beam, the observatory's rings, flags and flames:
+  only still frames were looked at). Open from step 3: the plan's pieces that need two
   anchors or sit on other shapes aren't built (rope and chain bridges,
   prayer-flag lines between shards, treehouses on trunks, doors in mushroom
   stems, sailboats, Aurora's stair of arches, Twilight's lantern tree: a

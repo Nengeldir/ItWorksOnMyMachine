@@ -8,7 +8,7 @@ import { SPECIES, type SpeciesInfo } from "../flora/species";
 // true proportions (radius = height), so parts can turn without shearing.
 // No three.js geometry here.
 
-export type StructureId = "watchtower" | "stoneLantern" | "windmill" | "monastery" | "bellPavilion" | "stoneHut" | "prayerPole" | "lighthouse" | "stiltHut" | "ruinColumn" | "shrineGate" | "spiritStatue" | "forgeTemple" | "obelisk" | "brazier" | "observatory" | "pylon" | "starAltar";
+export type StructureId = "watchtower" | "stoneLantern" | "windmill" | "monastery" | "bellPavilion" | "stoneHut" | "prayerPole" | "lighthouse" | "stiltHut" | "ruinColumn" | "shrineGate" | "spiritStatue" | "forgeTemple" | "obelisk" | "brazier" | "observatory" | "pylon" | "starAltar" | "ethMainBuilding";
 
 export interface StructureInfo extends SpeciesInfo {
   foot: number; // radius of the ground it stands on, as a share of the height
@@ -179,6 +179,16 @@ export const STRUCTURE_INFO: Record<StructureId, StructureInfo> = {
     glows: true,
     foot: 0.6,
     sink: 0.5,
+    spin: null,
+  },
+  // An Easter egg: ETH Zurich's main building, where VIScon is held
+  ethMainBuilding: {
+    aspect: [1, 1],
+    collider: { trunk: 0.3, top: 0.72, taper: 0.9, canopy: { y: 0.8, r: 0.27, h: 0.2 }, lean: 0, hall: { x: 1.12, y: 0.55, z: 0.4 } },
+    sway: 0.008,
+    glows: true,
+    foot: 0.8,
+    sink: 0.32,
     spin: null,
   },
 };

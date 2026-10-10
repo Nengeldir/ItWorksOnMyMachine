@@ -122,6 +122,8 @@ export const VERDANT: Biome = {
   },
   structures: [
     // Old mills on the shoulders of the hills, watchtowers above the valley, lanterns along the river
+    // An Easter egg, in about one level in six: ETH Zurich's main building, dome and all, above the valley
+    { id: "ethMainBuilding", landmark: 2400, spacing: 60, chance: 0.1, height: [30, 34], colors: { stone: "#dccba6", stone2: "#b9a987", roof: "#7f9c8f", cloth: "#1f407a" }, where: { above: [-5, 130], lateral: [120, 420], facing: true } },
     { id: "windmill", spacing: 130, chance: 0.9, height: [15, 19], colors: { stone: "#d9cfbb", stone2: "#b9b59a", roof: "#b5533c", cloth: "#f6ecd6" }, where: { above: [-10, 150], lateral: [60, 700], forest: false, hilltop: true } },
     { id: "watchtower", spacing: 170, chance: 0.6, height: [15, 21], colors: { stone: "#cfc6b4", stone2: "#9aa784", roof: "#3f6f8f", cloth: "#d84a4a" }, where: { above: [-15, 170], lateral: [50, 800] } },
     { id: "shrineGate", spacing: 130, chance: 0.6, height: [8, 11], colors: { stone: "#bdb6a6", stone2: "#93a07c", roof: "#3a3a44", cloth: "#d84a3a" }, where: { above: [-18, 120], lateral: [30, 500], facing: true } },

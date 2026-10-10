@@ -122,3 +122,32 @@ test("every run biome has a landmark and scattered structures, the same at every
     assert.ok(fine.length > 0 && fine.every((p) => here.has(p)), `${biome}: full-detail nodes disagree with coarse ones`);
   }
 });
+
+test("the ETH main building collides along its whole length, and only some levels have one", () => {
+  const h = 30;
+  // Yaw 0: the wings run along x, the rotunda looks along z
+  const eth = new Plant(0, 0, 0, h, h, 0, STRUCTURE_INFO.ethMainBuilding.collider);
+  assert.ok(eth.distance(1.05 * h, 0.3 * h, 0) < 0, "inside the end of a wing");
+  assert.ok(eth.distance(0, 0.85 * h, 0.1 * h) < 0, "inside the dome");
+  assert.ok(eth.distance(1.05 * h, 0.8 * h, 0) > 3, "above the wing's roof");
+  assert.ok(eth.distance(0, 0.3 * h, 0.9 * h) > 3, "in front of the rotunda");
+  const turned = new Plant(0, 0, 0, h, h, Math.PI / 2, STRUCTURE_INFO.ethMainBuilding.collider);
+  assert.ok(turned.distance(0, 0.3 * h, 1.05 * h) < 0 && turned.distance(1.05 * h, 0.3 * h, 0) > 3);
+  // Seeds 2 and 3 have none, seed 6 has one (about one Verdant level in six does)
+  const count = (seed) => {
+    const world = new World(runLevel(seed, 1, "verdant"));
+    assert.equal(world.biome.structures[0].id, "ethMainBuilding");
+    const species = world.biome.vegetation.species.length;
+    let n = 0;
+    for (let iz = 0; iz < 7; iz++) {
+      const cx = Math.floor(world.course.x(iz * 384 + 192) / 384), cy = Math.floor(world.course.y(iz * 384 + 192) / 384);
+      for (let ix = cx - 2; ix <= cx + 2; ix++) for (let iy = cy - 1; iy <= cy + 1; iy++) {
+        const { plants } = placeFlora(world, { x0: ix * 384, y0: iy * 384, z0: iz * 384, x1: ix * 384 + 384, y1: iy * 384 + 384, z1: iz * 384 + 384 }, false);
+        for (let o = 0; o < plants.length; o += PLANT_STRIDE) if (plants[o] === species) n++;
+      }
+    }
+    return n;
+  };
+  assert.equal(count(2), 0);
+  assert.equal(count(6), 1);
+});

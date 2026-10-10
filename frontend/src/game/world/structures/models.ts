@@ -396,7 +396,7 @@ function observatory(c: Colors): THREE.BufferGeometry[] {
 }
 
 function pylon(c: Colors): THREE.BufferGeometry[] {
-  const crystal: Paint = { color: c.light, color2: c.cloth, share2: 0.4, shade: [0.9, 1.2], glow: 1.3, glow2: 1.9 };
+  const crystal: Paint = { color: c.light, color2: c.cloth, share2: 0.4, shade: [0.8, 1.15], glow: 0.55, glow2: 0.95 };
   const parts = [
     piece(block(0.16, 0.13, -0.32, 0.08), { color: c.stone, color2: c.stone2, share2: 0.3, shade: [0.72, 1.08] }),
     piece(block(0.1, 0.085, 0.08, 0.2), { color: c.stone2, shade: [0.8, 1.08] }),
@@ -417,14 +417,65 @@ function starAltar(c: Colors): THREE.BufferGeometry[] {
   const parts = [
     piece(new THREE.CylinderGeometry(0.58, 0.68, 0.62, 10).translate(0, -0.21, 0), stone),
     piece(new THREE.CylinderGeometry(0.4, 0.44, 0.08, 10).translate(0, 0.14, 0), stone),
-    piece(new THREE.CylinderGeometry(0.3, 0.3, 0.012, 10).translate(0, 0.186, 0), { color: c.light, shade: [1, 1], glow: 0.9 }),
+    piece(new THREE.CylinderGeometry(0.3, 0.3, 0.012, 10).translate(0, 0.186, 0), { color: c.light, shade: [1, 1], glow: 0.5 }),
     // A fallen star, floating over it
-    piece(new THREE.OctahedronGeometry(0.16, 0).scale(1, 1.3, 1).translate(0, 0.72, 0), { color: c.light, shade: [1, 1], glow: LIT, sway: [1, 1] }),
-    piece(new THREE.OctahedronGeometry(0.1, 0).scale(1.9, 0.5, 1.9).rotateY(0.6).translate(0, 0.72, 0), { color: c.cloth, shade: [1, 1], glow: LIT, sway: [1, 1] }),
+    piece(new THREE.OctahedronGeometry(0.16, 0).scale(1, 1.3, 1).translate(0, 0.72, 0), { color: c.light, shade: [0.85, 1.1], glow: 0.9, sway: [1, 1] }),
+    piece(new THREE.OctahedronGeometry(0.1, 0).scale(1.9, 0.5, 1.9).rotateY(0.6).translate(0, 0.72, 0), { color: c.cloth, shade: [0.9, 1.1], glow: 1.2, sway: [1, 1] }),
   ];
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * Math.PI * 2;
     parts.push(piece(new THREE.ConeGeometry(0.05, 0.22, 4).translate(Math.sin(a) * 0.5, 0.2, Math.cos(a) * 0.5), { color: c.stone2, shade: [0.8, 1.1] }));
+  }
+  return parts;
+}
+
+function ethMainBuilding(c: Colors): THREE.BufferGeometry[] {
+  const stone: Paint = { color: c.stone, shade: [0.84, 1.06] };
+  const base: Paint = { color: c.stone2, shade: [0.75, 1.02] };
+  const roof: Paint = { color: c.roof, color2: c.roof.clone().multiplyScalar(0.86), share2: 0.3, shade: [0.8, 1.12] };
+  const lit: Paint = { color: c.light, shade: [1, 1], glow: 1.5 };
+  const box = (w: number, h: number, d: number, x: number, y: number, z: number) => new THREE.BoxGeometry(w, h, d).translate(x, y, z);
+  const parts = [
+    // A terrace, the long hall on a rusticated ground floor, a cornice and a low roof
+    piece(box(2.3, 0.37, 0.92, 0, -0.135, 0), base),
+    piece(box(2.2, 0.14, 0.78, 0, 0.12, 0), base),
+    piece(box(2.16, 0.28, 0.74, 0, 0.33, 0), stone),
+    piece(box(2.2, 0.02, 0.8, 0, 0.48, 0), { color: c.stone, shade: [1.05, 1.1] }),
+    piece(box(2.1, 0.05, 0.66, 0, 0.515, 0), roof),
+    // The rotunda swelling out of the front, its drum and the ribbed dome
+    piece(new THREE.CylinderGeometry(0.33, 0.33, 0.55, 16).translate(0, 0.325, 0.2), stone),
+    piece(new THREE.CylinderGeometry(0.36, 0.36, 0.025, 16).translate(0, 0.5, 0.2), { color: c.stone, shade: [1.05, 1.1] }),
+    piece(new THREE.CylinderGeometry(0.27, 0.29, 0.14, 16).translate(0, 0.66, 0.12), stone),
+    piece(new THREE.SphereGeometry(0.27, 16, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.82, 1).translate(0, 0.73, 0.12), roof),
+    piece(new THREE.CylinderGeometry(0.035, 0.045, 0.05, 8).translate(0, 0.965, 0.12), stone),
+    piece(new THREE.IcosahedronGeometry(0.02, 0).translate(0, 1, 0.12), { color: c.trim, shade: [1, 1], glow: 0.8 }),
+    // The doors under the columns
+    piece(box(0.1, 0.12, 0.02, 0, 0.11, 0.535), { color: c.wood, shade: [0.8, 1] }),
+  ];
+  // Columns round the rotunda, with tall windows between them
+  for (let i = -4; i <= 4; i++) {
+    const a = (i / 4) * 1.25;
+    parts.push(piece(new THREE.CylinderGeometry(0.014, 0.016, 0.3, 6).translate(Math.sin(a) * 0.35, 0.34, 0.2 + Math.cos(a) * 0.35), { color: c.stone, shade: [0.95, 1.1] }));
+    if (i < 4) {
+      const b = ((i + 0.5) / 4) * 1.25;
+      parts.push(piece(new THREE.BoxGeometry(0.045, 0.16, 0.02).translate(0, 0.35, 0.325).rotateY(b).translate(0, 0, 0.2), lit));
+    }
+  }
+  for (let i = 0; i < 10; i++) parts.push(piece(new THREE.BoxGeometry(0.035, 0.07, 0.02).translate(0, 0.66, 0.272).rotateY((i / 10) * Math.PI * 2).translate(0, 0, 0.12), lit));
+  for (const side of [-1, 1]) {
+    // Pavilions closing the wings, a little taller and further out
+    parts.push(piece(box(0.34, 0.47, 0.84, side * 0.95, 0.285, 0), stone));
+    parts.push(piece(box(0.37, 0.02, 0.87, side * 0.95, 0.53, 0), { color: c.stone, shade: [1.05, 1.1] }));
+    parts.push(piece(box(0.3, 0.045, 0.74, side * 0.95, 0.56, 0), roof));
+    // Two storeys of windows down both long sides
+    for (const face of [-1, 1]) {
+      for (let row = 0; row < 2; row++) {
+        for (let i = 0; i < 6; i++) parts.push(piece(box(0.035, row ? 0.075 : 0.06, 0.02, side * (0.39 + i * 0.066), 0.29 + row * 0.11, face * 0.372), lit));
+        for (let i = 0; i < 3; i++) parts.push(piece(box(0.04, row ? 0.075 : 0.06, 0.02, side * (0.86 + i * 0.09), 0.29 + row * 0.11, face * 0.422), lit));
+      }
+    }
+    // Banners in the university's blue either side of the doors
+    parts.push(piece(box(0.035, 0.16, 0.006, side * 0.42, 0.36, 0.378), { color: c.cloth, shade: [0.9, 1.1], sway: [1, 0.05] }));
   }
   return parts;
 }
@@ -462,6 +513,7 @@ export function structureGeometry(spec: StructureSpec, spinY: number): THREE.Buf
     observatory: () => observatory(colors),
     pylon: () => pylon(colors),
     starAltar: () => starAltar(colors),
+    ethMainBuilding: () => ethMainBuilding(colors),
   };
   const parts = builders[spec.id]();
   const merged = mergeGeometries(parts)!;

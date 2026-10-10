@@ -32,6 +32,8 @@ export interface ColliderShape {
   disc?: { y: number; out: number; r: number; t: number };
   /** A gate: two posts `x` either side along the model's x axis (radius `r`, up to `y`) and a bar of radius `bar` across their tops (shares of the height) */
   gate?: { x: number; r: number; y: number; bar: number };
+  /** A long building: a box from the ground up to `y`, half as long as `x` along the model's x axis and half as deep as `z` (shares of the height) */
+  hall?: { x: number; y: number; z: number };
 }
 
 export interface SpeciesInfo {
