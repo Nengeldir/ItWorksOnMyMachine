@@ -151,6 +151,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/world/palette.ts` | The `Palette` type: a lighting mood (colors, sun elevation and azimuth, night factor, mist, effect glow), and `sunDirection(palette)`. Each biome lists its moods |
 | `game/world/atmosphere.ts` | `ATMOSPHERE` light uniforms shared per biome; `atmospheric()` patches Lambert materials (sun-tinted haze matching the sky, valley mist, backlit rims, rock strata); `skyMaterial()` (gradient, HDR sun or moon disc and halo, painted clouds, twinkling stars at night). Under the sea (`ATMOSPHERE.underwater`, set from `SkySpec.underwater`): `atmospheric()` adds caustics, and the sky is the water's surface seen from below (`ATMOSPHERE.surface`) |
 | `game/world/deep.ts` | Under the sea, looks only: `LightShafts` (shafts of light from the surface, a world-fixed grid of them round the camera) and `SeaLife` (schools of fish, jellyfish), each one instanced draw call animated in the vertex shader. `DEEP` in `tuning.ts` |
+| `game/world/water.ts` | River pools, waterfall curtains and seas. River pools write depth so the later waterfall draw cannot paint foam over the upstream surface; dry banks are discarded. River shading continues to the edge, with narrow animated lip foam (`WATER.lipFoam`, `lipFoamWidth`, per-pixel distance) and a short `WATER.fallBlend` join below it (0.2 m). Both river and island curtains advect foam downward through a fixed travel coordinate, accelerating with the drop (`WATER.fallSpeed`); elapsed time never reverses the flow. Rendering only; water collisions still use `Steps` |
 | `game/world/WorldView.ts` | Meshes for a World, as its biome describes them: land streamed from the workers (Sky Isles' chunks, or a `LandStreamer` for v2 land), pines, the sea of clouds and cloud puffs, sky, gates. `ready` is false until the land near you has arrived. `collider` (a `LandCollider`) holds the land on screen; `covers(x, y, z)` says whether the land at a point is on screen (or there is none), else collisions there fall back to the distance field |
 | `game/world/crystals.ts` | Crystal gates: instanced crystals (bob, spin, pass flare and burst in the shader), veil discs with the pass shockwave, light pillars over the next gate and the finish |
 | `session/` | Solo, room, explore and run sessions wiring a `Game` to the network and UI. `ExploreSession`: free flight through any biome (`/?explore=verdant&seed=2`), nothing saved; `?test` reuses it with a RunController for real portals/upgrades and unsaved victory previews, showing only test shortcuts rather than biome/light controls. `RunSession`: a roguelike run (`/?run=<seed>`), best score per run seed in localStorage |
@@ -315,6 +316,31 @@ designer). UI only: runs play as before.
   biomes (labels, moods, colors), `Esc` back to today's colors, a run's start
   pill, score pill, compass and colors. Not looked at: the upgrade picker,
   title card and finish screen (unchanged), phones.
+### 2026-10-10 — Natural river-to-waterfall transitions
+
+- Fixed waterfall foam drawing over the upstream river: pool surfaces now
+  write depth, so the later curtain draw is correctly occluded. Dry padded
+  banks are discarded before writing depth (`game/world/water.ts`).
+- Joined curtains to the exact upstream cross-section, carrying the river's
+  depth tint, flow, foam and surface normal across the lip. Curtains arc
+  downstream and downward; river shading blends into falling foam over the
+  first 0.2 m of drop. Both river and island waterfalls animate foam downward
+  through a fixed travel coordinate, accelerating with the drop without
+  reversing as elapsed time grows.
+- Added subtle, broken animated foam at the lip, fading within 0.9 m upstream.
+  Its width is evaluated per pixel so coarse river vertices cannot spread it
+  upstream. Exposed `WATER.fallBlend`, `fallSpeed`, `lipFoam` and `lipFoamWidth`
+  in `game/tuning.ts` and `?tune`; updated README and the architecture map.
+  These are rendering changes only; seeded generation and collisions are unchanged.
+- Added `frontend/tests/water.test.mjs` to check pool/curtain continuity and
+  downstream-only geometry across five biomes and three seeds. Frontend build,
+  lint and the water regression test pass; build retains the bundle-size
+  warning. Browser checks covered morning and moonlit upstream/downstream
+  views, falling animation and lip foam, with no JavaScript errors. Hiding
+  the curtain left the upstream river pixels identical after the depth fix.
+  The full test run remains blocked by failures in seven pre-existing
+  untracked test files with missing modules or stale expectations.
+
 ### 2026-10-10 — Rebase mesh fixes for review
 
 - Rebased onto main at `9f3d70c`, preserving both sides of documentation

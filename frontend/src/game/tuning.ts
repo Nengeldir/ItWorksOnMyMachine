@@ -133,6 +133,10 @@ export const WATER = {
   glitter: 1, // sun glitter on the water
   glow: 1, // lava and bioluminescent pools
   spray: 1, // spray when skimming the water, mist at the foot of falls
+  fallBlend: 0.2, // short join just below the edge; the flat river keeps its shading
+  fallSpeed: 3, // foam flows downward, accelerating as it falls
+  lipFoam: 0.45, // subtle broken foam along outgoing waterfall edges
+  lipFoamWidth: 0.9, // maximum upstream reach of edge foam, in metres
 };
 
 /** Levels under the sea (Sunken Reef). Looks only */
@@ -318,6 +322,10 @@ export const RANGES: Record<string, [number, number, number?]> = {
   thermal: [0, 2],
   gale: [0, 2],
   grassDistance: [40, 300, 5],
+  fallBlend: [0.05, 1, 0.05],
+  fallSpeed: [0.5, 6, 0.1],
+  lipFoam: [0, 1, 0.05],
+  lipFoamWidth: [0.1, 2, 0.1],
   music: [0, 1],
   sfx: [0, 2],
   crossfade: [0.5, 10],

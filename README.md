@@ -252,6 +252,13 @@ other level. Fly any biome freely at
 `/?explore=<id>&seed=<n>` (ids: `verdant`, `glacier`, `archipelago`,
 `lagoon`, `twilight`, `ember`, `aurora`, `reef`).
 
+Rivers keep their color and ripples up to the edge. Below it, waterfall foam
+flows downward and accelerates with the drop. In `?tune`, Water's `fallSpeed`
+controls that motion; `fallBlend` sets the short shading join below the edge
+(0.2 m by default). A narrow band of animated foam softens the lip;
+`lipFoam` controls its strength and `lipFoamWidth` its maximum reach upstream
+(0.9 m by default).
+
 **Test mode:** open `/?test` (or `/?test=verdant&seed=2`), or add `&test` to
 any single-player URL: `/?explore=verdant&seed=2&test` tests that world,
 `/?seed=42&test` and `/?run=5&test` that seed (from Sky Isles). Rooms and the
