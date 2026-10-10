@@ -3,7 +3,7 @@ import * as THREE from "three";
 const PIECES = 28;
 const LIFETIME = 1.6;
 
-/** Bits of wingsuit that scatter on a crash */
+/** Fragments of the airplane that scatter on a crash */
 export class Debris {
   readonly mesh: THREE.InstancedMesh;
   private readonly positions: THREE.Vector3[] = [];
