@@ -1,12 +1,11 @@
 import * as THREE from "three";
 import { fxTime } from "../particles";
-import { DESCENT } from "./terrain";
 
 // The air between you and the world: one set of light uniforms shared by the
 // sky, the terrain and the rocks, set per biome (palette). The patch adds what
 // the plain Lambert material lacks:
 // - haze that turns the sun's color when you look towards it, matching the sky,
-// - mist pooling on the canyon floor and thinning with height,
+// - mist that thickens below you, down towards the sea of clouds,
 // - rims that light up on edges seen against the sun (backlight),
 // - rock strata: soft horizontal bands on cliffs.
 
@@ -15,7 +14,6 @@ export const ATMOSPHERE = {
   sunColor: { value: new THREE.Color("#ffffff") },
   mistColor: { value: new THREE.Color("#ffffff") },
   mistDensity: { value: 0.5 },
-  descent: { value: DESCENT },
   horizon: { value: new THREE.Color("#ffffff") },
   zenith: { value: new THREE.Color("#3366cc") },
   clouds: { value: new THREE.Color("#ffffff") },
@@ -36,7 +34,6 @@ const PARS = /* glsl */ `
   uniform vec3 atmoSunColor;
   uniform vec3 atmoMistColor;
   uniform float atmoMistDensity;
-  uniform float atmoDescent;
   uniform float atmoStrata;
   varying vec3 vAtmoWorld;
   ${SUN_GLOW}
@@ -50,7 +47,6 @@ export function atmospheric<T extends THREE.MeshLambertMaterial>(material: T, st
     shader.uniforms.atmoSunColor = ATMOSPHERE.sunColor;
     shader.uniforms.atmoMistColor = ATMOSPHERE.mistColor;
     shader.uniforms.atmoMistDensity = ATMOSPHERE.mistDensity;
-    shader.uniforms.atmoDescent = ATMOSPHERE.descent;
     shader.uniforms.atmoStrata = strataUniform;
     shader.vertexShader = shader.vertexShader
       .replace("void main() {", "varying vec3 vAtmoWorld;\nvoid main() {")
@@ -88,8 +84,9 @@ export function atmospheric<T extends THREE.MeshLambertMaterial>(material: T, st
           gl_FragColor.rgb += atmoSunColor * rim * pow(towardsSun, 3.0) * 0.45;
           #ifdef USE_FOG
             float fogFactor = smoothstep(fogNear, fogFar, vFogDepth);
-            float above = vAtmoWorld.y + atmoDescent * vAtmoWorld.z;
-            float mist = atmoMistDensity * exp(-max(above, 0.0) / 45.0) * (1.0 - exp(-dist / 280.0));
+            // Height above a level a little below the camera: rock far beneath you sinks into the haze
+            float above = vAtmoWorld.y - (cameraPosition.y - 40.0);
+            float mist = atmoMistDensity * (1.0 - exp(-max(-above, 0.0) / 120.0)) * (1.0 - exp(-dist / 280.0));
             gl_FragColor.rgb = mix(gl_FragColor.rgb, atmoMistColor, clamp(mist, 0.0, 0.85) * (1.0 - fogFactor));
             gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor + sunGlow(viewDir), fogFactor);
           #endif

@@ -286,11 +286,13 @@ export class CrystalGates {
       for (let i = 0; i < main + satellites; i++) {
         const big = i < main;
         const angle = big ? (i / main) * Math.PI * 2 + range(rng, -0.08, 0.08) : range(rng, 0, Math.PI * 2);
-        const halfLength = big ? range(rng, 1.3, 2.1) * (ring.finish ? 1.25 : 1) : range(rng, 0.35, 0.7);
-        const radius = big ? ring.radius + 0.5 + halfLength : ring.radius + range(rng, 1.5, 5.5);
+        // Sized for a 13 m ring; smaller gates get smaller crystals so the crown stays clear of the rock
+        const k = Math.min(1, ring.radius / 13);
+        const halfLength = (big ? range(rng, 1.3, 2.1) * (ring.finish ? 1.25 : 1) : range(rng, 0.35, 0.7)) * k;
+        const radius = big ? ring.radius + 0.5 * k + halfLength : ring.radius + range(rng, 1.5, 5.5) * k;
         gateIndex.push(g);
         crystal.push(angle, radius, range(rng, 0, Math.PI * 2), range(rng, -0.4, 0.4));
-        size.push(halfLength, big ? range(rng, 1.1, 1.6) : range(rng, 0.6, 0.9), big ? 0.5 + range(rng, -0.2, 0.2) : range(rng, -1, 1));
+        size.push(halfLength, (big ? range(rng, 1.1, 1.6) : range(rng, 0.6, 0.9)) * k, big ? 0.5 + range(rng, -0.2, 0.2) : range(rng, -1, 1));
         layout.push({ angle, radius });
       }
       this.layout.push(layout);

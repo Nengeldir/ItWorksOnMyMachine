@@ -3,7 +3,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { outlineMaterial, toonMaterial } from "./toon";
 import { ATMOSPHERE } from "./world/atmosphere";
 import { ANIM, FX } from "./tuning";
-import { clamp, smoothstep } from "./world/terrain";
+import { clamp, smoothstep } from "./math";
 
 // The pilot: a small cel-shaded flyer with Genshin / Sky proportions (a big
 // head, slim limbs), a Sky-style cape, a scarf, and a pair of feathered

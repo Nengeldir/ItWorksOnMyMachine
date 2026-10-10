@@ -1,7 +1,6 @@
 import { PerspectiveCamera, Vector3 } from "three";
+import { clamp } from "./math";
 import { CAMERA } from "./tuning";
-import type { Terrain } from "./world/terrain";
-import { clamp } from "./world/terrain";
 
 const WORLD_UP = new Vector3(0, 1, 0);
 const desired = new Vector3();
@@ -61,9 +60,17 @@ export class CameraRig {
     const calm = clamp((45 - speed) / 25, 0, 1);
     this.camera.position.y += Math.sin(this.time * 0.9) * 0.15 * calm;
 
-    if (terrain) {
-      const floor = terrain.height(this.camera.position.x, this.camera.position.z) + 1.5;
-      if (this.camera.position.y < floor) this.camera.position.y = floor;
+    // Behind rock? Pull in towards the pilot until the view is clear
+    if (clearance && clearance(this.camera.position.x, this.camera.position.y, this.camera.position.z) < 1.5) {
+      let clear = 0;
+      let blocked = 1;
+      for (let i = 0; i < 6; i++) {
+        const mid = (clear + blocked) / 2;
+        pulled.lerpVectors(position, this.camera.position, mid);
+        if (clearance(pulled.x, pulled.y, pulled.z) >= 1.5) clear = mid;
+        else blocked = mid;
+      }
+      this.camera.position.lerpVectors(position, this.camera.position, clear);
     }
 
     // Roll the horizon with the pilot, but only partly

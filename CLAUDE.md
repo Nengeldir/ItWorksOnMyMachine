@@ -40,8 +40,9 @@ touching code, and keep it true.
 ## The project
 
 Wingrace is a browser wingsuit racer in the style of Superflight, with
-multiplayer races. Every course is a seeded canyon (same seed, same map) with
-gates (rings), pillars, floating rocks and arches. Built for the VIScon
+multiplayer races. Every course is a seeded racing line through floating
+islands (same seed, same map) with crystal gates, pine forests and a sea of
+clouds below. Built for the VIScon
 hackathon: React + Three.js frontend, FastAPI backend behind Caddy, everything
 in `docker compose`.
 
@@ -79,13 +80,15 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/effects.ts` | Crash debris (instanced tetrahedra) |
 | `game/audio.ts` | Synthesized wind and event sounds |
 | `game/webgl.ts` | WebGL 2 availability check; `GameScreen` shows help if it's missing |
-| `game/world/World.ts` | Everything a seed decides: terrain, course, obstacles, palette. No rendering |
-| `game/world/terrain.ts` | Heightmap canyon from simplex noise; distance queries for collisions |
-| `game/world/course.ts` | Racing line, ring placement, obstacle placement |
-| `game/world/obstacles.ts` | Pillars, rocks, arches as signed distance functions, plus a grid for lookups |
-| `game/world/palette.ts` | Six biome moods (Dusk, Glacier, Jungle, Desert, Nightshade, Lagoon): colors plus lighting (sun elevation and azimuth, night factor, valley mist, clouds, effect glow). `sunDirection(palette)` |
+| `game/math.ts` | `clamp`, `smoothstep`, `smin` (smooth minimum for distance fields) |
+| `game/world/World.ts` | Everything a seed decides: course, rock field, trees, palette; `distance()` for collisions, `lost()` below the islands. No rendering |
+| `game/world/islands.ts` | `RockField`: the floating islands as one signed distance field (shapes melted with `smin`, roughened, a tube carved along the racing line) |
+| `game/world/mesher.ts`, `mesher.worker.ts` | Cuts chunks of the rock field into flat-shaded meshes in Web Workers, and places trees |
+| `game/world/trees.ts` | Tree colliders and their lookup index |
+| `game/world/course.ts` | The racing line (a descending curve in z) and the gates along it |
+| `game/world/palette.ts` | Six biome moods (Alpine, Misty pines, Autumn, Dusk, Winter, Starlight): colors plus lighting (sun elevation and azimuth, night factor, mist below you, effect glow). `sunDirection(palette)` |
 | `game/world/atmosphere.ts` | `ATMOSPHERE` light uniforms shared per biome; `atmospheric()` patches Lambert materials (sun-tinted haze matching the sky, valley mist, backlit rims, rock strata); `skyMaterial()` (gradient, HDR sun or moon disc and halo, painted clouds, twinkling stars at night) |
-| `game/world/WorldView.ts` | Meshes for a World: streamed terrain chunks, obstacles, sky, sun, gates |
+| `game/world/WorldView.ts` | Meshes for a World: island chunks streamed from the workers, pines, the sea of clouds and cloud puffs, sky, gates. `ready` is false until the rock near you has arrived |
 | `game/world/crystals.ts` | Crystal gates: instanced crystals (bob, spin, pass flare and burst in the shader), veil discs with the pass shockwave, light pillars over the next gate and the finish |
 | `session/` | Solo and room sessions wiring a `Game` to the network and UI |
 | `net/` | Server clock sync and the room connection (SSE down, POST up) |
@@ -99,7 +102,7 @@ Players never collide, so the server only relays positions.
 
 - **Flight:** the nose points where you go. Gravity along the flight path
   speeds you up or slows you down, drag caps speed, bank turns you, too slow
-  and the nose drops. Skimming terrain (proximity) adds style points, a
+  and the nose drops. Skimming rock (proximity) adds style points, a
   multiplier and acceleration. Crash means respawn at the last ring, with the
   clock still running.
 - **Rendering:** `Game.loop` interpolates between physics states, animates
@@ -199,7 +202,7 @@ behave well in different light, shiny catchy things, bright standouts.
   flat sun disc. Gradient, HDR sun (or moon) disc and halo that bloom, two
   layers of drifting painted clouds lit from the sun's side with silver
   linings, twinkling stars at night.
-- **Atmosphere patch** for terrain, pillars, rocks and arches: haze that
+- **Atmosphere patch** for terrain and rocks: haze that
   takes the sun's glow towards the sun (matching the sky, so distant terrain
   melts into it), mist pooling on the canyon floor, backlit rims on edges seen
   against the sun, wavering rock strata. The hemisphere light now mixes in
@@ -219,6 +222,37 @@ behave well in different light, shiny catchy things, bright standouts.
   Lagoon in Chrome (stepping the loop by hand because the automation tab was
   hidden), no console errors. Jungle and Desert not looked at.
 
+### 2026-10-10: Fixed the broken merge of the visuals onto the islands (Claude)
+
+What went wrong: `main` gained the floating-islands rewrite (`ca3c53c`,
+deleting `terrain.ts` and `obstacles.ts`) while the visuals work was written
+against the old canyon. Both were then copied onto each other by hand
+(`5768877` on `Pengyue`, `41c96f2` on `main`) instead of merged, so
+`WorldView.ts` and `palette.ts` ended up half one version and half the other,
+and the new modules still imported `world/terrain`. Neither branch compiled.
+Also, `HEAD` pointed at `pengyue` (lowercase) while the branch is `Pengyue`;
+macOS's case-insensitive file system hides that, but git then shows no current
+branch.
+
+The fix: a real merge of the visuals commits onto `ca3c53c`, with my code
+ported to the islands world:
+- `WorldView`: the islands version, plus the shader sky, the atmosphere patch
+  on the rock, crystal gates instead of tori, and per-biome light uniforms.
+- `palette.ts`: the islands palettes, each given a lighting mood, plus a night
+  palette, **Starlight**, so stars and glowing trims show up somewhere. Adding
+  a palette changes which palette a seed gets (colors only, not the map).
+- `atmosphere.ts`: the mist used the canyon floor's height. It's now a haze
+  that thickens below the camera, towards the sea of clouds.
+- `Game.skimSpray`: sprays off the nearest rock surface (the distance field's
+  gradient) instead of the canyon floor, so walls and overhangs spray too.
+- Crystals scale with the ring radius (islands gates are 8 m, not 13 m), so
+  the crowns stay clear of the rock tube.
+- `PilotFx`: no motes while the pilot is frozen (countdown, waiting for
+  islands), where they piled up into a glowing ball.
+- Imports moved from `world/terrain` to `math`.
+- Verified: `tsc`, lint and build pass; raced seed 42 (Misty pines) in Chrome
+  through islands and gates, no console errors.
+
 ## Next up
 
 - Measure real frame times at High quality on an integrated GPU, in a focused
@@ -227,8 +261,8 @@ behave well in different light, shiny catchy things, bright standouts.
   animation; a "wings unfold" intro would be nice.
 - Remote pilots each cost about 0.7 ms of CPU for animation. With many
   players, animate distant pilots every other frame.
-- Look at Jungle and Desert in a browser, and tune mist density per biome
-  (Dusk's haze may be a little strong).
+- Look at every palette in a browser (only Misty pines was checked after the
+  islands merge), and tune mist density per biome.
 - Day/night or time-of-day as a continuous parameter instead of a fixed
   night factor per palette.
 - `RINGS.crystals` only applies to the next map (gates are built once per
@@ -238,7 +272,7 @@ behave well in different light, shiny catchy things, bright standouts.
 
 ## Roadmap
 
-The long-term direction: turn Wingrace from a single-canyon racer into a
+The long-term direction: turn Wingrace from a single-map racer into a
 **roguelike flying adventure across procedurally generated biomes**, while
 keeping races and time trials on top of the same world generator.
 Everything has to be aesthetically excellent: a coherent painted look
@@ -247,10 +281,11 @@ where to go.
 
 ### Terrain: procedural worlds
 
-Today: one heightmap canyon, three obstacle shapes, flat palettes. Goal:
+Today: floating islands from one signed distance field (meshed in workers),
+pines, a sea of clouds, palettes with lighting moods. Goal:
 varied, layered, living landscapes generated from a seed.
 
-- **Landforms:** move from one canyon function to a composable generator:
+- **Landforms:** grow the islands' distance field into a composable generator:
   mountain ranges (ridged multifractal), valleys carved along splines, plateaus
   and mesas (terraced noise), cliffs, arches and floating islands (a 3D density
   field meshed with surface nets or marching cubes in a worker).
@@ -330,7 +365,7 @@ modules, never a fork of the renderer.
 
 | # | Biome | Landforms and set pieces | Light and mood | Signature effects | Sidequests |
 | :- | :- | :- | :- | :- | :- |
-| 1 | **Sunlit Canyons** (start; today's map) | Meandering canyon, rock towers, arches, floating boulders | Warm late afternoon, backlit (Dusk / Desert palettes) | Dust motes in sunbeams, heat shimmer | Light the three cairns; thread the needle arches |
+| 1 | **Sky Isles** (start; today's map) | Floating islands with pine forests, rock tunnels, a sea of clouds | Clear alpine day or backlit dusk (Alpine, Dusk palettes) | Light motes, cloud wisps, pollen in the sun | Light the three cairns; thread the needle tunnels |
 | 2 | **Verdant Highlands** | Rolling hills, terraced cliffs, rivers with waterfalls, dense forest with tall pines and broadleaf canopies | Soft morning sun, humid mist in valleys (Jungle) | Pollen and fireflies in shade, waterfall spray and rainbows, leaves blown off trees by your wake | Chase the spirit birds; collect seeds and plant a glowing tree |
 | 3 | **Glacier Peaks** | Jagged ridges, ice cliffs, crevasses, frozen lakes, snowfields; cloud sea below | Crisp, high sun, blue shadows (Glacier) | Snow blown off ridges, ice sparkle, breath-like frost on wingtips, aurora at the summit | Ring the ice bells; rescue a stranded glider in a blizzard |
 | 4 | **Sky Archipelago** | Floating islands (3D density), waterfalls into the void, vine bridges, cloud banks to dive through | Golden hour above the clouds, god rays through gaps | Cloud wisps parting around you, light motes like Sky's Isle of Dawn | Gather scattered stars; ride the wind walls between islands |
@@ -344,11 +379,11 @@ modules, never a fork of the renderer.
 1. **Biome definition format** (`world/biomes/*.ts`): `{ name, palette,
    landforms, water, vegetation, props, particles, sidequests, portals }`, all
    deterministic from `(runSeed, level)`. Today's `World` becomes the
-   "Sunlit Canyons" recipe.
+   "Sky Isles" recipe.
 2. **Terrain generator v2**: a composable height function (domain-warped
    ridged noise, terraces, carved river splines), plus an optional 3D density
    field for islands and overhangs. Generate chunks in a Web Worker, with LOD
-   rings. Collisions stay analytic (height plus SDF obstacles).
+   rings. Collisions stay analytic (distance fields, as `RockField` does now).
 3. **Terrain shader v2**: slope- and height-blended layers (grass, rock,
    snow, sand) with triplanar sampling on cliffs, building on `atmospheric()`.
    Keep the flat-shaded painted look; textures are subtle noise, not photos.
@@ -372,7 +407,7 @@ modules, never a fork of the renderer.
 ### What Claude should focus on
 
 - **First:** the biome definition format and the terrain generator v2,
-  because everything else hangs off them. Port the current canyon into the
+  because everything else hangs off them. Port the current islands into the
   format without changing how it looks, verify, then add Verdant Highlands
   (the first new one: it exercises rivers, forests and mist).
 - **Second:** vegetation and water, as reusable systems.

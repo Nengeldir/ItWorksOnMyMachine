@@ -11,10 +11,10 @@ import { type ControlSettings, Input } from "./input";
 import { FX_LIGHT, Kind, Particles, fxTime } from "./particles";
 import { PilotFx } from "./pilotfx";
 import { INTERPOLATION_DELAY_MS, Pilot, type PilotSample } from "./pilots";
+import { clamp } from "./math";
 import { SpeedLines } from "./speedlines";
 import { TOON_LIGHT } from "./toon";
 import { FX, RANGES, RINGS, TUNING_GROUPS, loadTuning, resetTuning, saveTuning } from "./tuning";
-import { clamp } from "./world/terrain";
 import { World } from "./world/World";
 import { WorldView } from "./world/WorldView";
 
@@ -108,6 +108,8 @@ const vel = new THREE.Vector3();
 const basisA = new THREE.Vector3();
 const basisB = new THREE.Vector3();
 const color = new THREE.Color();
+const normal = new THREE.Vector3();
+const surface = new THREE.Vector3();
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
 export class Game {
@@ -254,8 +256,6 @@ export class Game {
     FX_LIGHT.boost.value = palette.glow;
     TOON_LIGHT.rimColor.value.set(palette.sun).lerp(WHITE, 0.35);
     TOON_LIGHT.glow.value = 0.15 + palette.night * 1.3;
-    const { start } = this.world.course;
-    this.view.updateChunks(start.x, start.z, Infinity);
     this.setGhosts([]);
     this.style = 0;
     this.freeFlight(true);
@@ -560,21 +560,38 @@ export class Game {
     }
   }
 
-  /** Spray off the ground while skimming it, and sparks when really close */
+  /** Spray off the rock while skimming it, and sparks when really close */
   private skimSpray(dt: number) {
+    if (this.smoothProximity < 0.2 || FX.skimDust <= 0) return;
     const { x, y, z } = this.flight.position;
-    const ground = this.world.terrain.height(x, z);
-    const height = y - ground;
-    if (this.smoothProximity < 0.2 || height > 9 || FX.skimDust <= 0) return;
+    const rock = this.world.rock;
+    const gap = rock.distance(x, y, z);
+    if (gap > 9) return;
+    // The rock's surface normal from the distance field's gradient; the nearest surface point is along it
+    const e = 0.5;
+    normal.set(
+      rock.distance(x + e, y, z) - rock.distance(x - e, y, z),
+      rock.distance(x, y + e, z) - rock.distance(x, y - e, z),
+      rock.distance(x, y, z + e) - rock.distance(x, y, z - e),
+    );
+    if (normal.lengthSq() < 1e-8) return;
+    normal.normalize();
+    surface.copy(this.flight.position).addScaledVector(normal, -gap);
     this.dustDebt += this.smoothProximity * 110 * FX.skimDust * this.particles.budget * dt;
-    const close = clamp((5 - height) / 4, 0, 1);
-    color.set(this.world.palette.top).lerp(WHITE, 0.4);
+    const close = clamp((5 - gap) / 4, 0, 1);
+    color.set(this.world.palette.cloud).lerp(WHITE, 0.4);
     for (; this.dustDebt >= 1; this.dustDebt--) {
-      at.set(x + rand(-2.5, 2.5), ground + rand(0.2, 0.8), z + rand(-2.5, 2.5));
+      at.copy(surface)
+        .add(tmp.set(rand(-2.5, 2.5), rand(-2.5, 2.5), rand(-2.5, 2.5)))
+        .addScaledVector(normal, rand(0.2, 0.8));
       const spark = Math.random() < close * 0.35;
       this.particles.emit(
         at,
-        vel.copy(this.flight.velocity).multiplyScalar(spark ? 0.5 : 0.25).add(tmp.set(rand(-4, 4), rand(2, 7), rand(-4, 4))),
+        vel
+          .copy(this.flight.velocity)
+          .multiplyScalar(spark ? 0.5 : 0.25)
+          .addScaledVector(normal, rand(2, 7))
+          .add(tmp.set(rand(-3, 3), rand(-3, 3), rand(-3, 3))),
         spark
           ? { life: rand(0.3, 0.6), size: rand(0.25, 0.45), color: GOLD, kind: Kind.Star, gravity: 12, drag: 1, intensity: 2.5 }
           : { life: rand(0.6, 1.1), size: rand(1, 2.2), color, kind: Kind.Wisp, gravity: 3, drag: 2.2, intensity: 0.55 },
@@ -687,7 +704,9 @@ export class Game {
     const crashed = this.crashedAt !== null;
     if (!crashed) {
       this.avatar.update(dt, this.flight.speed, this.smoothProximity);
-      this.fx.update(dt, this.flight.speed, this.flight.velocity, this.smoothProximity);
+      // Frozen on the start line or while islands load: no motes, or they pile up into a glowing ball
+      const moving = this.raceState !== "countdown" && !waiting;
+      this.fx.update(dt, this.flight.speed, this.flight.velocity, this.smoothProximity, moving);
       this.skimSpray(dt);
       this.rig.update(
         dt,
@@ -705,11 +724,10 @@ export class Game {
 
     const camera = this.rig.camera;
     camera.updateMatrixWorld();
-    this.view.updateChunks(camera.position.x, camera.position.z, 4);
     this.view.update(camera, dt);
     this.gateMotes(dt);
     this.gateGlints(dt);
-    const flying = !crashed && this.raceState !== "countdown";
+    const flying = !crashed && this.raceState !== "countdown" && !waiting;
     this.speedLines.update(dt, body.position, flying ? this.flight.velocity : tmp.set(0, 0, 0), camera, this.particles.budget);
 
     const liveTime = t - INTERPOLATION_DELAY_MS;

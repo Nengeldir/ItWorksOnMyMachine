@@ -41,6 +41,7 @@ export class PilotFx {
   private spiralDebt = 0;
   private readonly velocity = new THREE.Vector3();
   private readonly center = new THREE.Vector3();
+  private moving = true;
 
   constructor(avatar: Avatar, color: string, particles: Particles | null, options: PilotFxOptions = {}) {
     this.avatar = avatar;
@@ -77,10 +78,11 @@ export class PilotFx {
     this.trails.forEach((t) => (t.opacity = 0));
   }
 
-  /** Call after the avatar has animated this frame */
-  update(dt: number, speed: number, velocity: THREE.Vector3, proximity: number) {
+  /** Call after the avatar has animated this frame; particles only flow while `moving` */
+  update(dt: number, speed: number, velocity: THREE.Vector3, proximity: number, moving = true) {
     const avatar = this.avatar;
     this.velocity.copy(velocity);
+    this.moving = moving;
     avatar.group.updateWorldMatrix(true, true);
     avatar.wingtips(tipL, tipR);
     avatar.span(span);
@@ -99,7 +101,7 @@ export class PilotFx {
       : 0;
 
     const particles = this.particles;
-    if (!particles || dt <= 0) return;
+    if (!particles || dt <= 0 || !moving) return;
     const budget = particles.budget * this.share;
 
     // Light motes shed from the wingtips: more with speed, a sky-like drift upwards
@@ -144,7 +146,7 @@ export class PilotFx {
   /** A puff of air and feathers of light pushed down and back off each wing */
   private downstroke(strength: number) {
     const particles = this.particles;
-    if (!particles || FX.flapPuffs <= 0) return;
+    if (!particles || FX.flapPuffs <= 0 || !this.moving) return;
     const count = Math.round((4 + strength * 12) * FX.flapPuffs * particles.budget * this.share);
     down.set(0, -1, 0).applyQuaternion(this.avatar.group.quaternion);
     for (let i = 0; i < count; i++) {
