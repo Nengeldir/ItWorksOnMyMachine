@@ -205,6 +205,22 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: `docker compose up --build` looked stuck at `npm ci` (Claude)
+
+Reported: the build hangs at `Step 4/10 : RUN npm ci`. Not reproduced: on
+this machine (Colima, 4 CPUs, 4 GiB) the step finished in 1 to 2 min and
+the stack served `/` and `/api/time`. DNS and connect take milliseconds, but
+downloads from npm run at about 0.5 MB/s (single tarballs 50 to 120 s), and
+without `docker buildx` Compose falls back to the classic builder, which
+prints nothing until a step ends.
+- `frontend/Dockerfile`: `npm ci --no-audit --no-fund --loglevel=http`, so
+  every download is logged and a slow build is distinguishable from a hung
+  one.
+- Verified: `docker compose build --no-cache frontend` and
+  `docker compose up --build -d`; `/` returns 200. The user's own hang is
+  not diagnosed yet (needs their log). Installing `docker-buildx` would add
+  live progress and npm cache mounts.
+
 ### 2026-10-10: Collisions with the land exactly as drawn (Claude)
 
 Asked for: make absolutely sure the terrain's hitbox matches the visuals,
@@ -1394,9 +1410,9 @@ ported to the islands world:
   narrower than the body (2 of 10 test crashes, briefly). About 1.7% of
   vertical rays through Sky Isles cross the mesh inconsistently (slivers
   where snapped faces meet); harmless for flying, it can confuse the
-  tumble's inside test. The extra rock triangles (about 4×) want a
-  frame-time check in a focused window; `SurfaceCutter`'s tolerance (0.5 m)
-  is the knob. Remote pilots don't use the hitbox (they never crash).
+  tumble's inside test. Coarse v2 nodes (12 m and up) aren't snapped. The
+  extra rock triangles (about 4×) want a frame-time check in a focused
+  window; `SurfaceCutter`'s tolerance (0.5 m) is the knob. Remote pilots don't use the hitbox (they never crash).
 
 - Play through the integrated portal/finale and victory lap; check multiplayer
   and gamepad controls. Make the explore debug panel usable at narrow widths
