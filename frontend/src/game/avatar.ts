@@ -292,6 +292,27 @@ export class Avatar {
   private barrel = { t: -1, dir: 1 };
   private barrelCooldown = 0;
   private speed = 30;
+  boost = 0;
+  brake = 0;
+  private boostOn = false;
+
+  setSpeedControls(boost: number, brake: number) {
+    if (boost > 0.1 && !this.boostOn) { this.flapPhase = 0; this.beat(); }
+    this.boostOn = boost > 0.1;
+    this.boost = boost;
+    this.brake = brake;
+  }
+
+  resetMotion() {
+    this.hasLast = false;
+    this.pitchRate = this.yawRate = this.rollRate = 0;
+    this.lean = this.leanVelocity = 0;
+    this.barrel.t = -1;
+    this.barrelProgress = -1;
+    this.barrelCooldown = 0;
+    this.boost = this.brake = 0;
+    this.boostOn = false;
+  }
   private climb = 0;
   private time = 0;
   private clothTime = 0;
@@ -598,12 +619,12 @@ export class Avatar {
     return out.setFromMatrixColumn(this.rig.matrixWorld, 1).normalize();
   }
 
-  /** Spins a full barrel roll: 1 = to the right, -1 = to the left */
   /** A wingbeat on demand (a run's flap ability): the wings at full effort for a moment */
   beat() {
     this.effort = 1;
   }
 
+  /** Spins a full barrel roll: 1 = right, -1 = left. */
   barrelRoll(dir: 1 | -1) {
     if (this.barrel.t >= 0) return;
     this.barrel = { t: 0, dir };
@@ -716,16 +737,16 @@ export class Avatar {
     this.rig.scale.set(SCALE / Math.sqrt(stretch), SCALE / Math.sqrt(stretch), SCALE * stretch);
 
     // Body: a superhero arch, more when climbing; the head looks ahead and into turns
-    this.chest.rotation.set(0.1 + clamp(this.climb, 0, 1) * 0.12 + this.pitchRate * 0.05, -turn * 0.08 * A.limbSwing, 0);
+    this.chest.rotation.set(this.brake * 0.18 - this.boost * 0.08 + 0.1 + clamp(this.climb, 0, 1) * 0.12 + this.pitchRate * 0.05, -turn * 0.08 * A.limbSwing, 0);
     this.head.rotation.set(0.85 - this.pitchRate * 0.08, -turn * 0.35 * A.headLook, turn * 0.25 * A.headLook);
     this.pelvis.rotation.set(0, turn * 0.06 * A.limbSwing, -this.lean * 0.15);
 
     // Wings
-    const amp = A.flapAngle * this.effort + A.glideFlutter * (1 - this.effort);
+    const amp = (A.flapAngle * this.effort + A.glideFlutter * (1 - this.effort)) * (1 - this.brake * 0.85) * (1 - this.boost * 0.5);
     const stroke = Math.sin(this.flapPhase) + 0.22 * Math.sin(this.flapPhase * 2);
     const strokeOuter = Math.sin(this.flapPhase - 0.7) + 0.22 * Math.sin(this.flapPhase * 2 - 1.4);
     const barrelTuck = this.barrel.t >= 0 ? Math.sin(Math.PI * this.barrel.t) : 0;
-    const sweep = A.sweepAtSpeed * speedK + barrelTuck * 0.45 - slow01(this.speed) * 0.1;
+    const sweep = A.sweepAtSpeed * speedK + barrelTuck * 0.45 - slow01(this.speed) * 0.1 + this.boost * A.boostSweep - this.brake * A.brakeSweep;
     // Positive lift raises the wing (towards the back)
     const lift = (s: 1 | -1) => 0.12 + amp * stroke + turn * 0.12 * s * A.limbSwing;
     for (const [side, s] of [
@@ -736,7 +757,7 @@ export class Avatar {
       side.wingOuter.rotation.set(0, -(amp * 0.8 * strokeOuter + 0.05) * s, (-0.1 - sweep * 0.7) * s);
 
       // Arms reach out like a Sky glide and follow the wings a little
-      const spread = 1.3 - speedK * 0.35 - barrelTuck * 0.5;
+      const spread = 1.3 - speedK * 0.35 - barrelTuck * 0.5 + this.brake * 0.25 - this.boost * 0.15;
       const armLift = 0.25 + stroke * amp * 0.35 + turn * 0.25 * s * A.limbSwing;
       side.shoulder.rotation.set(0, -armLift * s, spread * s);
       side.elbow.rotation.set(0, 0, 0.25 * s);
@@ -744,7 +765,7 @@ export class Avatar {
       // Legs together, knees soft, toes pointed; they swing like a rudder in turns
       const kick = Math.sin(t * 2.4 + (s > 0 ? 0 : 1.6)) * 0.06 * calm;
       side.hip.rotation.set(0.06 + kick, 0, 0.05 * s - turn * 0.12 * A.limbSwing);
-      side.knee.rotation.set(-0.32 - clamp(this.climb, 0, 1) * 0.35 - kick * 1.4 - barrelTuck * 0.4, 0, 0);
+      side.knee.rotation.set(-this.brake * 0.3 - 0.32 - clamp(this.climb, 0, 1) * 0.35 - kick * 1.4 - barrelTuck * 0.4, 0, 0);
     }
 
     // Ponytail trails the head and swings

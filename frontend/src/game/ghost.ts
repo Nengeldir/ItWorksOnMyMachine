@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from "three";
 import type { PilotSample } from "./pilots";
 
-/** A recorded run: samples of [t_ms, x, y, z, qx, qy, qz, qw], t from the race start */
+/** A recorded run: samples of [t_ms, x, y, z, qx, qy, qz, qw, boost, brake], t from the race start */
 export interface GhostData {
   hz: number;
   samples: number[][];
@@ -26,7 +26,7 @@ export class GhostRecorder {
     this.nextAt = 0;
   }
 
-  record(timeMs: number, position: Vector3, quaternion: Quaternion) {
+  record(timeMs: number, position: Vector3, quaternion: Quaternion, boost = 0, brake = 0) {
     if (timeMs < this.nextAt) return;
     this.nextAt = timeMs + 1000 / HZ;
     this.samples.push([
@@ -38,13 +38,15 @@ export class GhostRecorder {
       round(quaternion.y, 4),
       round(quaternion.z, 4),
       round(quaternion.w, 4),
+      round(boost, 2),
+      round(brake, 2),
     ]);
   }
 
   /** The run so far, ending exactly at `endMs` */
-  finish(endMs: number, position: Vector3, quaternion: Quaternion): GhostData {
+  finish(endMs: number, position: Vector3, quaternion: Quaternion, boost = 0, brake = 0): GhostData {
     this.nextAt = 0;
-    this.record(endMs, position, quaternion);
+    this.record(endMs, position, quaternion, boost, brake);
     // Very long runs keep every n-th sample (and the last), at a lower rate
     const every = Math.ceil(this.samples.length / MAX_SAMPLES);
     if (every <= 1) return { hz: HZ, samples: this.samples };
@@ -60,10 +62,10 @@ export class GhostRecorder {
 
 export function ghostSamples(ghost: GhostData): PilotSample[] {
   const samples: PilotSample[] = [];
-  for (const [t, x, y, z, qx, qy, qz, qw] of ghost.samples) {
+  for (const [t, x, y, z, qx, qy, qz, qw, boost = 0, brake = 0] of ghost.samples) {
     // Interpolation needs strictly increasing times
     if (samples.length && t <= samples[samples.length - 1].t) continue;
-    samples.push({ t, p: new Vector3(x, y, z), q: new Quaternion(qx, qy, qz, qw).normalize(), v: 0, cp: 0 });
+    samples.push({ t, p: new Vector3(x, y, z), q: new Quaternion(qx, qy, qz, qw).normalize(), v: 0, cp: 0, boost, brake });
   }
   // Speed isn't recorded; it only drives the trails, so derive it
   for (let i = 1; i < samples.length; i++) {

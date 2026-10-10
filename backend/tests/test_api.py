@@ -4,7 +4,7 @@ import app as app_module
 from app import app, rooms
 from rooms import COUNTDOWN_MS
 
-client = TestClient(app)
+client = TestClient(app, headers={"X-Flight-Rules": "speed-control-v1"})
 
 
 def ghost(n=3):
@@ -101,3 +101,26 @@ def test_own_slower_run_ranks_against_others_only():
         ).json()
     assert result["rank"] == 1
     assert result["personal_best_ms"] == 60_000
+
+
+def test_old_flight_client_must_reload():
+    old = TestClient(app)
+    assert old.post("/api/runs/start", json={"seed": 42}).status_code == 409
+
+
+def test_speed_control_state_and_ghost_validation():
+    from models import Ghost, StateRequest
+    import pytest
+    state = StateRequest(token="x", t=0, p=[0, 0, 0], q=[0, 0, 0, 1], v=30, cp=0, boost=0.7, brake=0.2)
+    assert state.boost == 0.7
+    with pytest.raises(ValueError):
+        StateRequest(**{**state.model_dump(), "brake": 2})
+    assert len(Ghost(hz=15, samples=[[0, 0, 0, 0, 0, 0, 0, 1, 1, 0]]).samples[0]) == 10
+
+
+def test_speed_intensity_reaches_room_snapshots():
+    joined = client.post("/api/rooms/SPEED/join", json={"client_id": "speed-pilot"}).json()
+    state = {"token": joined["token"], "t": 1, "p": [0, 10, 0], "q": [0, 0, 0, 1], "v": 40, "cp": 0, "boost": 0.75, "brake": 0.2}
+    assert client.post("/api/rooms/SPEED/state", json=state).status_code == 204
+    import json
+    assert json.loads(rooms.rooms["SPEED"].snapshot(1))["players"][0][-2:] == [0.75, 0.2]

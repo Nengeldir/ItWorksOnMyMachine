@@ -128,9 +128,9 @@ export class RoomSession {
     const game = this.game;
     if (!game) return;
     const { selfId } = this.store.get();
-    for (const [id, x, y, z, qx, qy, qz, qw, v, cp, t] of snapshot.players) {
+    for (const [id, x, y, z, qx, qy, qz, qw, v, cp, t, boost = 0, brake = 0] of snapshot.players) {
       if (id === selfId) continue;
-      game.pushSample(id, { t, p: new Vector3(x, y, z), q: new Quaternion(qx, qy, qz, qw), v, cp });
+      game.pushSample(id, { t, p: new Vector3(x, y, z), q: new Quaternion(qx, qy, qz, qw), v, cp, boost, brake });
     }
   }
 

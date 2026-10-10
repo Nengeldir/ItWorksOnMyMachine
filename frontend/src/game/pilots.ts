@@ -9,6 +9,8 @@ export interface PilotSample {
   q: THREE.Quaternion;
   v: number;
   cp: number;
+  boost?: number;
+  brake?: number;
 }
 
 // Draw live players this far in the past, so there is usually a newer sample to blend towards
@@ -126,7 +128,11 @@ export class Pilot {
       tmp.subVectors(this.position, this.lastPosition).divideScalar(dt);
       if (tmp.lengthSq() < 200 * 200) this.velocity.lerp(tmp, 1 - Math.exp(-dt * 8));
     }
+    if (appeared || this.position.distanceTo(this.lastPosition) > 40) this.avatar.resetMotion();
     this.lastPosition.copy(this.position);
+    const blend = b ? Math.min(1, Math.max(0, (time - a.t) / (b.t - a.t))) : 0;
+    this.avatar.setSpeedControls((a.boost ?? 0) + ((b?.boost ?? a.boost ?? 0) - (a.boost ?? 0)) * blend,
+      (a.brake ?? 0) + ((b?.brake ?? a.brake ?? 0) - (a.brake ?? 0)) * blend);
     this.avatar.update(dt, this.speed, 0, camera.distanceTo(this.position));
     this.fx.update(dt, this.speed, this.velocity, 0);
   }

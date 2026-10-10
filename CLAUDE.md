@@ -199,6 +199,35 @@ out of the repo root into a sensible place.
   match" was not reproduced or diagnosed yet; the panel is there to find it.
 - Branch `audio-music`, cut from `main`.
 
+### 2026-10-10: Speed controls (`speed-control`)
+
+- Consolidated the two speed integrations in `flight.ts`; gravity, drag,
+  proximity and adventure modifiers now participate in one integration.
+- Universal held Shift/RT boost (2.5 s reserve, release to recharge) and
+  Space/LT brake (priority over boost, drag tapers near 22 m/s). Wingbeat
+  moved to C/A; Gale boost strengthens the universal boost by 25% per stack.
+- `input.ts`, `Game.ts`: reset held controls/motion at respawn, clear stale
+  gamepad state, ignore unfocused input and remove double-tap stunt triggers.
+- `camera.ts`, `tuning.ts`: interpolated heading and travel direction,
+  restrained horizon/FOV, bounded boost feedback, segment obstruction checks
+  and eased camera extension. New tuning storage namespace keeps old camera
+  overrides from masking the defaults.
+- `avatar.ts`, `pilotfx.ts`, `trail.ts`, `audio.ts`: swept boost/spread brake
+  poses, brightened/lengthened boost trails, brake wisps, wind feedback and
+  fresh animation history on respawn. Fixed trail sampling so sub-0.8 m
+  movement per frame accumulates instead of repeatedly replacing one point.
+- HUD charge meter and control hints; updated adventure intro and upgrades.
+- `pilots.ts`, `ghost.ts`, room/API state and backend validation carry explicit
+  boost/brake intensity. Old eight-field ghosts remain readable.
+- Backend store preserves old scores/ghosts as `legacy`, filters all current
+  results by `speed-control-v1`, and rejects outdated gameplay POSTs with a
+  reload message. Deploy frontend and backend together.
+- Verified: production build and lint pass; 11 frontend regression tests and
+  21 backend tests pass. Browser visual playtesting
+  was blocked by unavailable Chrome, an in-app webview timeout, and a stalled
+  Safari control call; no visual or gamepad playtest is claimed.
+
+
 ### 2026-10-10: Merged main's menu and UI redesign (Claude)
 
 `origin/main` (`e4e5732`) redesigned the menu and HUD around a live 3D
@@ -590,6 +619,13 @@ ported to the islands world:
   menu music yet); Aurora Summit needs its own finale track; the portal tunnel
   and results screen could use stingers; the music doesn't duck under fast wind.
   The tracks are ~2.9 MB each, so consider lowering the bitrate if load time matters.
+
+- Playtest `speed-control` with keyboard, mouse and gamepad: boost into a
+  banked turn, brake before a narrow gate, low-speed recovery, inverted flight,
+  respawn and two-player effects. Tune reserve/drag/camera in `?tune`; assess
+  camera-segment query cost in a focused window at Medium and High quality.
+- Check speed-control poses/trails in day and night biomes, including with
+  bloom disabled; visual verification remains outstanding.
 
 - **Measure in a focused window**: `__bench(2/1/0)` after `__shot(0)` in a
   dev build. Bloom at High was 30 to 70 ms of GPU on an M2 in a hidden tab

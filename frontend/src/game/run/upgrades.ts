@@ -5,8 +5,8 @@ import { makeRng } from "../rng";
 // (FlightMods), abilities and scoring rules. None of this reaches races.
 
 export interface RunStats {
-  dash: number; // ability level (Shift): a burst of speed
-  flap: number; // ability level (Space): Sky-style wingbeats with stamina
+  dash: number; // upgrade level (Shift): stronger held boost
+  flap: number; // ability level (C): Sky-style wingbeats with stamina
   hover: number; // ability level (hold F): sink and gravity cancelled for a moment
   glideLock: number; // passive: let go of pitch and the glide holds itself
   drag: number; // multiplier
@@ -42,8 +42,8 @@ export interface Upgrade {
 }
 
 export const UPGRADES: readonly Upgrade[] = [
-  { id: "dash", name: "Gale dash", icon: "💨", kind: "ability", key: "Shift", max: 3, effect: { dash: 1 }, description: "A burst of speed on demand. Each stack recharges it faster and pushes harder." },
-  { id: "flap", name: "Wingbeat", icon: "🪽", kind: "ability", key: "Space", max: 3, effect: { flap: 1 }, description: "Beat your wings to climb and speed up, Sky style. Stamina refills at every gate." },
+  { id: "dash", name: "Gale boost", icon: "💨", kind: "ability", key: "Shift", max: 3, effect: { dash: 1 }, description: "Your held boost accelerates 25% harder per stack." },
+  { id: "flap", name: "Wingbeat", icon: "🪽", kind: "ability", key: "C", max: 3, effect: { flap: 1 }, description: "Beat your wings to climb and speed up, Sky style. Stamina refills at every gate." },
   { id: "hover", name: "Featherfall", icon: "🪶", kind: "ability", key: "hold F", max: 2, effect: { hover: 1 }, description: "Hold to hang in the air: no sink, no speed lost to climbing, for a moment." },
   { id: "glideLock", name: "Glide lock", icon: "🧭", kind: "passive", max: 1, effect: { glideLock: 1, drag: 0.92 }, description: "Let go of pitch and your wings hold an efficient shallow glide." },
   { id: "daredevil", name: "Daredevil", icon: "🔥", kind: "passive", max: 3, effect: { proximity: 1.5, multiplier: 1 }, description: "Skimming the land pushes you much harder, and your style multiplier goes higher." },
