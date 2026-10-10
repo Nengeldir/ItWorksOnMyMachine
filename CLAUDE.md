@@ -1,12 +1,12 @@
 # CLAUDE.md: read this first, every session
 
-This file is Claude's memory for Wingrace. Claude Code loads it automatically
+This file is Claude's memory for Wind Rider. Claude Code loads it automatically
 at the start of every session in this repository. Read all of it before
 touching code, and keep it true.
 
 ## The most important point: Genshin Impact and Sky (光遇)
 
-**Wingrace is a Genshin Impact and Sky: Children of the Light (光遇) styled
+**Wind Rider is a Genshin Impact and Sky: Children of the Light (光遇) styled
 game.** Every model, animation, effect, screen and piece of UI goes in that
 direction. When in doubt, ask "would this fit in Genshin or in Sky?", and if
 not, change it.
@@ -65,7 +65,7 @@ decides how things should look and feel.
 
 ## The project
 
-Wingrace is a browser wingsuit racer in the style of Superflight, with
+Wind Rider is a browser wingsuit racer in the style of Superflight, with
 multiplayer races. Every course is a seeded racing line through floating
 islands (same seed, same map) with crystal gates, pine forests and a sea of
 clouds below. Built for the VIScon
@@ -205,6 +205,13 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Renamed the game to Wind Rider (Claude)
+
+Asked for: change the game's name to "Wind Rider".
+- Visible name changed in `README.md`, `frontend/index.html` (title), the menu heading, the game's top bar and WebGL help text, and the dev console message. This file now says Wind Rider too.
+- **Left as `wingrace`** on purpose: localStorage keys (`wingrace.settings`, `.client`, `.runs`, `.tuning...`, `wingrace:stale-reload`) so players keep settings and best scores, and shader program cache keys (internal).
+- Not verified in a browser; no build or lint run yet.
 
 ### 2026-10-10: Sunken Reef, an underwater biome (Claude)
 
@@ -1658,7 +1665,7 @@ shader; no backend API changes; no deleting branches or force-pushing.
 
 ## Roadmap
 
-The long-term direction: turn Wingrace from a single-map racer into a
+The long-term direction: turn Wind Rider from a single-map racer into a
 **roguelike flying adventure across procedurally generated biomes**, while
 keeping races and time trials on top of the same world generator.
 Everything has to be aesthetically excellent: a coherent painted look

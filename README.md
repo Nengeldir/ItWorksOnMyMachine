@@ -1,4 +1,4 @@
-# Wingrace
+# Wind Rider
 
 A Superflight-style wingsuit game for the browser, with multiplayer races.
 Every course is a field of low-poly floating islands generated from a seed:
