@@ -231,6 +231,14 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Bigger collectible lights
+
+- `ITEMS_FX.lights` (new, default 2.5, in `?tune` under "Item looks")
+  scales the collectible lights (points and energy) in `items/relicFx.ts`.
+  Looks only: the pickup range (2.5 m, `run/items.ts`) is unchanged, so a
+  bigger light doesn't mean an easier grab.
+- Verified: tsc and lint pass. Not looked at in a browser.
+
 ### 2026-10-10: Adventure items (continued)
 
 Item 10 completes the first milestone: three air steps, paired feathered boots, rings and downward puffs. Items 5–9 add lantern ghost gates, conch breadcrumbs, an automatic Phoenix revive, 10-second ribbon handling and collectible attraction. Build/lint pass; 66 tests pass, including bag/charge rejection, timed effects, revive, swept gates/collectibles and finite geometry. Browser gallery inspected; fixed clipping by fitting all models into four rows. Detailed effect balance, audible mix and focused-window GPU performance remain unverified. Item 11–20 and world pickups are the next milestone.

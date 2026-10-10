@@ -47,6 +47,7 @@ export class RelicFx {
     this.markers.begin();
     let count=0;
     this.lightQuat.setFromAxisAngle(UP,flight.position.z*0.02);
+    this.lightScale.setScalar(ITEMS_FX.lights);
     for(const light of items.lights){
       if(light.collected || light.position.distanceToSquared(flight.position)>500**2 || count>=128)continue;
       this.lightMatrix.compose(light.position,this.lightQuat,this.lightScale);
