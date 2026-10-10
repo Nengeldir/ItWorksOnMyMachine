@@ -32,7 +32,17 @@ export class RelicFx {
     this.avatar = avatar; this.equipment = equipment; this.particles = particles;
     this.group.add(this.markers.mesh, this.ribbon.mesh, this.lights);
   }
-  used(id: RunItemId) { void id; }
+  used(id: RunItemId) {
+    if(id === "aeroBoots"){
+      for(const foot of this.avatar.feet){
+        foot.getWorldPosition(at);
+        for(let i=0;i<Math.round(12*this.particles.budget);i++){
+          vel.set(Math.sin(i)*2,-4,Math.cos(i)*2);
+          this.particles.emit(at,vel,fx(0.6,0.25,GOLD,Kind.Wisp,0,1,0.8));
+        }
+      }
+    }
+  }
   update(dt: number, items: Items, flight: Flight, flying: boolean) {
     this.markers.begin();
     let count=0;
@@ -58,6 +68,11 @@ export class RelicFx {
       }
     }
     if(items.invulnerable) this.markers.add(this.avatar.group.position,null,2.5,0.7 * ITEMS_FX.relics,0.09,2,GOLD);
+    const boots = items.bag.some(c=>c.id === "aeroBoots") || items.time("aeroBoots")>=0;
+    if(boots && this.equipment.wearing("feet")!=="aeroBoots") this.equipment.equip("aeroBoots");
+    if(!boots && this.equipment.wearing("feet")==="aeroBoots") this.equipment.unequip("feet");
+    const jump=items.time("aeroBoots");
+    if(jump>=0) for(const foot of this.avatar.feet){ foot.getWorldPosition(at); this.markers.add(at,UP,0.5+jump*3,0.65 * ITEMS_FX.relics,0.07,2,GOLD); }
     const lantern = items.time("spiritLantern") >= 0;
     if (lantern) for (const gate of items.ghostGates) {
       if (!gate.collected && gate.position.distanceToSquared(flight.position) < 500 * 500) {

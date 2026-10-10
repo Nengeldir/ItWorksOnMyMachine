@@ -80,12 +80,12 @@ export class ItemGallery {
     this.equipment = new Equipment(this.avatar, this.particles);
 
     // Every item on a curved wall of three rows behind the pilot, with its name
-    const columns = 4;
+    const columns = Math.ceil(ITEMS.length / 4);
     ITEMS.forEach((info, i) => {
       const row = Math.floor(i / columns);
       const a = (((i % columns) + 0.5) / columns - 0.5) * 1.5;
       const display = new ItemDisplay(info.id, info.id === "firework" ? 1.3 : 0.85);
-      display.group.position.set(Math.sin(a) * 7, 3.3 - row * 1.9, -Math.cos(a) * 7 + 1);
+      display.group.position.set(Math.sin(a) * 7, 3.5 - row * 1.6, -Math.cos(a) * 7 + 1);
       this.scene.add(display.group);
       this.displays.push(display);
       const label = createLabel(info.name, "#ffffff");
@@ -122,6 +122,7 @@ export class ItemGallery {
     this.equipment.unequip("back");
     this.equipment.unequip("head");
     this.equipment.unequip("hand");
+    this.equipment.unequip("feet");
     this.equipment.setThrust(0);
   }
 
