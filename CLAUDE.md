@@ -118,7 +118,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/effects.ts` | Crash debris: feathers knocked loose that flutter down (instanced) |
 | `game/audio.ts` | Synthesized wind and event sounds, run stingers (portal, upgrade, dash; sidequest and item are unused for now) and the wingbeat whoosh |
 | `game/webgl.ts` | WebGL 2 availability check; `GameScreen` shows help if it's missing |
-| `game/run/` | The roguelike run. `run.ts`: run length, biome order from the run seed, portal destinations, scoring constants, `RunHud`. `upgrades.ts`: nine data-defined upgrades and the 3-of-N offer. `controller.ts`: `RunController` (levels, gates and chains, abilities as `FlightMods`, the portal transition: blur in, the next level built under the blur (`buildNext`), wormhole and upgrade pick while it streams, blur out with the palette cross-fade; HUD data). `portal.ts`: the portal (ring, a flat disk like a window onto night, beam), the `Wormhole` (a camera-centred shell mapping the view onto an endless twisting tube of lensed stars and nebula with the exit glowing ahead, spirit motes, its own lights) and `screenSparkle`. Game's `veil(k)` (the `.portal-veil` DOM blur and sparkles) and `insideWormhole(on)` (hides the level: land, sky, soft particles, speed lines, ambient, gate effects) serve it |
+| `game/run/` | The roguelike run. `run.ts`: run length, biome order from the run seed, portal destinations, scoring constants, `RunHud`. `upgrades.ts`: nine data-defined upgrades and the 3-of-N offer. `controller.ts`: `RunController` (levels, gates and chains, abilities as `FlightMods`, the portal transition: blur in, the next level built under the blur (`buildNext`), wormhole and upgrade pick while it streams, blur out with the palette cross-fade; HUD data). `finale.ts`: `Finale`, the last portal's cutscene (space under a world-fixed Milky Way with dust lanes and its core overhead, the camera's scripted pan beneath the pilot and back, then white light; Enter skips). `portal.ts`: the portal (ring, a flat disk like a window onto night, beam), the `Wormhole` (a camera-centred shell mapping the view onto an endless twisting tube of lensed stars and nebula with the exit glowing ahead, spirit motes, its own lights) and `screenSparkle`. Game's `veil(k)` (the `.portal-veil` DOM blur and sparkles) and `insideWormhole(on)` (hides the level: land, sky, soft particles, speed lines, ambient, gate effects) serve it |
 | `game/devtools.ts` | Dev builds only: `__shot(view)` (freeze, stream the land around a fixed camera, render once), `__raceHashes()` (the race map's determinism check), `__run(s)`, `__bench(q)` and `__crash(kind, after)` (flies into rock near the start and stops `after` s into the crash animation) on `window` |
 | `game/math.ts` | `clamp`, `smoothstep`, `smin` (smooth minimum for distance fields) |
 | `game/world/terrain/` | Generator v2 (every biome but Sky Isles). `noise.ts`: seeded fbm, ridged multifractal, domain-warped ridges, terraces. `shapes.ts`: distance-field primitives with boxes, surface ids and grain (Island, NoiseIsland from 3D noise with tunnels, Mesa with ledges, Spire between two points, Slab, RockRing, Cap). `ground.ts`: the heightfield following the line (valley, hills, warped ridged mountains, terraces, crevasses, carved river channel, overhang noise on cliffs). `river.ts`: `Steps`, a valley floor stepping down in pools and falls, and the river in it (water distance for collisions). `field.ts`: `TerrainField`, ground + shapes as one field, `fill()` for whole blocks (same arithmetic as `distance()`). `recipes.ts`: gates and scenery from a biome's `LandRecipe`. `mesh.ts`: surface nets per LOD node, faces painted for the shader. `streamer.ts`: `LandStreamer`, the LOD octree (384/192/96 m nodes, 16 cells each). `material.ts`: the terrain shader |
@@ -189,6 +189,31 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: The finale cutscene (Claude)
+
+Asked for: the last portal (to victory) plays a cutscene that slowly pans
+beneath the player, isometric, showing the Milky Way now present above the
+player floating in empty space, then pans back to the default camera and
+fades out into white light.
+- `run/finale.ts`: at level 8 the portal starts `Finale` instead of the
+  summary. The screen blurs and sparkles as for any portal (0.5 s); under
+  the blur the land and its sky are hidden and the pilot floats in space.
+  The sky is a world-fixed shell: the Milky Way's band arching overhead
+  (core near the zenith, warm; pink and blue nebulae; dark dust lanes),
+  pixel-sized stars, denser in the band; lit from the core and starlight.
+  The camera takes over from the chase view: it pans (spherical path around
+  the pilot) to 11 m beneath and to the side, looking up past the pilot at
+  the galaxy (1.5 to 7 s), holds with a slow drift (to 10 s), pans back to
+  the chase pose (13.5 s) and the view fades into warm white light (16 s).
+  Motes drift around the pilot. `Enter` skips to the white light.
+- New run phase `finale`; HUDs are hidden; Game's `whiteOut(k)` is the
+  white overlay. The run is scored before the cutscene, as before.
+- For now the summary panel then shows over the white (step 8 replaces it).
+- Verified: build and lint pass. In Chrome (run 7 with `__game.run.level =
+  8` and `__portal`): the blur in, the galaxy from beneath the pilot at
+  7.5 s, the return and the white fade at 14.9 s, the summary at the end;
+  no console errors.
 
 ### 2026-10-10: The next biome loads during the portal (Claude)
 

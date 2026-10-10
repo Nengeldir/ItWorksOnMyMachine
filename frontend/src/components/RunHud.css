@@ -360,6 +360,16 @@
   right: 0.6rem;
 }
 
+.finale-skip {
+  position: absolute;
+  right: 1.2rem;
+  bottom: 1.2rem;
+  color: rgba(244, 240, 255, 0.55);
+  font-size: 0.8rem;
+  pointer-events: none;
+  animation: run-picker-in 2s ease-out 2s both;
+}
+
 @media (max-width: 640px) {
   .run-objectives {
     display: none;
