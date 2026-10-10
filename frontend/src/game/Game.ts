@@ -987,7 +987,15 @@ export class Game implements RunHost {
     // The hitbox: a ball for the body, a rectangle for each wing (flight.ts). The land collides as
     // drawn once it is on screen (before that, as the distance field), trees and water by their fields.
     // In a run, Acrobatic Recovery can turn a clipped wingtip into a roll away from the rock
-    const part = this.hitTest(other, distance);
+    const part = this.run?.items.invulnerable ? null : this.hitTest(other, distance);
+    if ((part || this.world.lost(y,z)) && this.run?.items.revive(this.flight)) {
+      this.prevPosition.copy(this.flight.position);
+      this.prevQuaternion.copy(this.flight.quaternion);
+      this.prevVelocity.copy(this.flight.velocity);
+      this.avatar.revive();
+      this.rig.snap(this.flight.position, this.flight.forward, this.flight.up, this.flight.speed);
+      return;
+    }
     if (part && this.run && this.rescue(part)) {
       // Rolled away, or the tornado took the hit
     } else if (part || this.world.lost(y, z)) {

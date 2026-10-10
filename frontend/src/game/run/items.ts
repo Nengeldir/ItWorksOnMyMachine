@@ -16,6 +16,8 @@ export const ITEM = {
   lanternTime: 15,
   ghostBonus: 500,
   conchTime: 8,
+  phoenixGrace: 2,
+  phoenixSpeed: 36,
   bag: 3, // items carried at once
   // Anemo Catcher: a bottled updraft
   updraftTime: 1.6, // seconds
@@ -39,7 +41,7 @@ export const ITEM = {
   fireWobble: 0.45, // how hard it yanks the controls about
 };
 
-export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch";
+export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather";
 
 /** How an item saved the pilot from a hit */
 export type ItemSave = "starflake";
@@ -74,12 +76,14 @@ export const RUN_ITEMS: readonly RunItemInfo[] = [
   { id: "cometFirework", model: "firework", name: "Comet Tail Firework", icon: "🎆", rarity: 2, charges: 1, description: "A giant rocket strapped to your back: a terrifying, barely steerable burst of speed and a tail of sparks." },
   { id: "spiritLantern", model: "spiritLantern", name: "Spirit Lantern", icon: "🏮", rarity: 1, charges: 1, description: "Light the lantern for 15 seconds to reveal and collect hidden ghost gates worth 500 points." },
   { id: "echoConch", model: "echoConch", name: "Echoing Conch", icon: "🐚", rarity: 0, charges: 1, description: "A sonar song highlights a safe route through the next three gates." },
+  { id: "phoenixFeather", model: "phoenixFeather", name: "Feather of the Great Phoenix", icon: "🔥", rarity: 3, charges: 1, auto: true, description: "Carried charm: a crash consumes the feather and revives you in mid-air with two seconds of protection." },
 ];
 
 export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.id === id)!;
 
 /** How long each item's effect lasts once used (seconds) */
 const DURATION: Record<RunItemId, () => number> = {
+  phoenixFeather: () => ITEM.phoenixGrace,
   echoConch: () => ITEM.conchTime,
   spiritLantern: () => ITEM.lanternTime,
   anemoCatcher: () => ITEM.updraftTime,
@@ -121,7 +125,7 @@ export class Items {
   /** Seconds since each item's effect began (absent: not under way) */
   readonly active = new Map<RunItemId, number>();
   /** One-off moments, counted so the looks can tell a new one happened */
-  readonly cue = { pickup: 0, use: 0, full: 0, auto: 0, shatter: 0 };
+  readonly cue = { pickup: 0, use: 0, full: 0, auto: 0, shatter: 0, phoenix: 0 };
   /** The item last picked up, and last used */
   picked: RunItemId | null = null;
   used: RunItemId | null = null;
@@ -232,6 +236,23 @@ export class Items {
       this.cue.shatter++;
     }
   }
+
+  /** A carried Phoenix feather revives from terrain or the abyss onto the clear course tube. */
+  revive(flight: Flight): boolean {
+    const index = this.bag.findIndex(c => c.id === "phoenixFeather");
+    if (index < 0 || !this.world) return false;
+    this.bag.splice(index, 1);
+    this.selected = Math.min(this.selected, Math.max(0, this.bag.length - 1));
+    const z = clamp(flight.position.z, this.world.course.start.z, this.world.course.endZ - 25);
+    const position = this.world.course.pointAt(z);
+    flight.reset(position, this.world.course.tangentAt(z), ITEM.phoenixSpeed);
+    this.reset();
+    this.active.set("phoenixFeather", 0);
+    this.cue.phoenix++;
+    return true;
+  }
+
+  get invulnerable(): boolean { return this.active.has("phoenixFeather"); }
 
   /** Seconds into an item's effect, or -1 */
   time(id: RunItemId): number {
