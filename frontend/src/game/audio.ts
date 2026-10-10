@@ -24,6 +24,7 @@ export class GameAudio {
   private muted = false;
   private paused = false;
   private boosting = false;
+  private hum: { gain: GainNode; oscillators: OscillatorNode[] } | null = null;
 
   get isMuted(): boolean {
     return this.muted;
@@ -215,15 +216,61 @@ export class GameAudio {
       // A rising major arpeggio
       [523, 659, 784, 1047, 1319].forEach((f, i) => this.tone(f, 0.45, "triangle", 0.18, i * 0.08));
     } else if (kind === "portal") {
-      // A shimmering chord swelling up
-      [392, 494, 587, 740].forEach((f, i) => this.tone(f, 1.4, "sine", 0.14, i * 0.04));
-      [1568, 1976].forEach((f, i) => this.tone(f, 0.8, "triangle", 0.07, 0.3 + i * 0.1));
+      // A rising whoosh, then a shimmering chord swelling up
+      this.sweep(200, 2400, 0.9, 0.55);
+      [392, 494, 587, 740].forEach((f, i) => this.tone(f, 2.2, "sine", 0.3, i * 0.04));
+      [196, 98].forEach((f) => this.tone(f, 2.2, "triangle", 0.3));
+      [1568, 1976, 2349].forEach((f, i) => this.tone(f, 1.2, "triangle", 0.14, 0.3 + i * 0.1));
     } else if (kind === "upgrade") {
       [659, 988, 1319].forEach((f, i) => this.tone(f, 0.5, "triangle", 0.18, i * 0.06));
     } else {
       this.tone(220, 0.25, "sawtooth", 0.06);
       this.tone(440, 0.3, "triangle", 0.1, 0.03);
     }
+  }
+
+  /** Filtered noise sweeping from `from` to `to` Hz */
+  private sweep(from: number, to: number, duration: number, volume: number) {
+    if (!this.ctx || !this.noise || !this.effects) return;
+    const now = this.ctx.currentTime;
+    const source = this.ctx.createBufferSource();
+    source.buffer = this.noise;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.Q.value = 1.2;
+    filter.frequency.setValueAtTime(from, now);
+    filter.frequency.exponentialRampToValueAtTime(to, now + duration);
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(volume, now + duration * 0.4);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    source.connect(filter).connect(gain).connect(this.effects);
+    source.start(now);
+    source.stop(now + duration + 0.05);
+  }
+
+  /** A humming drone that swells as you near a portal (`near` 0..1, 0 = silent) */
+  portalHum(near: number) {
+    if (!this.ctx || !this.effects) return;
+    if (!this.hum) {
+      if (near <= 0) return;
+      const gain = this.ctx.createGain();
+      gain.gain.value = 0;
+      gain.connect(this.effects);
+      const oscillators = [110, 165, 220.7].map((f) => {
+        const osc = this.ctx!.createOscillator();
+        osc.type = "sine";
+        osc.frequency.value = f;
+        osc.connect(gain);
+        osc.start();
+        return osc;
+      });
+      this.hum = { gain, oscillators };
+    }
+    const now = this.ctx.currentTime;
+    this.hum.gain.gain.setTargetAtTime(near * near * 0.22, now, 0.15);
+    // Rises in pitch as you close in
+    this.hum.oscillators.forEach((osc, i) => osc.frequency.setTargetAtTime([110, 165, 220.7][i] * (1 + near * 0.35), now, 0.2));
   }
 
   crash() {
@@ -247,6 +294,7 @@ export class GameAudio {
   dispose() {
     void this.ctx?.close();
     this.ctx = null;
+    this.hum = null;
     this.music = null;
   }
 }

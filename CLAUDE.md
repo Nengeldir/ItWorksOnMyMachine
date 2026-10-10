@@ -205,6 +205,27 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Portal ring upright, portal audio (Claude)
+
+- **Ring**: the portal took the course's tangent as its normal, which points
+  down with the descent, so the ring leaned back like a floor light. `Portal`
+  now flattens the normal to horizontal (`run/portal.ts`), so ring, veil and
+  crossing test stand upright. Run mode only; races are untouched.
+- **Audio**: entering a portal now plays a rising whoosh plus a louder,
+  longer chord with a low drone (`GameAudio.stinger("portal")`). New
+  `GameAudio.portalHum(near)`: a drone that swells and rises in pitch within
+  500 m of an open portal and goes silent in the wormhole. Wired through
+  `RunHost.portalHum` and `Game.portalHum`; `RunController` calls it per frame.
+- **Run sounds**: runs never called the race's `audio.ring()` and
+  `audio.finish()` (only `checkRing` does), so gates and portals were silent.
+  `RunHost.stinger` now also takes `"gate"` (chime per gate) and `"finish"`
+  (fanfare on entering a portal).
+- **Beam**: the portal's light beam started at the veil's centre, a hollow tube
+  with a hard base through the veil. It now rises from the top of the ring and
+  fades in over its first 60 m.
+- Verified: build and lint pass. Not heard or seen in a browser; the ring tilt
+  was inferred from the code (the normal's y), so check it by eye.
+
 ### 2026-10-10: Collisions with the land exactly as drawn (Claude)
 
 Asked for: make absolutely sure the terrain's hitbox matches the visuals,
