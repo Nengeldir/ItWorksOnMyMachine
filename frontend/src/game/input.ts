@@ -17,6 +17,9 @@ export interface ControlSettings {
   muted?: boolean;
 }
 
+/** URL test mode only: Shift+P, Shift+O, Shift+S */
+export type TestAction = "portal" | "win" | "speed";
+
 /** One-off presses. Wingbeat, hover-stall, plunge and Gale Force need their adventure upgrades. */
 export type InputAction = "pause" | "respawn" | "mute" | "barrelLeft" | "barrelRight" | "flap" | "hover" | "plunge" | "burst";
 
@@ -42,6 +45,8 @@ function isTyping(event: KeyboardEvent): boolean {
 export class Input {
   settings: ControlSettings;
   onAction?: (action: InputAction) => void;
+  /** Installed only by the URL test mode. */
+  onTestAction?: (action: TestAction) => void;
   locked = false;
   private readonly element: HTMLElement;
   private readonly keys = new Set<string>();
@@ -82,6 +87,16 @@ export class Input {
 
   private onKeyDown = (event: KeyboardEvent) => {
     if (event.defaultPrevented || controlsBlocked() || isTyping(event)) return;
+    if (this.onTestAction && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      const action = event.code === "KeyP" ? "portal" : event.code === "KeyO" ? "win" : event.code === "KeyS" ? "speed" : null;
+      if (action) {
+        event.preventDefault();
+        // Consume the chord before P pauses or S pitches, including held Shift boost.
+        this.reset();
+        if (!event.repeat) this.onTestAction(action);
+        return;
+      }
+    }
     if (event.repeat && !this.keys.has(event.code)) return;
     this.keys.add(event.code);
     // Arrow keys would scroll the page; leave them alone on buttons and panels

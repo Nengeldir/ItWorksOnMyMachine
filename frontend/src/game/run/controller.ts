@@ -202,8 +202,8 @@ export class RunController {
     return this.phase === "portal" || this.phase === "pick" || this.phase === "finale" || this.phase === "won";
   }
 
-  start() {
-    this.loadLevel(runOrder(this.seed)[0]);
+  start(initial?: Level) {
+    this.loadLevel(initial?.biome.id ?? runOrder(this.seed)[0], initial);
   }
 
   /** Taking off from the intro: the title card plays from here */
@@ -215,10 +215,10 @@ export class RunController {
 
   // --- levels --------------------------------------------------------------------
 
-  private loadLevel(biome: BiomeId) {
+  private loadLevel(biome: BiomeId, initial?: Level) {
     this.disposeLevel();
     this.path.push(biome);
-    this.host.setLevel(runLevel(this.seed, this.level, biome));
+    this.host.setLevel(initial ?? runLevel(this.seed, this.level, biome));
     const world = this.host.world;
     this.passed.clear();
     this.lastGate = 0;
@@ -413,6 +413,30 @@ export class RunController {
     this.host.freeze(true);
     this.finale = new Finale();
     this.host.scene.add(this.finale.group);
+  }
+
+  /** Test mode: replace the portal with one directly along the pilot's heading. */
+  spawnTestPortal() {
+    if (this.frozen || this.ended) return;
+    const { flight } = this.host;
+    const radius = this.portals[0]?.radius ?? 15;
+    const color = this.level >= RUN_LENGTH ? "#ffe9a0" : BIOMES[destination(this.seed, this.level, this.path)].portals.color;
+    const position = flight.position.clone().addScaledVector(flight.forward, Math.max(radius * 3, flight.speed * 1.5));
+    this.disposeLevel();
+    const portal = new Portal(position, flight.forward, radius, color);
+    this.portals.push(portal);
+    this.group.add(portal.group);
+  }
+
+  /** Test mode: show the real summary immediately, including this level's stats. */
+  testWin() {
+    if (!this.styleBanked) {
+      this.totalTime += this.levelTime;
+      this.totalStyle += this.host.style;
+      this.score += Math.round(this.host.style);
+      this.styleBanked = true;
+    }
+    this.finish();
   }
 
   /** Enter during the finale: straight to the white light */

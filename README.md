@@ -77,6 +77,9 @@ docker compose up -d --build
 | `N`                       | New map (in a room's lobby)                        |
 | `←` `→` / `A` `D`         | Switch course in the map select (`Esc` goes back)  |
 | `Esc`                     | Free the mouse                                     |
+| `Shift+P` in `?test`       | Spawn a usable portal ahead of the pilot            |
+| `Shift+O` in `?test`       | Show the victory screen (nothing saved)             |
+| `Shift+S` in `?test`       | Toggle the whole simulation and animations between ½× and 1× speed |
 
 Pitch can be inverted in the menu. Diving turns height into speed, climbing
 turns speed back into height. Flying within a few metres of rock or trees fills
@@ -217,6 +220,22 @@ glowing ponds), soft clouds, valley mist, auroras and ambient particles
 (fireflies, snow, embers, spores). Fly any biome freely at
 `/?explore=<id>&seed=<n>` (ids: `verdant`, `glacier`, `archipelago`,
 `lagoon`, `twilight`, `ember`, `aurora`).
+In explore mode only, `Shift+V` toggles quarter-speed slow motion for flight
+and animations; `V` still switches lighting.
+
+**Test mode:** open `/?test` (or `/?test=verdant&seed=2`). It shows the test
+shortcut hints, with world/light selectors and N/B/V switching reserved for
+explore mode. Spawned portals use
+adventure's wormhole and upgrade picker; victory uses its finish screen and
+autopilot. Slow motion scales the shared physics/animation clock, including
+scenery shaders, particles, camera motion, transitions and animated UI overlays.
+Press `Shift+S` again to restore normal speed. The rate survives world changes
+and resets when you leave test mode. Test results are never saved.
+
+Test mode is included in the normal production build. Use the existing
+`docker compose up --build` and open `http://localhost:8080/?test` (or add
+`?test` to your deployed URL). No Dockerfile changes, build arguments,
+`VITE_ENABLE_DEBUG` flag, or debug Compose override are required.
 
 **Flight model** ([`frontend/src/game/flight.ts`](frontend/src/game/flight.ts)):
 an arcade, energy-based wingsuit. The nose points where you go, gravity along

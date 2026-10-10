@@ -12,6 +12,7 @@ export type Screen =
   | { kind: "solo"; seed: number }
   | { kind: "room"; code: string }
   | { kind: "explore"; biome: BiomeId; seed: number }
+  | { kind: "test"; biome: BiomeId; seed: number }
   | { kind: "run"; seed: number }
   | { kind: "gallery" };
 
@@ -28,9 +29,10 @@ function screenFromUrl(): Screen {
   if (Number.isInteger(run) && run >= 1 && run < 2 ** 31) return { kind: "run", seed: run };
   // /?explore=ember, or just /?explore to start in the first world and switch from there
   if (params.has("gallery")) return { kind: "gallery" };
-  const explore = params.get("explore");
+  const test = params.has("test");
+  const explore = test ? params.get("test") : params.get("explore");
   if (explore !== null) {
-    return { kind: "explore", biome: ExploreSession.valid(explore) ? explore : "skyIsles", seed: Number.isInteger(seed) && seed >= 1 ? seed : 1 };
+    return { kind: test ? "test" : "explore", biome: ExploreSession.valid(explore) ? explore : "skyIsles", seed: Number.isInteger(seed) && seed >= 1 ? seed : 1 };
   }
   if (Number.isInteger(seed) && seed >= 1 && seed < 2 ** 31) return { kind: "solo", seed };
   return { kind: "menu" };
@@ -39,7 +41,7 @@ function screenFromUrl(): Screen {
 function urlFor(screen: Screen): string {
   if (screen.kind === "solo") return `/?seed=${screen.seed}`;
   if (screen.kind === "room") return `/?room=${screen.code}`;
-  if (screen.kind === "explore") return `/?explore=${screen.biome}&seed=${screen.seed}`;
+  if (screen.kind === "explore" || screen.kind === "test") return `/?${screen.kind}=${screen.biome}&seed=${screen.seed}`;
   if (screen.kind === "run") return `/?run=${screen.seed}`;
   if (screen.kind === "gallery") return "/?gallery";
   return "/";

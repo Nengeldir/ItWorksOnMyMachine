@@ -82,6 +82,11 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 ```
 
 - `/?seed=42` opens a time trial on seed 42. Add `&tune` for the tuning panel.
+- `/?test` (optionally `?test=verdant&seed=2`) opens the explore-style test
+  sandbox: Shift+P spawns a portal ahead, Shift+O previews victory, Shift+S
+  toggles simulation and all visual animations between half and normal speed.
+  Nothing is saved; world/light controls and N/B/V switching are explore-only.
+  Included in the standard production build; no Docker changes or debug flags.
 - `/?gallery` shows every item model and the pilot's item animations.
 - `/?explore=<biome>&seed=<n>` flies a run level of any biome freely (no
   clock, nothing saved), e.g. `/?explore=verdant&seed=2` (Morning) or `&seed=3`
@@ -99,7 +104,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 
 | Path | What it does |
 | :--- | :--- |
-| `game/Game.ts` | The game: frame loop, fixed 120 Hz physics steps, race state, ring checks, HUD data, effects wiring (gate bursts, skim spray, gate motes), rendering with optional bloom, adaptive quality, the `?tune` panel |
+| `game/Game.ts` | The game: frame loop, fixed 120 Hz physics steps, race state, ring checks, HUD data, effects wiring (gate bursts, skim spray, gate motes), rendering with optional bloom, adaptive quality, test-only shared time scaling, the `?tune` panel |
 | `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only. `touching()` is the pilot's hitbox (`FLIGHT.hit*`): a ball for the body and a rectangle per wing, tilted up at a dihedral, fixed in the flight frame (never the animated pose), sampled against the distance field with early-outs; `hitboxWorld()` is the same hitbox in world space, which `Game.step` tests against the land drawn (`LandCollider`). `FlightMods` (run upgrades: drag, sink, stall, proximity boost, dash boost, thermal lift, hover, glide lock, `thrust`, a plunge's `dive`, Hover-Stall's `hang`) are only ever passed in run mode; `flap()`, `launch()`, `deflect()` and a forced `dodge()` are run abilities |
 | `game/avatar.ts` | The pilot: a cel-shaded chibi flyer built from primitives (merged per body part, vertex-colored), a procedural cape and scarf (`Cloth`), two-segment feathered wings, and all its animation: bank lead spring, barrel rolls, flapping driven by effort, bobbing, cloth ripples, limb reactions. Also `createLabel` and `glowTexture` |
 | `game/toon.ts` | Toon material (3-band gradient, rim light tinted by the biome's sun, self-lit `glow` vertex attribute for trims and wingtips) and the inverted-hull ink outline. `TOON_LIGHT` is set per biome |
@@ -109,7 +114,8 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/speedlines.ts` | Wind streaks that hang in the air and rush past at speed |
 | `game/camera.ts` | Chase camera (`CAMERA` tuning): lag, partial horizon roll, FOV with speed, FOV kick on gates, shake when skimming; after a crash (`startFall`, `fall`) it arcs up over the pilot and looks down on the fall (`CAMERA.fall*`) |
 | `game/tuning.ts` | `ANIM`, `FX`, `RINGS`, `CAMERA`: every look constant, slider ranges, localStorage persistence |
-| `game/input.ts` | Keyboard, pointer-lock mouse and gamepad, merged into pitch and roll, plus actions (respawn, mute, barrel rolls) |
+| `game/testPlayback.ts` | Test-only playback rate: the frame loop scales its delta, CSS animations/transitions follow through the Web Animations API, and a scoped observer handles new overlays; cleanup restores normal playback |
+| `game/input.ts` | Test-only Shift+P/O/S chords are consumed before ordinary bindings; keyboard, pointer-lock mouse and gamepad, merged into pitch and roll, plus actions (respawn, mute, barrel rolls) |
 | `game/pilots.ts` | Remote players and ghosts: interpolated samples driving an `Avatar` and `PilotFx` |
 | `game/ghost.ts` | Recording and decoding ghost runs (15 Hz) |
 | `game/glidein.ts` | `GlideIn`: while the land near you is loading (free flight, runs, explore; never races), the pilot glides in on rails instead of hanging frozen: no input, no physics step, no scoring; at most 70 m and never within 30 m of the next gate, slowing before rock; control comes back at `START_SPEED` when the land is ready, and a run's level clock keeps running meanwhile |
@@ -138,7 +144,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/world/atmosphere.ts` | `ATMOSPHERE` light uniforms shared per biome; `atmospheric()` patches Lambert materials (sun-tinted haze matching the sky, valley mist, backlit rims, rock strata); `skyMaterial()` (gradient, HDR sun or moon disc and halo, painted clouds, twinkling stars at night) |
 | `game/world/WorldView.ts` | Meshes for a World, as its biome describes them: land streamed from the workers (Sky Isles' chunks, or a `LandStreamer` for v2 land), pines, the sea of clouds and cloud puffs, sky, gates. `ready` is false until the land near you has arrived. `collider` (a `LandCollider`) holds the land on screen; `covers(x, y, z)` says whether the land at a point is on screen (or there is none), else collisions there fall back to the distance field |
 | `game/world/crystals.ts` | Crystal gates: instanced crystals (bob, spin, pass flare and burst in the shader), veil discs with the pass shockwave, light pillars over the next gate and the finish |
-| `session/` | Solo, room, explore and run sessions wiring a `Game` to the network and UI. `ExploreSession`: free flight through any biome (`/?explore=verdant&seed=2`), nothing saved. `RunSession`: a roguelike run (`/?run=<seed>`), best score per run seed in localStorage |
+| `session/` | Solo, room, explore and run sessions wiring a `Game` to the network and UI. `ExploreSession`: free flight through any biome (`/?explore=verdant&seed=2`), nothing saved; `?test` reuses it with a RunController for real portals/upgrades and unsaved victory previews, showing only test shortcuts rather than biome/light controls. `RunSession`: a roguelike run (`/?run=<seed>`), best score per run seed in localStorage |
 | `net/` | Server clock sync and the room connection (SSE down, POST up) |
 | `staleBuild.ts` | After a redeploy, an open tab's lazy chunks (bloom, `?tune`) and mesher worker are 404s: `reloadForNewBuild` reloads the page once (at most every 30 s, production only) |
 | `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, controls, and the run's HUD, title card and upgrade picker (`RunHud.tsx`). The menu's live course behind the glass is `MenuBackdrop` (a `Game` in `drift` attract mode, which switches courses with `setSeed` and snapshots each one for card art); today's best folds into a flag (`TodaysBest`). `CourseSelect` is the map select (a carousel of course cards; featured art in `public/courses/`). Before a race, `GameScreen`'s `ReadyCard` sits where the timer will be; its `Panel` (results) folds to its heading and main buttons on narrow screens |
@@ -285,6 +291,70 @@ prints nothing until a step ends.
   `docker compose up --build -d`; `/` returns 200. The user's own hang is
   not diagnosed yet (needs their log). Installing `docker-buildx` would add
   live progress and npm cache mounts.
+
+### 2026-10-10: Confirm test mode works with the existing Docker build
+
+- Verified that the URL selects test mode in the normal frontend bundle;
+  it has no development-only or debug-build guard. Both Dockerfiles and
+  the standard Compose configuration remain unchanged.
+- README now documents `docker compose up --build` followed by
+  `http://localhost:8080/?test`, without build arguments or debug overrides.
+  The pre-existing untracked `docker-compose.debug.yml` is not required.
+- Verification: frontend production build and lint pass. Firefox on Vite
+  preview confirms test UI in the production bundle (no `__game` dev hook),
+  Shift+S at 0.5×, Shift+O opening victory, its CSS animation at 0.5×, and
+  saved bests unchanged. Screenshot inspected. No Docker image was built.
+
+
+### 2026-10-10: Remove biome controls from test mode
+
+- `GameScreen.tsx`: hide the world/light selectors and music diagnostics in
+  test mode, and disable its N/B/V world/light shortcuts. Keep the compact
+  Shift+P/O/S hints. Explore retains its existing controls.
+- `RunHud.tsx`: test victory offers replay and menu, without the next-world
+  action. The URL can still select an initial biome; portals still advance
+  through the adventure. README and architecture notes updated.
+- Verification: frontend build and lint pass. In Firefox, test mode shows
+  only Shift+P/O/S hints, with zero world/light buttons; N/B/V leave the URL
+  unchanged. Explore still shows both selectors and V changes the light.
+  Test panel visually checked. No new tests needed for this UI-only change.
+
+
+### 2026-10-10: URL test mode with portal, victory and half-speed shortcuts
+
+- `App.tsx`, `ExploreSession.ts`, `GameScreen.tsx`: `/?test` (or
+  `?test=<biome>&seed=<n>`) reuses explore's worlds/lights panel and starts
+  immediately. Test runs use the existing adventure controller, picker and
+  finish screen (`RunHud.tsx`), with explicit unsaved-result text. They never
+  call the score-saving RunSession or server APIs. World switches retain
+  `?test` and other query flags; invalid biome names fall back to Sky Isles.
+- `input.ts`: Shift+P places a usable portal ahead along the pilot's heading;
+  Shift+O shows victory with the current stats and autopilot; Shift+S toggles
+  normal/half speed. Chords are consumed before pause, pitch and held boost;
+  repeats, text fields and open settings dialogs cannot trigger them.
+- `run/controller.ts`: accepts the sandbox's starting biome/mood, can replace
+  its exit with a nearby portal, and can finish immediately through the real
+  summary event. `Game.ts` resets the run cleanly after victory/world changes.
+- `Game.ts`, new `game/testPlayback.ts`: scale the shared frame delta before
+  fixed-step accumulation and shader time, slowing flight, cooldowns, crash
+  recovery, camera, scenery, particles, equipment, portal/finale transitions
+  and the victory lap together. CSS animations/transitions (including newly
+  mounted picker/finish overlays) get the same playback rate without restarting.
+  Adaptive graphics quality still measures real frame time. Rate persists
+  across biome changes; leaving the test session restores normal playback.
+- Verification: frontend build and lint pass. New `tests/test-mode.test.mjs`
+  covers chord isolation/repeats/editing, oriented portal placement and actual
+  upgrade entry, initial biome/mood, one victory event with stats, and CSS
+  playback/cleanup. Browser: Firefox with an isolated temporary profile,
+  test UI and portal visually checked; picker and victory both at 0.5 playback
+  rate, saved bests unchanged. One second of manual frame stepping advanced
+  game/avatar/portal clocks by 1 s normally and 0.5 s when slowed, with 119/60
+  fixed physics steps (fractional accumulator accounts for the first count).
+- Full `npm test`: the six existing tracked test files and the new test file
+  pass; four pre-existing untracked test files fail (`camera`, `debug`,
+  `flight-realism`, `input`). The debug test imports missing `debugMode.ts`;
+  those unrelated files were left intact. Backend unchanged. Real gamepad,
+  audible mix and focused-window performance were not tested.
 
 ### 2026-10-10: Collisions with the land exactly as drawn (Claude)
 
@@ -1455,6 +1525,10 @@ ported to the islands world:
   checked against the distance field).
 - **The rest of the design list** (items 1 to 20, abilities 11 to 20) is
   planned, not started.
+
+- Test mode: check shortcut feel with physical keyboard/mouse and the debug
+  panel on narrow screens; browser automation verified behavior and timing,
+  not focused-window performance or audio listening.
 
 - Playtest the settings dead zone with a real gamepad and listen to the separate
   audio levels; check mouse sensitivity 2× across different devices.
