@@ -53,7 +53,17 @@ CATALOG = [
         ("goldenFeather", "Golden feather", 3), ("aviatorCap", "Aviator keepsake", 1),
         ("wingedHelm", "Winged helm keepsake", 2), ("apple", "Apple", 0),
         ("peach", "Peach", 0), ("grapes", "Grapes", 0),
-        ("cherries", "Cherries", 0), ("starfruit", "Starfruit", 1)]],
+        ("cherries", "Cherries", 0), ("starfruit", "Starfruit", 1),
+        ("spiritLantern", "Spirit Lantern", 1), ("echoConch", "Echoing Conch", 1),
+        ("phoenixFeather", "Feather of the Great Phoenix", 3), ("silkRibbon", "Cloud-Spun Silk Ribbon", 1),
+        ("vortexGeode", "Vortex Geode", 1), ("aeroBoots", "Aero-Boots of the Adepti", 2),
+        ("stormKite", "Stormcaller's Kite", 2), ("glacialPrism", "Glacial Prism", 2),
+        ("sunNectar", "Sun-Kissed Nectar", 1), ("windTether", "Tether of the Wind Spirit", 2),
+        ("mothCape", "Illusory Moth Cape", 2), ("resonantChimes", "Resonant Chimes", 1),
+        ("crystalUpdraft", "Crystallized Updraft", 2), ("duskHourglass", "Dusk-Weaver's Hourglass", 3),
+        ("electroPrism", "Electro-Charged Prism", 2), ("dragonTear", "Tear of the Dragon", 3),
+        ("anemoCatcher", "Anemo Catcher", 1), ("starflakeShield", "Starflake Shield", 2),
+        ("gliderWax", "Luminescent Glider Wax", 1)]],
 ]
 BY_KEY = {e["key"]: e for e in CATALOG}
 STARTERS = {f"{slot}:{asset}": 1 for slot, asset in DEFAULT_EQUIPPED.items() if slot != "pet"}
