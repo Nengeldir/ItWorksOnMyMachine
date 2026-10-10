@@ -17,12 +17,17 @@ export interface ControlSettings {
   muted?: boolean;
 }
 
-/** One-off presses. Wingbeat needs its adventure upgrade. */
-export type InputAction = "pause" | "respawn" | "mute" | "barrelLeft" | "barrelRight" | "flap";
+/** URL test mode only: Shift+P, Shift+O, Shift+S */
+export type TestAction = "portal" | "win" | "speed";
+
+/** One-off presses. Wingbeat, hover-stall, plunge and Gale Force need their adventure upgrades. */
+export type InputAction = "pause" | "respawn" | "mute" | "barrelLeft" | "barrelRight" | "flap" | "hover" | "plunge" | "burst";
 
 export function controlsBlocked(): boolean {
   return !!document.querySelector?.("dialog[open]");
 }
+const ACTIONS: InputAction[] = ["pause", "respawn", "mute", "barrelLeft", "barrelRight", "flap", "hover", "plunge", "burst"];
+
 function deadZone(value: number, threshold = 0.12): number {
   if (Math.abs(value) < threshold) return 0;
   return (value - Math.sign(value) * threshold) / (1 - threshold);
@@ -40,6 +45,8 @@ function isTyping(event: KeyboardEvent): boolean {
 export class Input {
   settings: ControlSettings;
   onAction?: (action: InputAction) => void;
+  /** Installed only by the URL test mode. */
+  onTestAction?: (action: TestAction) => void;
   locked = false;
   private readonly element: HTMLElement;
   private readonly keys = new Set<string>();
@@ -80,6 +87,16 @@ export class Input {
 
   private onKeyDown = (event: KeyboardEvent) => {
     if (event.defaultPrevented || controlsBlocked() || isTyping(event)) return;
+    if (this.onTestAction && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      const action = event.code === "KeyP" ? "portal" : event.code === "KeyO" ? "win" : event.code === "KeyS" ? "speed" : null;
+      if (action) {
+        event.preventDefault();
+        // Consume the chord before P pauses or S pitches, including held Shift boost.
+        this.reset();
+        if (!event.repeat) this.onTestAction(action);
+        return;
+      }
+    }
     if (event.repeat && !this.keys.has(event.code)) return;
     this.keys.add(event.code);
     // Arrow keys would scroll the page; leave them alone on buttons and panels
@@ -87,8 +104,7 @@ export class Input {
     const atGame = !target || target === document.body || target === this.element;
     if (atGame && (event.code.startsWith("Arrow") || event.code === "Space")) event.preventDefault();
     if (event.repeat) return;
-    const actions: InputAction[] = ["pause", "respawn", "mute", "barrelLeft", "barrelRight", "flap"];
-    for (const action of actions) {
+    for (const action of ACTIONS) {
       if (this.binding(action).includes(event.code)) {
         if (atGame || action === "pause") event.preventDefault();
         this.onAction?.(action);
@@ -126,11 +142,6 @@ export class Input {
     }
   };
 
-  /** Is the hover button held? (F, or the gamepad's B / circle) */
-  get hovering(): boolean {
-    return !!this.key("hover") || !!this.padButtons[1];
-  }
-
   private binding(action: BindingAction): string[] {
     return (this.settings.bindings ?? DEFAULT_BINDINGS)[action];
   }
@@ -162,8 +173,12 @@ export class Input {
       if (pressed[3] && !this.padButtons[3]) this.onAction?.("respawn");
       if (pressed[4] && !this.padButtons[4]) this.onAction?.("barrelLeft");
       if (pressed[5] && !this.padButtons[5]) this.onAction?.("barrelRight");
-      // A flaps and B hovers in adventure; triggers control speed in every mode.
+      // In adventure: A flaps, B hover-stalls, X plunges, the right stick's click is Gale Force.
+      // Triggers control speed in every mode.
       if (pressed[0] && !this.padButtons[0]) this.onAction?.("flap");
+      if (pressed[1] && !this.padButtons[1]) this.onAction?.("hover");
+      if (pressed[2] && !this.padButtons[2]) this.onAction?.("plunge");
+      if (pressed[11] && !this.padButtons[11]) this.onAction?.("burst");
       boost = Math.max(boost, deadZone(pad.buttons[7]?.value ?? 0));
       brake = Math.max(brake, deadZone(pad.buttons[6]?.value ?? 0));
       this.padButtons = pressed;

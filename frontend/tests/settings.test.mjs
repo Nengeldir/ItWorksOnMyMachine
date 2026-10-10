@@ -43,3 +43,9 @@ test("reduced camera motion suppresses speed and gate field-of-view effects", as
   for(let i=0;i<120;i++) camera.update(1/60,position,forward,up,120,1,null,undefined,1);
   assert.equal(camera.camera.fov,CAMERA.fov);
 });
+test("bindings saved before an action existed keep their keys, and the new action gets its default", () => {
+  const bindings = defaultBindings(); bindings.boost = ["KeyO"]; delete bindings.plunge; delete bindings.burst;
+  const s = normalizeSettings({ bindings });
+  assert.deepEqual(s.bindings.boost, ["KeyO"]);
+  assert.deepEqual(s.bindings.plunge, ["KeyX"]); assert.deepEqual(s.bindings.burst, ["KeyZ"]);
+});

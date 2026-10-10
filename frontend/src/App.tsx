@@ -1,49 +1,14 @@
 import { useEffect, useState } from "react";
 import { type User, getMe } from "./api";
-import type { BiomeId } from "./game/world/biomes";
-import { ExploreSession } from "./session/ExploreSession";
 import GameScreen from "./components/GameScreen";
 import { randomSeed } from "./game/rng";
 import Menu from "./components/Menu";
+import { type Screen, screenFromSearch, urlFor } from "./route";
 import { type Settings, loadSettings, saveSettings } from "./storage";
 
-export type Screen =
-  | { kind: "menu"; joinCode?: string }
-  | { kind: "solo"; seed: number }
-  | { kind: "room"; code: string }
-  | { kind: "explore"; biome: BiomeId; seed: number }
-  | { kind: "run"; seed: number }
-  | { kind: "gallery" };
+export type { Screen } from "./route";
 
-// Screens live in the URL, so a room link can be shared and reloads keep you in place
-function screenFromUrl(): Screen {
-  const params = new URLSearchParams(location.search);
-  const room = params.get("room")?.toUpperCase();
-  if (room && /^[A-Z0-9]{3,8}$/.test(room)) {
-    // First visit through an invite link: pick a name before joining
-    return loadSettings().nickname ? { kind: "room", code: room } : { kind: "menu", joinCode: room };
-  }
-  const seed = Number(params.get("seed"));
-  const run = Number(params.get("run"));
-  if (Number.isInteger(run) && run >= 1 && run < 2 ** 31) return { kind: "run", seed: run };
-  // /?explore=ember, or just /?explore to start in the first world and switch from there
-  if (params.has("gallery")) return { kind: "gallery" };
-  const explore = params.get("explore");
-  if (explore !== null) {
-    return { kind: "explore", biome: ExploreSession.valid(explore) ? explore : "skyIsles", seed: Number.isInteger(seed) && seed >= 1 ? seed : 1 };
-  }
-  if (Number.isInteger(seed) && seed >= 1 && seed < 2 ** 31) return { kind: "solo", seed };
-  return { kind: "menu" };
-}
-
-function urlFor(screen: Screen): string {
-  if (screen.kind === "solo") return `/?seed=${screen.seed}`;
-  if (screen.kind === "room") return `/?room=${screen.code}`;
-  if (screen.kind === "explore") return `/?explore=${screen.biome}&seed=${screen.seed}`;
-  if (screen.kind === "run") return `/?run=${screen.seed}`;
-  if (screen.kind === "gallery") return "/?gallery";
-  return "/";
-}
+const screenFromUrl = (): Screen => screenFromSearch(location.search, Boolean(loadSettings().nickname));
 
 const App = () => {
   const [screen, setScreen] = useState<Screen>(screenFromUrl);

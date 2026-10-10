@@ -2,6 +2,7 @@ import { IconArrowLeft, IconChevronDown, IconChevronUp } from "@tabler/icons-rea
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from "react";
 import type { Screen } from "../App";
 import { formatTime, ordinal } from "../format";
+import { controlsBlocked } from "../game/input";
 import { webglAvailable } from "../game/webgl";
 import { BIOMES, type BiomeId } from "../game/world/biomes";
 import { RUN } from "../game/tuning";
@@ -41,7 +42,7 @@ function useMountedSession(session: Mountable, settings: Settings) {
 function useHotkeys(keys: Record<string, () => void>) {
   const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
     const target = event.target as HTMLElement | null;
-    if (target && ["INPUT", "TEXTAREA"].includes(target.tagName)) return;
+    if (event.defaultPrevented || controlsBlocked() || target?.isContentEditable || (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
     const action = keys[event.code];
     if (!action || event.repeat) return;
     // Otherwise Enter would also click whichever button still has focus
@@ -263,26 +264,38 @@ const RoomScreen = ({ code, settings, onSettings, onExit }: ScreenProps & { code
 
 // --- Explore ---------------------------------------------------------------------
 
-const ExploreScreen = ({ biome, seed, settings, onSettings, onExit }: ScreenProps & { biome: BiomeId; seed: number }) => {
-  const [session] = useState(() => new ExploreSession(biome, seed, settings));
+const ExploreScreen = ({ biome, seed, settings, onSettings, onExit, testMode = false }: ScreenProps & { biome: BiomeId; seed: number; testMode?: boolean }) => {
+  const [session] = useState(() => new ExploreSession(biome, seed, settings, testMode));
   const ref = useMountedSession(session, settings);
-  const { hud, error, biome: current, mood, track, playing } = useSyncExternalStore(session.store.subscribe, session.store.get);
+  const { hud, error, biome: current, mood, track, playing, speed, offers, next, summary } = useSyncExternalStore(session.store.subscribe, session.store.get);
 
   // The mouse is often locked to the game, so everything has a key
   useHotkeys({
-    KeyN: () => session.step(1),
-    KeyB: () => session.step(-1),
-    KeyV: () => session.stepMood(1),
+    ...(!testMode ? {
+      KeyN: () => session.step(1),
+      KeyB: () => session.step(-1),
+      KeyV: () => session.stepMood(1),
+    } : {}),
+    Enter: () => { if (summary) session.again(); else session.skip(); },
+    Backspace: () => { if (summary) onExit(); },
   });
 
   const moods = BIOMES[current].moods;
+  const run = hud?.run ?? null;
+  const phase = run?.phase;
+  const transitioning = phase === "portal" || phase === "pick" || phase === "finale" || phase === "won";
   return (
     <div className="game">
       <div ref={ref} className="game-view" />
-      {hud && <Hud hud={hud} settings={settings} onSettings={onSettings} />}
-      <TopBar title={`Explore · ${hud ? `${hud.biomeName} · ${hud.paletteName}` : ""} · #${seed}`} onExit={onExit} />
+      {hud && !summary && (!transitioning || hud.paused) && <Hud hud={hud} settings={settings} onSettings={onSettings} showStyle={testMode} />}
+      {/* Test mode flies a real run: its score, chain and compass to the portal */}
+      {testMode && run && !summary && !transitioning && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
+      {!summary && <TopBar title={testMode
+        ? `Test · #${seed}${run ? ` · level ${run.level}/${run.length} · ${run.biome} · ${run.mood}` : ""} · ${speed}× speed`
+        : `Explore · ${hud ? `${hud.biomeName} · ${hud.paletteName}` : ""} · #${seed}`} onExit={onExit} />}
       {error && <div className="banner">{error}</div>}
-      <aside className="debug-panel glass">
+      {!summary && !transitioning && <aside className={`debug-panel glass${testMode ? " test" : ""}`}>
+        {!testMode && <>
         <h3>Worlds</h3>
         <div className="debug-row">
           {(Object.keys(BIOMES) as BiomeId[]).map((id) => (
@@ -307,7 +320,19 @@ const ExploreScreen = ({ biome, seed, settings, onSettings, onExit }: ScreenProp
         <p className="debug-keys">
           <kbd>N</kbd> next world · <kbd>B</kbd> previous · <kbd>V</kbd> next light
         </p>
-      </aside>
+        </>}
+        {testMode && <>
+          <h3>Test mode · nothing saved</h3>
+          <ul className="debug-keys">
+            <li><kbd>Shift+P</kbd> portal ahead</li>
+            <li><kbd>Shift+O</kbd> victory</li>
+            <li><kbd>Shift+S</kbd> {speed === 1 ? "half speed" : "normal speed"}</li>
+          </ul>
+        </>}
+      </aside>}
+      {testMode && phase === "finale" && <div className="finale-skip"><kbd>Enter</kbd> skip</div>}
+      {testMode && offers.length > 0 && !hud?.paused && <UpgradePicker offers={offers} next={next} onPick={(id) => session.pick(id)} />}
+      {testMode && summary && <FinishScreen testMode summary={summary} best={null} onAgain={() => session.again()} onMenu={onExit} />}
     </div>
   );
 };
@@ -471,7 +496,7 @@ const NoWebGL = ({ onExit }: { onExit: () => void }) => (
 
 const GameScreen = ({ screen, onNewRun, ...props }: ScreenProps & { screen: Exclude<Screen, { kind: "menu" }>; onNewRun: () => void }) => {
   if (!webglAvailable()) return <NoWebGL onExit={props.onExit} />;
-  if (screen.kind === "explore") return <ExploreScreen biome={screen.biome} seed={screen.seed} {...props} />;
+  if (screen.kind === "explore" || screen.kind === "test") return <ExploreScreen biome={screen.biome} seed={screen.seed} testMode={screen.kind === "test"} {...props} />;
   if (screen.kind === "run") return <RunScreen seed={screen.seed} onNewRun={onNewRun} {...props} />;
   if (screen.kind === "gallery") return <GalleryScreen onExit={props.onExit} />;
   return screen.kind === "solo" ? (
