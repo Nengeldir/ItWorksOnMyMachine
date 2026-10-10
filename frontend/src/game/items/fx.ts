@@ -61,6 +61,7 @@ const lookAlong = (out: THREE.Quaternion, direction: THREE.Vector3) =>
 const USE_STYLE: Partial<Record<RunItemId, "eat" | "raise" | "toss">> = {
   spiritLantern: "raise",
   echoConch: "raise",
+  silkRibbon: "raise",
   anemoCatcher: "raise",
   starflakeShield: "raise",
   gliderWax: "raise",
