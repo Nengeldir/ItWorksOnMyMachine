@@ -467,9 +467,10 @@ export class Game implements RunHost {
     this.view = new WorldView(this.world, this.scene);
     this.view.prepare(this.renderer);
     this.scene.add(this.view.group);
-    this.view.group.visible = !this.inWormhole;
-    // Compile the level's shaders now (behind the loading wait or the tunnel), not mid-flight
+    // Compile the level's shaders now (behind the loading wait or the wormhole), not mid-flight;
+    // compile() skips hidden objects, so the new land is hidden only afterwards
     this.renderer.compile(this.scene, this.rig.camera);
+    this.view.group.visible = !this.inWormhole;
     this.particles.clear();
     this.softParticles.clear();
     this.ambient.setWorld(this.world);
