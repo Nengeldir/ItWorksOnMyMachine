@@ -334,9 +334,14 @@ export class Avatar {
    * eased by whoever sets them: `tuck` dives like a falling star (Plunging
    * Attack), `hover` hangs upright with the wings fluttering (Hover-Stall),
    * `cast` throws both arms forward and flares the wings (Gale Force), `surf`
-   * crouches low with a hand trailing through the clouds (Cloud-Surfing)
+   * crouches low with a hand trailing through the clouds (Cloud-Surfing),
+   * `climb` reaches for the sky on hard wingbeats (Zenith Climber), `sing`
+   * throws the head back and the arms open (Resonance), `flare` rears up
+   * with cape and wings thrown forward (Aero-Braking), `falcon` tucks the
+   * wings back like a stooping falcon, `butterfly` spreads cape and wings
+   * wide on slow, deep beats (the gliding stances)
    */
-  readonly stance = { tuck: 0, hover: 0, cast: 0, surf: 0 };
+  readonly stance = { tuck: 0, hover: 0, cast: 0, surf: 0, climb: 0, sing: 0, flare: 0, falcon: 0, butterfly: 0 };
   /** How far each wing (left, right) is folded in during a crash, to keep it out of rock it is wedged against (0..1) */
   private readonly folded = [0, 0];
   /** A crash playing out: the body flails, then goes limp (Game moves `group`) */
@@ -734,10 +739,10 @@ export class Avatar {
       0.18 + clamp(this.climb, 0, 1) * 0.9 + Math.abs(this.yawRate) * 0.35 + Math.abs(this.rollRate) * 0.08 + slow * 0.7;
     effort = clamp(effort * (1 - diving * 0.75), 0, 1);
     const st = this.stance;
-    effort = Math.max(effort * (1 - st.tuck * 0.9), st.hover, st.cast * 0.8);
+    effort = Math.max(effort * (1 - st.tuck * 0.9) * (1 - st.falcon * 0.8), st.hover, st.cast * 0.8, st.climb * 0.95, st.flare * 0.7, st.butterfly * 0.75);
     this.effort += (effort - this.effort) * (1 - Math.exp(-dt * 3));
     const before = Math.sin(this.flapPhase);
-    this.flapPhase += TAU * (ANIM.flapRate + ANIM.flapBoost * this.effort) * dt * (this.barrel.t >= 0 ? 1.6 : 1) * (1 + st.hover * 0.9);
+    this.flapPhase += TAU * (ANIM.flapRate + ANIM.flapBoost * this.effort) * dt * (this.barrel.t >= 0 ? 1.6 : 1) * (1 + st.hover * 0.9) * (1 - st.butterfly * 0.45) * (1 + st.climb * 0.35);
     const after = Math.sin(this.flapPhase);
     if (before > 0 && after <= 0 && this.time - this.lastFlap > 0.15) {
       this.lastFlap = this.time;
@@ -773,28 +778,30 @@ export class Avatar {
     this.rig.position.set(Math.sin(t * TAU * A.bobRate * 0.5) * A.bobAmount * 0.4 * calm, bob + flapLift, 0);
     const st = this.stance;
     // Hovering, the body swings upright under the wings; surfing, it sits back a little
+    // Flaring, the body rears up into the wind; in the butterfly stance it floats, rocking gently
     this.rig.rotation.set(
-      Math.cos(t * TAU * A.bobRate) * 0.04 * calm - this.pitchRate * 0.05 + st.hover * 0.95 + st.surf * 0.18 - st.tuck * 0.1,
+      Math.cos(t * TAU * A.bobRate) * 0.04 * calm - this.pitchRate * 0.05 + st.hover * 0.95 + st.surf * 0.18 - st.tuck * 0.1 + st.flare * 0.85 + st.butterfly * 0.12,
       0,
-      roll + Math.sin(t * 1.3) * 0.12 * st.surf,
+      roll + Math.sin(t * 1.3) * 0.12 * st.surf + Math.sin(t * 0.9) * 0.08 * st.butterfly,
     );
-    const stretch = 1 + clamp((this.speed - 55) / 60, 0, 1) * 0.06;
+    const stretch = 1 + clamp((this.speed - 55) / 60, 0, 1) * 0.06 + st.falcon * 0.05;
     this.rig.scale.set(SCALE / Math.sqrt(stretch), SCALE / Math.sqrt(stretch), SCALE * stretch);
 
     // Body: a superhero arch, more when climbing; the head looks ahead and into turns
-    this.chest.rotation.set(this.brake * 0.18 - this.boost * 0.08 + 0.1 + clamp(this.climb, 0, 1) * 0.12 + this.pitchRate * 0.05 + st.cast * 0.3 + st.surf * 0.25 - st.tuck * 0.12, -turn * 0.08 * A.limbSwing, 0);
-    this.head.rotation.set(0.85 - this.pitchRate * 0.08 - st.hover * 0.55 - st.surf * 0.15, -turn * 0.35 * A.headLook, turn * 0.25 * A.headLook);
+    this.chest.rotation.set(this.brake * 0.18 - this.boost * 0.08 + 0.1 + clamp(this.climb, 0, 1) * 0.12 + this.pitchRate * 0.05 + st.cast * 0.3 + st.surf * 0.25 - st.tuck * 0.12 + st.climb * 0.15 + st.sing * 0.3 + st.flare * 0.2 - st.falcon * 0.1, -turn * 0.08 * A.limbSwing, 0);
+    // Singing, the head is thrown back (with a little sway to the song)
+    this.head.rotation.set(0.85 - this.pitchRate * 0.08 - st.hover * 0.55 - st.surf * 0.15 - st.sing * 0.6 - st.climb * 0.2 + st.falcon * 0.1, -turn * 0.35 * A.headLook, turn * 0.25 * A.headLook + Math.sin(t * 7) * 0.12 * st.sing);
     this.pelvis.rotation.set(0, turn * 0.06 * A.limbSwing, -this.lean * 0.15);
 
     // Wings
-    const amp = (A.flapAngle * this.effort + A.glideFlutter * (1 - this.effort)) * (1 - this.brake * 0.85) * (1 - this.boost * 0.5) * (1 - st.tuck * 0.85) * (1 - st.surf * 0.6) * (1 + st.hover * 0.25);
+    const amp = (A.flapAngle * this.effort + A.glideFlutter * (1 - this.effort)) * (1 - this.brake * 0.85) * (1 - this.boost * 0.5) * (1 - st.tuck * 0.85) * (1 - st.surf * 0.6) * (1 + st.hover * 0.25) * (1 - st.falcon * 0.85) * (1 + st.butterfly * 0.7 + st.climb * 0.3);
     const stroke = Math.sin(this.flapPhase) + 0.22 * Math.sin(this.flapPhase * 2);
     const strokeOuter = Math.sin(this.flapPhase - 0.7) + 0.22 * Math.sin(this.flapPhase * 2 - 1.4);
     const barrelTuck = this.barrel.t >= 0 ? Math.sin(Math.PI * this.barrel.t) : 0;
     const sweep = A.sweepAtSpeed * speedK + barrelTuck * 0.45 - slow01(this.speed) * 0.1 + this.boost * A.boostSweep - this.brake * A.brakeSweep
-      + st.tuck * 0.95 - st.hover * 0.3 - st.cast * 0.35;
+      + st.tuck * 0.95 - st.hover * 0.3 - st.cast * 0.35 - st.flare * 0.95 + st.falcon * 1.15 - st.butterfly * 0.45 - st.sing * 0.2;
     // Positive lift raises the wing (towards the back)
-    const lift = (s: 1 | -1) => 0.12 + amp * stroke + turn * 0.12 * s * A.limbSwing + st.cast * 0.35 - st.tuck * 0.15;
+    const lift = (s: 1 | -1) => 0.12 + amp * stroke + turn * 0.12 * s * A.limbSwing + st.cast * 0.35 - st.tuck * 0.15 + st.climb * 0.25 + st.sing * 0.4 + st.flare * 0.3 - st.falcon * 0.12 + st.butterfly * 0.18;
     for (const [side, s] of [
       [this.right, 1],
       [this.left, -1],
@@ -806,18 +813,21 @@ export class Avatar {
       const glide = 1.3 - speedK * 0.35 - barrelTuck * 0.5 + this.brake * 0.25 - this.boost * 0.15;
       // Tucked, the arms reach past the head like a diver's; casting, they thrust ahead; the
       // surfer's left hand trails low, through the cloud
-      const reach = Math.max(st.tuck, st.cast);
+      // Climbing, they reach for the sky; flaring, they brace forward; singing, they open wide; the
+      // falcon holds them back along its sides, the butterfly spreads them with its wings
+      const reach = Math.max(st.tuck, st.cast, st.climb * 0.6, st.flare * 0.45);
       const trailing = s < 0 ? st.surf : st.surf * 0.4;
-      const spread = glide + (2.75 - glide) * reach + st.hover * 0.25 - trailing * 0.55;
-      const armLift = (0.25 + stroke * amp * 0.35 + turn * 0.25 * s * A.limbSwing) * (1 - reach) - trailing * 0.7;
+      const spread = (glide + (2.75 - glide) * reach + st.hover * 0.25 - trailing * 0.55 + st.sing * 0.2 + st.butterfly * 0.25) * (1 - st.falcon * 0.8);
+      const armLift = (0.25 + stroke * amp * 0.35 + turn * 0.25 * s * A.limbSwing) * (1 - reach) - trailing * 0.7 + st.sing * 0.45 + st.butterfly * 0.2 - st.falcon * 0.5;
       side.shoulder.rotation.set(0, -armLift * s, spread * s);
       side.elbow.rotation.set(0, 0, (0.25 + st.cast * 0.1 - st.tuck * 0.2) * s);
 
       // Legs together, knees soft, toes pointed; they swing like a rudder in turns
       const kick = Math.sin(t * 2.4 + (s > 0 ? 0 : 1.6)) * 0.06 * calm;
       // Hovering, the legs dangle; surfing, they swing under the body, knees bent as if on a board
-      side.hip.rotation.set(0.06 + kick + st.hover * 0.35 * (s > 0 ? 1 : 0.7) + st.surf * 0.75, 0, 0.05 * s - turn * 0.12 * A.limbSwing + st.surf * 0.12 * s);
-      side.knee.rotation.set((-this.brake * 0.3 - 0.32 - clamp(this.climb, 0, 1) * 0.35 - kick * 1.4 - barrelTuck * 0.4) * (1 - st.tuck * 0.85) - st.hover * 0.45 - st.surf * 0.9, 0, 0);
+      // Flaring, the legs swing forward under the body like a bird landing
+      side.hip.rotation.set(0.06 + kick + st.hover * 0.35 * (s > 0 ? 1 : 0.7) + st.surf * 0.75 + st.flare * 0.7, 0, 0.05 * s - turn * 0.12 * A.limbSwing + st.surf * 0.12 * s + st.butterfly * 0.1 * s);
+      side.knee.rotation.set((-this.brake * 0.3 - 0.32 - clamp(this.climb, 0, 1) * 0.35 - kick * 1.4 - barrelTuck * 0.4) * (1 - st.tuck * 0.85) * (1 - st.falcon * 0.8) - st.hover * 0.45 - st.surf * 0.9 - st.flare * 0.5, 0, 0);
     }
 
     // Item animations take over the right arm
@@ -842,15 +852,20 @@ export class Avatar {
 
     if (!this.detailed && dt > 0) return;
     this.clothTime += dt * (4.5 + this.speed * 0.11) * A.clothSpeed;
-    this.updateCloth(A.clothWave * (0.075 + slow01(this.speed) * 0.05), -this.lean * 0.3 - turn * 0.15, this.pitchRate * 0.12 - this.climb * 0.12);
+    this.updateCloth(
+      A.clothWave * (0.075 + slow01(this.speed) * 0.05) * (1 + st.flare * 1.5 + st.butterfly * 0.6) * (1 - st.falcon * 0.6),
+      -this.lean * 0.3 - turn * 0.15,
+      this.pitchRate * 0.12 - this.climb * 0.12 + st.flare * 0.75 - st.falcon * 0.2,
+      1 + st.butterfly * 1.6 + st.flare * 0.4 - st.falcon * 0.3,
+    );
   }
 
-  /** Moves the cape and scarf: `wave` ripple size, `leanX` sideways swing, `pitch` lift of the hem */
-  private updateCloth(wave: number, leanX: number, pitch: number) {
+  /** Moves the cape and scarf: `wave` ripple size, `leanX` sideways swing, `pitch` lift of the hem, `spread` how wide it fans */
+  private updateCloth(wave: number, leanX: number, pitch: number, spread = 1) {
     const A = ANIM;
     const ct = this.clothTime;
     this.capeShape = (u, v, out) => {
-      const width = 0.11 + 0.2 * Math.pow(v, 0.8);
+      const width = 0.11 + 0.2 * Math.pow(v, 0.8) * spread;
       const w =
         wave * Math.pow(v, 1.3) * Math.sin(TAU * 1.3 * v - ct + u * 0.7) +
         wave * 0.35 * v * Math.sin(TAU * 2.4 * v - ct * 1.7 + u * 2.1);

@@ -59,10 +59,13 @@ export interface FlightMods {
   dive: number; // 0..1: the nose is pulled down towards `diveAngle` (Plunging Attack)
   diveAngle: number; // radians below the horizon
   hang: boolean; // Hover-Stall: no flight model, the pilot hangs in the air and turns on the spot (`hangStep`)
+  turn: number; // multiplies how hard you can steer: pitch rate, turn rate and the load limit (stances, Aero-Braking)
+  climb: number; // multiplies gravity's pull along the path while climbing (Zenith Climber)
+  ascend: number; // m/s: Ascension's rise straight up (0: none); no flight model while it lasts (`ascendStep`)
 }
 
 export function plainMods(): FlightMods {
-  return { drag: 1, sink: 1, stall: 1, proximityBoost: 1, boost: 0, lift: 0, hover: 0, glideLock: false, thrust: 0, dive: 0, diveAngle: 1, hang: false };
+  return { drag: 1, sink: 1, stall: 1, proximityBoost: 1, boost: 0, lift: 0, hover: 0, glideLock: false, thrust: 0, dive: 0, diveAngle: 1, hang: false, turn: 1, climb: 1, ascend: 0 };
 }
 
 /** The shallow dive the glide lock holds (radians below the horizon) */
@@ -307,6 +310,40 @@ export class Flight {
     this.velocity.copy(this.forward).multiplyScalar(speed);
   }
 
+  /** A burst of speed along the path (run mode: Moth's Attraction, Echo-Trail's wind rings) */
+  surge(dv: number) {
+    this.speed = Math.max(0, this.speed + dv);
+    this.velocity.copy(this.flightPath).multiplyScalar(this.speed);
+  }
+
+  /**
+   * Ascension (run mode), one step: the wings level and the nose swings up to
+   * straight up (keeping the heading the belly faces), the speed eases to
+   * `speed`, and the pilot moves along the nose. No gravity, sink or drag
+   * until it hands back to the flight model, flying straight up
+   */
+  private ascendStep(dt: number, speed: number) {
+    this.boost = 0;
+    this.brake = 0;
+    this.steeringBank = 0;
+    this.updateAxes();
+    // Straight up, the back towards where you were heading (as if pulled through a half loop)
+    const flat = Math.hypot(this.forward.x, this.forward.z) > 0.05 ? this.forward : this.up;
+    axis.set(-flat.x, 0, -flat.z).normalize();
+    if (flat === this.up) axis.negate();
+    desiredPath.crossVectors(axis, WORLD_DOWN);
+    lookMatrix.makeBasis(desiredPath, axis, WORLD_DOWN);
+    turn.setFromRotationMatrix(lookMatrix);
+    this.quaternion.slerp(turn, 1 - Math.exp(-dt * 14)).normalize();
+    this.updateAxes();
+    this.speed += (speed - this.speed) * (1 - Math.exp(-dt * 10));
+    this.flightPath.copy(this.forward);
+    this.velocity.copy(this.forward).multiplyScalar(this.speed);
+    this.position.addScaledVector(this.forward, this.speed * dt);
+    this.dodgeWait = Math.max(0, this.dodgeWait - dt);
+    this.dodgeElapsed = -1;
+  }
+
   /**
    * Glancing off a surface (Acrobatic Recovery, run mode): out along `normal`
    * by `push` metres, the nose and the path turned to run along the surface,
@@ -336,6 +373,11 @@ export class Flight {
       this.hangStep(dt, input);
       return;
     }
+    if (mods && mods.ascend > 0) {
+      this.ascendStep(dt, mods.ascend);
+      return;
+    }
+    const steer = mods ? mods.turn : 1;
     this.updateAxes();
     const brakeInput = clamp(input.brake ?? 0, 0, 1);
     const boostInput = brakeInput > 0 ? 0 : clamp(input.boost ?? 0, 0, 1);
@@ -374,7 +416,7 @@ export class Flight {
     const liftAuthority = clamp(this.speed / Math.max(stallSpeed, 0.01), 0, 1) ** 2;
     turn.setFromAxisAngle(LOCAL_BACK, this.steeringBank);
     this.quaternion.multiply(turn);
-    turn.setFromAxisAngle(LOCAL_RIGHT, clamp(input.pitch, -1, 1) * p.pitchRate * liftAuthority * dt);
+    turn.setFromAxisAngle(LOCAL_RIGHT, clamp(input.pitch, -1, 1) * p.pitchRate * steer * liftAuthority * dt);
     this.quaternion.multiply(turn);
     // Pitch loops can leave the underlying frame upside down even when the
     // steering bank is zero. Recover that frame around the nose when pitch is
@@ -402,7 +444,7 @@ export class Flight {
     // Signed lateral lift stays continuous through knife-edge and inverted flight.
     const bankFactor = Math.sin(this.bank) / Math.max(Math.abs(Math.cos(this.bank)), 0.26);
     const headingAuthority = Math.hypot(this.forward.x, this.forward.z);
-    const yawRate = p.turnRate * p.gravity * bankFactor
+    const yawRate = p.turnRate * steer * p.gravity * bankFactor
       / Math.max(this.speed, p.minSpeed, 0.01) * liftAuthority * headingAuthority;
     turn.setFromAxisAngle(WORLD_UP, -yawRate * dt);
     this.quaternion.premultiply(turn);
@@ -439,7 +481,7 @@ export class Flight {
       if (axis.lengthSq() < 1e-12) axis.copy(this.right);
       axis.normalize();
       const responseAngle = pathAngle * (1 - Math.exp(-p.pathResponse * dt));
-      const loadAngle = p.maxLoad * p.gravity / Math.max(this.speed, p.minSpeed, 0.01) * dt;
+      const loadAngle = p.maxLoad * steer * p.gravity / Math.max(this.speed, p.minSpeed, 0.01) * dt;
       turn.setFromAxisAngle(axis, Math.min(responseAngle, loadAngle));
       this.flightPath.applyQuaternion(turn).normalize();
     }
@@ -453,7 +495,9 @@ export class Flight {
     // nose at a fixed glide speed indefinitely. Deliberate nose-down dives
     // still gain speed; holding the nose level spends speed until it stalls.
     const glideLoss = p.glideDrag * p.gravity * Math.max(0, this.forward.y - this.flightPath.y);
-    const pathAccel = -p.gravity * this.flightPath.y * (1 - (mods?.hover ?? 0)) - glideLoss
+    // Zenith Climber: while climbing, gravity pulls back less along the path
+    const climbing = this.flightPath.y > 0 && mods ? mods.climb : 1;
+    const pathAccel = -p.gravity * this.flightPath.y * (1 - (mods?.hover ?? 0)) * climbing - glideLoss
       + p.proximityBoost * (mods?.proximityBoost ?? 1) * clamp(proximity, 0, 1)
       + this.boost * p.boostAcceleration * (1 + (mods?.boost ?? 0))
       + (mods?.thrust ?? 0)

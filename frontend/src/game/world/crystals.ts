@@ -257,11 +257,18 @@ export class CrystalGates {
   private readonly layout: { angle: number; radius: number }[][] = [];
   private mode: RingMode = "free";
   private next = 0;
+  private readonly crystals: THREE.InstancedMesh;
+  private readonly veils: THREE.InstancedMesh;
+  /** Per gate: its first crystal's instance */
+  private readonly firstCrystal: number[] = [];
+  /** Per gate: the direction it faces now (Resonance can turn it; looks only, the run keeps its own) */
+  private readonly facing: THREE.Vector3[];
 
   constructor(seed: number, rings: Ring[], colors: { ice: THREE.Color; accent: THREE.Color }, sunDirection: THREE.Vector3) {
     this.rings = rings;
     this.sunDirection = sunDirection;
     this.states = rings.map(() => ({ visible: 1, highlight: 0, passedAt: -1e3 }));
+    this.facing = rings.map((r) => r.normal.clone());
     this.gateUniform = rings.map((r) => new THREE.Vector4(1, 0, -1e3, r.finish ? 1 : 0));
     const defines = { GATE_COUNT: Math.max(1, rings.length) };
     const shared = {
@@ -321,6 +328,7 @@ export class CrystalGates {
     let k = 0;
     rings.forEach((ring, g) => {
       const placement = this.placement(ring, 1);
+      this.firstCrystal.push(k);
       for (let i = 0; i < this.layout[g].length; i++) crystals.setMatrixAt(k++, placement);
     });
     crystals.frustumCulled = false;
@@ -377,6 +385,25 @@ export class CrystalGates {
     beams.renderOrder = 2;
 
     this.group.add(crystals, veils, beams);
+    this.crystals = crystals;
+    this.veils = veils;
+  }
+
+  /** Turns gate `index` (its crystals and veil) to face along `normal` (Resonance; looks only) */
+  orient(index: number, normal: THREE.Vector3) {
+    const ring = this.rings[index];
+    if (!ring) return;
+    this.facing[index].copy(normal).normalize();
+    tmpQuaternion.setFromUnitVectors(Z, this.facing[index]);
+    const placement = tmpMatrix.compose(ring.position, tmpQuaternion, tmpScale.setScalar(1));
+    const first = this.firstCrystal[index];
+    const count = this.layout[index].length;
+    for (let i = 0; i < count; i++) this.crystals.setMatrixAt(first + i, placement);
+    this.crystals.instanceMatrix.addUpdateRange(first * 16, count * 16);
+    this.crystals.instanceMatrix.needsUpdate = true;
+    this.veils.setMatrixAt(index, tmpMatrix.compose(ring.position, tmpQuaternion, tmpScale.setScalar(ring.radius)));
+    this.veils.instanceMatrix.addUpdateRange(index * 16, 16);
+    this.veils.instanceMatrix.needsUpdate = true;
   }
 
   private material(material: THREE.ShaderMaterial) {
@@ -390,7 +417,7 @@ export class CrystalGates {
   }
 
   private placement(ring: Ring, scale: number): THREE.Matrix4 {
-    tmpQuaternion.setFromUnitVectors(Z, ring.normal);
+    tmpQuaternion.setFromUnitVectors(Z, this.facing[ring.index] ?? ring.normal);
     return tmpMatrix.compose(ring.position, tmpQuaternion, tmpScale.setScalar(scale));
   }
 
@@ -428,7 +455,7 @@ export class CrystalGates {
   crystalPositions(index: number, out: THREE.Vector3[]): THREE.Vector3[] {
     const ring = this.rings[index];
     const spin = fxTime.value * RINGS.spin;
-    tmpQuaternion.setFromUnitVectors(Z, ring.normal);
+    tmpQuaternion.setFromUnitVectors(Z, this.facing[index]);
     const layout = this.layout[index] ?? [];
     // Reuses the vectors already in `out`
     while (out.length < layout.length) out.push(new THREE.Vector3());
