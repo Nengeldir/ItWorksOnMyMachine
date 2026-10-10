@@ -231,6 +231,7 @@ doesn't fly the course itself.
 | `frontend/src/game/flight.ts`          | Flight model                                             |
 | `frontend/src/game/avatar.ts`          | The pilot's model and animation                          |
 | `frontend/src/game/death.ts`           | Crash animations: how a crash plays out (looks only)     |
+| `frontend/src/game/items/`             | Item models and animations; `/?gallery` shows them all   |
 | `frontend/src/game/tuning.ts`          | Every look-and-feel constant, for the `?tune` panel      |
 | `frontend/src/game/debugMode.ts`       | Development-build and URL gate for local playtesting     |
 | `frontend/src/game/debug/`            | Lazy-loaded playtest panel and fixed-step flight telemetry |
