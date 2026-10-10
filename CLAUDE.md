@@ -158,6 +158,48 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Milestone 3, part 1: Verdant Highlands' systems (Claude)
+
+- **Vegetation** (`world/flora/`): 14 species built from primitives
+  (`meshes.ts`: pine, fir, snowy fir, oak, birch, bush, palm, jungle tree,
+  glowing mushroom, crystal cluster, dead tree, basalt columns, boulder,
+  redwood), each vertex carrying a color, a sway weight and a glow weight.
+  `species.ts` holds sizes and colliders (tapered trunk plus canopy, leaning
+  for palms). `placement.ts` places plants in the workers straight from the
+  distance field on a world-aligned jittered grid (so a node's plants don't
+  depend on its level of detail): forest patches from noise, a tree line,
+  slope and water limits, species by altitude, wetness and forest. Full
+  meshes for full-detail nodes (one instanced pool per species, swaying in
+  the wind in the shader), impostors from an atlas baked at load for coarse
+  nodes, colliders (`Plant` in `trees.ts`) from full-detail nodes only.
+- **GPU grass and flowers**: tufts placed per full-detail node, drawn within
+  `FLORA.grassDistance` of the camera, swaying, shrinking away with distance.
+- **Water** (`world/water.ts`): river pools as ribbons on the steps with the
+  real depth over the carved ground, falls as curtains arcing off each lip.
+  One shader with four kinds (water, lava, ice, glowing pools): depth tint,
+  shore and fall foam, flow streaks, a capped and tinted sky reflection, sun
+  glitter that blooms, dimmed by moonlight. Pools are solid (skimming counts
+  for style, `Game.waterSpray` throws droplets and mist), falls can be flown
+  through.
+- **Valley mist**: `ATMOSPHERE.mistMode/mistHeight/mistThickness`; biomes with
+  ground pool their mist over the valley floor near the camera instead of
+  below the camera (Sky Isles keeps the old mode).
+- **Ambient particles** (`game/ambient.ts`): per-biome emitters spawned ahead
+  of you: fireflies in the shade of forests (many more at night, blinking:
+  new `Kind.Firefly`), motes, petals, snow, leaves, embers, spores, ash,
+  glitter; mist and spray at the foot of falls. A second `Particles` with
+  ordinary blending for snow, leaves, ash and mist.
+- **No per-frame allocations in emitters**: `fx(...)` in `particles.ts`
+  returns one shared spec; Game and PilotFx no longer build an object per
+  particle.
+- Bugs fixed on the way: pool owner keys overflowed an `Int32Array`; the
+  water's fog uniforms were used before their declaration; pool triangles
+  faced down.
+- Tuning: `FLORA` (wind, glow, grass distance) and `WATER` (glitter, glow,
+  spray) groups. Dev: `__run(seconds)` steps the loop by hand.
+- Verified: build and lint pass, race hashes unchanged, Verdant by day and
+  night in Chrome (136 draw calls, 430k triangles on screen at High).
+
 ### 2026-10-10: Milestone 2, terrain generator v2 (Claude)
 
 - **A composable distance field** (`world/terrain/`) for every biome except
@@ -345,13 +387,12 @@ ported to the islands world:
 
 ## Next up
 
-**Resume here:** the roguelike milestones below. Milestones 1 and 2 are done.
-Next is milestone 3: Verdant Highlands' systems (water on the river steps
-with falls, trees with impostors, GPU grass and flowers, fireflies, valley
-mist), then every other biome.
+**Resume here:** the roguelike milestones below. Milestones 1 and 2 are done,
+and milestone 3's systems for Verdant Highlands (part 1). Next: soft clouds
+for v2 biomes, then every other planned biome (Glacier Peaks, Sky
+Archipelago, Coral Lagoon with a sea, Twilight Forest, Ember Wastes with lava,
+Aurora Summit), each with a day and a night mood.
 
-- Mist is still the camera-relative haze from the islands: over grounded land
-  it washes everything below you out. It should pool on the valley floor.
 - The faceted cloud puffs look like dark discs at night; v2 biomes want soft
   clouds.
 - Far ridged mountains are spiky at 24 m voxels; maybe smooth the ridges with

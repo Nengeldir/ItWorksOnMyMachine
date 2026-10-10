@@ -67,6 +67,14 @@ export class World {
     return d;
   }
 
+  /** Height of the valley floor under the racing line at z (where valley mist pools) */
+  valleyFloor(z: number): number {
+    const ground = this.land?.ground;
+    if (!ground) return this.course.y(z) - 40;
+    if (ground.steps) return ground.steps.level(z);
+    return ground.spec.level !== null ? ground.height(this.course.x(z), z) : this.course.y(z) - ground.spec.depth;
+  }
+
   /** Below the islands, there is only the sea of clouds */
   lost(y: number, z: number): boolean {
     return y < this.course.y(z) - ABYSS;

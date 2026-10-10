@@ -142,8 +142,8 @@ export const SKY_ISLES: Biome = {
   moods: MOODS,
   terrain: { kind: "legacyIslands" },
   vegetation: { kind: "legacyPines" },
-  sky: { cloudSea: { depth: 260 }, puffs: 70, puffsBelow: true, puffLift: 0 },
-  particles: { motes: 0 },
+  sky: { cloudSea: { depth: 260 }, puffs: 70, puffsBelow: true, puffLift: 0, mist: { mode: "camera" } },
+  particles: { ambient: [] },
   sidequests: [
     { kind: "beacons", title: "Light the three cairns", thing: "cairn", count: 3, reward: 1500 },
     { kind: "thread", title: "Thread the needle tunnels", thing: "needle tunnel", count: 4, reward: 1200 },

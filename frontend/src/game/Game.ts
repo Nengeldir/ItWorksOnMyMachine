@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import type { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { Ambient } from "./ambient";
 import { GameAudio } from "./audio";
 import { Avatar } from "./avatar";
 import { CameraRig } from "./camera";
@@ -8,14 +9,15 @@ import { Debris } from "./effects";
 import { FLIGHT, Flight, type FlightInput } from "./flight";
 import { type GhostData, GhostRecorder, type GhostRun, ghostSamples } from "./ghost";
 import { type ControlSettings, Input } from "./input";
-import { FX_LIGHT, Kind, Particles, fxTime } from "./particles";
+import { FX_LIGHT, Kind, Particles, fx, fxTime } from "./particles";
 import { PilotFx } from "./pilotfx";
 import { INTERPOLATION_DELAY_MS, Pilot, type PilotSample } from "./pilots";
 import { clamp } from "./math";
 import { SpeedLines } from "./speedlines";
 import { TOON_LIGHT } from "./toon";
-import { FX, RANGES, RINGS, TUNING_GROUPS, loadTuning, resetTuning, saveTuning } from "./tuning";
+import { FX, RANGES, RINGS, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveTuning } from "./tuning";
 import { type Level, raceLevel } from "./world/biomes";
+import type { WaterKind } from "./world/terrain/river";
 import { World } from "./world/World";
 import { WorldView } from "./world/WorldView";
 
@@ -28,6 +30,8 @@ const START_SPEED = 32; // m/s
 const HUD_INTERVAL = 100; // ms
 const GOLD = new THREE.Color("#ffd23f");
 const WHITE = new THREE.Color("#ffffff");
+const SPRAY = new THREE.Color("#e8f7ff");
+const LAVA_SPARK = new THREE.Color("#ff9a3c");
 
 /** 2: bloom and full resolution, 1: no bloom, 0: lower resolution and fewer particles */
 type Quality = 0 | 1 | 2;
@@ -129,6 +133,9 @@ export class Game {
   private readonly avatar: Avatar;
   private readonly fx: PilotFx;
   private readonly particles: Particles;
+  /** Particles that blend instead of glowing: snow, leaves, ash, mist */
+  private readonly softParticles: Particles;
+  private readonly ambient: Ambient;
   private readonly speedLines: SpeedLines;
   private readonly debris: Debris;
   private readonly marker: HTMLDivElement;
@@ -201,11 +208,13 @@ export class Game {
     window.addEventListener("pointerdown", this.startAudio, { once: true });
 
     this.particles = new Particles();
+    this.softParticles = new Particles(3000, true);
+    this.ambient = new Ambient(this.particles, this.softParticles);
     this.avatar = new Avatar(options.color);
     this.fx = new PilotFx(this.avatar, options.color, this.particles);
     this.speedLines = new SpeedLines();
     this.debris = new Debris(options.color);
-    this.scene.add(this.avatar.group, this.debris.mesh, this.particles.points, this.speedLines.mesh, ...this.fx.meshes);
+    this.scene.add(this.avatar.group, this.debris.mesh, this.particles.points, this.softParticles.points, this.speedLines.mesh, ...this.fx.meshes);
 
     this.vignette = document.createElement("div");
     this.vignette.className = "speed-vignette";
@@ -264,8 +273,11 @@ export class Game {
     }
     this.world = new World(level);
     this.view = new WorldView(this.world, this.scene);
+    this.view.prepare(this.renderer);
     this.scene.add(this.view.group);
     this.particles.clear();
+    this.softParticles.clear();
+    this.ambient.setWorld(this.world);
     this.speedLines.setColor(this.world.palette.horizon);
     // How effects react to this biome's light: glows pop at night, and get a push in bright daylight
     const palette = this.world.palette;
@@ -372,6 +384,7 @@ export class Game {
     this.fx.dispose();
     this.avatar.dispose();
     this.particles.dispose();
+    this.softParticles.dispose();
     this.speedLines.dispose();
     this.debris.dispose();
     this.composer?.dispose();
@@ -526,15 +539,7 @@ export class Game {
             .multiplyScalar(rand(5, 15))
             .addScaledVector(forward, rand(2, 6) + this.flight.speed * 0.15)
             .add(tmp2.set(rand(-2, 2), rand(-2, 2), rand(-2, 2))),
-          {
-            life: rand(1, 1.9),
-            size: rand(0.45, 0.95),
-            color: k % 2 ? WHITE : tint,
-            kind: Kind.Shard,
-            gravity: 4,
-            drag: 1.1,
-            intensity: 2.8,
-          },
+          fx(rand(1, 1.9), rand(0.45, 0.95), k % 2 ? WHITE : tint, Kind.Shard, 4, 1.1, 2.8),
         );
       }
     }
@@ -543,21 +548,13 @@ export class Game {
       const p = crystals[k % crystals.length];
       at.lerpVectors(ring.position, p, rand(0.85, 1.05));
       tmp.subVectors(at, ring.position).normalize();
-      this.particles.emit(at, vel.copy(tmp).multiplyScalar(rand(1, 5)).addScaledVector(forward, rand(-2, 4)), {
-        life: rand(1.2, 2.2),
-        size: rand(0.6, 1.2),
-        color: tint,
-        kind: Kind.Star,
-        gravity: -0.5,
-        drag: 1.5,
-        intensity: 3,
-      });
+      this.particles.emit(at, vel.copy(tmp).multiplyScalar(rand(1, 5)).addScaledVector(forward, rand(-2, 4)), fx(rand(1.2, 2.2), rand(0.6, 1.2), tint, Kind.Star, -0.5, 1.5, 3));
     }
     for (let k = 0; k < Math.round(30 * amount); k++) {
       this.particles.emit(
         this.flight.position,
         vel.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize().multiplyScalar(rand(4, 10)).addScaledVector(this.flight.velocity, 0.6),
-        { life: rand(0.5, 0.9), size: rand(0.5, 1.1), color: WHITE, kind: Kind.Glow, drag: 3, intensity: 2 },
+        fx(rand(0.5, 0.9), rand(0.5, 1.1), WHITE, Kind.Glow, 0, 3, 2),
       );
     }
   }
@@ -570,8 +567,8 @@ export class Game {
         this.flight.position,
         vel.set(rand(-1, 1), rand(-0.3, 1), rand(-1, 1)).normalize().multiplyScalar(rand(4, 18)).addScaledVector(this.flight.velocity, -0.1),
         k % 3
-          ? { life: rand(0.6, 1.4), size: rand(0.4, 0.9), color: WHITE, kind: Kind.Star, gravity: 6, drag: 2, intensity: 2.4 }
-          : { life: rand(0.8, 1.4), size: rand(1.5, 3), color, kind: Kind.Wisp, gravity: -1, drag: 2.5, intensity: 0.8 },
+          ? fx(rand(0.6, 1.4), rand(0.4, 0.9), WHITE, Kind.Star, 6, 2, 2.4)
+          : fx(rand(0.8, 1.4), rand(1.5, 3), color, Kind.Wisp, -1, 2.5, 0.8),
       );
     }
   }
@@ -582,6 +579,14 @@ export class Game {
     const { x, y, z } = this.flight.position;
     const rock = this.world.rock;
     const gap = rock.distance(x, y, z);
+    const steps = this.world.steps;
+    if (steps) {
+      const water = steps.waterDistance(x, y, z);
+      if (water < 9 && water < gap) {
+        this.waterSpray(dt, water, steps.pool(z).level, steps.river!.kind);
+        return;
+      }
+    }
     if (gap > 9) return;
     // The rock's surface normal from the distance field's gradient; the nearest surface point is along it
     const e = 0.5;
@@ -609,9 +614,28 @@ export class Game {
           .addScaledVector(normal, rand(2, 7))
           .add(tmp.set(rand(-3, 3), rand(-3, 3), rand(-3, 3))),
         spark
-          ? { life: rand(0.3, 0.6), size: rand(0.25, 0.45), color: GOLD, kind: Kind.Star, gravity: 12, drag: 1, intensity: 2.5 }
-          : { life: rand(0.6, 1.1), size: rand(1, 2.2), color, kind: Kind.Wisp, gravity: 3, drag: 2.2, intensity: 0.55 },
+          ? fx(rand(0.3, 0.6), rand(0.25, 0.45), GOLD, Kind.Star, 12, 1, 2.5)
+          : fx(rand(0.6, 1.1), rand(1, 2.2), color, Kind.Wisp, 3, 2.2, 0.55),
       );
+    }
+  }
+
+  /** Skimming water: a wake of droplets and mist (or sparks off lava) */
+  private waterSpray(dt: number, gap: number, level: number, kind: WaterKind) {
+    const close = clamp((7 - gap) / 6, 0, 1);
+    this.dustDebt += (0.3 + close) * 140 * WATER.spray * this.particles.budget * dt;
+    const lava = kind === "lava";
+    for (; this.dustDebt >= 1; this.dustDebt--) {
+      at.set(this.flight.position.x + rand(-1.5, 1.5), level + 0.2, this.flight.position.z + rand(-1.5, 1.5));
+      const droplet = Math.random() < 0.6;
+      vel.copy(this.flight.velocity).multiplyScalar(droplet ? 0.35 : 0.15).add(tmp.set(rand(-3, 3), rand(3, 9) * (0.4 + close), rand(-3, 3)));
+      if (lava) {
+        this.particles.emit(at, vel, fx(rand(0.5, 1), rand(0.25, 0.45), LAVA_SPARK, Kind.Star, 9, 0.8, 2.6));
+      } else if (droplet) {
+        this.particles.emit(at, vel, fx(rand(0.5, 1), rand(0.18, 0.35), SPRAY, Kind.Glow, 12, 0.6, 1.5));
+      } else {
+        this.softParticles.emit(at, vel, fx(rand(0.8, 1.4), rand(1.5, 3), WHITE, Kind.Glow, -0.5, 2, 0.85));
+      }
     }
   }
 
@@ -631,13 +655,7 @@ export class Game {
       const p = crystals[Math.floor(Math.random() * crystals.length)];
       if (!p) continue;
       this.glintDebt--;
-      this.particles.emit(at.copy(p).add(tmp.set(rand(-0.8, 0.8), rand(-0.8, 0.8), rand(-0.8, 0.8))), vel.set(0, 0, 0), {
-        life: rand(0.35, 0.6),
-        size: rand(1.2, 2.2),
-        color: WHITE,
-        kind: Kind.Star,
-        intensity: 2.6,
-      });
+      this.particles.emit(at.copy(p).add(tmp.set(rand(-0.8, 0.8), rand(-0.8, 0.8), rand(-0.8, 0.8))), vel.set(0, 0, 0), fx(rand(0.35, 0.6), rand(1.2, 2.2), WHITE, Kind.Star, 0, 0, 2.6));
     }
     this.glintDebt = Math.min(this.glintDebt, 2);
   }
@@ -659,15 +677,7 @@ export class Game {
       at.copy(ring.position)
         .addScaledVector(basisA, Math.cos(angle) * r)
         .addScaledVector(basisB, Math.sin(angle) * r);
-      this.particles.emit(at, vel.copy(n).multiplyScalar(rand(-1.5, 1.5)), {
-        life: rand(1.5, 2.6),
-        size: rand(0.5, 1),
-        color: tint,
-        kind: Kind.Star,
-        gravity: -0.4,
-        drag: 0.8,
-        intensity: 2.2,
-      });
+      this.particles.emit(at, vel.copy(n).multiplyScalar(rand(-1.5, 1.5)), fx(rand(1.5, 2.6), rand(0.5, 1), tint, Kind.Star, -0.4, 0.8, 2.2));
     }
   }
 
@@ -745,12 +755,14 @@ export class Game {
     this.gateGlints(dt);
     const flying = !crashed && this.raceState !== "countdown" && !waiting;
     this.speedLines.update(dt, body.position, flying ? this.flight.velocity : tmp.set(0, 0, 0), camera, this.particles.budget);
+    this.ambient.update(dt, camera.position, flying ? this.flight.velocity : tmp.set(0, 0, 0), this.particles.budget);
 
     const liveTime = t - INTERPOLATION_DELAY_MS;
     this.live.forEach((pilot) => pilot.update(liveTime, dt, camera.position));
     const racing = this.raceState !== "free";
     this.ghosts.forEach((ghost) => ghost.update(racing ? t - this.startAt : -Infinity, dt, camera.position));
     this.particles.update();
+    this.softParticles.update();
 
     this.audio.update(this.flight.speed, this.smoothProximity, flying);
     this.updateMarker();
@@ -868,6 +880,7 @@ export class Game {
     const camera = this.rig.camera;
     // Particle sizes are in metres: keep the conversion in step with the zooming FOV
     this.particles.setViewport(this.renderer.domElement.height, camera.fov);
+    this.softParticles.setViewport(this.renderer.domElement.height, camera.fov);
     if (this.bloomOn && !this.composer) void this.createComposer();
     if (this.bloomOn && this.composer && this.bloomPass) {
       this.bloomPass.strength = FX.bloom * (1 + this.world.palette.night * 0.6);
@@ -938,6 +951,7 @@ export class Game {
     this.composer?.setSize(width, height);
     this.rig.resize(width / height);
     this.particles.setViewport(height * this.renderer.getPixelRatio(), this.rig.camera.fov);
+    this.softParticles.setViewport(height * this.renderer.getPixelRatio(), this.rig.camera.fov);
   }
 
   private async openTuning() {

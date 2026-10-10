@@ -8,8 +8,9 @@ import * as THREE from "three";
 export const Kind = {
   Glow: 0, // soft round mote
   Star: 1, // four-pointed twinkle
-  Shard: 2, // a diamond-shaped crystal chip
+  Shard: 2, // a diamond-shaped crystal chip (or a tumbling leaf)
   Wisp: 3, // a faint puff of air
+  Firefly: 4, // a soft mote that blinks on and off
 } as const;
 export type Kind = (typeof Kind)[keyof typeof Kind];
 
@@ -21,6 +22,23 @@ export interface ParticleSpec {
   gravity?: number; // m/s², positive falls, negative rises
   drag?: number; // 1/s
   intensity?: number; // brightness; above 1 blooms
+}
+
+const shared: ParticleSpec = { life: 1, size: 1, color: new THREE.Color(), kind: 0 };
+
+/**
+ * A particle spec for one emit call, without allocating: every call returns the
+ * same object (emit copies it straight away), so per-frame emitters create no garbage.
+ */
+export function fx(life: number, size: number, color: THREE.Color, kind: Kind, gravity = 0, drag = 0, intensity = 1): ParticleSpec {
+  shared.life = life;
+  shared.size = size;
+  shared.color = color;
+  shared.kind = kind;
+  shared.gravity = gravity;
+  shared.drag = drag;
+  shared.intensity = intensity;
+  return shared;
 }
 
 /** Shared by everything that animates with time in a shader: trails, particles, crystals */
@@ -65,9 +83,16 @@ const vertexShader = /* glsl */ `
     float kind = timing.w;
     float grow = smoothstep(0.0, 0.08, t);
     float shrink = kind > 0.5 && kind < 1.5 ? sin(3.14159 * t) : 1.0 - t * t;
+    if (kind > 3.5) shrink = sin(3.14159 * t);
     gl_PointSize = timing.z * grow * shrink * pixelScale / max(0.1, -mvPosition.z);
-    vColor = color * physics.z * boost;
-    vAlpha = (kind > 2.5 ? (1.0 - t) * 0.5 : pow(1.0 - t, 1.2)) * smoothstep(1.5, 7.0, -mvPosition.z);
+    #ifdef ALPHA_BLEND
+      vColor = color * physics.z;
+    #else
+      vColor = color * physics.z * boost;
+    #endif
+    vAlpha = (kind > 2.5 && kind < 3.5 ? (1.0 - t) * 0.5 : pow(clamp(1.0 - t, 0.0, 1.0), 1.2)) * smoothstep(1.5, 7.0, -mvPosition.z);
+    // Fireflies blink: mostly dark, glowing up for a moment every few seconds
+    if (kind > 3.5) vAlpha *= 0.15 + 0.85 * smoothstep(0.55, 0.95, sin(age * (1.1 + fract(seed) * 1.4) + seed * 6.0));
     vKind = kind;
     vSpin = seed + age * 3.0;
     #include <fog_vertex>
@@ -85,7 +110,7 @@ const fragmentShader = /* glsl */ `
     vec2 uv = gl_PointCoord * 2.0 - 1.0;
     float r2 = dot(uv, uv);
     float a;
-    if (vKind < 0.5) {
+    if (vKind < 0.5 || vKind > 3.5) {
       a = exp(-r2 * 5.0);
     } else if (vKind < 1.5) {
       // A twinkle: bright core and two rays that slowly turn
@@ -102,12 +127,20 @@ const fragmentShader = /* glsl */ `
       a = exp(-r2 * 3.0) * 0.6;
     }
     if (a < 0.01) discard;
-    vec3 color = vColor * a * vAlpha;
-    #ifdef USE_FOG
-      float fogFactor = smoothstep(fogNear, fogFar, vFogDepth);
-      color *= 1.0 - fogFactor;
+    #ifdef ALPHA_BLEND
+      vec3 color = vColor;
+      #ifdef USE_FOG
+        color = mix(color, fogColor, smoothstep(fogNear, fogFar, vFogDepth));
+      #endif
+      gl_FragColor = vec4(color, clamp(a * vAlpha, 0.0, 1.0));
+    #else
+      vec3 color = vColor * a * vAlpha;
+      #ifdef USE_FOG
+        float fogFactor = smoothstep(fogNear, fogFar, vFogDepth);
+        color *= 1.0 - fogFactor;
+      #endif
+      gl_FragColor = vec4(color, 1.0);
     #endif
-    gl_FragColor = vec4(color, 1.0);
   }
 `;
 
@@ -125,7 +158,8 @@ export class Particles {
   private uploaded = 0; // the cursor at the last upload
   private pending = 0; // particles written since then
 
-  constructor(capacity = 6000) {
+  /** `alpha`: ordinary blending (snow, leaves, ash, mist) instead of adding light */
+  constructor(capacity = 6000, alpha = false) {
     this.capacity = capacity;
     this.start = new Float32Array(capacity * 3);
     this.velocity = new Float32Array(capacity * 3);
@@ -150,14 +184,15 @@ export class Particles {
       fragmentShader,
       transparent: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
+      blending: alpha ? THREE.NormalBlending : THREE.AdditiveBlending,
       fog: true,
+      defines: alpha ? { ALPHA_BLEND: "" } : {},
     });
     material.uniforms.time = fxTime;
     material.uniforms.boost = FX_LIGHT.boost;
     this.points = new THREE.Points(geometry, material);
     this.points.frustumCulled = false;
-    this.points.renderOrder = 5;
+    this.points.renderOrder = alpha ? 4 : 5;
   }
 
   /** Converts metres to pixels: call when the viewport or field of view changes */

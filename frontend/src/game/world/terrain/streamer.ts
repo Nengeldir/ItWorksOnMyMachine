@@ -1,5 +1,8 @@
 import * as THREE from "three";
 import { TERRAIN } from "../../tuning";
+import { PLANT_STRIDE, SPECIES } from "../flora/species";
+import type { FloraView } from "../flora/view";
+import { Plant } from "../trees";
 import type { World } from "../World";
 import { NODE_SIZE, type TerrainMesh, nodeKey } from "./mesh";
 
@@ -22,7 +25,7 @@ export interface NodeRequest {
   iz: number;
 }
 
-export type NodeResult = TerrainMesh & { key: number };
+export type NodeResult = TerrainMesh & { key: number; plants: Float32Array; tufts: Float32Array };
 
 interface Node {
   lod: number;
@@ -35,6 +38,8 @@ interface Node {
   children: Node[] | null; // null until first needed
   state: "idle" | "pending" | "loaded";
   mesh: THREE.Mesh | null; // null when loaded but empty
+  plants: Float32Array | null;
+  tufts: Float32Array | null;
   shown: boolean;
   desired: number; // the update stamp it was last wanted in
 }
@@ -44,6 +49,7 @@ export class LandStreamer {
   private readonly world: World;
   private readonly group: THREE.Group;
   private readonly material: THREE.Material;
+  private readonly flora: FloraView | null;
   private readonly roots: Node[] = [];
   private readonly byKey = new Map<number, Node>();
   private readonly ranges = new Map<number, [number, number] | null>();
@@ -52,10 +58,11 @@ export class LandStreamer {
   private desired: Node[] = [];
   private readonly wanted: { node: Node; d: number }[] = [];
 
-  constructor(world: World, group: THREE.Group, material: THREE.Material) {
+  constructor(world: World, group: THREE.Group, material: THREE.Material, flora: FloraView | null) {
     this.world = world;
     this.group = group;
     this.material = material;
+    this.flora = flora;
     const field = world.land!;
     const { course } = world;
     const extent = field.ground?.spec.extent ?? 900;
@@ -100,6 +107,8 @@ export class LandStreamer {
       children: null,
       state: "idle",
       mesh: null,
+      plants: null,
+      tufts: null,
       shown: false,
       desired: -1,
     };
@@ -196,7 +205,21 @@ export class LandStreamer {
       node.mesh = new THREE.Mesh(geometry, this.material);
       node.mesh.matrixAutoUpdate = false;
     }
+    node.plants = result.plants;
+    node.tufts = result.tufts;
+    // Full-detail nodes are the ones near you: their plants collide from now on
+    if (node.lod === 0) this.world.trees.add(node.key, this.colliders(result.plants));
     this.settle();
+  }
+
+  private colliders(plants: Float32Array): Plant[] {
+    const species = this.world.biome.vegetation.kind === "flora" ? this.world.biome.vegetation.species : [];
+    const out: Plant[] = [];
+    for (let o = 0; o < plants.length; o += PLANT_STRIDE) {
+      const info = SPECIES[species[plants[o]].id];
+      out.push(new Plant(plants[o + 1], plants[o + 2], plants[o + 3], plants[o + 4], plants[o + 5], plants[o + 6], info.collider));
+    }
+    return out;
   }
 
   /** Puts arrived nodes on screen once they cover their area, and takes off what they replace */
@@ -246,15 +269,19 @@ export class LandStreamer {
   private show(node: Node) {
     node.shown = true;
     if (node.mesh) this.group.add(node.mesh);
+    if (node.plants && this.flora) this.flora.show(node.key, node.lod, node.plants, node.tufts!, node.box);
   }
 
   private hide(node: Node) {
+    if (node.shown) this.flora?.hide(node.key);
     node.shown = false;
     if (node.mesh) {
       this.group.remove(node.mesh);
       node.mesh.geometry.dispose();
       node.mesh = null;
     }
+    node.plants = null;
+    node.tufts = null;
     node.state = "idle";
   }
 

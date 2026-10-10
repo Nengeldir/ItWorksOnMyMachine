@@ -18,6 +18,7 @@ export interface StepSpec {
 
 export interface RiverSpec {
   kind: WaterKind;
+  colors: { deep: string; shallow: string; foam: string }; // for lava: crust, glow, bright edge
   width: [number, number]; // metres, per pool
   lakes: number; // share of pools that widen into a lake
   meander: number; // metres the river swings around the line

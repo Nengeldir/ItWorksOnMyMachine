@@ -1,3 +1,4 @@
+import type { SpeciesId } from "../flora/species";
 import type { Palette } from "../palette";
 import type { GroundSpec } from "../terrain/ground";
 
@@ -22,6 +23,7 @@ export interface Surface {
   top2?: string; // drier or lusher patches of it
   snow: boolean; // snow settles on it above the snow line
   glow?: number; // self-lit cracks (lava) or spots, as a share of faces
+  bare?: boolean; // nothing grows on it
 }
 
 /** Biome-wide layers for the terrain shader */
@@ -60,8 +62,48 @@ export type TerrainRecipe =
   /** Generator v2: a ground heightfield (or none) plus rock shapes, one distance field */
   | { kind: "v2"; ground: GroundSpec | null; groundSurface: number; surfaces: Surface[]; layers: Layers; land: LandRecipe };
 
-/** What grows on the land. "legacyPines": one pine species placed by the mesher, as on the race map */
-export type VegetationSpec = { kind: "legacyPines" } | { kind: "none" };
+/** One species in a biome's flora, with its colors and where it grows */
+export interface FloraSpecies {
+  id: SpeciesId;
+  weight: number;
+  height: [number, number]; // metres
+  foliage: string; // leaves, needles, cap, crystal…
+  foliage2?: string; // a second shade, or the cap's spots and gills
+  trunk?: string;
+  tints?: string[]; // per-plant tints multiplied in (autumn reds and golds)
+  where?: {
+    above?: [number, number]; // metres above the racing line
+    wet?: boolean; // only near water
+    forest?: boolean; // true: only in forests, false: only in the open
+  };
+}
+
+/** Grass tufts and flowers near the camera */
+export interface GrassSpec {
+  spacing: number; // metres between tufts
+  height: [number, number];
+  color: string; // base of the blades
+  tip: string; // tips
+  flowers: string[]; // flower colors (empty: none)
+  flowerShare: number; // share of tufts that flower, where flowers grow at all
+}
+
+/** What grows on the land */
+export type VegetationSpec =
+  /** One pine species placed by the mesher, as on the race map */
+  | { kind: "legacyPines" }
+  | { kind: "none" }
+  | {
+      kind: "flora";
+      spacing: number; // metres between plant candidates (a jittered grid)
+      density: number; // share of candidates that grow inside forests
+      openDensity: number; // …and outside them
+      forest: { scale: number; cover: number }; // forest patches: noise scale in metres, share of the land
+      treeline: number; // nothing grows higher than this above the line
+      minUp: number; // nothing grows on faces steeper than this (normal.y)
+      species: FloraSpecies[];
+      grass: GrassSpec | null;
+    };
 
 /** Mist and clouds around the land */
 export interface SkySpec {
@@ -73,11 +115,26 @@ export interface SkySpec {
   puffsBelow: boolean;
   /** Metres added to the height of the puffs above the line (clear of hills and mountains) */
   puffLift: number;
+  /**
+   * Where the mood's mist gathers: below the camera (over a sea of clouds), or
+   * pooling `above` metres over the valley floor, fading out `thickness` metres higher
+   */
+  mist: { mode: "camera" } | { mode: "valley"; above: number; thickness: number };
+}
+
+export type AmbientKind = "fireflies" | "motes" | "snow" | "leaves" | "embers" | "spores" | "ash" | "glitter" | "petals";
+
+/** One kind of particle drifting around the camera */
+export interface Ambient {
+  kind: AmbientKind;
+  rate: number; // per second, at full particle budget
+  colors: string[];
+  night?: number; // rate multiplier added at night (fireflies: many more)
 }
 
 /** The air's own particles, drifting around the camera (pollen, snow, embers…) */
 export interface ParticleStyle {
-  motes: number; // per second around the camera; 0 = none
+  ambient: Ambient[];
 }
 
 export type SidequestKind = "beacons" | "thread" | "collect" | "chase" | "skim" | "thermals" | "rescue" | "waterfalls";

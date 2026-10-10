@@ -84,7 +84,21 @@ export const TERRAIN = {
   glow: 1, // glowing cracks and spots
 };
 
-const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN } as const;
+/** Plants and grass. Looks only: colliders don't move with the wind */
+export const FLORA = {
+  wind: 1, // how hard the wind moves leaves and grass
+  glow: 1, // self-lit mushroom caps and crystals
+  grassDistance: 140, // metres: grass and flowers grow on screen within this
+};
+
+/** Rivers, falls and seas */
+export const WATER = {
+  glitter: 1, // sun glitter on the water
+  glow: 1, // lava and bioluminescent pools
+  spray: 1, // spray when skimming the water, mist at the foot of falls
+};
+
+const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, WATER } as const;
 const DEFAULTS = JSON.parse(JSON.stringify(GROUPS)) as typeof GROUPS;
 const STORAGE_KEY = "wingrace.tuning";
 
@@ -183,6 +197,10 @@ export const RANGES: Record<string, [number, number, number?]> = {
   coverSlope: [-0.4, 0.25],
   texture: [0, 3],
   textureScale: [0.2, 4],
+  wind: [0, 4],
+  glitter: [0, 4],
+  spray: [0, 4],
+  grassDistance: [40, 300, 5],
 };
 
 export const TUNING_GROUPS: [string, Group][] = [
@@ -191,4 +209,6 @@ export const TUNING_GROUPS: [string, Group][] = [
   ["Crystal gates", RINGS],
   ["Camera", CAMERA],
   ["Terrain", TERRAIN],
+  ["Plants", FLORA],
+  ["Water", WATER],
 ];

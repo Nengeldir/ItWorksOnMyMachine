@@ -9,6 +9,8 @@ import { levelId } from "./biomes";
 import type { Layers } from "./biomes/types";
 import { applyTerrainTuning, type TerrainUniforms, terrainMaterial } from "./terrain/material";
 import { LandStreamer, type NodeRequest, type NodeResult } from "./terrain/streamer";
+import { FloraView } from "./flora/view";
+import { WaterView } from "./water";
 import { Tree } from "./trees";
 import { sunDirection } from "./palette";
 import type { World } from "./World";
@@ -89,6 +91,8 @@ export class WorldView {
   /** Generator-v2 land, streamed with levels of detail */
   private readonly land: LandStreamer | null = null;
   private readonly terrainUniforms: TerrainUniforms | null = null;
+  private readonly flora: FloraView | null = null;
+  private readonly water: WaterView | null = null;
   private readonly byKey = new Map<number, RockChunk>();
   private readonly workers: Worker[] = [];
   private readonly busy: number[] = [];
@@ -115,6 +119,9 @@ export class WorldView {
     ATMOSPHERE.sunColor.value.set(palette.sun);
     ATMOSPHERE.mistColor.value.set(palette.mist);
     ATMOSPHERE.mistDensity.value = palette.mistDensity;
+    const mist = world.biome.sky.mist;
+    ATMOSPHERE.mistMode.value = mist.mode === "valley" ? 1 : 0;
+    ATMOSPHERE.mistThickness.value = mist.mode === "valley" ? mist.thickness : 120;
     ATMOSPHERE.horizon.value.set(palette.horizon);
     ATMOSPHERE.zenith.value.set(palette.zenith);
     ATMOSPHERE.clouds.value.set(palette.cloud);
@@ -167,7 +174,12 @@ export class WorldView {
       const { material, uniforms } = terrainMaterial(terrain.layers);
       this.material(material);
       this.terrainUniforms = uniforms;
-      this.land = new LandStreamer(world, this.group, material);
+      if (world.biome.vegetation.kind === "flora") this.flora = new FloraView(world, this.group);
+      if (world.steps) {
+        this.water = new WaterView(world);
+        this.group.add(this.water.group);
+      }
+      this.land = new LandStreamer(world, this.group, material, this.flora);
     }
 
     const count = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 4) - 1));
@@ -363,6 +375,11 @@ export class WorldView {
 
   // --- rings -------------------------------------------------------------------
 
+  /** One-off GPU work that needs the renderer: the plants' impostor atlas */
+  prepare(renderer: THREE.WebGLRenderer) {
+    this.flora?.bake(renderer);
+  }
+
   /** "race": the next gate glows, passed ones are gone. "free": all shown quietly. */
   setRings(mode: RingMode, next: number) {
     this.gates.setMode(mode, next);
@@ -375,10 +392,14 @@ export class WorldView {
 
   /** Per frame: stream rock around the camera, the sky follows it, the gates animate */
   update(camera: THREE.Camera, dt: number) {
+    const mist = this.world.biome.sky.mist;
+    if (mist.mode === "valley") ATMOSPHERE.mistHeight.value = this.world.valleyFloor(camera.position.z) + mist.above;
     if (this.land) {
       this.land.update(camera.position, this.dispatch);
       this.ready = this.land.ready;
       applyTerrainTuning(this.terrainUniforms!, (this.world.biome.terrain as { layers: Layers }).layers);
+      this.flora?.update(camera);
+      this.water?.update();
     } else {
       this.stream(camera.position);
     }
@@ -391,6 +412,8 @@ export class WorldView {
     this.workers.forEach((w) => w.terminate());
     for (const chunk of this.chunks) this.unload(chunk);
     this.land?.dispose();
+    this.flora?.dispose();
+    this.water?.dispose();
     this.instanced.forEach((m) => m.dispose());
     this.geometries.forEach((g) => g.dispose());
     this.materials.forEach((m) => m.dispose());

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { Avatar } from "./avatar";
-import { Kind, type Particles } from "./particles";
+import { Kind, type Particles, fx } from "./particles";
 import { Trail } from "./trail";
 import { FX } from "./tuning";
 
@@ -119,7 +119,7 @@ export class PilotFx {
         particles.emit(
           at.copy(tip).addScaledVector(span, rand(-0.2, 0.2)),
           vel.copy(velocity).multiplyScalar(0.1).addScaledVector(span, rand(-1, 1)),
-          { life: rand(0.7, 1.2), size: rand(0.35, 0.6), color: this.gold, kind: Kind.Star, drag: 2, intensity: 2.6 },
+          fx(rand(0.7, 1.2), rand(0.35, 0.6), this.gold, Kind.Star, 0, 2, 2.6),
         );
       }
     }
@@ -131,15 +131,7 @@ export class PilotFx {
     this.particles!.emit(
       at.set(tip.x + rand(-0.25, 0.25), tip.y + rand(-0.25, 0.25), tip.z + rand(-0.25, 0.25)),
       vel.copy(this.velocity).multiplyScalar(0.12).add(jitter.set(rand(-1.2, 1.2), rand(-0.4, 1.2), rand(-1.2, 1.2))),
-      {
-        life: rand(0.7, 1.5),
-        size: star ? rand(0.3, 0.55) : rand(0.18, 0.4),
-        color,
-        kind: star ? Kind.Star : Kind.Glow,
-        gravity: -0.8,
-        drag: 1.4,
-        intensity: this.ghost ? 0.8 : rand(1.4, 2.4),
-      },
+      fx(rand(0.7, 1.5), star ? rand(0.3, 0.55) : rand(0.18, 0.4), color, star ? Kind.Star : Kind.Glow, -0.8, 1.4, this.ghost ? 0.8 : rand(1.4, 2.4)),
     );
   }
 
@@ -162,8 +154,8 @@ export class PilotFx {
           .multiplyScalar(rand(3, 6) * strength + 1)
           .addScaledVector(this.velocity, 0.25),
         wisp
-          ? { life: rand(0.5, 0.8), size: rand(0.8, 1.4), color: this.head, kind: Kind.Wisp, drag: 3, intensity: 0.5 }
-          : { life: rand(0.6, 1), size: rand(0.25, 0.45), color: this.gold, kind: Kind.Star, drag: 2, intensity: 2 },
+          ? fx(rand(0.5, 0.8), rand(0.8, 1.4), this.head, Kind.Wisp, 0, 3, 0.5)
+          : fx(rand(0.6, 1), rand(0.25, 0.45), this.gold, Kind.Star, 0, 2, 2),
       );
     }
   }

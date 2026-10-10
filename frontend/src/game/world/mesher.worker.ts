@@ -2,8 +2,9 @@
 // the level's key (it's deterministic), then meshes whichever chunks it is asked
 // for: the race map's chunks (legacy) or generator-v2 nodes at any level of detail.
 import { type LevelKey, levelId, makeLevel } from "./biomes";
+import { placeFlora } from "./flora/placement";
 import { meshChunk } from "./mesher";
-import { meshNode } from "./terrain/mesh";
+import { NODE_SIZE, meshNode } from "./terrain/mesh";
 import type { NodeRequest } from "./terrain/streamer";
 import { World } from "./World";
 
@@ -34,8 +35,12 @@ self.onmessage = (event: MessageEvent<MeshRequest>) => {
       { transfer: [mesh.positions.buffer, mesh.colors.buffer, mesh.trees.buffer] },
     );
   } else {
-    const mesh = meshNode(world, request.lod, request.ix, request.iy, request.iz);
-    const transfer = mesh.positions.length ? [mesh.positions.buffer, mesh.rock.buffer, mesh.cover.buffer, mesh.snow.buffer] : [];
-    self.postMessage({ kind: "node", level: id, key: request.key, ...mesh }, { transfer });
+    const { lod, ix, iy, iz } = request;
+    const mesh = meshNode(world, lod, ix, iy, iz);
+    const size = NODE_SIZE << lod;
+    const flora = placeFlora(world, { x0: ix * size, y0: iy * size, z0: iz * size, x1: (ix + 1) * size, y1: (iy + 1) * size, z1: (iz + 1) * size }, lod === 0);
+    const transfer = [flora.plants.buffer, flora.tufts.buffer];
+    if (mesh.positions.length) transfer.push(mesh.positions.buffer, mesh.rock.buffer, mesh.cover.buffer, mesh.snow.buffer);
+    self.postMessage({ kind: "node", level: id, key: request.key, ...mesh, ...flora }, { transfer: transfer.filter((b) => b.byteLength > 0) });
   }
 };

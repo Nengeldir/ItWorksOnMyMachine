@@ -14,12 +14,29 @@ export const ATMOSPHERE = {
   sunColor: { value: new THREE.Color("#ffffff") },
   mistColor: { value: new THREE.Color("#ffffff") },
   mistDensity: { value: 0.5 },
+  // Where mist gathers: 0 = below the camera (over a sea of clouds), 1 = below mistHeight (in a valley)
+  mistMode: { value: 0 },
+  mistHeight: { value: 0 },
+  mistThickness: { value: 120 },
   horizon: { value: new THREE.Color("#ffffff") },
   zenith: { value: new THREE.Color("#3366cc") },
   clouds: { value: new THREE.Color("#ffffff") },
   night: { value: 0 },
   time: fxTime,
 };
+
+/**
+ * Mist: below a level a little under the camera (rock far beneath you sinks into
+ * the haze over a sea of clouds), or below a fixed height (pooling in a valley).
+ * Needs atmoMistDensity, atmoMistMode, atmoMistHeight and atmoMistThickness.
+ */
+export const MIST = /* glsl */ `
+  float atmoMist(vec3 world, float dist) {
+    float level = mix(cameraPosition.y - 40.0, atmoMistHeight, atmoMistMode);
+    float above = world.y - level;
+    return atmoMistDensity * (1.0 - exp(-max(-above, 0.0) / max(atmoMistThickness, 1.0))) * (1.0 - exp(-dist / 280.0));
+  }
+`;
 
 /** The sky's glow around the sun; the haze uses the same curve so distant terrain melts into the sky */
 const SUN_GLOW = /* glsl */ `
@@ -34,9 +51,13 @@ const PARS = /* glsl */ `
   uniform vec3 atmoSunColor;
   uniform vec3 atmoMistColor;
   uniform float atmoMistDensity;
+  uniform float atmoMistMode;
+  uniform float atmoMistHeight;
+  uniform float atmoMistThickness;
   uniform float atmoStrata;
   varying vec3 vAtmoWorld;
   ${SUN_GLOW}
+  ${MIST}
 `;
 
 /** Adds the haze, mist, backlight and strata to a Lambert material (terrain, rocks) */
@@ -47,6 +68,9 @@ export function atmospheric<T extends THREE.MeshLambertMaterial>(material: T, st
     shader.uniforms.atmoSunColor = ATMOSPHERE.sunColor;
     shader.uniforms.atmoMistColor = ATMOSPHERE.mistColor;
     shader.uniforms.atmoMistDensity = ATMOSPHERE.mistDensity;
+    shader.uniforms.atmoMistMode = ATMOSPHERE.mistMode;
+    shader.uniforms.atmoMistHeight = ATMOSPHERE.mistHeight;
+    shader.uniforms.atmoMistThickness = ATMOSPHERE.mistThickness;
     shader.uniforms.atmoStrata = strataUniform;
     shader.vertexShader = shader.vertexShader
       .replace("void main() {", "varying vec3 vAtmoWorld;\nvoid main() {")
@@ -84,9 +108,7 @@ export function atmospheric<T extends THREE.MeshLambertMaterial>(material: T, st
           gl_FragColor.rgb += atmoSunColor * rim * pow(towardsSun, 3.0) * 0.45;
           #ifdef USE_FOG
             float fogFactor = smoothstep(fogNear, fogFar, vFogDepth);
-            // Height above a level a little below the camera: rock far beneath you sinks into the haze
-            float above = vAtmoWorld.y - (cameraPosition.y - 40.0);
-            float mist = atmoMistDensity * (1.0 - exp(-max(-above, 0.0) / 120.0)) * (1.0 - exp(-dist / 280.0));
+            float mist = atmoMist(vAtmoWorld, dist);
             gl_FragColor.rgb = mix(gl_FragColor.rgb, atmoMistColor, clamp(mist, 0.0, 0.85) * (1.0 - fogFactor));
             gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor + sunGlow(viewDir), fogFactor);
           #endif

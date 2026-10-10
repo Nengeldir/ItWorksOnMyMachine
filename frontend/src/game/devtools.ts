@@ -76,7 +76,24 @@ export function installDevtools() {
     g.render();
     return { ready: g.view.ready, biome: g.world.biome.name, mood: g.world.palette.name };
   };
-  Object.assign(window, { __shot: shot, __raceHashes: raceHashes });
+  /**
+   * Runs the game loop by hand for `seconds` of game time at 60 fps (the tab's own
+   * requestAnimationFrame doesn't run when it's hidden), yielding now and then so
+   * worker results arrive. The pilot flies on whatever input is held.
+   */
+  const run = async (seconds = 2) => {
+    const g = (window as unknown as { __game: Game }).__game as unknown as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    document.querySelectorAll<HTMLElement>(".panel,.topbar,.hud,.ring-marker,.speed-vignette,.banner,.ghost-note").forEach((e) => (e.style.visibility = "hidden"));
+    let t = performance.now();
+    for (let i = 0; i < seconds * 60; i++) {
+      t += 1000 / 60;
+      g.loop(t);
+      cancelAnimationFrame(g.frame);
+      if (i % 4 === 0) await settle();
+    }
+    return { position: g.flight.position.toArray().map(Math.round), speed: Math.round(g.flight.speed) };
+  };
+  Object.assign(window, { __shot: shot, __raceHashes: raceHashes, __run: run });
 }
 
 /**
