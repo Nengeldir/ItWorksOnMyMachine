@@ -253,6 +253,10 @@ screen's stats to match. A deliberate gameplay change in **runs only**
   changes, the last feather breathes with "last feather" beside it. The
   upgrade's card and icons use the same drawing. The crash note reads "Out
   of feathers · The journey ends here" on the last crash.
+- **Overlap fixed** (reported from a screenshot): the feather pill at
+  4.2rem ran into the objectives at 6.2rem. Both now stack in one column
+  (`.run-side`, from 4.4rem, 0.5rem apart), so neither is placed by a fixed
+  offset; without feathers (test mode) the objectives start at 4.4rem.
 - **Finish screen**: `RunSummary` has `completed` and `livesLeft`. A lost
   run is headed "Out of feathers", "fell in <biome>". Stats: Flying time, Biomes
   cleared (levels behind you, of 8), Gates, Best chain, Style, and Feathers left
@@ -2531,7 +2535,7 @@ ported to the islands world:
 
 ## Next up
 
-- **Lives**: look at them in a browser (the feather pill at 4.2rem under the
+- **Lives**: look at them in a browser (the `.run-side` column under the
   top bar, narrow screens, the white fade after the last crash, the "Out of
   feathers"
   finish screen), then balance: three lives over eight levels may be harsh,

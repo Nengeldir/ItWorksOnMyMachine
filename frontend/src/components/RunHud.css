@@ -36,10 +36,17 @@
   color: var(--warm-deep);
 }
 
-.run-lives {
+.run-side {
   position: absolute;
-  top: 4.2rem;
+  top: 4.4rem;
   left: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.run-lives {
   display: flex;
   align-items: center;
   gap: 0.3rem;
@@ -112,9 +119,6 @@
 }
 
 .run-objectives {
-  position: absolute;
-  top: 6.2rem;
-  left: 1rem;
   list-style: none;
   margin: 0;
   padding: 0.7rem 0.9rem;
