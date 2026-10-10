@@ -123,6 +123,13 @@ export const TWILIGHT: Biome = {
     ],
     grass: { spacing: 2.6, height: [0.45, 0.85], color: "#1f4a4a", tip: "#3fa0a0", flowers: ["#7af0ff", "#d080ff", "#ffe08a"], flowerShare: 0.35, glow: 1.2 },
   },
+  structures: [
+    // A great spirit gate; smaller gates, fox statues and lanterns glowing among the trees
+    { id: "shrineGate", landmark: 1100, spacing: 50, chance: 1, height: [22, 26], colors: { stone: "#5d6a78", stone2: "#3f6a5c", roof: "#2a2440", cloth: "#7a3fb0", light: "#7af0ff", trim: "#b7fff0" }, where: { above: [-20, 80], lateral: [50, 320], facing: true } },
+    { id: "shrineGate", spacing: 110, chance: 0.6, height: [8, 11], colors: { stone: "#5d6a78", stone2: "#3f6a5c", roof: "#2a2440", cloth: "#7a3fb0", light: "#7af0ff", trim: "#b7fff0" }, where: { above: [-20, 100], lateral: [30, 420], facing: true } },
+    { id: "spiritStatue", spacing: 140, chance: 0.5, height: [3.5, 5.5], colors: { stone: "#6f7c88", stone2: "#3f7a5c", roof: "#6f7c88", light: "#b7fff0", trim: "#7af0ff" }, where: { lateral: [20, 420], facing: true } },
+    { id: "stoneLantern", spacing: 46, chance: 0.35, height: [2.6, 3.6], colors: { stone: "#5d6a78", stone2: "#3f7a5c", roof: "#3a3458", light: "#7af0ff", trim: "#b7fff0" }, where: { lateral: [0, 300] } },
+  ],
   sky: { cloudSea: null, puffs: 30, puffsBelow: false, puffLift: 320, mist: { mode: "valley", above: 12, thickness: 30 } },
   particles: {
     ambient: [

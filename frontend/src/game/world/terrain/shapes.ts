@@ -400,6 +400,58 @@ export class NoiseIsland extends BaseShape {
   }
 }
 
+export interface BridgeSpan {
+  half: number; // half its length, from the crown to where it meets the ground
+  width: number; // of the deck
+  crown: number; // top of the deck above the water, in the middle
+  foot: number; // …and at its ends
+  arch: [number, number]; // the opening underneath: half width and rise above the water
+  depth: number; // the abutments reach this far below the water
+}
+
+/**
+ * A humped stone bridge across a river: the deck rises to a crown over one
+ * arch, wide and tall enough to fly through. Chunky on purpose: the land is
+ * meshed on a 6 m grid, and anything thinner comes out in tatters.
+ */
+export class Bridge extends BaseShape {
+  private readonly water: number;
+  private readonly ax: number;
+  private readonly az: number;
+  private readonly span: BridgeSpan;
+
+  /** `center` on the water in mid-river, `along` the horizontal unit vector from bank to bank */
+  constructor(center: Vector3, along: Vector3, span: BridgeSpan, look: ShapeLook = {}) {
+    super(look, 0.25);
+    this.water = center.y;
+    this.ax = along.x;
+    this.az = along.z;
+    this.span = span;
+    const hx = Math.abs(along.x) * span.half + Math.abs(along.z) * span.width * 0.5;
+    const hz = Math.abs(along.z) * span.half + Math.abs(along.x) * span.width * 0.5;
+    this.box(center.x, center.y + (span.crown - span.depth) / 2, center.z, hx, (span.crown + span.depth) / 2, hz);
+  }
+
+  distance(px: number, py: number, pz: number): number {
+    const s = this.span;
+    const dx = px - this.cx;
+    const dz = pz - this.cz;
+    const u = dx * this.ax + dz * this.az;
+    const w = dz * this.ax - dx * this.az;
+    const v = py - this.water;
+    const k = Math.max(0, 1 - (u / s.half) ** 2);
+    const top = s.foot + (s.crown - s.foot) * k;
+    // (the deck slopes, so its height difference overstates the distance: scaled down to stay a bound)
+    const side = Math.abs(w) - s.width / 2;
+    const over = (v - top) * 0.75;
+    const end = Math.abs(u) - s.half;
+    const under = -v - s.depth;
+    const body = Math.min(Math.max(side, over, end, under), 0) + Math.hypot(Math.max(side, 0), Math.max(over, 0), Math.max(end, 0), Math.max(under, 0));
+    const opening = (1 - Math.hypot(u / s.arch[0], v / s.arch[1])) * Math.min(s.arch[0], s.arch[1]);
+    return Math.max(body, opening);
+  }
+}
+
 /** A volcanic cone standing on the ground, its flanks curving in to a rim around a crater */
 export class Volcano extends BaseShape {
   private readonly x: number;

@@ -86,6 +86,8 @@ export const VERDANT: Biome = {
       { rock: "#7d7466", rock2: "#6c6457", under: "#4f4a42", top: "#6fa53e", top2: "#a5b84f", snow: true },
       // 1: outcrops, pillars, arches
       { rock: "#8f8676", rock2: "#a39a88", bands: 5, streaks: 0.3, under: "#5a5348", top: "#79a848", top2: "#93b453", snow: true },
+      // 2: worked stone (bridges): courses of pale masonry, a paved top
+      { rock: "#d6ccb8", rock2: "#c4baa4", bands: 2.5, under: "#a59c89", top: "#cfc6b0", top2: "#bfb69f", snow: false, bare: true },
     ],
     layers: { dirt: "#6b5236", sand: "#c9b98a", snow: "#f4f7fa", snowLine: 190, topSlope: 0.72, texture: 1, glow: "#ffffff" },
     land: {
@@ -97,6 +99,7 @@ export const VERDANT: Biome = {
         { kind: "arches", count: 6, radius: [18, 30], lateral: [150, 400], surface: 1 },
         // Table mountains on the horizon, their sides stepped in ledges
         { kind: "mesas", count: 7, radius: [60, 120], rise: [120, 260], lateral: [520, 1000], step: 22, surface: 1 },
+        { kind: "bridges", chance: 0.8, width: 12, surface: 2 },
       ],
     },
   },
@@ -117,6 +120,17 @@ export const VERDANT: Biome = {
     ],
     grass: { spacing: 2.4, height: [0.5, 0.95], color: "#4f8a32", tip: "#a8c95a", flowers: ["#ffffff", "#ffd84a", "#c58cff", "#ff7a9c"], flowerShare: 0.25 },
   },
+  structures: [
+    // Old mills on the shoulders of the hills, watchtowers above the valley, lanterns along the river
+    // An Easter egg, in about one level in six: ETH Zurich's main building, dome and all, above the valley
+    { id: "ethMainBuilding", landmark: 2400, spacing: 60, chance: 0.1, height: [30, 34], colors: { stone: "#dccba6", stone2: "#b9a987", roof: "#7f9c8f", cloth: "#1f407a" }, where: { above: [-5, 130], lateral: [120, 420], facing: true } },
+    // And another: a great bust of Albert Einstein, close by the racing line, in about one level in ten
+    { id: "einsteinBust", landmark: 2400, spacing: 30, chance: 0.3, height: [6, 7], colors: { stone: "#c9c2b2", stone2: "#a39c8c", roof: "#a07c4c", cloth: "#f3f0e8", wood: "#3a2c20" }, where: { above: [-26, 25], lateral: [25, 140], facing: true } },
+    { id: "windmill", spacing: 130, chance: 0.9, height: [15, 19], colors: { stone: "#d9cfbb", stone2: "#b9b59a", roof: "#b5533c", cloth: "#f6ecd6" }, where: { above: [-10, 150], lateral: [60, 700], forest: false, hilltop: true } },
+    { id: "watchtower", spacing: 170, chance: 0.6, height: [15, 21], colors: { stone: "#cfc6b4", stone2: "#9aa784", roof: "#3f6f8f", cloth: "#d84a4a" }, where: { above: [-15, 170], lateral: [50, 800] } },
+    { id: "shrineGate", spacing: 130, chance: 0.6, height: [8, 11], colors: { stone: "#bdb6a6", stone2: "#93a07c", roof: "#3a3a44", cloth: "#d84a3a" }, where: { above: [-18, 120], lateral: [30, 500], facing: true } },
+    { id: "stoneLantern", spacing: 12, chance: 0.7, height: [2.6, 3.6], colors: { stone: "#bdb6a6", stone2: "#93a07c", roof: "#7a7466" }, where: { lateral: [0, 160], wet: true } },
+  ],
   sky: { cloudSea: null, puffs: 50, puffsBelow: false, puffLift: 380, mist: { mode: "valley", above: 18, thickness: 34 } },
   particles: {
     ambient: [

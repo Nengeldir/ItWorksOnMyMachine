@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { TERRAIN } from "../../tuning";
-import { PLANT_STRIDE, SPECIES } from "../flora/species";
+import { PLANT_STRIDE } from "../flora/species";
 import type { FloraView } from "../flora/view";
+import { kindInfo } from "../structures/kinds";
 import { Plant } from "../trees";
 import type { World } from "../World";
 import { NODE_SIZE, type TerrainMesh, nodeKey } from "./mesh";
@@ -225,10 +226,9 @@ export class LandStreamer {
   }
 
   private colliders(plants: Float32Array): Plant[] {
-    const species = this.world.biome.vegetation.kind === "flora" ? this.world.biome.vegetation.species : [];
     const out: Plant[] = [];
     for (let o = 0; o < plants.length; o += PLANT_STRIDE) {
-      const info = SPECIES[species[plants[o]].id];
+      const info = kindInfo(this.world.biome, plants[o]);
       out.push(new Plant(plants[o + 1], plants[o + 2], plants[o + 3], plants[o + 4], plants[o + 5], plants[o + 6], info.collider));
     }
     return out;
