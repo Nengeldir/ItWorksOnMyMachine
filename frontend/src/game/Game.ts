@@ -1159,7 +1159,7 @@ export class Game implements RunHost {
     const crystals = this.view.gates.crystalPositions(index, this.crystalPoints);
     for (const p of crystals) {
       const outward = tmp.subVectors(p, ring.position).normalize();
-      for (let k = 0; k < Math.round(3 * amount); k++) {
+      for (let k = 0; k < Math.round(2 * amount); k++) {
         this.particles.emit(
           at.copy(p).addScaledVector(outward, rand(-0.6, 0.6)),
           vel
@@ -1167,22 +1167,22 @@ export class Game implements RunHost {
             .multiplyScalar(rand(5, 15))
             .addScaledVector(forward, rand(2, 6) + this.flight.speed * 0.15)
             .add(tmp2.set(rand(-2, 2), rand(-2, 2), rand(-2, 2))),
-          fx(rand(1, 1.9), rand(0.45, 0.95), k % 2 ? WHITE : tint, Kind.Shard, 4, 1.1, 2.8),
+          fx(rand(0.7, 1.2), rand(0.22, 0.45), k % 2 ? WHITE : tint, Kind.Shard, 4, 1.1, 1.5),
         );
       }
     }
-    // Stars around the rim and a puff of light around the pilot
-    for (let k = 0; k < Math.round(70 * amount); k++) {
+    // Fine stars around the rim and scattered grains around the pilot
+    for (let k = 0; k < Math.round(48 * amount); k++) {
       const p = crystals[k % crystals.length];
       at.lerpVectors(ring.position, p, rand(0.85, 1.05));
       tmp.subVectors(at, ring.position).normalize();
-      this.particles.emit(at, vel.copy(tmp).multiplyScalar(rand(1, 5)).addScaledVector(forward, rand(-2, 4)), fx(rand(1.2, 2.2), rand(0.6, 1.2), tint, Kind.Star, -0.5, 1.5, 3));
+      this.particles.emit(at, vel.copy(tmp).multiplyScalar(rand(1, 5)).addScaledVector(forward, rand(-2, 4)), fx(rand(0.7, 1.2), rand(0.22, 0.45), tint, Kind.Star, -0.5, 1.5, 1.5));
     }
-    for (let k = 0; k < Math.round(30 * amount); k++) {
+    for (let k = 0; k < Math.round(18 * amount); k++) {
       this.particles.emit(
-        this.flight.position,
+        at.copy(this.flight.position).add(tmp2.set(rand(-0.6, 0.6), rand(-0.6, 0.6), rand(-0.6, 0.6))),
         vel.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize().multiplyScalar(rand(4, 10)).addScaledVector(this.flight.velocity, 0.6),
-        fx(rand(0.5, 0.9), rand(0.5, 1.1), WHITE, Kind.Glow, 0, 3, 2),
+        fx(rand(0.4, 0.65), rand(0.12, 0.25), WHITE, Kind.Glow, 0, 3, 1),
       );
     }
   }

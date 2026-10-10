@@ -113,7 +113,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only. `touching()` is the pilot's hitbox (`FLIGHT.hit*`): a ball for the body and a rectangle per wing, tilted up at a dihedral, fixed in the flight frame (never the animated pose), sampled against the distance field with early-outs; `hitboxWorld()` is the same hitbox in world space, which `Game.step` tests against the land drawn (`LandCollider`). `FlightMods` (run upgrades: drag, sink, stall, proximity boost, dash boost, thermal lift, hover, glide lock, `thrust`, a plunge's `dive`, Hover-Stall's `hang`, `turn` for stances and Aero-Braking, Zenith's `climb`, Ascension's `ascend`, a rise on rails in `ascendStep`) are only ever passed in run mode; `flap()`, `launch()`, `deflect()`, `surge()` and a forced `dodge()` are run abilities |
 | `game/avatar.ts` | The pilot: a cel-shaded chibi flyer built from primitives (merged per body part, vertex-colored), a procedural cape and scarf (`Cloth`), two-segment feathered wings, and all its animation: bank lead spring, barrel rolls, flapping driven by effort, bobbing, cloth ripples, limb reactions. Also `createLabel` and `glowTexture` |
 | `game/toon.ts` | Toon material (3-band gradient, rim light tinted by the biome's sun, self-lit `glow` vertex attribute for trims and wingtips) and the inverted-hull ink outline. `TOON_LIGHT` is set per biome |
-| `game/pilotfx.ts` | Per-pilot effects: wingtip and cape ribbons, fine motes sampled along the swept wing pose with subframe births, compact downstroke puffs, barrel-roll stars. Shared by you, other players and ghosts |
+| `game/pilotfx.ts` | Per-pilot effects: wingtip and cape ribbons, fine motes sampled along the swept wing pose with subframe births, compact downstroke puffs, golden roll arcs and directional boost dust/slivers. Shared by you, other players and ghosts |
 | `game/particles.ts` | One GPU particle system (ring buffer, physics in the vertex shader). Kinds: Glow, Star, Shard, Wisp, Firefly, Bubble. `fxTime` is the shared shader clock; `FX_LIGHT.boost` scales all glowing effects per biome |
 | `game/trail.ts` | Glowing additive ribbon (shader: soft edges, light pulses, fades near the camera) |
 | `game/speedlines.ts` | Wind streaks that hang in the air and rush past at speed |
@@ -222,6 +222,50 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Adventure title outline and opening autopilot PR #47
+
+- Implemented in `/private/tmp/wind-rider-adventure-intro`, branch
+  `feature/adventure-title-intro`, from main `db8c8f9`; committed as `0a2f1bf`.
+  Original Pengyue source and unfinished lighting edits are preserved.
+- `Game.ts` / `RunSession.ts`: unscored safe-rail autopilot behind Take off;
+  no run progress while waiting. Starting resets flight, camera, inputs, gate
+  visuals, run clock and title timing. `RunHud.css`: thin warm glowing outline
+  on map-transition title lettering. README and tracked CLAUDE.md updated.
+- Build, lint and all 82 frontend tests pass (Node 22.14 asynchronous resolver).
+  Backend untouched. Browser unavailable: cua lists no connected browsers;
+  title readability and handover feel need visual verification.
+- Published [PR #47](https://github.com/Nengeldir/ItWorksOnMyMachine/pull/47)
+  into main. Existing profile/cosmetics PR #43 remains separate. No merge done.
+
+
+### 2026-10-10: Action-specific gold accents for rolls and boosts
+
+- `pilotfx.ts`: barrel rolls now alternate wingtips for fine twin golden arcs,
+  mixing tiny twinkles and flakes. Boost sheds short-lived gold grains with
+  occasional ivory slivers swept backwards; it replaces boost's generic mote
+  density increase. Both use swept poses/subframe births and respect particle
+  budgets, remote-pilot share, stationary gating and ghost brightness.
+- `tuning.ts`: `FX.rollSparkles` (72/s peak) and `boostSparkles` (48/s full boost)
+  adjust density live; README documents both. Grain size/light reuse existing
+  controls. No flight, collision or action-timing changes.
+- Verified build, lint and all four particle regression tests pass. A temporary
+  emitter harness checked glide, boost, roll, combined actions and zero budget:
+  distinct particle mixes, grains at most 0.16 m, bounded brightness and
+  subframe births. Browser visual verification remains unavailable.
+
+
+### 2026-10-10: Gentler portal and gate crossing particles
+
+- `run/portal.ts`: reduced crossing burst count, size, brightness and lifetime;
+  default `RUN.portalFlash` is now 0.25. Nearby portal-rim stars are also smaller,
+  dimmer and less numerous so they do not accumulate into large light blobs.
+- `Game.ts`: crystal-gate crossing bursts use fewer, finer, dimmer shards/stars
+  and scattered small grains around the pilot, replacing the overlapping large
+  glow particles. Crossing detection, camera kick and gameplay are unchanged.
+- Verified frontend build and lint pass. Browser visual verification remains
+  unavailable as noted above; inspect both crossing effects in day/night scenes.
+
 
 ### 2026-10-10: Fine wing grains and tighter light halos
 
@@ -2039,8 +2083,12 @@ ported to the islands world:
 
 ## Next up
 
-- Wing grains/light halos: inspect day/night flight, boost, braking and rolls
-  with bloom on/off and decorated wings; check lamp and gate edges in a focused
+- PR #47: visually check title outlines in day/night, opening autopilot and
+  Take off/Enter/touch handover. No connected browser was available.
+
+- Wing grains/light halos and portal/gate crossing bursts: inspect day/night flight, boost, braking and rolls
+  with bloom on/off and decorated wings; inspect action-specific gold roll arcs
+  and boost dust/ivory slivers; check lamp and gate edges in a focused
   browser. Browser control was unavailable for this change.
 
 

@@ -36,10 +36,14 @@ export class PilotFx {
   private readonly ghost: boolean;
   private readonly head = new THREE.Color();
   private readonly body = new THREE.Color();
-  private readonly gold = new THREE.Color("#ffe6a0");
+  private readonly gold = new THREE.Color("#ffd779");
+  private readonly ivory = new THREE.Color("#fff4d6");
   private debtL = 0;
   private debtR = 0;
   private spiralDebt = 0;
+  private boostDebt = 0;
+  private rollGrain = 0;
+  private boostGrain = 0;
   private readonly velocity = new THREE.Vector3();
   private readonly center = new THREE.Vector3();
   private moving = true;
@@ -80,7 +84,8 @@ export class PilotFx {
   reset() {
     this.trails.forEach((t) => t.reset());
     this.hasPrevious = false;
-    this.debtL = this.debtR = this.spiralDebt = this.brakeDebt = this.wingDebt = 0;
+    this.debtL = this.debtR = this.spiralDebt = this.boostDebt = this.brakeDebt = this.wingDebt = 0;
+    this.rollGrain = this.boostGrain = 0;
   }
 
   hide() {
@@ -145,27 +150,52 @@ export class PilotFx {
     }
 
     // Light motes shed from the wingtips: more with speed, a sky-like drift upwards
-    const rate = (10 + speed * 0.9) * FX.sparkles * budget * (1 + proximity + avatar.boost);
+    const rate = (10 + speed * 0.9) * FX.sparkles * budget * (1 + proximity);
     this.debtL += rate * dt;
     this.debtR += rate * dt;
     for (; this.debtL >= 1; this.debtL--) this.mote(tipL, this.previousL, (this.debtL - 1) / rate, dt);
     for (; this.debtR >= 1; this.debtR--) this.mote(tipR, this.previousR, (this.debtR - 1) / rate, dt);
 
-    // A spiral of stars while rolling
+    // Boost: small gold dust with occasional ivory slivers, swept backwards.
+    // Sample each birth along the wing movement, never a bright batch at one point.
+    const boostRate = FX.boostSparkles * avatar.boost * budget;
+    this.boostDebt += boostRate * dt;
+    for (; this.boostDebt >= 1; this.boostDebt--) {
+      const age = (this.boostDebt - 1) / boostRate;
+      const grain = this.boostGrain++;
+      const left = grain % 2 === 0;
+      this.sampleTip(left ? tipL : tipR, left ? this.previousL : this.previousR, age, dt);
+      jitter.lerpVectors(this.center, this.previousCenter, age / dt);
+      at.lerp(jitter, rand(0, 0.3)).addScaledVector(span, rand(-0.08, 0.08));
+      const sliver = grain % 3 === 0;
+      particles.emit(at,
+        vel.copy(velocity).multiplyScalar(-0.08).addScaledVector(span, (left ? -1 : 1) * rand(0.3, 1)),
+        fx(rand(0.25, 0.5), FX.wingGrainSize * (sliver ? rand(1.1, 1.5) : rand(0.7, 1.1)),
+          sliver ? this.ivory : this.gold, sliver ? Kind.Shard : Kind.Glow, 0, 1.5,
+          FX.wingGrainLight * (this.ghost ? 0.6 : 0.95)), age);
+    }
+    if (avatar.boost <= 0) this.boostDebt = 0;
+
+    // Rolling wingtips leave two fine golden arcs: twinkles mixed with tiny flakes.
     if (barrel > 0) {
-      const spiralRate = 140 * barrel * budget;
+      const spiralRate = FX.rollSparkles * barrel * budget;
       this.spiralDebt += spiralRate * dt;
       for (; this.spiralDebt >= 1; this.spiralDebt--) {
         const age = (this.spiralDebt - 1) / spiralRate;
-        const left = Math.random() < 0.5;
+        const grain = this.rollGrain++;
+        const left = grain % 2 === 0;
+        const flake = grain % 3 === 0;
         this.sampleTip(left ? tipL : tipR, left ? this.previousL : this.previousR, age, dt);
         particles.emit(
-          at.addScaledVector(span, rand(-0.2, 0.2)),
+          at.addScaledVector(span, rand(-0.08, 0.08)),
           vel.copy(velocity).multiplyScalar(0.1).addScaledVector(span, rand(-1, 1)),
-          fx(rand(0.5, 0.9), FX.wingGrainSize * rand(1.2, 1.8), this.gold, Kind.Star, 0, 2, FX.wingGrainLight * 1.2),
+          fx(rand(0.45, 0.75), FX.wingGrainSize * rand(1, 1.6), this.gold,
+            flake ? Kind.Shard : Kind.Star, 0, 2, FX.wingGrainLight * (this.ghost ? 0.6 : 1.1)),
           age,
         );
       }
+    } else {
+      this.spiralDebt = 0;
     }
     this.rememberPose();
   }

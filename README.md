@@ -325,7 +325,9 @@ flight physics, the pilot's animation, trails and particles, the crystal gates,
 the camera and the render quality. Look tweaks are remembered in the browser;
 physics tweaks aren't, so they can't follow you into a race.
 Effects exposes `wingGrainSize`, `wingGrainLight` and `wingPuffSize` for fine
-wing dust and compact downstroke puffs. `bloomHalo` controls the widest glow
+wing dust and compact downstroke puffs. `rollSparkles` adjusts the golden
+barrel-roll arcs; `boostSparkles` adjusts the gold dust and ivory slivers
+swept behind the wings during boost. `bloomHalo` controls the widest glow
 layers independently of bloom strength and radius, keeping light edges defined.
 Cosmetics exposes `wingParticleSize` for the decorated wings' tiny accents.
 Collection pickups exposes crystal size, mote rate and mote distance; Run

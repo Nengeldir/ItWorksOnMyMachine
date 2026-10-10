@@ -26,6 +26,8 @@ export const ANIM = {
 /** Trails, particles, wind and screen effects */
 export const FX = {
   boostTrailGlow: 0.45,
+  boostSparkles: 48, // fine gold dust and ivory slivers/second at full boost
+  rollSparkles: 72, // gold twinkles and tiny flakes/second at mid-roll
   brakeWisps: 24, // particles/second at full brake
   trailLength: 1, // multiplier on ribbon length
   trailWidth: 1,
@@ -153,7 +155,7 @@ export const DEEP = {
 
 /** The roguelike run's looks (its rules live in run/run.ts and run/upgrades.ts) */
 export const RUN = {
-  portalFlash: 0.35, // intensity of the crossing sparkles and screen brightening
+  portalFlash: 0.25, // intensity of the crossing sparkles and screen brightening
   tunnelFade: 1.4, // seconds to fade out of the tunnel into the next biome
   compass: 1, // size of the portal compass
   toasts: true, // pop-ups for points and run events
@@ -280,6 +282,8 @@ export const RANGES: Record<string, [number, number, number?]> = {
   trailLength: [0.2, 2.5],
   trailWidth: [0.2, 3],
   trailGlow: [0, 3],
+  boostSparkles: [0, 100, 1],
+  rollSparkles: [0, 140, 1],
   sparkles: [0, 4],
   flapPuffs: [0, 4],
   wingGrainSize: [0.04, 0.25],
