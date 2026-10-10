@@ -346,8 +346,9 @@ export class RunController {
       if (before >= 0 || after < 0) continue;
       tmp.lerpVectors(prevPosition, flight.position, before / (before - after));
       const offset = tmp.distanceTo(ring.position);
-      if (offset > ring.radius + 1 + this.stats.magnet + this.abilities.widening(ring)) continue;
+      if (offset > ring.radius + 1 + this.stats.magnet + this.abilities.widening(ring) + this.items.widening(i)) continue;
       this.passed.add(i);
+      this.items.gate(i);
       this.chain = Math.min(CHAIN_MAX, this.chain + 1);
       this.bestChain = Math.max(this.bestChain, this.chain);
       this.gates++;
