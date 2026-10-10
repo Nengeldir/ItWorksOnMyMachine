@@ -8,9 +8,9 @@ export interface Settings extends ControlSettings {
   nickname: string;
 }
 
-const SETTINGS_KEY = "wingrace.settings";
-const CLIENT_KEY = "wingrace.client";
-const TUTORIAL_KEY = "wingrace.tutorial";
+const SETTINGS_KEY = "windrider.settings";
+const CLIENT_KEY = "windrider.client";
+const TUTORIAL_KEY = "windrider.tutorial";
 
 export function defaultSettings(): Settings {
   return { nickname: "", invertPitch: false, invertMouse: false, invertGamepad: false,

@@ -65,6 +65,9 @@ decides how things should look and feel.
 
 ## The project
 
+The game is called **Wind Rider** (named 2026-10-10; it was Wingrace, renamed
+everywhere, storage keys included; the landing page's logo reads "WindRider").
+
 Wind Rider is a browser wingsuit racer in the style of Superflight, with
 multiplayer races. Every course is a seeded racing line through floating
 islands (same seed, same map) with crystal gates, pine forests and a sea of
@@ -217,6 +220,40 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Wind Rider, Cinzel and Philosopher, a quieter start (Claude)
+
+Asked for by the UX group, on `shiyu-tutorial`.
+
+- **Name:** the game is Wind Rider (title, tab, no-WebGL page, README, this
+  file); the landing page's title is the logo and reads "WindRider". Internal
+  names too, since nothing was live: localStorage `windrider.*`, shader cache
+  keys, the dev log prefix. Browsers start fresh (a new guest id, default
+  settings, the newcomer question again). This replaces the rename entry
+  below, which kept the `wingrace` keys (decided by the UX group: never in
+  production, so nothing to keep).
+- **Fonts** (`main.tsx`, `index.css`): headings (`h1`, `h2`) in Cinzel
+  (`--font-display`, carved capitals, a little open tracking), everything
+  else in Philosopher (`--font-body`; it only has 400 and 700, so 500 shows
+  as 400 and 600 or more as 700). Numbers that change as you watch keep Plus
+  Jakarta Sans (`--font-numbers`): Philosopher's digits differ in width even
+  with `tabular-nums` (1111 is 52 px, 8888 92 px), so clocks would jitter.
+  That's the race timer, speed, the countdown, standings, the ring marker's
+  distance, the "New in" countdowns, times on boards and results, the run's
+  score and stats. All bundled with `@fontsource`.
+- **Start button** (`ReadyCard`): only the button(s), on a glass pill, 6.5rem
+  from the top. The start button breathes a halo and a light sweeps across it
+  now and then (CSS only, off under reduced motion). The time trial's line of
+  text and the room's pilot count are gone.
+- **Mouse hint** removed (How to fly has Mouse control).
+- **Countdown, GO, Crashed** in the middle of the screen, in the theme's ink
+  (GO was green, Crashed red).
+- Tried and reverted: waiting for Enter after a crash. It changes gameplay
+  (the race clock keeps running while you wait), so it's for the team.
+- Verified: build, lint and the frontend tests (31) pass. In the app's
+  browser: the fonts in use (computed families, Philosopher loaded). A
+  comparison of six body fonts rendered in headless Chromium. Not checked:
+  phones.
+
 ### 2026-10-10: Key guide, newcomer question, overlays pause the game (Claude)
 
 Asked for by the UX group, on `shiyu-tutorial`: a "?" left of the settings
@@ -234,7 +271,7 @@ flight?" question for newcomers, and the game paused behind both.
   time trial, room or run, when the server has no finished run for the
   player (`/api/me` now returns `has_played`: by login, or by browser id for
   guests via `?client_id=`) and nothing was started or skipped in this
-  browser (`wingrace.tutorial` in localStorage, per user id). "Start with a
+  browser (`windrider.tutorial` in localStorage, per user id). "Start with a
   tutorial" opens How to fly for now (the interactive tutorial is next),
   "Skip tutorial" ends it. `/?tutorial` asks anyway, for demos.
 - **Overlays pause the game** (`game/hold.ts`, `Game.hold`): an open overlay
@@ -1924,6 +1961,8 @@ finale and the finish screen. What's open:
   steering, boost, brake and the mouse in the air; it replaces How to fly
   behind "Start with a tutorial" (`App.tsx`). The room's pilot list and last
   race, if missed, could go in the pause overlay.
+- Decide with the team: after a crash, wait for Enter before flying on?
+  Playtesters can't react to the instant respawn; the cost is race time.
 - The gamepad can't press Enter (start a run, answer the overlays) or pause;
   `Backspace` abandons a running time trial at once and isn't in How to fly.
 - Misclicks that throw a run away, to judge once the in-game UI is settled

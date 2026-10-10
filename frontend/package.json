@@ -11,7 +11,9 @@
     "test": "node --import ./tests/register.mjs --test tests/*.test.mjs"
   },
   "dependencies": {
+    "@fontsource-variable/cinzel": "^5.3.0",
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
+    "@fontsource/philosopher": "^5.3.0",
     "@tabler/icons-react": "^3.49.0",
     "lil-gui": "^0.21.0",
     "react": "^19.3.0",

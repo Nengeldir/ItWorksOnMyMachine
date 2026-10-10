@@ -127,7 +127,7 @@ function plantMaterial(sway: number, grass = false, grassGlow = 0, built: { spin
           totalEmissiveRadiance += diffuseColor.rgb * vGlow * floraGlow * floraLights;`,
       );
   };
-  material.customProgramCacheKey = () => `wingrace-flora-${grass}-${grassGlow}-${spin ? `${spin.y}${spin.upright ? "u" : ""}` : ""}`;
+  material.customProgramCacheKey = () => `windrider-flora-${grass}-${grassGlow}-${spin ? `${spin.y}${spin.upright ? "u" : ""}` : ""}`;
   return material;
 }
 

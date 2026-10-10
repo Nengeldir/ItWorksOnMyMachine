@@ -129,7 +129,7 @@ export function terrainMaterial(layers: Layers): { material: THREE.MeshLambertMa
         totalEmissiveRadiance += terrainGlowColor * vRock.a * terrainGlow;`,
       );
   };
-  material.customProgramCacheKey = () => "wingrace-terrain";
+  material.customProgramCacheKey = () => "windrider-terrain";
   return { material, uniforms };
 }
 

@@ -1665,7 +1665,7 @@ export class Game implements RunHost {
       this.slowFrames = 0;
       this.measured = 0;
       this.setQuality((this.quality - 1) as Quality);
-      if (import.meta.env.DEV) console.info(`[wind-rider] frame rate low, quality now ${this.quality}`);
+      if (import.meta.env.DEV) console.info(`[windrider] frame rate low, quality now ${this.quality}`);
     }
   }
 

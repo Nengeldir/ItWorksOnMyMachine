@@ -2,7 +2,7 @@
 // the tuning panel) and mesher worker no longer exist on the server. Loading one of them fails,
 // so the page reloads once to pick up the current build instead of hanging without land.
 
-const KEY = "wingrace:stale-reload";
+const KEY = "windrider:stale-reload";
 const RETRY_MS = 30_000;
 
 /** Reloads the page, unless it already did so in the last 30 s (then the file is really missing) */
