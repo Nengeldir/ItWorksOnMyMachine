@@ -2176,7 +2176,7 @@ Status: **done** = mechanics, models and animations in the game.
 | 14 | Tether of the Wind Spirit | A grappling hook of light to a nearby hoop or cliff, swinging you round it for a sharp turn | done |
 | 15 | Illusory Moth Cape | Intangible for 3 s: fly straight through rock | done |
 | 16 | Resonant Chimes | Passing a hoop while active sends a shockwave that widens the next hoop | done |
-| 17 | Crystallized Updraft | A trampoline of wind dropped on a surface: bounce off it for a big vertical boost | planned |
+| 17 | Crystallized Updraft | A trampoline of wind dropped on a surface: bounce off it for a big vertical boost | done |
 | 18 | Dusk-Weaver's Hourglass | Slows time for the world around you while you move at normal speed | planned |
 | 19 | Electro-Charged Prism | An electric aura: near misses throw chain lightning that scores bonus points | planned |
 | 20 | Tear of the Dragon | A heavy teardrop: while held, a rapid dive-bomb straight down to low hoops | planned |

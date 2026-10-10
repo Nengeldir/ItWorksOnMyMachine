@@ -5,7 +5,7 @@ import type { Avatar } from "../avatar";
 import type { Flight } from "../flight";
 import type { Particles } from "../particles";
 import { Kind, fx } from "../particles";
-import type { Items, RunItemId } from "../run/items";
+import { ITEM, type Items, type RunItemId } from "../run/items";
 import { ITEMS_FX } from "../tuning";
 import { Trail } from "../trail";
 import { buildItem, disposeItem } from "./models";
@@ -110,6 +110,11 @@ export class RelicFx {
     if(items.time("resonantChimes")>=0 && items.chimeTarget>=0){
       const gate=items.world?.course.rings[items.chimeTarget];
       if(gate)this.markers.add(gate.position,gate.normal,gate.radius+items.widening(items.chimeTarget),0.6 * ITEMS_FX.relics,0.025,2,GOLD);
+    }
+    if(items.time("crystalUpdraft")>=0){
+      this.markers.add(items.pad,UP,ITEM.padRadius,0.7 * ITEMS_FX.relics,0.05,2,GOLD);
+      at.copy(items.pad).addScaledVector(UP,2);
+      this.markers.add(at,UP,ITEM.padRadius*0.7,0.3 * ITEMS_FX.relics,0.02,3,ICE);
     }
     const kiteTime=items.time("stormKite");
     this.kite.visible=this.cord.visible=kiteTime>=0;
