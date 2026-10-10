@@ -5,6 +5,7 @@ import { holdGame } from "../game/hold";
 import { formatTime, ordinal, untilTomorrow } from "../format";
 import { controlsBlocked } from "../game/input";
 import { dailySeed } from "../game/rng";
+import { keyboardBinding } from "../game/bindings";
 import { webglAvailable } from "../game/webgl";
 import { BIOMES, type BiomeId } from "../game/world/biomes";
 import { RUN } from "../game/tuning";
@@ -49,7 +50,7 @@ function useHotkeys(keys: Record<string, () => void>) {
   const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
     const target = event.target as HTMLElement | null;
     if (event.defaultPrevented || controlsBlocked() || target?.isContentEditable || (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
-    const action = keys[event.code];
+    const action = keys[keyboardBinding(event)];
     if (!action || event.repeat) return;
     // Otherwise Enter would also click whichever button still has focus
     event.preventDefault();

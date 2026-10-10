@@ -124,9 +124,8 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/camera.ts` | Chase camera (`CAMERA` tuning): lag, partial horizon roll, FOV with speed, FOV kick on gates, shake when skimming; after a crash (`startFall`, `fall`) it arcs up over the pilot and looks down on the fall (`CAMERA.fall*`) |
 | `game/tuning.ts` | `ANIM`, `FX`, `RINGS`, `CAMERA`: every look constant, slider ranges, localStorage persistence |
 | `game/testPlayback.ts` | Test-only playback rate: the frame loop scales its delta, CSS animations/transitions follow through the Web Animations API, and a scoped observer handles new overlays; cleanup restores normal playback |
-| `game/input.ts` | Keyboard, pointer-lock mouse and gamepad. Items: Y/right mouse button use, U/wheel cycle; d-pad right/left. Test Shift+I gives items in design-list order; Shift+P/O/S retain portal, victory and playback controls. |
-
-| `game/input.ts` | Test-only Shift+P/O/S chords are consumed before ordinary bindings; keyboard, pointer-lock mouse, gamepad, the touch stick and buttons and tilt, merged into pitch and roll, plus actions (respawn, mute, barrel rolls). `observe` reports the merged flight input and actions to the tutorial via the session |
+| `game/input.ts` | Test-only Shift+P/O/S/I chords are consumed before ordinary bindings; keyboard, pointer-lock mouse, gamepad, the touch stick and buttons and tilt, merged into pitch and roll, plus actions (respawn, mute, barrel rolls). Keyboard characters follow the active layout through `bindings.ts`; held keys are released by physical code so modifier/layout changes cannot stick controls. Items use Y/right mouse button and U/wheel cycling; d-pad right/left, and test Shift+I grants items. `observe` reports the merged flight input and actions to the tutorial via the session |
+| `game/bindings.ts` | Defaults, key labels and reserved keys; `keyboardBinding` translates layout characters into saved binding identifiers for gameplay, panel/map shortcuts and rebinding. Letters ignore case, modifiers/keypad retain their positions, and `Char:` bindings support other printable characters. Existing `KeyA`/`Digit5` identifiers mean the displayed character |
 | `game/touch.ts` | Phones and tablets. `watchTouchMode()` keeps `html.touch` on while the player uses a finger (CSS shows touch UI and hides key hints by it: `.touch-only`, `.no-touch`). `TouchControls` (built by `Game`, plain DOM in the game view, styled in `components/Touch.css`): a stick that appears under the thumb anywhere on the canvas, Boost / Brake / dodge / Flap / Hover / Plunge / Gale buttons, Tilt / Respawn / Pause pills; it only writes `Input.touch*` and calls `Input.dispatchAction`. On the first finished tap it goes full screen and locks landscape (Android), and takes a screen wake lock |
 | `game/tilt.ts` | `tilt`, the one device-orientation sensor: `tiltAngles()` gets roll and lean from the direction of gravity (no jumps where the event's angles flip), `enable()` asks iOS for permission (from a tap), `recenter()` makes the current hold level flight. On/off is kept in `wingrace.tilt`, outside `Settings` (the in-game button owns it). `Input.sample` adds it to pitch and roll (`TILT_*` in `input.ts`) |
 | `game/pilots.ts` | Remote players and ghosts: interpolated samples driving an `Avatar` and `PilotFx` |
@@ -2658,6 +2657,11 @@ ported to the islands world:
   its surface (also present before the ribbon fix). Ribbon/coat and leg/cloth
   clearance do not resolve all body/coat intersections; inspect the torso
   contact before extending cloth self-collision.
+
+- Keyboard layouts: check the control feel on physical AZERTY, QWERTZ and
+  Dvorak keyboards. Automated regression and Firefox checks use explicit
+  layout character/physical-code pairs; an OS-level layout switch during
+  a real flight has not been playtested.
 
 - PR #33: visually verify the compass, toast and test-panel spacing on short
   screens; browser control failed during review with an API-key auth error.

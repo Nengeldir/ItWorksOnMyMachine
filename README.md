@@ -130,6 +130,10 @@ Open **Settings** from the main menu or the paused screen to change controls.
 Keyboard actions support a primary and an alternate key, with conflict detection
 and reset-to-default controls. Escape cancels rebinding or closes Settings;
 closing Settings returns to the paused screen. HUD hints reflect your bindings.
+Letters and symbols follow your active keyboard layout: press the displayed
+character wherever it is on your keyboard (including AZERTY, QWERTZ or Dvorak).
+Letter bindings ignore Shift and Caps Lock. Rebinding also supports characters
+such as `é` or `ü`; existing saved bindings keep their displayed letters.
 Menu/navigation keys, upgrade keys 1–4 and world-switching keys N/B/V are reserved.
 
 Mouse, keyboard and gamepad pitch can be inverted independently. Default mouse

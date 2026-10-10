@@ -14,7 +14,8 @@ test("held controls, repeat handling, focus loss and gamepad disconnect", () => 
   const actions = []; input.onAction = action => actions.push(action);
   const key = (code, type = "keydown", repeat = false) => {
     const e = new Event(type, {cancelable:true});
-    Object.defineProperties(e, {code:{value:code}, repeat:{value:repeat}});
+    const character = code.startsWith("Key") ? code.slice(3).toLowerCase() : code === "Space" ? " " : code.startsWith("Shift") ? "Shift" : code;
+    Object.defineProperties(e, {code:{value:code}, key:{value:character}, repeat:{value:repeat}});
     win.dispatchEvent(e); return e;
   };
   try {
