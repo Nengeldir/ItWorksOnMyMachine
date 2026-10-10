@@ -26,6 +26,8 @@ import {
   runOrder,
 } from "./run";
 import { type RunStats, UPGRADES, type Upgrade, type UpgradeId, baseStats, offer, statsFor } from "./upgrades";
+import { Collection } from "./collection";
+import type { Reward } from "../../profile/types";
 
 // One roguelike run, from the first level to the last portal: it loads each
 // biome, scores gates and style, keeps the lives, runs the
@@ -59,12 +61,15 @@ export interface RunHost {
   readonly pixelHeight: number;
   gateBurst(index: number): void;
   wingbeat(): void;
-  stinger(kind: "portal" | "upgrade" | "dash" | "gate" | "finish"): void;
+  stinger(kind: "portal" | "upgrade" | "dash" | "gate" | "finish" | "item"): void;
   /** The portal's hum, louder the nearer you are: 0..1 */
   portalHum(near: number): void;
 }
 
 export interface RunEvents {
+  /** Only real adventure sessions receive issued persistent rewards. */
+  rewards?: Reward[];
+  collected?(reward: Reward): void;
   /** The portal was entered: choose one of these */
   offer?(upgrades: Upgrade[], next: BiomeId | null): void;
   /** A new biome begins */
@@ -180,6 +185,11 @@ export class RunController {
   private sparkled = false;
   /** The last portal's cutscene */
   private finale: Finale | null = null;
+  private collection: Collection | null = null;
+  private readonly collected = (reward: Reward) => {
+    this.events.collected?.(reward);
+    this.host.stinger("item");
+  };
 
   /** `lives`: crashes before the run ends (Infinity: never, the test sandbox) */
   constructor(seed: number, host: RunHost, events: RunEvents, lives = START_LIVES) {
@@ -243,6 +253,7 @@ export class RunController {
     this.host.view.setRings("race", 0);
     this.abilities.setLevel(world);
     this.items.setLevel(world);
+    if (this.events.rewards) this.collection = new Collection(world, this.events.rewards.filter(r => r.level === this.level), this.host.scene);
     // The portal stands at the last gate
     const { course } = world;
     const finish = course.rings[course.rings.length - 1];
@@ -258,6 +269,8 @@ export class RunController {
   }
 
   private disposeLevel() {
+    this.collection?.dispose();
+    this.collection = null;
     this.portals.forEach((p) => p.dispose());
     this.portals = [];
   }
@@ -324,6 +337,7 @@ export class RunController {
     if (this.phase !== "explore" && this.phase !== "arrive") return;
     if (!this.items.frozenCombo) this.levelTime += dt;
     this.abilities.worldRate=this.items.worldRate;
+    this.collection?.step(prevPosition, flight.position, this.collected, this.host.particles);
     this.abilities.step(dt, input, proximity, flight, m);
     const pickups = this.items.cue.pickup, full = this.items.cue.full;
     this.items.step(dt, input, proximity, flight, m);
@@ -559,6 +573,7 @@ export class RunController {
 
   frame(dt: number) {
     const { camera, particles } = this.host;
+    this.collection?.frame(dt, camera.position, this.phase === "explore" || this.phase === "arrive", particles);
     this.phaseTime += dt;
     if (this.toast && (this.toastTime -= dt) <= 0) this.toast = null;
     if (this.stats.flap > 0) this.stamina = Math.min(2 + this.stats.flap, this.stamina + dt / 9);

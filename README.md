@@ -103,15 +103,13 @@ on Android the first tap goes full screen and turns the screen for you.
 | Touch                     | Action                                             |
 | :------------------------ | :------------------------------------------------- |
 | Drag anywhere on the view | A stick appears under your thumb: pitch and turn   |
-| **Tilt**                  | Steer by tilting the device instead: turn it like a wheel to bank, lean it away to dive. Level is how you hold it when you turn Tilt on or resume from pause. Needs an https page; iOS asks for permission |
 | Hold **Boost** / **Brake** | Boost / air brake                                 |
 | `‹` `›`                   | 5 m sideways dodge                                 |
 | **Flap** / **Hover** / **Plunge** / **Gale** | Tap to use the adventure ability once you have its upgrade |
 | **Respawn**, **Pause**    | As `R` and `P`                                     |
 
-Tilt sensitivity and "Invert touch and tilt up / down" are in Settings.
-The tutorial follows touch and tilt as well as keys and gamepad. Tilt works
-on either side of a flat hold; enabling it or resuming calibrates both axes.
+"Invert touch up / down" is in Settings. The tutorial follows touch as well
+as keys and gamepad.
 In test mode, touch buttons open a portal, preview victory and change speed.
 
 Pitch can be inverted in the menu. Diving turns height into speed, climbing
@@ -341,6 +339,15 @@ you can't see, nor fly through rock you can. Open the game with `?tune`
 flight physics, the pilot's animation, trails and particles, the crystal gates,
 the camera and the render quality. Look tweaks are remembered in the browser;
 physics tweaks aren't, so they can't follow you into a race.
+Effects exposes `wingGrainSize`, `wingGrainLight` and `wingPuffSize` for fine
+wing dust and compact downstroke puffs. `rollSparkles` adjusts the golden
+barrel-roll arcs; `boostSparkles` adjusts the gold dust and ivory slivers
+swept behind the wings during boost. `bloomHalo` controls the widest glow
+layers independently of bloom strength and radius, keeping light edges defined.
+Cosmetics exposes `wingParticleSize` for the decorated wings' tiny accents.
+Collection pickups exposes crystal size, mote rate and mote distance; Run
+exposes `portalFlash` for crossing sparkles and screen brightening. Crystal
+pickups have a fixed 5.2 m collection radius (treasures: 3.2 m).
 
 **Looks** ([`frontend/src/game/avatar.ts`](frontend/src/game/avatar.ts) and
 friends): the pilot is a cel-shaded little flyer with outlines, a cape, a scarf
@@ -367,10 +374,32 @@ finish time has to match its own clock within 3 s, and nothing under 25 s
 counts. That stops casual cheating, not a determined cheater, since the server
 doesn't fly the course itself.
 
+## Saved adventure profile
+
+**Profile & inventory** in the menu shows your level, XP, crystals, items,
+cosmetics, wings and pets. Collect crystals near hoops and rarer discoveries farther
+beside them during Adventure. Rewards save immediately to your existing login's
+profile in SQLite. Pause an adventure to inspect the inventory; equip collected
+cosmetics or a companion, and preview every model. Races and test mode grant no
+profile rewards. [Progression, rarity distances and API](docs/adventure-profile.md)
+describes spawn rates, the XP curve, duplicate conversion and persistence.
+
+In test mode (`/?test`), **Try items, pets & cosmetics** opens an unsaved fitting
+room for every model, with front/back previews, flight trials, item animations
+and firework controls. All eight existing pets are included; no-companion is an
+unequip action. Equipped pets lead through hoops along the autopilot rail.
+Wings include feather, wind, ocean, ice, phoenix, storm and constellation designs;
+capes have distinct embroidered hems.
+
 ## Project Structure
 
 | Path                                   | Purpose                                                  |
 | :------------------------------------- | :------------------------------------------------------- |
+| `backend/profiles.py`                  | Persistent adventure profiles, inventory, issued rewards and XP |
+| `frontend/src/profile/`               | Profile API client, types and durable pickup outbox       |
+| `frontend/src/game/run/collection.ts` | Hoop-distance rarity, terrain-safe pickups and collection models |
+| `frontend/src/game/cosmetics/`, `game/pets/` | Toon outfits, decorated wing fans and animated hoop guides |
+| `frontend/src/components/ProfilePanel.tsx`, `CollectionPreview.tsx`, `TestCollectionPanel.tsx` | Profile, inventory, equip controls, preview and unsaved test fitting room |
 | `backend/app.py`                       | API endpoints, login headers, solo runs                  |
 | `backend/rooms.py`                     | Rooms, race state machine, SSE listeners, tick loop      |
 | `backend/store.py`                     | SQLite runs, leaderboards and ghosts                     |
@@ -378,7 +407,7 @@ doesn't fly the course itself.
 | `backend/tests/`                       | pytest tests for rooms and the API                       |
 | `frontend/src/game/Game.ts`            | The game: loop, physics steps, race state, HUD data      |
 | `frontend/src/game/input.ts`           | Input, actions and shared keyboard bindings (including pause) |
-| `frontend/src/game/touch.ts`, `tilt.ts` | Phones and tablets: on-screen stick and buttons, tilt steering |
+| `frontend/src/game/touch.ts`           | Phones and tablets: on-screen stick and buttons          |
 | `frontend/src/game/world/`             | Racing line, rock field, meshing workers, palettes, view |
 | `frontend/src/game/world/meshCleanup.ts` | Preserves compact stones, removes closed slivers and trims narrow tips; protects chunk borders |
 | `frontend/src/game/world/landCollider.ts` | Collisions with the land exactly as drawn             |

@@ -13,7 +13,7 @@ export default function Controls({settings,onSettings}: {settings:Settings;onSet
     <li>Adventure items: {label("useItem")} (or the right mouse button) uses the lit item in your bag · {label("nextItem")} (or the mouse wheel) picks the next.</li>
     <li>{label("respawn")} respawn · {label("mute")} mute · {label("pause")} pause.</li>
     <li>Steering banks up to 80°. Escape frees the mouse.</li>
-    <li>Touch screens: drag anywhere to steer, or turn on Tilt and steer by tilting; buttons for the rest.</li>
+    <li>Touch screens: drag anywhere to steer; buttons for the rest.</li>
   </ul><button onClick={()=>setOpen(true)}>Settings</button>
   {open && <SettingsPanel settings={settings} onSettings={onSettings} onClose={()=>setOpen(false)} />}</div>;
 }

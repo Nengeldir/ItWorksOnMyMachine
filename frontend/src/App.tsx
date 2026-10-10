@@ -4,6 +4,7 @@ import GameScreen from "./components/GameScreen";
 import { randomSeed } from "./game/rng";
 import { FirstFlight } from "./components/Help";
 import Menu from "./components/Menu";
+import { profileClient } from "./profile/client";
 import { type Screen, screenFromSearch, urlFor } from "./route";
 import {
   type Settings,
@@ -20,6 +21,7 @@ export type { Screen } from "./route";
 const screenFromUrl = (): Screen => screenFromSearch(location.search, Boolean(loadSettings().nickname));
 
 const App = () => {
+  useEffect(() => { void profileClient.initialize(); }, []);
   const [screen, setScreen] = useState<Screen>(screenFromUrl);
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [me, setMe] = useState<User | null>(null);

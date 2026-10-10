@@ -1,0 +1,43 @@
+.profile-dialog { width: min(960px, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); border: 1px solid var(--ink-12); border-radius: 26px; padding: 1.5rem; color: var(--ink); overflow: auto; }
+.profile-dialog::backdrop { background: #14203a80; backdrop-filter: blur(8px); }
+.profile-header, .profile-stats, .profile-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.profile-header h2 { margin: .2rem 0 .8rem; }
+.profile-header button { flex-shrink: 0; }
+.profile-stats { justify-content: flex-start; flex-wrap: wrap; padding: .8rem 0; }
+.profile-stats strong, .profile-flight span { display: inline-flex; align-items: center; gap: .4rem; }
+.profile-xp { display: grid; gap: .35rem; margin-bottom: 1rem; }
+.profile-xp progress, .profile-flight progress { width: 100%; height: .5rem; accent-color: #ad859e; }
+.profile-toolbar { flex-wrap: wrap; padding: .6rem 0 1rem; }
+.profile-toolbar [role="tablist"] { display: flex; flex-wrap: wrap; gap: .35rem; }
+.profile-toolbar [aria-selected="true"] { background: var(--ink); color: white; }
+.profile-toolbar label { display: flex; gap: .4rem; align-items: center; font-size: .8rem; }
+.profile-body { display: grid; grid-template-columns: 1fr 250px; gap: 1rem; }
+.inventory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: .7rem; align-content: start; max-height: 440px; overflow: auto; padding: .25rem; }
+.inventory-entry { display: flex; flex-direction: column; align-items: flex-start; gap: .3rem; border: 1px solid; min-height: 130px; text-align: left; padding: .7rem; background: var(--ink-06); }
+.inventory-entry.locked { background: transparent; }
+.inventory-entry[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 1px; }
+.inventory-entry small { font-size: .68rem; text-transform: capitalize; color: var(--ink-70); }
+.inventory-entry span:last-child { display: inline-flex; align-items: center; gap: .25rem; font-size: .7rem; }
+.inventory-symbol { font-size: 1.5rem; color: var(--ink-70); }
+.inventory-detail { background: var(--ink-06); border-radius: 20px; text-align: center; padding: 1rem; align-self: start; }
+.inventory-detail h3 { margin: .5rem 0; }
+.inventory-detail p, .profile-dialog footer { font-size: .8rem; color: var(--ink-70); }
+.inventory-detail small { display: block; margin-top: .7rem; font-size: .72rem; }
+.collection-preview { height: 190px; width: 100%; display: grid; place-items: center; overflow: hidden; }
+.collection-preview canvas { display: block; }
+.inventory-empty { grid-column: 1 / -1; }
+.profile-empty { padding: 2rem 0; }
+.profile-flight { position: absolute; right: 1rem; top: 5rem; z-index: 5; width: 170px; padding: .65rem .8rem; border-radius: 18px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem; font-size: .78rem; }
+.profile-flight small { width: 100%; font-size: .65rem; }
+.profile-flight button { width: 100%; padding: .35rem; }
+.collection-notice { position: absolute; left: 50%; bottom: 6rem; transform: translateX(-50%); max-width: min(500px, 85vw); border-radius: 18px; padding: .8rem 1.1rem; z-index: 12; text-align: center; font-size: .85rem; pointer-events: none; animation: collection-arrive .45s ease-out; }
+.collection-notice.level-up { border: 1px solid #dcb565; box-shadow: 0 0 26px #e3bf7140; }
+@keyframes collection-arrive { from { opacity: 0; transform: translate(-50%, 12px) scale(.94); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
+.menu-inventory { position: fixed; top: 1.5rem; left: 1.5rem; padding: .7rem 1rem; border-radius: 18px; }
+@media (max-width: 650px) { .profile-dialog { padding: 1rem; width: calc(100vw - 1rem); max-height: calc(100dvh - 1rem); } .profile-body { grid-template-columns: 1fr; } .inventory-detail { grid-row: 1; } .collection-preview { height: 150px; } .inventory-grid { max-height: 300px; grid-template-columns: repeat(2, 1fr); } .inventory-entry { min-height: 115px; } .profile-flight { top: auto; bottom: 1rem; right: .5rem; width: 130px; } .collection-notice { bottom: 11rem; } .menu-inventory { top: .75rem; left: .75rem; } }
+@media (prefers-reduced-motion: reduce) { .collection-notice { animation: none; } }
+.collection-preview:not([data-unavailable]) .preview-error { display: none; }
+.profile-flight { pointer-events: none; }
+.profile-flight.paused { pointer-events: auto; }
+/* Keep the profile away from the centred flight bars on narrow screens. */
+@media (max-width: 650px) { .profile-flight { top: 5rem; bottom: auto; width: 105px; padding: .5rem; font-size: .7rem; } }

@@ -68,3 +68,16 @@ These are visual fixtures, not recorded flights; reload the normal test URL to
 resume play. `window.__itemShot(id)` is the equivalent console helper. The dev
 fixture signals completion with `document.body.dataset.itemShot`; it is absent
 from the production build. `/?gallery` shows every model without terrain.
+
+## Collection fitting room
+
+Choose **Try items, pets & cosmetics** in the test panel. All 65 model choices
+are available offline: thirty-one carried items, capes, hats, shoes, wings and all
+eight pets. Inspect front/back previews, try a style in flight, carry/use an item,
+light the firework, put it away, unequip a companion or restore your profile look.
+Flight pauses while the dialog is open; closing resumes only if it was flying
+beforehand. The selected pet leads along the autopilot rail through hoops.
+
+This changes only the current test Game. It saves no appearance, inventory,
+crystals or XP and bypasses no profile ownership checks. Normal explore and
+adventure modes cannot call these sandbox controls.

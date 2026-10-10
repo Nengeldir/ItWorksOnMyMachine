@@ -1,7 +1,6 @@
 import type { FlightInput } from "./flight";
 import { clamp } from "./math";
 import { DEFAULT_BINDINGS, type Bindings, type BindingAction } from "./bindings";
-import { tilt } from "./tilt";
 export { keyLabel } from "./bindings";
 
 export interface ControlSettings {
@@ -9,9 +8,8 @@ export interface ControlSettings {
   mouseSensitivity: number; // 0.3..6, 2 = default
   invertMouse?: boolean;
   invertGamepad?: boolean;
-  /** The touch stick and tilting: up / top away from you climbs instead of diving */
+  /** The touch stick: up climbs instead of diving */
   invertTouch?: boolean;
-  tiltSensitivity?: number; // 0.4..2.5, 1 = default
   bindings?: Bindings;
   deadZone?: number;
   reducedMotion?: boolean;
@@ -47,24 +45,14 @@ function deadZone(value: number, threshold = 0.12): number {
   return (value - Math.sign(value) * threshold) / (1 - threshold);
 }
 
-// Tilting the phone: how far is full deflection, and how much of it around level does nothing
-const TILT_ROLL = 0.5; // radians, about 29°
-const TILT_PITCH = 0.36; // about 21°
-const TILT_DEAD = 0.035; // about 2°
-
-function tiltAxis(angle: number, full: number, sensitivity: number): number {
-  const beyond = Math.max(0, Math.abs(angle) - TILT_DEAD);
-  return clamp((Math.sign(angle) * beyond * sensitivity) / (full - TILT_DEAD), -1, 1);
-}
-
 function isTyping(event: KeyboardEvent): boolean {
   const target = event.target as HTMLElement | null;
   return !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
 }
 
 /**
- * Keyboard, mouse (pointer lock), gamepad, the touch stick and buttons
- * (`TouchControls`) and tilting the phone (`tilt`), merged into pitch and roll.
+ * Keyboard, mouse (pointer lock), gamepad and the touch stick and buttons
+ * (`TouchControls`), merged into pitch and roll.
  * Flight-stick convention by default: forward / W / mouse up dives.
  */
 export class Input {
@@ -123,8 +111,9 @@ export class Input {
     return () => { this.observers.delete(observer); };
   }
 
-  dispatchAction(action: InputAction) {
-    if (controlsBlocked() || !document.hasFocus()) return;
+  /** `touched`: from a finger on the page, which needs no focus check (some phone browsers report none) */
+  dispatchAction(action: InputAction, touched = false) {
+    if (controlsBlocked() || (!touched && !document.hasFocus())) return;
     for (const observer of this.observers) observer.action?.(action);
     this.onAction?.(action);
   }
@@ -233,7 +222,9 @@ export class Input {
   }
 
   sample(dt: number): FlightInput {
-    if (controlsBlocked() || !document.hasFocus()) { this.reset(); return { pitch: 0, roll: 0, boost: 0, brake: 0, use: 0 }; }
+    // A finger on the stick or a button is on this page, whatever the browser says about focus
+    const touched = this.touchBoost || this.touchBrake || this.touchX !== 0 || this.touchY !== 0;
+    if (controlsBlocked() || (!touched && !document.hasFocus())) { this.reset(); return { pitch: 0, roll: 0, boost: 0, brake: 0, use: 0 }; }
     const recenter = Math.exp(-dt * 3.5);
     this.stickX *= recenter;
     this.stickY *= recenter;
@@ -247,11 +238,6 @@ export class Input {
     const touchSign = this.settings.invertTouch ? -1 : 1;
     pitch += this.touchY * touchSign;
     roll += this.touchX;
-    if (tilt.active) {
-      const sensitivity = this.settings.tiltSensitivity ?? 1;
-      roll += tiltAxis(tilt.roll, TILT_ROLL, sensitivity);
-      pitch += tiltAxis(tilt.pitch, TILT_PITCH, sensitivity) * touchSign;
-    }
 
     let boost = this.touchBoost ? 1 : this.key("boost");
     let brake = this.touchBrake ? 1 : this.key("brake");
