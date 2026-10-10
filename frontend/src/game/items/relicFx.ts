@@ -6,6 +6,7 @@ import type { Particles } from "../particles";
 import { Kind, fx } from "../particles";
 import type { Items, RunItemId } from "../run/items";
 import { ITEMS_FX } from "../tuning";
+import { Trail } from "../trail";
 import type { Equipment } from "./equip";
 
 const GOLD = new THREE.Color("#ffe5a0");
@@ -16,6 +17,7 @@ const UP = new THREE.Vector3(0, 1, 0);
 export class RelicFx {
   readonly group = new THREE.Group();
   private readonly markers = new RingQuads(64, false);
+  private readonly ribbon = new Trail("#d6c5fa", { width: 0.3, shimmer: 0.5, length: 1.2 });
   private debt = 0;
   private phoenix = 0;
   private readonly avatar: Avatar;
@@ -23,7 +25,7 @@ export class RelicFx {
   private readonly particles: Particles;
   constructor(avatar: Avatar, equipment: Equipment, particles: Particles) {
     this.avatar = avatar; this.equipment = equipment; this.particles = particles;
-    this.group.add(this.markers.mesh);
+    this.group.add(this.markers.mesh, this.ribbon.mesh);
   }
   used(id: RunItemId) { void id; }
   update(dt: number, items: Items, flight: Flight, flying: boolean) {
@@ -63,8 +65,11 @@ export class RelicFx {
       vel.copy(UP).multiplyScalar(0.8);
       this.particles.emit(at, vel, fx(0.8, 0.18, GOLD, Kind.Firefly, 0, 1, 1.2));
     }
+    this.avatar.capeTip(at);
+    this.ribbon.push(at, flight.right);
+    this.ribbon.opacity = items.time("silkRibbon") >= 0 ? 0.7 * ITEMS_FX.relics : 0;
     this.markers.end();
   }
   hide() { this.group.visible = false; }
-  dispose() { this.markers.dispose(); this.group.removeFromParent(); }
+  dispose() { this.ribbon.dispose(); this.markers.dispose(); this.group.removeFromParent(); }
 }

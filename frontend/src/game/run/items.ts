@@ -18,6 +18,8 @@ export const ITEM = {
   conchTime: 8,
   phoenixGrace: 2,
   phoenixSpeed: 36,
+  ribbonTime: 10,
+  ribbonTurn: 2.1,
   bag: 3, // items carried at once
   // Anemo Catcher: a bottled updraft
   updraftTime: 1.6, // seconds
@@ -41,7 +43,7 @@ export const ITEM = {
   fireWobble: 0.45, // how hard it yanks the controls about
 };
 
-export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather";
+export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon";
 
 /** How an item saved the pilot from a hit */
 export type ItemSave = "starflake";
@@ -77,12 +79,14 @@ export const RUN_ITEMS: readonly RunItemInfo[] = [
   { id: "spiritLantern", model: "spiritLantern", name: "Spirit Lantern", icon: "🏮", rarity: 1, charges: 1, description: "Light the lantern for 15 seconds to reveal and collect hidden ghost gates worth 500 points." },
   { id: "echoConch", model: "echoConch", name: "Echoing Conch", icon: "🐚", rarity: 0, charges: 1, description: "A sonar song highlights a safe route through the next three gates." },
   { id: "phoenixFeather", model: "phoenixFeather", name: "Feather of the Great Phoenix", icon: "🔥", rarity: 3, charges: 1, auto: true, description: "Carried charm: a crash consumes the feather and revives you in mid-air with two seconds of protection." },
+  { id: "silkRibbon", model: "silkRibbon", name: "Cloud-Spun Silk Ribbon", icon: "🎀", rarity: 1, charges: 1, description: "Ten seconds of much tighter turns for threading narrow canyons." },
 ];
 
 export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.id === id)!;
 
 /** How long each item's effect lasts once used (seconds) */
 const DURATION: Record<RunItemId, () => number> = {
+  silkRibbon: () => ITEM.ribbonTime,
   phoenixFeather: () => ITEM.phoenixGrace,
   echoConch: () => ITEM.conchTime,
   spiritLantern: () => ITEM.lanternTime,
@@ -287,6 +291,7 @@ export class Items {
       }
     }
     this.previous.copy(flight.position); this.sampled = true;
+    if(this.active.has("silkRibbon")) mods.turn *= ITEM.ribbonTurn;
     // ITEM RULES
     // Anemo Catcher: the bottled updraft lifts the path and holds the speed while it lasts
     const updraft = this.time("anemoCatcher");
