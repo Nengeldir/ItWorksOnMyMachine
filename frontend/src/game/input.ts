@@ -100,7 +100,7 @@ export class Input {
     document.addEventListener("mouseup", this.onMouseUp);
     document.addEventListener("wheel", this.onWheel, { passive: true });
     document.addEventListener("pointerlockchange", this.onLockChange);
-    element.addEventListener("contextmenu", this.onContextMenu);
+    document.addEventListener("contextmenu", this.onContextMenu);
   }
 
   dispose() {
@@ -113,7 +113,7 @@ export class Input {
     document.removeEventListener("mouseup", this.onMouseUp);
     document.removeEventListener("wheel", this.onWheel);
     document.removeEventListener("pointerlockchange", this.onLockChange);
-    this.element.removeEventListener("contextmenu", this.onContextMenu);
+    document.removeEventListener("contextmenu", this.onContextMenu);
     if (document.pointerLockElement === this.element) document.exitPointerLock();
   }
 
@@ -206,7 +206,7 @@ export class Input {
   };
 
   private onContextMenu = (event: Event) => {
-    if (this.locked) event.preventDefault();
+    if (this.locked && event.target === this.element) event.preventDefault();
   };
 
   private onMouseMove = (event: MouseEvent) => {
