@@ -254,8 +254,17 @@ like the poles in some maps become unlikely. A deliberate gameplay change
   spikes keep about the height that was drawn before. Ember seed 1: 0.5% of
   near-rock points are field-only rock (Sky Isles: 2%). Runs' levels change
   a little.
+- **Crash camera under overhangs**: when the sky over the pilot is blocked,
+  the fall camera now lowers its arc (70°, then 50, 30, 12) to the first
+  angle with a clear view instead of being pulled in against the pilot
+  (`CameraRig.fall`, `FALL_ANGLES`).
 - Race hashes: trees, dist and rings unchanged; mesh changed (new values in
   `docs/dev-snippets.js`).
+- Rebased onto `main` (`30f2d85`: the rebased Pengyue work and the new
+  flight controls) and merged into `Pengyue`; collisions keep the
+  `speed-control-v3` rules tag (not bumped: that would hide every v3 time).
+  The 20 frontend tests pass (run on Node 22.14 with an equivalent
+  `module.register` resolver; `tests/register.mjs` needs Node ≥ 22.15).
 - Verified: build and lint pass. In Chrome: crashes of every kind on Sky
   Isles through the mesh path (`land: true`), the measurements above,
   Glacier and Ember after the generation change; no console errors. Not
