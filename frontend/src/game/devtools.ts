@@ -1,3 +1,5 @@
+import * as THREE from "three";
+import { fieldNormal } from "./death";
 import type { Game } from "./Game";
 import { fxTime } from "./particles";
 import { raceLevel } from "./world/biomes";
@@ -153,7 +155,64 @@ export function installDevtools() {
     return { quality, cpu: summary(cpu), gpu: summary(gpu), ...info, pixels: `${g.renderer.domElement.width}x${g.renderer.domElement.height}` };
   };
 
-  Object.assign(window, { __shot: shot, __raceHashes: raceHashes, __run: run, __bench: bench });
+  /**
+   * Plays a crash for looking at its animation: finds rock near the start of
+   * the course that suits `kind` (a wall for "headfirst" and "wing", a slope
+   * for "slide"), flies the pilot into it through the real physics step (so
+   * the game classifies the crash itself), and stops `after` seconds into the
+   * crash. `pick` chooses another spot. Returns the kind the game chose.
+   */
+  const crash = async (kind: "headfirst" | "slide" | "wing" = "headfirst", after = 0.5, pick = 0) => {
+    const g = (window as unknown as { __game: Game }).__game as unknown as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    cancelAnimationFrame(g.frame);
+    const w = g.world;
+    const n = new THREE.Vector3();
+    const p = new THREE.Vector3();
+    const spots: { p: THREE.Vector3; n: THREE.Vector3 }[] = [];
+    for (let z = -40; z < 400 && spots.length < 200; z += 7) {
+      const c = w.course.pointAt(z);
+      for (let dx = -90; dx <= 90; dx += 6) {
+        for (let dy = -70; dy <= 20; dy += 6) {
+          p.set(c.x + dx, c.y + dy, z);
+          if (Math.abs(w.rock.distance(p.x, p.y, p.z)) > 1.5) continue;
+          fieldNormal((x, y, z) => w.distance(x, y, z), p, n);
+          const wall = Math.abs(n.y) < 0.25;
+          if ((kind === "slide" && n.y > 0.7) || (kind !== "slide" && wall)) spots.push({ p: p.clone(), n: n.clone() });
+        }
+      }
+    }
+    const spot = spots[pick % Math.max(1, spots.length)];
+    if (!spot) return { error: "no rock near the course for this kind" };
+    // Onto the surface, then aim at it the way this kind of crash needs
+    for (let i = 0; i < 30; i++) spot.p.addScaledVector(spot.n, -w.distance(spot.p.x, spot.p.y, spot.p.z));
+    const dir = new THREE.Vector3();
+    if (kind === "headfirst") dir.copy(spot.n).negate();
+    else if (kind === "slide") dir.set(0, 0, 1).addScaledVector(spot.n, -spot.n.z).normalize().addScaledVector(spot.n, -0.3).normalize();
+    else dir.crossVectors(THREE.Object3D.DEFAULT_UP, spot.n).normalize().addScaledVector(spot.n, -0.3).normalize();
+    g.flight.reset(spot.p.clone().addScaledVector(dir, -5), dir, 35);
+    g.crashedAt = null;
+    g.avatar.revive();
+    g.prevPosition.copy(g.flight.position);
+    g.prevQuaternion.copy(g.flight.quaternion);
+    g.rig.snap(g.flight.position, g.flight.forward, g.flight.up, 35);
+    // Steer into the wall with the wing for "wing": roll so the wall is to the side
+    const input = { pitch: 0, roll: 0 };
+    let t = performance.now();
+    let crashedAt: number | null = null;
+    for (let i = 0; i < 600; i++) {
+      t += 1000 / 60;
+      g.input.sample = () => input;
+      g.loop(t);
+      cancelAnimationFrame(g.frame);
+      if (g.crashedAt !== null && crashedAt === null) crashedAt = g.elapsed;
+      if (crashedAt !== null && g.elapsed - crashedAt >= after) break;
+      if (i % 6 === 0) await settle();
+    }
+    delete g.input.sample;
+    return { wanted: kind, played: g.death.kind, crashed: crashedAt !== null, normal: spot.n.toArray().map((v: number) => +v.toFixed(2)) };
+  };
+
+  Object.assign(window, { __shot: shot, __raceHashes: raceHashes, __run: run, __bench: bench, __crash: crash });
 }
 
 /**
