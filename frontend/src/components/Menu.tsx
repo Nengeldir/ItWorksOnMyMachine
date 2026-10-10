@@ -3,6 +3,7 @@ import { type LeaderboardEntry, type User, getLeaderboard } from "../api";
 import type { Screen } from "../App";
 import { randomRoomCode } from "../format";
 import { dailySeed, randomSeed } from "../game/rng";
+import { bestRun } from "../session/RunSession";
 import { type Settings, clientId } from "../storage";
 import Controls from "./Controls";
 import Leaderboard from "./Leaderboard";
@@ -46,7 +47,10 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
         <h1>
           Wing<span>race</span>
         </h1>
-        <p>Wingsuit races through floating islands. Thread the tunnels, skim the rock, beat your friends to the last ring.</p>
+        <p>
+          Wingsuit races through floating islands, and an adventure across eight biomes. Thread the tunnels, skim the
+          rock, beat your friends to the last ring.
+        </p>
       </header>
 
       <section className="menu-card pilot">
@@ -88,6 +92,19 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
         <button className="primary" onClick={() => go({ kind: "room", code: randomRoomCode() })}>
           Create a room
         </button>
+      </section>
+
+      <section className="menu-card adventure">
+        <h2>Adventure</h2>
+        <p className="hint">
+          A roguelike run through eight biomes linked by portals. Pick an upgrade at every portal, do sidequests for
+          points, find the secret ways.
+        </p>
+        <button className="primary" onClick={() => go({ kind: "run", seed: daily })}>
+          Today's run <small>#{daily}</small>
+        </button>
+        <button onClick={() => go({ kind: "run", seed: randomSeed() })}>New random run</button>
+        {bestRun(daily) !== null && <p className="hint">Your best today: {bestRun(daily)!.toLocaleString()}</p>}
       </section>
 
       <section className="menu-card solo">

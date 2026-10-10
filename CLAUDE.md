@@ -73,7 +73,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | Path | What it does |
 | :--- | :--- |
 | `game/Game.ts` | The game: frame loop, fixed 120 Hz physics steps, race state, ring checks, HUD data, effects wiring (gate bursts, skim spray, gate motes), rendering with optional bloom, adaptive quality, the `?tune` panel |
-| `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only |
+| `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only. `FlightMods` (run upgrades: drag, sink, stall, proximity boost, dash boost, thermal lift, hover, glide lock) are only ever passed in run mode; `flap()` is a run ability |
 | `game/avatar.ts` | The pilot: a cel-shaded chibi flyer built from primitives (merged per body part, vertex-colored), a procedural cape and scarf (`Cloth`), two-segment feathered wings, and all its animation: bank lead spring, barrel rolls, flapping driven by effort, bobbing, cloth ripples, limb reactions. Also `createLabel` and `glowTexture` |
 | `game/toon.ts` | Toon material (3-band gradient, rim light tinted by the biome's sun, self-lit `glow` vertex attribute for trims and wingtips) and the inverted-hull ink outline. `TOON_LIGHT` is set per biome |
 | `game/pilotfx.ts` | Per-pilot effects: wingtip and cape ribbons, light motes, downstroke puffs, barrel-roll star spiral. Shared by you, other players and ghosts |
@@ -86,8 +86,9 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/pilots.ts` | Remote players and ghosts: interpolated samples driving an `Avatar` and `PilotFx` |
 | `game/ghost.ts` | Recording and decoding ghost runs (15 Hz) |
 | `game/effects.ts` | Crash debris (instanced tetrahedra) |
-| `game/audio.ts` | Synthesized wind and event sounds |
+| `game/audio.ts` | Synthesized wind and event sounds, run stingers (portal, upgrade, sidequest, item, dash) and the wingbeat whoosh |
 | `game/webgl.ts` | WebGL 2 availability check; `GameScreen` shows help if it's missing |
+| `game/run/` | The roguelike run. `run.ts`: run length, biome order from the run seed, portal destinations, scoring constants, `RunHud`. `upgrades.ts`: ten data-defined upgrades and the 3-of-N offer. `controller.ts`: `RunController` (levels, gates and chains, lives, abilities as `FlightMods`, sidequests, portals, upgrade pick, tunnel and palette cross-fade, HUD data). `quests.ts`: the sidequest framework (beacons, collect, chase, thread, rush, skim, thermals, rescue). `portal.ts`: portal (ring, swirling veil, beam) and the tunnel |
 | `game/devtools.ts` | Dev builds only: `__shot(view)` (freeze, stream the land around a fixed camera, render once) and `__raceHashes()` (the race map's determinism check) on `window` |
 | `game/math.ts` | `clamp`, `smoothstep`, `smin` (smooth minimum for distance fields) |
 | `game/world/terrain/` | Generator v2 (every biome but Sky Isles). `noise.ts`: seeded fbm, ridged multifractal, domain-warped ridges, terraces. `shapes.ts`: distance-field primitives with boxes, surface ids and grain (Island, NoiseIsland from 3D noise with tunnels, Mesa with ledges, Spire between two points, Slab, RockRing, Cap). `ground.ts`: the heightfield following the line (valley, hills, warped ridged mountains, terraces, crevasses, carved river channel, overhang noise on cliffs). `river.ts`: `Steps`, a valley floor stepping down in pools and falls, and the river in it (water distance for collisions). `field.ts`: `TerrainField`, ground + shapes as one field, `fill()` for whole blocks (same arithmetic as `distance()`). `recipes.ts`: gates and scenery from a biome's `LandRecipe`. `mesh.ts`: surface nets per LOD node, faces painted for the shader. `streamer.ts`: `LandStreamer`, the LOD octree (384/192/96 m nodes, 16 cells each). `material.ts`: the terrain shader |
@@ -101,9 +102,9 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/world/atmosphere.ts` | `ATMOSPHERE` light uniforms shared per biome; `atmospheric()` patches Lambert materials (sun-tinted haze matching the sky, valley mist, backlit rims, rock strata); `skyMaterial()` (gradient, HDR sun or moon disc and halo, painted clouds, twinkling stars at night) |
 | `game/world/WorldView.ts` | Meshes for a World, as its biome describes them: land streamed from the workers (Sky Isles' chunks, or a `LandStreamer` for v2 land), pines, the sea of clouds and cloud puffs, sky, gates. `ready` is false until the land near you has arrived |
 | `game/world/crystals.ts` | Crystal gates: instanced crystals (bob, spin, pass flare and burst in the shader), veil discs with the pass shockwave, light pillars over the next gate and the finish |
-| `session/` | Solo, room and explore sessions wiring a `Game` to the network and UI. `ExploreSession`: free flight through any biome (`/?explore=verdant&seed=2`), nothing saved |
+| `session/` | Solo, room, explore and run sessions wiring a `Game` to the network and UI. `ExploreSession`: free flight through any biome (`/?explore=verdant&seed=2`), nothing saved. `RunSession`: a roguelike run (`/?run=<seed>`), best score per run seed in localStorage |
 | `net/` | Server clock sync and the room connection (SSE down, POST up) |
-| `components/` | React screens: menu, HUD, lobby, results, controls |
+| `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, controls, and the run's HUD, title card and upgrade picker (`RunHud.tsx`) |
 
 Backend (`backend/`): `app.py` endpoints, `rooms.py` race state machine and
 15 Hz SSE relay, `store.py` SQLite runs and ghosts, `models.py` Pydantic models.
@@ -157,6 +158,52 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Milestone 4, the run loop (Claude)
+
+- **Runs** (`/?run=<seed>`, menu card "Adventure", daily run seed): eight
+  levels, Sky Isles first, Verdant second, the five middle biomes in an order
+  shuffled by the run seed, Aurora Summit last. Every level is
+  `runLevel(runSeed, level, biome)`. Three feathers; a crash costs one and
+  respawns you after your last gate; none left ends the run.
+- **Portals** (`run/portal.ts`): the main portal at the last gate leads to the
+  next biome on the run's order; a secret portal off the line opens when you
+  finish a sidequest and leads to another unseen biome with four (rarer)
+  choices. Each is a glowing ring, a swirling veil and a beam to steer by.
+  Flying in: a tunnel of rushing light fades in, the upgrade picker shows,
+  the next biome is built behind the tunnel, then the tunnel fades out while
+  the sky, sun, mist and fog cross-fade from the old palette to the new one.
+- **Upgrades** (`run/upgrades.ts`): ten, as data: Gale dash (Shift), Wingbeat
+  (Space, Sky-style stamina that refills at gates), Featherfall hover (hold
+  F), Glide lock, Daredevil (proximity boost), Gate magnet, Spare feather,
+  Streamline, Featherweight, Showoff. Three are offered per portal,
+  deterministic per run and level. Abilities reach the flight model only as
+  `FlightMods`, which only runs pass: with none, `Flight.step` is unchanged
+  (checked: the new and previous flight models agree exactly over 3000
+  steps of varied input).
+- **Score**: gates (100, times a chain of up to 5 gates in a row without a
+  crash), style (the proximity points; upgrades raise the multiplier's cap),
+  sidequest items and rewards, a level bonus plus points for every second
+  under par.
+- **Sidequests** (`run/quests.ts`), two per biome from its data, placed from
+  the level seed, always ahead of you and below the line: beacons (cairns,
+  ice bells, lanterns, ancient pillars), collect (seeds, stars, fallen
+  stars), chase (spirit birds, the manta, the spirit fox: a creature flies a
+  path ahead and you stay close), thread (needle tunnels, wind walls), rush
+  (a timed chain: outrun the eruption), skim (seconds low over the lagoon),
+  thermals (updrafts lift you in run mode), rescue (a stranded glider that
+  then flies off your wing).
+- **HUD**: score and chain, feathers, objectives with progress, a compass to
+  the nearest open portal, ability charges, upgrades, pop-ups, the level's
+  title card, the upgrade picker (keys 1 to 4) and a run summary with the
+  best score on that run seed (this browser; no backend changes).
+- Audio stingers for portals, upgrades, sidequests, items and dashes; a
+  wingbeat whoosh. `RUN` tuning group (tunnel fade, compass size, pop-ups).
+- Verified: build and lint pass; race hashes unchanged; a time trial still
+  counts down; in Chrome: a run's intro, HUD and compass, a ring and a cairn
+  scoring, a crash costing a feather, a portal into the tunnel, the picker,
+  and the arrival in Verdant Highlands with its title card. Not yet played
+  end to end by a person with a mouse.
 
 ### 2026-10-10: Milestone 3, part 2: every planned biome (Claude)
 
@@ -427,12 +474,15 @@ ported to the islands world:
 
 ## Next up
 
-**Resume here:** milestones 1 to 3 are done (all eight biomes exist). Next
-is milestone 4, the run loop: a run state machine (biome → portal → upgrade
-pick → next biome), portals, the upgrade picker, run score, sidequests (two
-per biome, already named in each biome's data), objectives HUD and compass.
-Races and time trials stay on Sky Isles.
+**Resume here:** milestones 1 to 4 are done. Next is milestone 5: polish and
+performance (knobs, audio, frame times per quality level in a focused window,
+day and night screenshots of every biome, README and this file).
 
+- Runs have only been driven by scripts in a hidden tab. Play one with a
+  mouse: check the chase pace, the secret portal's placement, and that every
+  sidequest is reachable in every biome.
+- The title card's CSS animation doesn't play in a hidden tab (screenshots
+  miss it); fine in a real window.
 - Sky Isles' faceted cloud puffs look like dark discs at night (Starlight
   mood). The race map's looks may change, but its colliders mustn't.
 - Giant mushrooms, trunks and rings are rock: they collide, as they should,
@@ -473,7 +523,7 @@ The first playable slice of the roguelike, in order. After each: commit to
    (depth tint, foam, sky reflection, sun glitter, skim spray), procedural
    trees (3+ species, wind sway, instanced, impostors far away), GPU grass and
    flowers near the camera, fireflies in shade. Then every other planned biome.
-4. **Run loop**: biome → portal → upgrade pick → next biome; portals (swirling
+4. **Run loop** (done): biome → portal → upgrade pick → next biome; portals (swirling
    veil, beam, tunnel transition cross-fading palettes); an upgrade picker (3
    of at least 6 data-defined upgrades: dash, hover, glide-lock, stamina flap,
    proximity boost, gate magnet; abilities go through the flight model behind

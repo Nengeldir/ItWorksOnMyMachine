@@ -16,7 +16,9 @@ import { clamp } from "./math";
 import { SpeedLines } from "./speedlines";
 import { TOON_LIGHT } from "./toon";
 import { FX, RANGES, RINGS, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveTuning } from "./tuning";
-import { type Level, raceLevel } from "./world/biomes";
+import { RunController, type RunEvents, type RunHost } from "./run/controller";
+import type { RunHud } from "./run/run";
+import { type Level, levelId, raceLevel } from "./world/biomes";
 import type { WaterKind } from "./world/terrain/river";
 import { type WaterHit, World } from "./world/World";
 import { WorldView } from "./world/WorldView";
@@ -59,6 +61,8 @@ export interface Standing extends Participant {
 
 export interface HudState {
   seed: number;
+  /** The roguelike run, in run mode */
+  run: RunHud | null;
   biomeName: string;
   paletteName: string;
   speedKmh: number;
@@ -121,19 +125,19 @@ const surface = new THREE.Vector3();
 const waterHit: WaterHit = { distance: 0, level: 0, kind: "water" };
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
-export class Game {
+export class Game implements RunHost {
   private readonly container: HTMLElement;
   private readonly renderer: THREE.WebGLRenderer;
-  private readonly scene = new THREE.Scene();
+  readonly scene = new THREE.Scene();
   private readonly rig: CameraRig;
   private readonly input: Input;
   private readonly audio = new GameAudio();
-  private readonly flight = new Flight();
-  private readonly prevPosition = new THREE.Vector3();
+  readonly flight = new Flight();
+  readonly prevPosition = new THREE.Vector3();
   private readonly prevQuaternion = new THREE.Quaternion();
   private readonly avatar: Avatar;
   private readonly fx: PilotFx;
-  private readonly particles: Particles;
+  readonly particles: Particles;
   /** Particles that blend instead of glowing: snow, leaves, ash, mist */
   private readonly softParticles: Particles;
   private readonly ambient: Ambient;
@@ -157,8 +161,11 @@ export class Game {
   private ghosts: Pilot[] = [];
   private readonly clock: () => number;
   private readonly events: GameEvents;
-  private world!: World;
-  private view!: WorldView;
+  world!: World;
+  view!: WorldView;
+  /** The roguelike run, when this game is one (never in races) */
+  private run: RunController | null = null;
+  private frozen = false;
   private selfId = "";
   private startSlot: number | null = null; // place on the start grid, null = alone
   private participants: Participant[] = [];
@@ -171,7 +178,7 @@ export class Game {
   private readonly crashPoint = new THREE.Vector3();
   private proximity = 0;
   private smoothProximity = 0;
-  private style = 0;
+  style = 0;
   private combo = 0;
   private comboIdle = 0;
   private lastBeep = 0;
@@ -202,6 +209,7 @@ export class Game {
       if (action === "respawn") this.respawnNow();
       if (action === "mute") this.audio.toggleMute();
       if (action === "barrelLeft" || action === "barrelRight") this.barrelRoll(action === "barrelLeft" ? -1 : 1);
+      if ((action === "dash" || action === "flap") && this.crashedAt === null) this.run?.ability(action);
     };
     this.renderer.domElement.addEventListener("click", this.engage);
     // Audio may only start after a user gesture: take the first one, mouse or keyboard
@@ -249,6 +257,63 @@ export class Game {
 
   private startAudio = () => this.audio.start();
 
+  // --- the roguelike run (RunHost) ---------------------------------------------------
+
+  /** Turns this game into a roguelike run: levels, upgrades, portals (never used for races) */
+  startRun(seed: number, events: RunEvents) {
+    this.run?.dispose();
+    this.run = new RunController(seed, this, events);
+    this.run.start();
+  }
+
+  /** Holds the pilot on the start line until the player takes off */
+  holdRun(hold: boolean) {
+    this.freeze(hold);
+    if (!hold) {
+      this.respawn(0);
+      this.run?.takeOff();
+    }
+  }
+
+  /** The upgrade chosen at a portal */
+  pickUpgrade(id: Parameters<RunController["pick"]>[0]) {
+    this.run?.pick(id);
+  }
+
+  get camera(): THREE.PerspectiveCamera {
+    return this.rig.camera;
+  }
+
+  get hovering(): boolean {
+    return this.input.hovering;
+  }
+
+  respawnAt(checkpoints: number) {
+    this.respawn(checkpoints);
+  }
+
+  freeze(on: boolean) {
+    this.frozen = on;
+    this.accumulator = 0;
+  }
+
+  wingbeat() {
+    this.avatar.beat();
+    this.audio.flap();
+    const amount = Math.round(24 * this.particles.budget);
+    for (let k = 0; k < amount; k++) {
+      this.particles.emit(
+        at.copy(this.flight.position).addScaledVector(this.flight.right, rand(-1.6, 1.6)),
+        vel.copy(this.flight.up).multiplyScalar(-rand(2, 6)).add(tmp2.set(rand(-1, 1), rand(-1, 1), rand(-1, 1))),
+        fx(rand(0.5, 0.9), rand(0.3, 0.6), WHITE, Kind.Glow, 1, 2, 1.6),
+      );
+    }
+  }
+
+  stinger(kind: "portal" | "upgrade" | "quest" | "item" | "dash") {
+    this.audio.stinger(kind);
+  }
+
   /** Keeps the camera out of the rock */
   private clearance = (x: number, y: number, z: number) => this.world.rock.distance(x, y, z);
 
@@ -268,6 +333,12 @@ export class Game {
 
   /** Builds the world for a level and puts you at the start, flying freely */
   setLevel(level: Level) {
+    // Already built (a run's first level, handed to the constructor): just start over
+    if (this.world && levelId(this.world.level.key) === levelId(level.key) && this.world.level.run?.index === level.run?.index) {
+      this.style = 0;
+      this.freeFlight(true);
+      return;
+    }
     if (this.view) {
       this.scene.remove(this.view.group);
       this.view.dispose();
@@ -379,6 +450,7 @@ export class Game {
     this.input.dispose();
     this.audio.dispose();
     this.gui?.destroy();
+    this.run?.dispose();
     this.view.dispose();
     this.live.forEach((p) => this.removePilot(p));
     this.ghosts.forEach((p) => this.removePilot(p));
@@ -427,6 +499,11 @@ export class Game {
 
   private respawnNow() {
     if (this.raceState === "countdown") return;
+    if (this.run) {
+      if (this.run.frozen) return;
+      this.respawn(this.run.checkpoint);
+      return;
+    }
     this.respawn(this.raceState === "free" ? 0 : this.checkpoints);
   }
 
@@ -439,12 +516,14 @@ export class Game {
     this.crashBurst();
     this.audio.crash();
     this.combo = 0;
+    // In a run, a crash costs a feather; with none left the run is over and you stay down
+    if (this.run && !this.run.crashed()) this.crashedAt = Infinity;
   }
 
   private step(input: FlightInput) {
     this.prevPosition.copy(this.flight.position);
     this.prevQuaternion.copy(this.flight.quaternion);
-    this.flight.step(STEP, input, this.proximity * this.proximity);
+    this.flight.step(STEP, input, this.proximity * this.proximity, FLIGHT, this.run ? this.run.flightMods : null);
 
     const { x, y, z } = this.flight.position;
     const distance = this.world.distance(x, y, z);
@@ -466,6 +545,8 @@ export class Game {
     if (this.raceState === "racing") {
       this.recorder.record(this.clock() - this.startAt, this.flight.position, this.flight.quaternion);
       this.checkRing();
+    } else if (this.run) {
+      this.run.step(STEP, this.proximity);
     } else if (this.raceState === "free") {
       // No race, but flying through a gate still makes it shine
       const rings = this.world.course.rings;
@@ -486,7 +567,7 @@ export class Game {
   }
 
   private get multiplier(): number {
-    return 1 + Math.min(4, Math.floor(this.combo / 1.5));
+    return 1 + Math.min(this.run ? this.run.multiplierCap : 4, Math.floor(this.combo / 1.5));
   }
 
   /** Did the last step pass through the next ring? */
@@ -520,7 +601,7 @@ export class Game {
   }
 
   /** A gate was passed: it flares (WorldView), and shards, stars and light burst out of it */
-  private gateBurst(index: number) {
+  gateBurst(index: number) {
     const ring = this.world.course.rings[index];
     this.view.passRing(index);
     this.rig.kick();
@@ -704,7 +785,8 @@ export class Game {
 
     this.input0 = this.input.sample(dt);
     // Before a race, wait for the islands around you to show up: no flying into invisible rock
-    const waiting = !this.view.ready && this.raceState === "free";
+    // In a run, also while held in the tunnel between biomes
+    const waiting = (!this.view.ready && this.raceState === "free") || this.frozen;
     if (this.crashedAt !== null) {
       if (this.elapsed - this.crashedAt > RESPAWN_DELAY) this.respawnNow();
     } else if (this.raceState !== "countdown" && !waiting) {
@@ -749,6 +831,7 @@ export class Game {
     const camera = this.rig.camera;
     camera.updateMatrixWorld();
     this.view.update(camera, dt);
+    this.run?.frame(dt);
     this.gateMotes(dt);
     this.gateGlints(dt);
     const flying = !crashed && this.raceState !== "countdown" && !waiting;
@@ -783,6 +866,7 @@ export class Game {
           : null;
     return {
       seed: this.world.seed,
+      run: this.run ? this.run.hud() : null,
       biomeName: this.world.biome.name,
       paletteName: this.world.palette.name,
       speedKmh: Math.round(this.flight.speed * 3.6),

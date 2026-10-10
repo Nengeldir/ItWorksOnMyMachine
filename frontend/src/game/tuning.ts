@@ -98,7 +98,14 @@ export const WATER = {
   spray: 1, // spray when skimming the water, mist at the foot of falls
 };
 
-const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, WATER } as const;
+/** The roguelike run's looks (its rules live in run/run.ts and run/upgrades.ts) */
+export const RUN = {
+  tunnelFade: 1.4, // seconds to fade out of the tunnel into the next biome
+  compass: 1, // size of the portal compass
+  toasts: true, // pop-ups for points and sidequest progress
+};
+
+const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, WATER, RUN } as const;
 const DEFAULTS = JSON.parse(JSON.stringify(GROUPS)) as typeof GROUPS;
 const STORAGE_KEY = "wingrace.tuning";
 
@@ -200,6 +207,8 @@ export const RANGES: Record<string, [number, number, number?]> = {
   wind: [0, 4],
   glitter: [0, 4],
   spray: [0, 4],
+  tunnelFade: [0.3, 4],
+  compass: [0.5, 2],
   grassDistance: [40, 300, 5],
 };
 
@@ -211,4 +220,5 @@ export const TUNING_GROUPS: [string, Group][] = [
   ["Terrain", TERRAIN],
   ["Plants", FLORA],
   ["Water", WATER],
+  ["Run", RUN],
 ];

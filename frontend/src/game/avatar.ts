@@ -599,6 +599,11 @@ export class Avatar {
   }
 
   /** Spins a full barrel roll: 1 = to the right, -1 = to the left */
+  /** A wingbeat on demand (a run's flap ability): the wings at full effort for a moment */
+  beat() {
+    this.effort = 1;
+  }
+
   barrelRoll(dir: 1 | -1) {
     if (this.barrel.t >= 0) return;
     this.barrel = { t: 0, dir };

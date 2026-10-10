@@ -6,7 +6,8 @@ export interface ControlSettings {
   mouseSensitivity: number; // 0.25..3, 1 = default
 }
 
-export type InputAction = "respawn" | "mute" | "barrelLeft" | "barrelRight";
+/** One-off presses. dash and flap only do something in a roguelike run, with the upgrade */
+export type InputAction = "respawn" | "mute" | "barrelLeft" | "barrelRight" | "dash" | "flap";
 
 const DEAD_ZONE = 0.12;
 const DOUBLE_TAP_MS = 280;
@@ -82,6 +83,11 @@ export class Input {
     // Barrel rolls: Q / E, or double-tap a roll key
     if (event.code === "KeyQ") this.onAction?.("barrelLeft");
     if (event.code === "KeyE") this.onAction?.("barrelRight");
+    if (event.code === "ShiftLeft" || event.code === "ShiftRight") this.onAction?.("dash");
+    if (event.code === "Space") {
+      if (atGame) event.preventDefault();
+      this.onAction?.("flap");
+    }
     const roll = ROLL_KEYS[event.code];
     if (roll) {
       const now = performance.now();
@@ -117,6 +123,11 @@ export class Input {
     }
   };
 
+  /** Is the hover button held? (F, or the gamepad's B / circle) */
+  get hovering(): boolean {
+    return this.keys.has("KeyF") || !!this.padButtons[1];
+  }
+
   private key(...codes: string[]): number {
     return codes.some((code) => this.keys.has(code)) ? 1 : 0;
   }
@@ -140,6 +151,9 @@ export class Input {
       if (pressed[3] && !this.padButtons[3]) this.onAction?.("respawn");
       if (pressed[4] && !this.padButtons[4]) this.onAction?.("barrelLeft");
       if (pressed[5] && !this.padButtons[5]) this.onAction?.("barrelRight");
+      // A flaps, X dashes (B, held, hovers): runs only
+      if (pressed[0] && !this.padButtons[0]) this.onAction?.("flap");
+      if (pressed[2] && !this.padButtons[2]) this.onAction?.("dash");
       this.padButtons = pressed;
     }
 

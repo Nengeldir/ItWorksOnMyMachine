@@ -3,7 +3,12 @@ import type { Screen } from "../App";
 import { formatTime, ordinal } from "../format";
 import { webglAvailable } from "../game/webgl";
 import type { BiomeId } from "../game/world/biomes";
+import { RUN } from "../game/tuning";
+import { UPGRADES } from "../game/run/upgrades";
+import { BIOMES } from "../game/world/biomes";
 import { ExploreSession } from "../session/ExploreSession";
+import { RunSession } from "../session/RunSession";
+import { RunHud, TitleCard, UpgradePicker } from "./RunHud";
 import { RoomSession } from "../session/RoomSession";
 import { SoloSession } from "../session/SoloSession";
 import { type Settings, clientId } from "../storage";
@@ -247,6 +252,90 @@ const ExploreScreen = ({ biome, seed, settings, onExit }: ScreenProps & { biome:
   );
 };
 
+// --- Roguelike run ------------------------------------------------------------------
+
+const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps & { seed: number; onNewRun: () => void }) => {
+  const [session] = useState(() => new RunSession(seed, settings));
+  const ref = useMountedSession(session, settings);
+  const { hud, stage, offers, secret, next, arrived, summary, best, error } = useSyncExternalStore(session.store.subscribe, session.store.get);
+  const run = hud?.run ?? null;
+
+  useHotkeys({
+    Enter: () => {
+      if (stage === "intro") session.begin();
+      else if (stage === "summary") session.again();
+    },
+    KeyN: () => stage === "summary" && onNewRun(),
+  });
+
+  // The title card shows for the run's "arrive" phase, its first seconds in a biome
+  const showTitle = arrived && run?.phase === "arrive" && stage === "flying";
+
+  return (
+    <div className="game">
+      <div ref={ref} className="game-view" />
+      {hud && stage !== "pick" && <Hud hud={hud} />}
+      {run && stage !== "intro" && stage !== "summary" && stage !== "pick" && <RunHud run={run} compassScale={RUN.compass} />}
+      {showTitle && arrived && <TitleCard level={arrived.level} length={run!.length} biome={arrived.biome} />}
+      <TopBar
+        title={`Run #${seed}${run ? ` · level ${run.level}/${run.length} · ${run.biome} · ${run.mood}` : ""}`}
+        onExit={onExit}
+      />
+      {error && <div className="banner">{error}</div>}
+
+      {stage === "intro" && !error && (
+        <aside className="panel">
+          <h2>Run #{seed}</h2>
+          <p>
+            Fly through eight biomes, from Sky Isles to the Aurora Summit. Every level ends at a portal: fly into it
+            and choose an upgrade. Gates score more in a chain, skimming the land earns style, and each biome has two
+            sidequests. Finish one and a secret portal opens to another biome, with rarer gifts.
+          </p>
+          <p className="hint">
+            You have {3} feathers: each crash costs one. Abilities you pick up: <kbd>Shift</kbd> dash, <kbd>Space</kbd>{" "}
+            wingbeat, hold <kbd>F</kbd> to hover. The arrow at the top points to the portal.
+          </p>
+          {best !== null && <p>Your best on this run: {best.toLocaleString()}</p>}
+          <button className="primary" onClick={() => session.begin()}>
+            Take off <kbd>Enter</kbd>
+          </button>
+          <details>
+            <summary>Controls</summary>
+            <Controls settings={settings} onSettings={onSettings} />
+          </details>
+        </aside>
+      )}
+
+      {stage === "pick" && <UpgradePicker offers={offers} secret={secret} next={next} onPick={(id) => session.pick(id)} />}
+
+      {stage === "summary" && summary && (
+        <aside className="panel results">
+          <h2>{summary.won ? "The summit!" : "Out of feathers"}</h2>
+          <p>
+            <strong>{summary.score.toLocaleString()}</strong> points
+            {best === null || summary.score > best ? " · a new best on this run!" : ` · your best is ${best.toLocaleString()}`}
+          </p>
+          <p>
+            {summary.levels} of 8 biomes: {summary.path.map((b) => BIOMES[b].name).join(" → ")}
+          </p>
+          <p>
+            {summary.sidequests} sidequest{summary.sidequests === 1 ? "" : "s"} done
+            {summary.upgrades.length > 0 && <> · {summary.upgrades.map((id) => UPGRADES.find((u) => u.id === id)?.icon).join(" ")}</>}
+          </p>
+          <div className="row">
+            <button className="primary" onClick={() => session.again()}>
+              Fly it again <kbd>Enter</kbd>
+            </button>
+            <button onClick={onNewRun}>
+              New run <kbd>N</kbd>
+            </button>
+          </div>
+        </aside>
+      )}
+    </div>
+  );
+};
+
 /** Shown instead of the game when the browser can't create a WebGL context */
 const NoWebGL = ({ onExit }: { onExit: () => void }) => (
   <div className="game">
@@ -278,9 +367,10 @@ const NoWebGL = ({ onExit }: { onExit: () => void }) => (
   </div>
 );
 
-const GameScreen = ({ screen, ...props }: ScreenProps & { screen: Exclude<Screen, { kind: "menu" }> }) => {
+const GameScreen = ({ screen, onNewRun, ...props }: ScreenProps & { screen: Exclude<Screen, { kind: "menu" }>; onNewRun: () => void }) => {
   if (!webglAvailable()) return <NoWebGL onExit={props.onExit} />;
   if (screen.kind === "explore") return <ExploreScreen biome={screen.biome} seed={screen.seed} {...props} />;
+  if (screen.kind === "run") return <RunScreen seed={screen.seed} onNewRun={onNewRun} {...props} />;
   return screen.kind === "solo" ? (
     <SoloScreen seed={screen.seed} {...props} />
   ) : (
