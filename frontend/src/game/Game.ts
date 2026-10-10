@@ -4,6 +4,7 @@ import * as THREE from "three";
 import type { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import type { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { AbilityFx } from "./abilities/fx";
+import { AbilityFx2 } from "./abilities/fx2";
 import { Ambient } from "./ambient";
 import { Autopilot } from "./autopilot";
 import { GameAudio } from "./audio";
@@ -183,6 +184,8 @@ export class Game implements RunHost {
   private readonly equipment: Equipment;
   /** What the run's abilities look like (game/abilities/) */
   private readonly abilityFx: AbilityFx;
+  /** …and of the design list's abilities 11 to 20 */
+  private readonly abilityFx2: AbilityFx2;
   readonly particles: Particles;
   /** Particles that blend instead of glowing: snow, leaves, ash, mist */
   private readonly softParticles: Particles;
@@ -291,7 +294,7 @@ export class Game implements RunHost {
       if (this.autopiloting) return;
       if (action === "respawn") this.respawnNow();
       if (action === "barrelLeft" || action === "barrelRight") this.barrelRoll(action === "barrelLeft" ? -1 : 1);
-      if ((action === "flap" || action === "hover" || action === "plunge" || action === "burst") && this.crashedAt === null && !this.glide.active) this.run?.ability(action);
+      if ((action === "flap" || action === "hover" || action === "plunge" || action === "burst" || action === "resonance" || action === "ascend" || action === "stance") && this.crashedAt === null && !this.glide.active) this.run?.ability(action);
     };
     if (options.testMode) {
       this.testPlayback = new TestPlayback(container.parentElement ?? container);
@@ -330,6 +333,11 @@ export class Game implements RunHost {
     this.abilityFx = new AbilityFx(this.scene, this.avatar, this.particles, this.softParticles, {
       kick: (degrees) => this.rig.kick(degrees),
       sound: (kind) => this.audio.ability(kind),
+    });
+    this.abilityFx2 = new AbilityFx2(this.scene, this.avatar, this.particles, this.softParticles, {
+      kick: (degrees) => this.rig.kick(degrees),
+      sound: (kind, pitch) => this.audio.ability2(kind, pitch),
+      turnGate: (index, normal) => this.view.gates.orient(index, normal),
     });
     this.speedLines = new SpeedLines();
     this.debris = new Debris(options.color);
@@ -520,6 +528,8 @@ export class Game implements RunHost {
     this.inWormhole = on;
     this.view.group.visible = !on;
     this.abilityFx.group.visible = !on;
+    this.abilityFx2.group.visible = !on;
+    this.abilityFx.inWormhole = this.abilityFx2.inWormhole = on;
     this.softParticles.points.visible = !on;
     this.speedLines.mesh.visible = !on;
     if (on) this.debris.mesh.visible = false;
@@ -776,6 +786,7 @@ export class Game implements RunHost {
     this.ghosts.forEach((p) => this.removePilot(p));
     this.fx.dispose();
     this.abilityFx.dispose();
+    this.abilityFx2.dispose();
     this.equipment.dispose();
     this.avatar.dispose();
     this.particles.dispose();
@@ -886,8 +897,8 @@ export class Game implements RunHost {
     // drawn once it is on screen (before that, as the distance field), trees and water by their fields.
     // In a run, Acrobatic Recovery can turn a clipped wingtip into a roll away from the rock
     const part = this.hitTest(other, distance);
-    if (part && this.run?.abilities.canRecover(part) && this.recover()) {
-      // Rolled away
+    if (part && this.run && this.rescue(part)) {
+      // Rolled away, or the tornado took the hit
     } else if (part || this.world.lost(y, z)) {
       this.crash(part, this.hitLand);
       return;
@@ -926,11 +937,13 @@ export class Game implements RunHost {
   }
 
   /**
-   * Acrobatic Recovery (run mode): a wingtip clipped the rock. Glance off it,
-   * out of the rock, and barrel roll away from it. False if the pilot can't
-   * be got clear (then it's a crash after all)
+   * A run's abilities may save the pilot from a hit (run mode): Acrobatic
+   * Recovery (a wingtip clipped the rock: glance off it, out of the rock, and
+   * barrel roll away from it) or Draft-Weaving's tornado (a glancing hit:
+   * glance off it). False if no ability saves it, or the pilot can't be got
+   * clear (then it's a crash after all)
    */
-  private recover(): boolean {
+  private rescue(part: HitPart): boolean {
     const f = this.flight;
     if (this.hitLand) {
       hitPoint.copy(landHit.point);
@@ -939,7 +952,11 @@ export class Game implements RunHost {
       hitPoint.copy(hitLocal).applyQuaternion(f.quaternion).add(f.position);
       fieldNormal(this.field, hitPoint, normal);
     }
-    f.deflect(normal, ABILITY.recoverPush, ABILITY.recoverKeep);
+    const abilities = this.run!.abilities;
+    const how = abilities.save(part, normal, tmp.copy(f.velocity).normalize());
+    if (!how) return false;
+    if (how === "roll") f.deflect(normal, ABILITY.recoverPush, ABILITY.recoverKeep);
+    else f.deflect(normal, ABILITY.weavePush, ABILITY.weaveKeep);
     // Teleported out: no sweep from where we were, and a few more nudges if anything still touches
     for (let i = 0; ; i++) {
       this.prevPosition.copy(f.position);
@@ -950,9 +967,11 @@ export class Game implements RunHost {
       if (i === 4) return false;
       f.position.addScaledVector(normal, 0.5);
     }
-    Object.assign(this.recoverRoll, FLIGHT, { dodgeDistance: 3, dodgeDuration: 0.55 });
-    f.dodge(normal.dot(f.right) >= 0 ? 1 : -1, this.recoverRoll, true);
-    this.run!.abilities.recovered(hitPoint, normal);
+    if (how === "roll") {
+      Object.assign(this.recoverRoll, FLIGHT, { dodgeDistance: 3, dodgeDuration: 0.55 });
+      f.dodge(normal.dot(f.right) >= 0 ? 1 : -1, this.recoverRoll, true);
+    }
+    abilities.saved(how, hitPoint, normal);
     return true;
   }
 
@@ -1057,7 +1076,7 @@ export class Game implements RunHost {
     if (this.crashedAt !== null || this.raceState === "countdown" || this.frozen || !this.view.ready) return;
     // In a run, Wind-Shear Dash turns the dodge into a blink; never while hover-stalling
     const abilities = this.run?.abilities;
-    if (abilities && abilities.hang >= 0) return;
+    if (abilities && (abilities.hang >= 0 || abilities.ascend >= 0)) return;
     if (this.flight.dodge(dir, abilities ? abilities.dodgeParams() : FLIGHT)) abilities?.dodged(dir, this.flight);
   }
 
@@ -1366,6 +1385,7 @@ export class Game implements RunHost {
       this.drift(dt);
     } else if (!crashed) {
       this.abilityFx.pose(dt, this.run && !waiting ? this.run.abilities : null);
+      this.abilityFx2.pose(dt, this.run && !waiting ? this.run.abilities : null);
       this.avatar.setDodge(this.flight.dodgePhase);
       this.avatar.setSpeedControls(this.flight.boost, this.flight.brake);
       this.avatar.update(dt, this.flight.speed, this.smoothProximity);
@@ -1374,8 +1394,13 @@ export class Game implements RunHost {
       const moving = this.raceState !== "countdown" && !waiting;
       this.fx.update(dt, this.flight.speed, this.flight.velocity, this.smoothProximity, moving);
       this.skimSpray(dt);
-      if (this.run) this.abilityFx.update(dt, this.run.abilities, this.world, this.flight, this.rig.camera, this.passedGate, moving);
-      else this.abilityFx.hide();
+      if (this.run) {
+        this.abilityFx.update(dt, this.run.abilities, this.world, this.flight, this.rig.camera, this.passedGate, moving);
+        this.abilityFx2.update(dt, this.run.abilities, this.world, this.flight, this.rig.camera, this.passedGate, moving);
+      } else {
+        this.abilityFx.hide();
+        this.abilityFx2.hide();
+      }
       this.rig.update(
         dt,
         body.position,
@@ -1397,6 +1422,7 @@ export class Game implements RunHost {
       body.position.copy(this.death.position);
       body.quaternion.copy(this.death.quaternion);
       this.abilityFx.hide();
+      this.abilityFx2.hide();
       this.equipment.update(dt);
       this.deathEffects(dt);
       this.rig.fall(body.position, dt, this.field);
@@ -1450,6 +1476,10 @@ export class Game implements RunHost {
       else if (ability.id === "plunge") ability.key = bindingLabel(bindings, "plunge");
       else if (ability.id === "galeForce") ability.key = bindingLabel(bindings, "burst");
       else if (ability.id === "windShear") ability.key = `${bindingLabel(bindings, "barrelLeft")} / ${bindingLabel(bindings, "barrelRight")}`;
+      else if (ability.id === "resonance") ability.key = bindingLabel(bindings, "resonance");
+      else if (ability.id === "ascension") ability.key = bindingLabel(bindings, "ascend");
+      else if (ability.id === "aeroBrake") ability.key = bindingLabel(bindings, "brake");
+      else if (ability.id === "falcon" || ability.id === "butterfly") ability.key = bindingLabel(bindings, "stance");
     }
     return {
       seed: this.world.seed,

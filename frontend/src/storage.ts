@@ -17,6 +17,9 @@ export function defaultSettings(): Settings {
     reducedMotion: false, quality: "auto", musicVolume: 1, effectsVolume: 1, muted: false };
 }
 
+/** Keys handed to new actions whose default keys a player has already bound to something else */
+const SPARE_KEYS = ["KeyY", "KeyU", "KeyI", "KeyJ", "KeyK", "KeyL", "KeyO", "Digit5", "Digit6", "Digit7", "Digit8", "Digit9"];
+
 export function normalizeSettings(value: unknown): Settings {
   const defaults = defaultSettings();
   if (!value || typeof value !== "object" || Array.isArray(value)) return defaults;
@@ -29,17 +32,27 @@ export function normalizeSettings(value: unknown): Settings {
     const candidate = saved.bindings as Bindings;
     const used = new Set<string>();
     let valid = true;
-    // Actions added since these were saved keep their default keys, unless that would clash
-    const stored = (action: (typeof bindingActions)[number]) => candidate[action] === undefined ? bindings[action] : candidate[action];
-    for (const action of bindingActions) {
-      const codes = stored(action);
+    // The saved actions first
+    const savedActions = bindingActions.filter((action) => candidate[action] !== undefined);
+    for (const action of savedActions) {
+      const codes = candidate[action];
       if (!Array.isArray(codes) || codes.length < 1 || codes.length > 2) { valid = false; break; }
       for (const code of codes) {
         if (typeof code !== "string" || !bindable(code) || used.has(code)) valid = false;
         used.add(code);
       }
     }
-    if (valid) for (const action of bindingActions) bindings[action] = [...stored(action)];
+    if (valid) {
+      for (const action of savedActions) bindings[action] = [...candidate[action]];
+      // Actions added since these were saved keep their default keys, or a spare one where those are taken
+      for (const action of bindingActions) {
+        if (candidate[action] !== undefined) continue;
+        let codes = bindings[action].filter((code) => !used.has(code));
+        if (!codes.length) codes = SPARE_KEYS.filter((code) => !used.has(code)).slice(0, 1);
+        bindings[action] = codes;
+        codes.forEach((code) => used.add(code));
+      }
+    }
   }
   return { ...defaults, bindings,
     nickname: typeof saved.nickname === "string" ? saved.nickname.slice(0,24) : "",

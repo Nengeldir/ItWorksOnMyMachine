@@ -6,11 +6,12 @@ import type { Course, Ring } from "../world/course";
 import type { World } from "../world/World";
 import type { RunStats, UpgradeId } from "./upgrades";
 
-// The rules of the design list's first ten abilities (CLAUDE.md, "Items and
+// The rules of the design list's twenty abilities (CLAUDE.md, "Items and
 // abilities"), for runs only: the run controller hands them the flight state
 // every physics step and they answer with FlightMods (thrust, a dive, the
 // hover-stall), boost refills and points. What they look like is in
-// game/abilities/ (AbilityFx), which only reads this.
+// game/abilities/ (AbilityFx for the first ten, AbilityFx2 for the rest),
+// which only reads this.
 
 /** Ability physics and scoring. Shown in ?tune, not saved (like FLIGHT) */
 export const ABILITY = {
@@ -57,7 +58,72 @@ export const ABILITY = {
   hangCooldown: 7,
   hangLaunch: 0.8, // share of the speed going in, coming out…
   hangMinLaunch: 28, // …at least this
+  // Moth's Attraction: a gate passed near its heart
+  mothSurge: 14, // m/s at the very heart, less further out…
+  mothTop: 100, // …none above this speed
+  mothBullseye: 0.25, // share of the radius that counts as the heart
+  // Zenith Climber
+  zenithLonger: 1.2, // climbs keep their speed this much longer (gravity pulls back 1/1.2 as hard)
+  // Resonance
+  songRange: 260, // metres the wave reaches
+  songSpeed: 170, // m/s it rolls out
+  songCone: 42, // degrees either side of the nose
+  songCooldown: 6,
+  // Ley-Line Surger
+  leyGates: 5, // gates in a row…
+  leyGap: 7, // …each within this many seconds of the last
+  leyHold: 9, // seconds between gates that keep a ley line alive
+  // Aero-Braking (the brake key, upgraded)
+  flareTime: 0.55, // seconds of the hard brake
+  flareDecel: 42, // m/s²…
+  flareFloor: 20, // …fading out by this speed
+  flareTurn: 2.3, // steering multiplier…
+  flareTurnTime: 1.3, // …for this long
+  flareCooldown: 3,
+  // Draft-Weaving
+  weaveTurn: 270, // degrees of tight turning spin up a tornado…
+  weaveRate: 0.7, // …turning at least this fast (rad/s)
+  weaveRoll: 0.5, // a barrel roll counts as this share of a tornado
+  weaveDecay: 0.08, // share lost per second when not spiralling
+  weaveTime: 14, // seconds the tornado lasts unused
+  weaveGlance: 0.55, // hits flying into the surface at most this steeply (the cosine) are glancing
+  weavePush: 0.8,
+  weaveKeep: 0.9,
+  // Ascension
+  ascendTime: 0.4, // seconds of the rise on rails
+  ascendShare: 0.75, // share of the speed turned upwards…
+  ascendMin: 32, // …at least this…
+  ascendMax: 58, // …at most this
+  ascendCooldown: 8,
+  // Gliding stances (H toggles; with both, it cycles)
+  stanceBlend: 0.45, // seconds to change stance
+  falconSink: 2.4,
+  falconDrag: 0.62,
+  falconTurn: 0.55,
+  falconStall: 1.15,
+  butterflySink: 0.3,
+  butterflyDrag: 2.2,
+  butterflyTurn: 1.75,
+  butterflyStall: 0.6,
+  // Echo-Trail
+  echoLife: 9, // seconds the ribbon lasts
+  echoTurn: 320, // degrees of turning that make a circle…
+  echoClose: 6, // …closed within this many metres of the ribbon
+  echoMinAge: 2, // the ribbon you cross must be at least this old (seconds)…
+  echoMinLength: 45, // …and at least this many metres of flight behind you
+  echoSurge: 12, // m/s at once…
+  echoThrust: 14, // …and m/s² for…
+  echoPush: 1.4, // …this long
+  echoRingLife: 6, // seconds the wind ring hangs where you drew it (fly it again for another push)
 };
+
+/** Gliding stances (Falcon and Butterfly) */
+export type Stance = "none" | "falcon" | "butterfly";
+/** A button press for a run ability */
+export type AbilityPress = "plunge" | "burst" | "hover" | "resonance" | "ascend" | "stance";
+/** Samples kept for the Echo-Trail ribbon (12 a second for `echoLife`) */
+export const ECHO_SAMPLES = 128;
+const ECHO_EVERY = 1 / 12;
 
 /** A river of cloud along the racing line, just under it (Cloud-Surfing) */
 export interface CloudLane {
@@ -130,7 +196,74 @@ export class Abilities {
     arrivals: 0,
   };
   /** One-off moments, counted so the looks can tell a new one happened */
-  readonly cue = { plunge: 0, strike: 0, shear: 0, burst: 0, recover: 0, hang: 0, launch: 0 };
+  readonly cue = {
+    plunge: 0, strike: 0, shear: 0, burst: 0, recover: 0, hang: 0, launch: 0,
+    moth: 0, bullseye: 0, apex: 0, sing: 0, ley: 0, leyEnd: 0, flare: 0, tornado: 0, shield: 0, ascend: 0, stance: 0, echo: 0, echoPass: 0,
+  };
+  /** The abilities' own clock (seconds of flying) */
+  private clock = 0;
+  // Moth's Attraction: the last gate threaded, how near its heart (0 edge … 1 heart)
+  mothGate = -1;
+  mothHeart = 0;
+  // Zenith Climber: 0..1, how steeply it is helping right now; where the last climb peaked
+  zenithClimb = 0;
+  private zenithHeld = 0;
+  readonly apexPoint = new THREE.Vector3();
+  // Resonance: seconds since the song (-1: none) and until the next; the gates it turned
+  song = -1;
+  songWait = 0;
+  readonly songOrigin = new THREE.Vector3();
+  readonly songAxis = new THREE.Vector3(0, 0, -1);
+  /** Gate index → the direction it now faces (from where you were when it heard the song) */
+  readonly attuned = new Map<number, THREE.Vector3>();
+  // Ley-Line Surger: gates in quick succession, and whether a ley line is awake
+  leyStreak = 0;
+  ley = false;
+  private lastGateAt = -1e3;
+  // Aero-Braking: seconds into the flare (-1: none) and until the next
+  flare = -1;
+  flareWait = 0;
+  private braking = false;
+  // Draft-Weaving: 0..1 spun up, then seconds of tornado left; where it last shielded you
+  weave = 0;
+  tornado = 0;
+  readonly shieldPoint = new THREE.Vector3();
+  readonly shieldNormal = new THREE.Vector3();
+  private readonly lastForward = new THREE.Vector3(0, 0, -1);
+  private hasForward = false;
+  // Ascension: seconds into the rise (-1: none) and until the next; where it began
+  ascend = -1;
+  ascendWait = 0;
+  private ascendSpeed = 0;
+  readonly ascendOrigin = new THREE.Vector3();
+  // Gliding stances: the one chosen, and how far each is blended in (0..1)
+  stance: Stance = "none";
+  falcon = 0;
+  butterfly = 0;
+  // Echo-Trail: the ribbon (newest at `echoHead`), and the wind ring a closed circle made
+  readonly echo = {
+    positions: Array.from({ length: ECHO_SAMPLES }, () => new THREE.Vector3()),
+    sides: Array.from({ length: ECHO_SAMPLES }, () => new THREE.Vector3()),
+    times: new Float64Array(ECHO_SAMPLES),
+    turned: new Float64Array(ECHO_SAMPLES),
+    travelled: new Float64Array(ECHO_SAMPLES),
+    head: -1,
+    count: 0,
+    /** The circle that closed: the ribbon between these times flashes */
+    loopFrom: 0,
+    loopTo: 0,
+  };
+  readonly echoRing = { t: -1, center: new THREE.Vector3(), normal: new THREE.Vector3(0, 0, 1), radius: 10, passWait: 0 };
+  private echoTurned = 0;
+  private echoTravelled = 0;
+  private echoSince = 0;
+  private echoNext = 0;
+  private echoPush = 0;
+  private readonly lastPosition = new THREE.Vector3();
+  /** Seconds since the abilities' clock started, for the looks' fading ribbon */
+  get now(): number {
+    return this.clock;
+  }
   strikeGate = -1;
   strikePoints = 0;
   readonly shearFrom = new THREE.Vector3();
@@ -172,6 +305,7 @@ export class Abilities {
       this.lanes.push({ z0, z1, depth: range(rng, 4.5, 6), width: range(rng, 14, 19), phase: range(rng, 0, 10) });
     }
     this.manta.active = false;
+    this.attuned.clear();
     this.reset();
     this.version++;
   }
@@ -183,12 +317,61 @@ export class Abilities {
     this.burst = -1;
     this.widened.clear();
     this.thrill = this.surf = this.slip = 0;
+    this.song = -1;
+    this.flare = -1;
+    this.ascend = -1;
+    this.weave = 0;
+    this.tornado = 0;
+    this.zenithClimb = 0;
+    this.zenithHeld = 0;
+    this.hasForward = false;
+    this.endLey();
+    this.leyStreak = 0;
+    this.echo.count = 0;
+    this.echo.head = -1;
+    this.echoRing.t = -1;
+    this.echoPush = 0;
   }
 
-  /** The buttons: X plunges, G unleashes Gale Force, F hover-stalls (again: off early) */
-  press(action: "plunge" | "burst" | "hover", flight: Flight): boolean {
+  private endLey() {
+    if (this.ley) this.cue.leyEnd++;
+    this.ley = false;
+  }
+
+  /**
+   * The buttons: X plunges, Z unleashes Gale Force, F hover-stalls (again: off
+   * early), T sings (Resonance), G ascends, H changes the gliding stance
+   */
+  press(action: AbilityPress, flight: Flight): boolean {
+    if (action === "resonance") {
+      if (!this.has("resonance") || this.song >= 0 || this.songWait > 0) return false;
+      this.song = 0;
+      this.songWait = ABILITY.songCooldown;
+      this.songOrigin.copy(flight.position);
+      this.songAxis.copy(flight.forward);
+      this.cue.sing++;
+      return true;
+    }
+    if (action === "ascend") {
+      if (!this.has("ascension") || this.ascend >= 0 || this.ascendWait > 0 || this.hang >= 0) return false;
+      this.ascend = 0;
+      this.plunge = -1;
+      this.ascendSpeed = clamp(flight.speed * ABILITY.ascendShare, ABILITY.ascendMin, ABILITY.ascendMax);
+      this.ascendOrigin.copy(flight.position);
+      this.cue.ascend++;
+      return true;
+    }
+    if (action === "stance") {
+      const owned: Stance[] = ["none"];
+      if (this.has("falcon")) owned.push("falcon");
+      if (this.has("butterfly")) owned.push("butterfly");
+      if (owned.length < 2) return false;
+      this.stance = owned[(owned.indexOf(this.stance) + 1) % owned.length];
+      this.cue.stance++;
+      return true;
+    }
     if (action === "plunge") {
-      if (!this.has("plunge") || this.plunge >= 0 || this.plungeWait > 0 || this.hang >= 0) return false;
+      if (!this.has("plunge") || this.plunge >= 0 || this.plungeWait > 0 || this.hang >= 0 || this.ascend >= 0) return false;
       this.plunge = 0;
       this.cue.plunge++;
       return true;
@@ -208,7 +391,7 @@ export class Abilities {
       if (this.hang > 0.3) this.launch(flight);
       return this.hang < 0;
     }
-    if (this.hangWait > 0 || this.plunge >= 0) return false;
+    if (this.hangWait > 0 || this.plunge >= 0 || this.ascend >= 0) return false;
     this.hang = 0;
     this.hangEntry = flight.speed;
     this.cue.hang++;
@@ -255,6 +438,8 @@ export class Abilities {
 
   /** A dodge started from here (for the afterimage) */
   dodged(direction: 1 | -1, flight: Flight) {
+    // A barrel roll spins Draft-Weaving's tornado up a little
+    if (this.has("draftWeave") && this.tornado <= 0) this.spinUp(ABILITY.weaveRoll);
     if (!this.has("windShear")) return;
     this.shearFrom.copy(flight.position);
     this.shearQuaternion.copy(flight.quaternion);
@@ -270,6 +455,16 @@ export class Abilities {
   /** A gate was passed: Gale Force charges, and a plunge strikes. Returns bonus points */
   gate(index: number, chain: number): number {
     if (this.has("galeForce") && this.burst < 0) this.energy = Math.min(1, this.energy + ABILITY.burstPerGate);
+    // Ley-Line Surger: gates in quick succession wake a ley line, and keep it awake
+    if (this.has("leyLine")) {
+      const gap = this.clock - this.lastGateAt;
+      this.leyStreak = gap <= (this.ley ? ABILITY.leyHold : ABILITY.leyGap) ? this.leyStreak + 1 : 1;
+      if (!this.ley && this.leyStreak >= ABILITY.leyGates) {
+        this.ley = true;
+        this.cue.ley++;
+      }
+    }
+    this.lastGateAt = this.clock;
     if (this.plunge < 0) return 0;
     this.plunge = -1;
     this.plungeWait = ABILITY.plungeCooldown * 0.5;
@@ -277,6 +472,60 @@ export class Abilities {
     this.strikePoints = ABILITY.plungeBonus * Math.max(1, chain);
     this.cue.strike++;
     return this.strikePoints;
+  }
+
+  /**
+   * Moth's Attraction: a gate was passed `offset` metres from its middle (of
+   * `radius`): out faster, the nearer the heart. True for a bullseye
+   */
+  threaded(index: number, offset: number, radius: number, flight: Flight): boolean {
+    if (!this.has("moth")) return false;
+    const heart = clamp(1 - offset / Math.max(radius, 1), 0, 1);
+    flight.surge(ABILITY.mothSurge * heart ** 1.5 * clamp((ABILITY.mothTop - flight.speed) / 15, 0, 1));
+    this.mothGate = index;
+    this.mothHeart = heart;
+    this.cue.moth++;
+    const bullseye = offset <= radius * ABILITY.mothBullseye;
+    if (bullseye) this.cue.bullseye++;
+    return bullseye;
+  }
+
+  /** The direction gate `ring` is flown through: Resonance may have turned it to face you */
+  gateNormal(ring: Ring): THREE.Vector3 {
+    return this.attuned.get(ring.index) ?? ring.normal;
+  }
+
+  /**
+   * Something touched: can an ability save the pilot? "roll": Acrobatic
+   * Recovery (a wingtip); "shield": Draft-Weaving's tornado takes a glancing
+   * hit (flying into the surface no steeper than `weaveGlance`). Null: a crash
+   */
+  save(part: HitPart | null, normal: THREE.Vector3, direction: THREE.Vector3): "roll" | "shield" | null {
+    if (this.canRecover(part)) return "roll";
+    if (part !== null && this.tornado > 0 && this.hang < 0 && -direction.dot(normal) <= ABILITY.weaveGlance) return "shield";
+    return null;
+  }
+
+  /** The save happened at `at`, off a surface facing `normal` */
+  saved(how: "roll" | "shield", at: THREE.Vector3, normal: THREE.Vector3) {
+    if (how === "roll") {
+      this.recovered(at, normal);
+      return;
+    }
+    this.tornado = 0;
+    this.weave = 0;
+    this.shieldPoint.copy(at);
+    this.shieldNormal.copy(normal);
+    this.cue.shield++;
+  }
+
+  /** Draft-Weaving: turning tightly or rolling spins the tornado up; full, it forms */
+  private spinUp(amount: number) {
+    this.weave = Math.min(1, this.weave + amount);
+    if (this.weave >= 1 && this.tornado <= 0) {
+      this.tornado = ABILITY.weaveTime;
+      this.cue.tornado++;
+    }
   }
 
   /** A wingtip clipped rock: can we roll away instead of crashing? (never for the body) */
@@ -301,6 +550,7 @@ export class Abilities {
   step(dt: number, input: FlightInput, proximity: number, flight: Flight, mods: FlightMods) {
     const course = this.course;
     if (!course) return;
+    this.clock += dt;
     const speed = flight.speed;
     // Surfing a cloud lane makes everything come back twice as fast
     const recharge = dt * (1 + this.surf);
@@ -383,6 +633,204 @@ export class Abilities {
     }
     this.slip += (slip - this.slip) * (1 - Math.exp(-dt * 6));
     if (slip > 0) mods.thrust += push(ABILITY.slipThrust * slip, ABILITY.slipTopSpeed, speed);
+
+    this.stepLater(dt, input, flight, mods, course, recharge);
+  }
+
+  /** The design list's abilities 11 to 20, per physics step */
+  private stepLater(dt: number, input: FlightInput, flight: Flight, mods: FlightMods, course: Course, recharge: number) {
+    const speed = flight.speed;
+    // How far the path turned this step, in any direction (Draft-Weaving, Echo-Trail)
+    const turned = this.hasForward ? Math.acos(clamp(this.lastForward.dot(flight.forward), -1, 1)) : 0;
+    this.songWait = Math.max(0, this.songWait - recharge);
+    this.flareWait = Math.max(0, this.flareWait - recharge);
+    if (this.ascend < 0) this.ascendWait = Math.max(0, this.ascendWait - recharge);
+
+    // Gliding stances: blended in and out, each a set of multipliers
+    const blend = dt / Math.max(0.05, ABILITY.stanceBlend);
+    const towards = (v: number, target: number) => (v < target ? Math.min(target, v + blend) : Math.max(target, v - blend));
+    this.falcon = towards(this.falcon, this.stance === "falcon" && this.has("falcon") ? 1 : 0);
+    this.butterfly = towards(this.butterfly, this.stance === "butterfly" && this.has("butterfly") ? 1 : 0);
+    const f = smoothstep(0, 1, this.falcon);
+    const b = smoothstep(0, 1, this.butterfly);
+    if (f > 0 || b > 0) {
+      const mix = (falcon: number, butterfly: number) => (1 + (falcon - 1) * f) * (1 + (butterfly - 1) * b);
+      mods.sink *= mix(ABILITY.falconSink, ABILITY.butterflySink);
+      mods.drag *= mix(ABILITY.falconDrag, ABILITY.butterflyDrag);
+      mods.turn *= mix(ABILITY.falconTurn, ABILITY.butterflyTurn);
+      mods.stall *= mix(ABILITY.falconStall, ABILITY.butterflyStall);
+    }
+
+    // Zenith Climber: the steeper the climb, the less gravity pulls back along it
+    if (this.has("zenith")) {
+      const steep = smoothstep(0.25, 0.6, flight.forward.y) * (this.hang < 0 ? 1 : 0);
+      mods.climb = 1 - (1 - 1 / ABILITY.zenithLonger) * steep;
+      this.zenithClimb += (steep - this.zenithClimb) * (1 - Math.exp(-dt * 5));
+      // A long climb that tops out: the apex shines
+      if (steep > 0.5) this.zenithHeld += dt;
+      else if (this.zenithHeld > 0.8 && flight.velocity.y < 4) {
+        this.zenithHeld = 0;
+        this.apexPoint.copy(flight.position);
+        this.cue.apex++;
+      } else if (steep < 0.2) this.zenithHeld = 0;
+    }
+
+    // Resonance: the wave rolls out; every gate inside its cone that it reaches turns to face you
+    if (this.song >= 0) {
+      this.song += dt;
+      const front = Math.min(ABILITY.songRange, this.song * ABILITY.songSpeed);
+      const cone = Math.cos((ABILITY.songCone * Math.PI) / 180);
+      for (const ring of course.rings) {
+        if (this.attuned.has(ring.index)) continue;
+        rel.subVectors(ring.position, this.songOrigin);
+        const d = rel.length();
+        if (d > front || d < 1 || rel.dot(this.songAxis) < cone * d) continue;
+        this.attuned.set(ring.index, new THREE.Vector3().subVectors(ring.position, flight.position).normalize());
+      }
+      if (this.song * ABILITY.songSpeed > ABILITY.songRange + 40) this.song = -1;
+    }
+
+    // Ley-Line Surger: endless boost while it's awake, until the gates stop coming
+    if (this.ley) {
+      if (this.clock - this.lastGateAt > ABILITY.leyHold) {
+        this.endLey();
+        this.leyStreak = 0;
+      } else flight.boostCharge = 1;
+    } else if (this.leyStreak > 0 && this.clock - this.lastGateAt > ABILITY.leyGap) this.leyStreak = 0;
+
+    // Aero-Braking: the brake's press flares cape and wings: a hard stop, then tight turns
+    const braking = (input.brake ?? 0) > 0.3;
+    if (braking && !this.braking && this.has("aeroBrake") && this.flare < 0 && this.flareWait <= 0 && this.hang < 0 && this.ascend < 0) {
+      this.flare = 0;
+      this.flareWait = ABILITY.flareCooldown;
+      this.plunge = -1;
+      this.cue.flare++;
+    }
+    this.braking = braking;
+    if (this.flare >= 0) {
+      this.flare += dt;
+      if (this.flare < ABILITY.flareTime) mods.thrust -= ABILITY.flareDecel * (1 - smoothstep(0.5, 1, this.flare / ABILITY.flareTime)) * clamp((speed - ABILITY.flareFloor) / 8, 0, 1);
+      if (this.flare < ABILITY.flareTurnTime) mods.turn *= 1 + (ABILITY.flareTurn - 1) * (1 - smoothstep(ABILITY.flareTurnTime * 0.6, ABILITY.flareTurnTime, this.flare));
+      else this.flare = -1;
+    }
+
+    // Draft-Weaving: tight turning (any axis) spins the tornado up; unused, it dies down
+    if (this.has("draftWeave")) {
+      if (this.hasForward && this.tornado <= 0) {
+        if (turned / Math.max(dt, 1e-6) > ABILITY.weaveRate) this.spinUp(turned / ((ABILITY.weaveTurn * Math.PI) / 180));
+        else this.weave = Math.max(0, this.weave - ABILITY.weaveDecay * dt);
+      }
+      if (this.tornado > 0) {
+        this.tornado = Math.max(0, this.tornado - dt);
+        if (this.tornado === 0) this.weave = 0;
+      }
+    }
+    this.lastForward.copy(flight.forward);
+    this.hasForward = true;
+
+    // Ascension: all the speed turned straight up, on rails for a moment
+    if (this.ascend >= 0) {
+      this.ascend += dt;
+      if (this.ascend < ABILITY.ascendTime) mods.ascend = this.ascendSpeed;
+      else {
+        this.ascend = -1;
+        this.ascendWait = ABILITY.ascendCooldown;
+      }
+    }
+
+    // Echo-Trail: the ribbon, a circle closing across it, and the wind ring it leaves
+    if (this.has("echoTrail")) this.stepEcho(dt, flight, mods, turned);
+    this.lastPosition.copy(flight.position);
+  }
+
+  private stepEcho(dt: number, flight: Flight, mods: FlightMods, turned: number) {
+    const e = this.echo;
+    const r = this.echoRing;
+    if (this.echoPush > 0) {
+      this.echoPush = Math.max(0, this.echoPush - dt);
+      mods.thrust += push(ABILITY.echoThrust, FLIGHT.maxSpeed, flight.speed);
+    }
+    // The wind ring: fly through it again (either way) for another push
+    if (r.t >= 0) {
+      r.t += dt;
+      r.passWait = Math.max(0, r.passWait - dt);
+      if (r.t > ABILITY.echoRingLife) r.t = -1;
+      else if (r.t > 0.6 && r.passWait <= 0) {
+        const before = rel.subVectors(this.lastPosition, r.center).dot(r.normal);
+        const after = rel.subVectors(flight.position, r.center).dot(r.normal);
+        if (before * after < 0) {
+          point.lerpVectors(this.lastPosition, flight.position, before / (before - after));
+          if (point.distanceTo(r.center) < r.radius + 1.5) {
+            r.passWait = 1;
+            flight.surge(ABILITY.echoSurge * 0.6);
+            this.echoPush = ABILITY.echoPush;
+            this.cue.echoPass++;
+          }
+        }
+      }
+    }
+    // How far the path has turned, in any direction
+    // How far the path has turned and gone; a hover-stall turns on the spot, which is no circle
+    if (e.count > 0 && this.hang < 0) {
+      this.echoTurned += turned;
+      this.echoTravelled += flight.position.distanceTo(this.lastPosition);
+    }
+    if (this.clock < this.echoNext) {
+      // Keep the newest sample glued to the pilot between samples
+      if (e.head >= 0) {
+        e.positions[e.head].copy(flight.position);
+        e.sides[e.head].copy(flight.right);
+      }
+      return;
+    }
+    this.echoNext = this.clock + ECHO_EVERY;
+    e.head = (e.head + 1) % ECHO_SAMPLES;
+    e.positions[e.head].copy(flight.position);
+    e.sides[e.head].copy(flight.right);
+    e.times[e.head] = this.clock;
+    e.turned[e.head] = this.echoTurned;
+    e.travelled[e.head] = this.echoTravelled;
+    e.count = Math.min(ECHO_SAMPLES, e.count + 1);
+    // Closed a circle? Crossing ribbon old enough, a full turn ago, and the smallest such loop
+    const full = (ABILITY.echoTurn * Math.PI) / 180;
+    for (let k = 1; k < e.count; k++) {
+      const i = (e.head - k + ECHO_SAMPLES) % ECHO_SAMPLES;
+      const t = e.times[i];
+      if (this.clock - t > ABILITY.echoLife || t < this.echoSince) break;
+      if (this.clock - t < ABILITY.echoMinAge || this.echoTurned - e.turned[i] < full || this.echoTravelled - e.travelled[i] < ABILITY.echoMinLength) continue;
+      if (e.positions[i].distanceTo(flight.position) > ABILITY.echoClose) continue;
+      this.closeLoop(i, k, flight);
+      break;
+    }
+  }
+
+  /** The circle from sample `from` (`length` samples back) to now becomes a wind ring */
+  private closeLoop(from: number, length: number, flight: Flight) {
+    const e = this.echo;
+    const r = this.echoRing;
+    r.center.set(0, 0, 0);
+    for (let k = 0; k <= length; k++) r.center.add(e.positions[(e.head - k + ECHO_SAMPLES) % ECHO_SAMPLES]);
+    r.center.divideScalar(length + 1);
+    // The loop's plane: the sum of the turns round its middle
+    r.normal.set(0, 0, 0);
+    let radius = 0;
+    for (let k = 0; k < length; k++) {
+      const a = e.positions[(e.head - k - 1 + ECHO_SAMPLES) % ECHO_SAMPLES];
+      const b = e.positions[(e.head - k + ECHO_SAMPLES) % ECHO_SAMPLES];
+      r.normal.add(SIDE.subVectors(a, r.center).cross(point.subVectors(b, r.center)));
+      radius += a.distanceTo(r.center);
+    }
+    if (r.normal.lengthSq() < 1e-6) r.normal.copy(flight.right);
+    r.normal.normalize();
+    r.radius = clamp(radius / Math.max(1, length), 4, 40);
+    r.t = 0;
+    r.passWait = 0;
+    e.loopFrom = e.times[from];
+    e.loopTo = this.clock;
+    this.echoSince = this.clock;
+    flight.surge(ABILITY.echoSurge);
+    this.echoPush = ABILITY.echoPush;
+    this.cue.echo++;
   }
 
   /**
@@ -419,8 +867,8 @@ export class Abilities {
   }
 
   /** The abilities' buttons on the HUD */
-  hud(flight: Flight): { id: UpgradeId; name: string; key: string; charge: number; ready: boolean }[] {
-    const out: { id: UpgradeId; name: string; key: string; charge: number; ready: boolean }[] = [];
+  hud(flight: Flight): { id: UpgradeId; name: string; key: string; charge: number; ready: boolean; count?: number }[] {
+    const out: { id: UpgradeId; name: string; key: string; charge: number; ready: boolean; count?: number }[] = [];
     if (this.has("plunge")) {
       const active = this.plunge >= 0;
       out.push({ id: "plunge", name: "Plunging Attack", key: "X", charge: active ? 1 - this.plunge / ABILITY.plungeTime : 1 - this.plungeWait / ABILITY.plungeCooldown, ready: active || this.plungeWait <= 0 });
@@ -434,6 +882,22 @@ export class Abilities {
       const active = this.hang >= 0;
       out.push({ id: "hoverStall", name: "Hover-Stall", key: "F", charge: active ? 1 - this.hang / ABILITY.hangTime : 1 - this.hangWait / ABILITY.hangCooldown, ready: active || this.hangWait <= 0 });
     }
+    if (this.has("resonance")) out.push({ id: "resonance", name: "Resonance", key: "T", charge: 1 - this.songWait / ABILITY.songCooldown, ready: this.songWait <= 0 });
+    if (this.has("aeroBrake")) out.push({ id: "aeroBrake", name: "Aero-Braking", key: "Space", charge: 1 - this.flareWait / ABILITY.flareCooldown, ready: this.flareWait <= 0 });
+    if (this.has("ascension")) {
+      const active = this.ascend >= 0;
+      out.push({ id: "ascension", name: "Ascension", key: "G", charge: active ? 1 : 1 - this.ascendWait / ABILITY.ascendCooldown, ready: active || this.ascendWait <= 0 });
+    }
+    if (this.has("falcon") || this.has("butterfly")) {
+      const id: UpgradeId = this.stance === "butterfly" || (this.stance === "none" && !this.has("falcon")) ? "butterfly" : "falcon";
+      const on = this.stance !== "none";
+      out.push({ id, name: on ? (id === "falcon" ? "Falcon Stance" : "Butterfly Stance") : "Gliding stance", key: "H", charge: on ? 1 : 0.35, ready: on });
+    }
+    if (this.has("leyLine")) {
+      const since = this.clock - this.lastGateAt;
+      out.push({ id: "leyLine", name: "Ley-Line Surger", key: "", charge: this.ley ? 1 - since / ABILITY.leyHold : this.leyStreak / ABILITY.leyGates, ready: this.ley, count: this.ley ? undefined : this.leyStreak });
+    }
+    if (this.has("draftWeave")) out.push({ id: "draftWeave", name: "Draft-Weaving", key: "", charge: this.tornado > 0 ? this.tornado / ABILITY.weaveTime : this.weave, ready: this.tornado > 0 });
     return out;
   }
 }

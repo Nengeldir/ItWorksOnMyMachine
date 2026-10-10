@@ -2,6 +2,7 @@
 // music (music.ts) and the wingbeat are recorded samples from public/audio.
 // Browsers only start audio after a user gesture, so call start() from a click.
 
+import type { AbilitySound2 } from "./abilities/fx2";
 import { MusicPlayer } from "./music";
 import { AUDIO } from "./tuning";
 import type { BiomeId } from "./world/biomes/types";
@@ -323,6 +324,80 @@ export class GameAudio {
         // A soft call from far off, like Sky's mantas
         this.glide(330, 494, 1.1, "sine", 0.07);
         this.glide(220, 330, 1.3, "sine", 0.05, 0.15);
+        break;
+    }
+  }
+
+  /** The design list's abilities 11 to 20 (game/abilities/fx2.ts); `pitch` scales chimes */
+  ability2(kind: AbilitySound2, pitch = 1) {
+    switch (kind) {
+      case "moth":
+        // Wings of light fluttering past: two soft sparkles
+        this.tone(1319 * pitch, 0.25, "sine", 0.06);
+        this.tone(1760 * pitch, 0.3, "sine", 0.05, 0.07);
+        this.whoosh(1800, 4200, 0.25, 0.12, "highpass");
+        break;
+      case "bullseye":
+        [1047, 1319, 1568, 2093].forEach((f, i) => this.tone(f, 0.8, "triangle", 0.09, i * 0.045));
+        this.glide(2093, 3136, 0.4, "sine", 0.05, 0.2);
+        break;
+      case "apex":
+        [1568, 2093, 2637].forEach((f, i) => this.tone(f, 0.6, "sine", 0.07, i * 0.06));
+        break;
+      case "sing":
+        // A call like Sky's: two voices gliding up together, a breath of air under them
+        this.glide(523, 784, 0.7, "sine", 0.13);
+        this.glide(659, 988, 0.75, "sine", 0.08, 0.05);
+        this.glide(262, 392, 0.8, "triangle", 0.05);
+        this.whoosh(500, 2200, 0.6, 0.18);
+        break;
+      case "attune":
+        this.tone(880 * pitch, 0.7, "triangle", 0.07);
+        this.tone(1320 * pitch, 0.55, "sine", 0.05, 0.04);
+        break;
+      case "ley":
+        [392, 523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.9, "sine", 0.1, i * 0.07));
+        this.glide(98, 196, 1.4, "triangle", 0.12);
+        break;
+      case "leyEnd":
+        [1047, 784, 587].forEach((f, i) => this.tone(f, 0.35, "triangle", 0.06, i * 0.07));
+        break;
+      case "flare":
+        // Cloth snapping open against the wind
+        this.whoosh(2400, 260, 0.55, 0.6, "lowpass");
+        this.whoosh(300, 1000, 0.22, 0.35);
+        break;
+      case "tornado":
+        this.whoosh(300, 1600, 1, 0.35);
+        this.tone(784, 0.6, "sine", 0.05, 0.2);
+        break;
+      case "shield":
+        this.whoosh(2200, 200, 0.6, 0.55, "lowpass");
+        [1175, 1760].forEach((f, i) => this.tone(f, 0.45, "triangle", 0.09, i * 0.06));
+        break;
+      case "ascend":
+        this.whoosh(200, 2600, 1.2, 0.7);
+        this.glide(220, 880, 0.9, "sine", 0.1);
+        break;
+      case "falcon":
+        // A far-off falcon's cry, twice
+        this.glide(2600, 1800, 0.35, "sine", 0.06);
+        this.glide(2400, 1500, 0.45, "sine", 0.05, 0.4);
+        this.whoosh(900, 3600, 0.5, 0.3, "highpass");
+        break;
+      case "butterfly":
+        [1568, 1976, 2349, 2637].forEach((f, i) => this.tone(f, 0.5, "sine", 0.05, i * 0.08));
+        break;
+      case "stanceOff":
+        [880, 660].forEach((f, i) => this.tone(f, 0.3, "sine", 0.06, i * 0.06));
+        break;
+      case "echo":
+        this.whoosh(300, 2400, 0.8, 0.5);
+        [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 1, "triangle", 0.09, i * 0.05));
+        break;
+      case "echoPass":
+        this.whoosh(600, 2400, 0.4, 0.45);
+        this.tone(1319, 0.4, "triangle", 0.07);
         break;
     }
   }

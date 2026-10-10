@@ -9,7 +9,7 @@ export default function Controls({settings,onSettings}: {settings:Settings;onSet
     <li>Pitch: {label("pitchDown")} / {label("pitchUp")}. Turn: {label("turnLeft")} / {label("turnRight")}.</li>
     <li>{label("boost")} boost · {label("brake")} brake (gamepad RT / LT).</li>
     <li>{label("barrelLeft")} / {label("barrelRight")} dodge 5 m (LB / RB).</li>
-    <li>Adventure abilities: {label("flap")} wingbeat · {label("hover")} hover-stall · {label("plunge")} plunge · {label("burst")} Gale Force.</li>
+    <li>Adventure abilities: {label("flap")} wingbeat · {label("hover")} hover-stall · {label("plunge")} plunge · {label("burst")} Gale Force · {label("resonance")} Resonance · {label("ascend")} Ascension · {label("stance")} gliding stance.</li>
     <li>{label("respawn")} respawn · {label("mute")} mute · {label("pause")} pause.</li>
     <li>Steering banks up to 80°. Escape frees the mouse.</li>
   </ul><button onClick={()=>setOpen(true)}>Settings</button>

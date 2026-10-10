@@ -18,7 +18,8 @@ the last ring.
   and Ember Wastes in an order the run's seed decides, and the Aurora Summit
   last. Chain gates, skim for style, and pick an upgrade at every portal
   (stronger boost, wingbeats, glide lock, and abilities like Hover-Stall,
-  Plunging Attack, Gale Force and a spirit manta to draft behind).
+  Plunging Attack, Gale Force, a spirit manta to draft behind, Resonance,
+  Ascension and the falcon and butterfly gliding stances).
 
 Races and time trials always fly Sky Isles, so recorded ghosts and
 leaderboards stay valid; the other biomes are for the adventure.
@@ -73,6 +74,9 @@ docker compose up -d --build
 | `F` / gamepad `B`         | Hover-Stall: stop and hover 2 s, steer to turn on the spot; again to launch early (adventure, with the ability) |
 | `X` / gamepad `X`         | Plunging Attack: a steep dive; a gate in it is a strike for bonus points; pull up to stop (adventure) |
 | `Z` / right stick click   | Gale Force, once charged by gates: a wind tunnel ahead that pushes you and widens its gates (adventure) |
+| `T` / left stick click    | Resonance: a wave of song that turns the gates ahead to face you (adventure) |
+| `G` / d-pad up            | Ascension: give up your forward speed to shoot straight up (adventure) |
+| `H` / d-pad down          | Gliding stance: falcon (fast, stiff) or butterfly (floaty, nimble); with both, it cycles (adventure) |
 | `1` to `4`                | Choose an upgrade at a portal                      |
 | `Enter` in the finale     | Skip the cutscene                                  |
 | `Backspace` at the end    | Back to the menu from the finish screen            |
@@ -145,8 +149,17 @@ refills the boost), Cloud-Surfing (rivers of cloud along the line refill boost
 and wingbeats and push you), Plunging Attack, Wind-Shear Dash, Thermal Vision
 (gates and the portal glow through fog and rock), Slipstream Rider (a spirit
 manta to ride behind), Gale Force, Acrobatic Recovery (a clipped wingtip rolls
-away instead of crashing, every 4 s) and Hover-Stall. Their numbers are in the
-`?tune` panel under "Run abilities", their looks under "Ability looks".
+away instead of crashing, every 4 s), Hover-Stall, Moth's Attraction (pass a
+gate near its heart to fly out faster), Zenith Climber (climbs keep their speed
+20% longer), Resonance, Ley-Line Surger (five gates in quick succession: endless
+boost until the chain breaks), Aero-Braking (pressing the brake flares hard and
+tightens your turns for a moment), Draft-Weaving (tight spirals or barrel rolls
+spin up a little tornado that shields one glancing hit), Ascension, the Falcon
+and Butterfly stances, and Echo-Trail (close a loop across your own ribbon of
+light for a wind ring that pushes you on). Their numbers are in the `?tune`
+panel under "Run abilities", their looks under "Ability looks". Settings saved
+before an action existed keep their keys; a new action whose default key is
+taken gets a spare one.
 Dodge movement uses the unbanked right axis captured at activation, passes
 through normal collision checks, and leaves the forward heading unchanged.
 The roll animation follows the same physics timing, including for other players
