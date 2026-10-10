@@ -1,5 +1,5 @@
-import { IconSettings, IconUser, IconX } from "@tabler/icons-react";
-import { type FormEvent, useEffect, useState } from "react";
+import { IconMap, IconSettings, IconUser, IconX } from "@tabler/icons-react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { type LeaderboardEntry, type User, getLeaderboard } from "../api";
 import type { Screen } from "../App";
 import { randomRoomCode } from "../format";
@@ -10,12 +10,10 @@ import { bestRun } from "../session/RunSession";
 import { type Settings, clientId } from "../storage";
 import { useUiTheme } from "../theme";
 import Controls from "./Controls";
+import CourseSelect from "./CourseSelect";
 import MenuBackdrop from "./MenuBackdrop";
 import TodaysBest from "./TodaysBest";
 import "./Menu.css";
-
-// Prototype switch: ?backdrop=chase follows an autopiloted pilot, anything else drifts over the course
-const BACKDROP_MODE = new URLSearchParams(location.search).get("backdrop") === "chase" ? "chase" : "drift";
 
 interface MenuProps {
   me: User | null;
@@ -35,15 +33,24 @@ function untilTomorrow(): string {
 }
 
 const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
-  const [daily] = useState(() => dailySeed());
-  const [course] = useState(() => ({ palette: raceLevel(daily).palette.name, gates: new Course(daily).rings.length }));
+  const [daily, setDaily] = useState(() => dailySeed());
+  const course = useMemo(
+    () => ({ palette: raceLevel(daily).palette.name, gates: new Course(daily).rings.length }),
+    [daily],
+  );
   const [tab, setTab] = useState<"solo" | "friends" | "adventure">(joinCode ? "friends" : "solo");
   const [code, setCode] = useState(joinCode ?? "");
-  const [seedText, setSeedText] = useState("");
   const [board, setBoard] = useState<LeaderboardEntry[]>([]);
   const [panel, setPanel] = useState<"none" | "settings" | "pilot">(joinCode && !settings.nickname ? "pilot" : "none");
   const [countdown, setCountdown] = useState(untilTomorrow);
-  useUiTheme(daily);
+  // The map select shows its course behind the glass, and the UI takes its colors
+  const [picking, setPicking] = useState(false);
+  const [preview, setPreview] = useState<number | null>(null);
+  const shown = picking && preview !== null ? preview : daily;
+  // Pictures of the courses the backdrop has shown, for the map select's cards
+  const [art, setArt] = useState<Record<number, string>>({});
+  const keepArt = useCallback((seed: number, url: string) => setArt((all) => ({ ...all, [seed]: url })), []);
+  useUiTheme(shown);
 
   useEffect(() => {
     getLeaderboard(daily, clientId())
@@ -52,18 +59,22 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
   }, [daily]);
 
   useEffect(() => {
-    const timer = setInterval(() => setCountdown(untilTomorrow()), 1000);
+    // Past UTC midnight the countdown starts over, and today's course becomes the new one
+    const timer = setInterval(() => {
+      setCountdown(untilTomorrow());
+      setDaily(dailySeed());
+    }, 1000);
     return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
     // Enter flies today's course, unless a field or button has the focus
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Enter" && e.target === document.body && tab === "solo") go({ kind: "solo", seed: daily });
+      if (e.key === "Enter" && e.target === document.body && tab === "solo" && !picking) go({ kind: "solo", seed: daily });
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [daily, tab, go]);
+  }, [daily, tab, picking, go]);
 
   const joinRoom = (e: FormEvent) => {
     e.preventDefault();
@@ -71,17 +82,16 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
     if (/^[A-Z0-9]{3,8}$/.test(room)) go({ kind: "room", code: room });
   };
 
-  const flySeed = (e: FormEvent) => {
-    e.preventDefault();
-    const seed = Number(seedText);
-    if (Number.isInteger(seed) && seed >= 1 && seed < 2 ** 31) go({ kind: "solo", seed });
+  const closePicker = () => {
+    setPicking(false);
+    setPreview(null);
   };
 
   const pilotName = me?.verified ? me.name : settings.nickname || "Guest";
 
   return (
     <main className="menu">
-      <MenuBackdrop seed={daily} mode={BACKDROP_MODE} />
+      <MenuBackdrop seed={shown} mode="drift" onSnapshot={keepArt} />
 
       <button
         className="menu-icon glass settings-button"
@@ -102,100 +112,101 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
         </section>
       )}
 
-      <header className="menu-title">
-        <h1>Wingrace</h1>
-        <p>Race through floating islands</p>
-      </header>
+      {picking ? (
+        <CourseSelect
+          daily={daily}
+          countdown={countdown}
+          art={art}
+          onPreview={setPreview}
+          onFly={(seed) => go({ kind: "solo", seed })}
+          onBack={closePicker}
+        />
+      ) : (
+        <>
+          <header className="menu-title">
+            <h1>Wingrace</h1>
+            <p>Race through floating islands</p>
+          </header>
 
-      <section className="menu-card glass">
-        <div className="menu-tabs" role="tablist">
-          <button role="tab" aria-selected={tab === "solo"} onClick={() => setTab("solo")}>
-            Solo
-          </button>
-          <button role="tab" aria-selected={tab === "friends"} onClick={() => setTab("friends")}>
-            With friends
-          </button>
-          <button role="tab" aria-selected={tab === "adventure"} onClick={() => setTab("adventure")}>
-            Adventure
-          </button>
-        </div>
-
-        {tab === "solo" ? (
-          <>
-            <div className="menu-course">
-              <div>
-                <small>Today's course · #{daily}</small>
-                <b>{course.palette} isles</b>
-              </div>
-              <span>{course.gates} gates</span>
-              <span>New in {countdown}</span>
-            </div>
-            <button className="primary" onClick={() => go({ kind: "solo", seed: daily })}>
-              Fly today's course <kbd>Enter</kbd>
-            </button>
-            <div className="menu-more">
-              <button className="menu-link" onClick={() => go({ kind: "solo", seed: randomSeed() })}>
-                Random course
+          <section className="menu-card glass">
+            <div className="menu-tabs" role="tablist">
+              <button role="tab" aria-selected={tab === "solo"} onClick={() => setTab("solo")}>
+                Solo
               </button>
-              <form onSubmit={flySeed} className="menu-seed">
-                <input
-                  value={seedText}
-                  onChange={(e) => setSeedText(e.target.value.replace(/\D/g, ""))}
-                  placeholder="Seed"
-                  inputMode="numeric"
-                  aria-label="Seed"
-                />
-                <button type="submit" className="menu-link" disabled={!seedText}>
-                  Fly
+              <button role="tab" aria-selected={tab === "friends"} onClick={() => setTab("friends")}>
+                With friends
+              </button>
+              <button role="tab" aria-selected={tab === "adventure"} onClick={() => setTab("adventure")}>
+                Adventure
+              </button>
+            </div>
+
+            {tab === "solo" ? (
+              <>
+                <div className="menu-course">
+                  <div>
+                    <small>Today's course · #{daily}</small>
+                    <b>{course.palette} isles</b>
+                  </div>
+                  <span>{course.gates} gates</span>
+                  <span>New in {countdown}</span>
+                </div>
+                <button className="primary" onClick={() => go({ kind: "solo", seed: daily })}>
+                  Fly today's course <kbd>Enter</kbd>
                 </button>
-              </form>
-            </div>
-          </>
-        ) : tab === "adventure" ? (
-          <>
-            <p className="menu-hint">
-              A roguelike run through eight biomes linked by portals. Pick an upgrade at every portal and chain gates
-              for points.
-            </p>
-            <button className="primary" onClick={() => go({ kind: "run", seed: daily })}>
-              Today's run · #{daily}
-            </button>
-            <div className="menu-more">
-              <button className="menu-link" onClick={() => go({ kind: "run", seed: randomSeed() })}>
-                New random run
-              </button>
-              {bestRun(daily) !== null && <span className="menu-hint">Your best today: {bestRun(daily)!.toLocaleString()}</span>}
-              {import.meta.env.DEV && (
-                <button className="menu-link" onClick={() => go({ kind: "explore", biome: "skyIsles", seed: 1 })}>
-                  Debug: explore worlds
+                <div className="menu-more">
+                  <button className="menu-link" onClick={() => setPicking(true)}>
+                    <IconMap size={18} /> Choose a course
+                  </button>
+                </div>
+              </>
+            ) : tab === "adventure" ? (
+              <>
+                <p className="menu-hint">
+                  A roguelike run through eight biomes linked by portals. Pick an upgrade at every portal and chain gates
+                  for points.
+                </p>
+                <button className="primary" onClick={() => go({ kind: "run", seed: daily })}>
+                  Today's run · #{daily}
                 </button>
-              )}
-            </div>
-          </>
-        ) : (
-          <>
-            <p className="menu-hint">Everyone in a room flies the same map at the same time.</p>
-            <button className="primary" onClick={() => go({ kind: "room", code: randomRoomCode() })}>
-              Create a room
-            </button>
-            <form onSubmit={joinRoom} className="menu-join">
-              <input
-                value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-                placeholder="Room code"
-                maxLength={8}
-                aria-label="Room code"
-                autoFocus={!!joinCode}
-              />
-              <button type="submit" className="primary" disabled={!/^[A-Za-z0-9]{3,8}$/.test(code.trim())}>
-                Join
-              </button>
-            </form>
-          </>
-        )}
-      </section>
+                <div className="menu-more">
+                  <button className="menu-link" onClick={() => go({ kind: "run", seed: randomSeed() })}>
+                    New random run
+                  </button>
+                  {bestRun(daily) !== null && <span className="menu-hint">Your best today: {bestRun(daily)!.toLocaleString()}</span>}
+                  {import.meta.env.DEV && (
+                    <button className="menu-link" onClick={() => go({ kind: "explore", biome: "skyIsles", seed: 1 })}>
+                      Debug: explore worlds
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="menu-hint">Everyone in a room flies the same map at the same time.</p>
+                <button className="primary" onClick={() => go({ kind: "room", code: randomRoomCode() })}>
+                  Create a room
+                </button>
+                <form onSubmit={joinRoom} className="menu-join">
+                  <input
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.toUpperCase())}
+                    placeholder="Room code"
+                    maxLength={8}
+                    aria-label="Room code"
+                    autoFocus={!!joinCode}
+                  />
+                  <button type="submit" className="primary" disabled={!/^[A-Za-z0-9]{3,8}$/.test(code.trim())}>
+                    Join
+                  </button>
+                </form>
+              </>
+            )}
+          </section>
+        </>
+      )}
 
-      <TodaysBest entries={board} />
+      {!picking && <TodaysBest entries={board} />}
 
       {panel === "pilot" && (
         <section className="menu-popover glass pilot-panel">

@@ -7,9 +7,10 @@ same seed. Every couple of seconds the racing line threads a gate. Dive for
 speed, skim the rock for style points and a boost, and beat your friends to
 the last ring.
 
-- **Race friends:** create a room, share the link, everyone flies the same map
+- **Race friends:** create a room, share its code, everyone flies the same map
   at the same time and sees each other live.
-- **Time trial:** race the clock on today's course, a random one or any seed,
+- **Time trial:** race the clock on today's course, or choose one in the map
+  select (a course for each of Sky Isles' moods, a random one or any seed),
   against the ghosts of the fastest runs. Leaderboards per seed.
 - **Adventure:** a roguelike run through eight biomes linked by portals:
   Sky Isles, Verdant Highlands, Glacier Peaks, Sky Archipelago, Coral Lagoon,
@@ -72,12 +73,14 @@ docker compose up -d --build
 | `Backspace` at the end    | Back to the menu from the finish screen            |
 | `Enter`                   | Start the run / the race, fly again                |
 | `N`                       | New map (in a room's lobby)                        |
+| `←` `→` / `A` `D`         | Switch course in the map select (`Esc` goes back)  |
 | `Esc`                     | Free the mouse                                     |
 
 Pitch can be inverted in the menu. Diving turns height into speed, climbing
 turns speed back into height. Flying within a few metres of rock or trees fills
-the proximity bar: you get style points with a growing multiplier and extra
-acceleration, so risky lines are faster. Crash, or drop into the sea of clouds
+the orange bar: you get extra acceleration (up to 18 km/h a second), so risky
+lines are faster, and in an adventure style points with a growing multiplier.
+The bar's label says what skimming is earning right now. Crash, or drop into the sea of clouds
 below the islands, and you respawn at your last ring, with the clock still
 running. While the land around you is still loading (outside races), the
 pilot glides in slowly by itself and you get control once it has arrived.
@@ -104,7 +107,8 @@ points to the portal. A crash puts you back at the last gate and breaks your
 gate chain.
 
 Boost starts with a 2.5-second reserve and recharges in roughly 4.5 seconds
-when released. The HUD shows charge. Gamepad triggers are analog. Braking adds
+when released. The blue bar in the HUD shows the reserve, labelled Boost
+ready, Boosting or Boost charging. Gamepad triggers are analog. Braking adds
 drag that fades near 22 m/s, while climbing can still cause a stall. Braking
 wins when both controls are held. The Gale boost upgrade strengthens the same
 held boost by 25% per stack; it no longer adds a separate dash action.
@@ -120,8 +124,7 @@ Dodge movement uses the unbanked right axis captured at activation, passes
 through normal collision checks, and leaves the forward heading unchanged.
 The roll animation follows the same physics timing, including for other players
 and ghosts. The camera carries its previous orientation through vertical flight
-and restores the horizon gradually. The boost panel keeps a fixed size across
-Ready, Boosting, Recharging and Braking states.
+and restores the horizon gradually.
 
 ## How It Works
 
@@ -252,7 +255,7 @@ doesn't fly the course itself.
 | `frontend/src/game/pilots.ts`          | Remote players and ghosts, with interpolation            |
 | `frontend/src/net/`                    | Server clock and the room connection (SSE + POST)        |
 | `frontend/src/session/`                | Solo and room sessions: wire a Game to the network and UI |
-| `frontend/src/components/`             | React screens: menu, HUD, lobby and result panels        |
+| `frontend/src/components/`             | React screens: menu, map select, HUD, results            |
 | `frontend/Caddyfile`                   | Static files, compression, `/api` to the backend         |
 
 Race results now use the `speed-control-v3` flight rules. SQLite migration

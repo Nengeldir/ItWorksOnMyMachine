@@ -8,9 +8,15 @@
   gap: 2rem;
 }
 
+/* Sized by the viewport, not the page: a scrollbar coming and going (tabs of different heights) or a
+   phone's address bar would otherwise resize the canvas, and every resize blanks it for a frame */
 .menu-backdrop {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100lvh;
   z-index: -1;
   pointer-events: none;
 }
@@ -128,6 +134,9 @@ body:has(.menu-backdrop:empty) {
 }
 
 .menu .menu-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   padding: 0.3rem 0.4rem;
   border: none;
   background: none;
@@ -137,17 +146,6 @@ body:has(.menu-backdrop:empty) {
 .menu .menu-link:hover:not(:disabled) {
   background: none;
   color: var(--ink);
-}
-
-.menu-seed {
-  display: flex;
-  align-items: center;
-}
-
-.menu-seed input {
-  width: 6rem;
-  padding: 0.3rem 0.7rem;
-  border-radius: 999px;
 }
 
 .menu-join {
