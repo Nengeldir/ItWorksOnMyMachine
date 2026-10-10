@@ -1,4 +1,4 @@
-import { Matrix4, Quaternion, Vector3 } from "three";
+import { Euler, Matrix4, Quaternion, Vector3 } from "three";
 import { clamp } from "./math";
 
 // A simplified winged object with a short, load-limited flight-path response.
@@ -55,10 +55,14 @@ export interface FlightMods {
   lift: number; // m/s of climb right now (a thermal's updraft)
   hover: number; // 0..1: cancels the sink and gravity along the path
   glideLock: boolean; // let go of pitch and the nose holds a shallow glide
+  thrust: number; // m/s² pushed along the flight path (slipstreams, cloud surfing, Gale Force, a plunge)
+  dive: number; // 0..1: the nose is pulled down towards `diveAngle` (Plunging Attack)
+  diveAngle: number; // radians below the horizon
+  hang: boolean; // Hover-Stall: no flight model, the pilot hangs in the air and turns on the spot (`hangStep`)
 }
 
 export function plainMods(): FlightMods {
-  return { drag: 1, sink: 1, stall: 1, proximityBoost: 1, boost: 0, lift: 0, hover: 0, glideLock: false };
+  return { drag: 1, sink: 1, stall: 1, proximityBoost: 1, boost: 0, lift: 0, hover: 0, glideLock: false, thrust: 0, dive: 0, diveAngle: 1, hang: false };
 }
 
 /** The shallow dive the glide lock holds (radians below the horizon) */
@@ -82,6 +86,11 @@ const ORIGIN = new Vector3();
 const desiredPath = new Vector3();
 const locked: FlightInput = { pitch: 0, roll: 0 };
 const probe = new Vector3();
+const euler = new Euler(0, 0, 0, "YXZ");
+/** Hover-Stall: how fast the pilot turns on the spot (rad/s), and how far it can look up or down */
+const HANG_YAW = 2;
+const HANG_PITCH = 1.4;
+const HANG_PITCH_LIMIT = 1.2;
 
 /** Which part of the pilot touched a surface */
 export type HitPart = "body" | "left" | "right";
@@ -186,13 +195,19 @@ export class Flight {
   private dodgeLength = 5;
   private dodgeDuration = 0.6;
 
+  /** Seconds until the next dodge can start */
+  get dodgeCooldown(): number {
+    return this.dodgeWait;
+  }
+
   /** Signed animation progress; zero means no dodge. */
   get dodgePhase(): number {
     return this.dodgeElapsed < 0 ? 0 : this.dodgeDirection * Math.max(0.0001, this.dodgeElapsed / this.dodgeDuration);
   }
 
-  dodge(direction: 1 | -1, p = FLIGHT): boolean {
-    if (this.dodgeElapsed >= 0 || this.dodgeWait > 0) return false;
+  /** A sideways dodge; `force` rolls even while one is under way or cooling down (Acrobatic Recovery) */
+  dodge(direction: 1 | -1, p = FLIGHT, force = false): boolean {
+    if (!force && (this.dodgeElapsed >= 0 || this.dodgeWait > 0)) return false;
     // Remove steering bank so a horizontal dodge doesn't also change altitude.
     turn.setFromAxisAngle(LOCAL_BACK, this.steeringBank);
     this.dodgeAxis.set(1, 0, 0).applyQuaternion(turn).applyQuaternion(this.quaternion).normalize();
@@ -241,12 +256,67 @@ export class Flight {
     this.updateAxes();
   }
 
+  /**
+   * Hover-Stall (run mode), one step: the speed bleeds away, the wings level,
+   * and the pilot turns on the spot: roll input yaws, pitch input pitches
+   * (short of straight up or down). Gravity, sink and drag are off
+   */
+  private hangStep(dt: number, input: FlightInput) {
+    this.boost = 0;
+    this.brake = 0;
+    this.speed *= Math.exp(-dt * 7);
+    this.steeringBank = 0;
+    this.updateAxes();
+    let pitch = Math.asin(clamp(this.forward.y, -1, 1));
+    let yaw = Math.atan2(-this.forward.x, -this.forward.z);
+    yaw -= clamp(input.roll, -1, 1) * HANG_YAW * dt;
+    pitch = clamp(pitch + clamp(input.pitch, -1, 1) * HANG_PITCH * dt, -HANG_PITCH_LIMIT, HANG_PITCH_LIMIT);
+    this.quaternion.setFromEuler(euler.set(pitch, yaw, 0));
+    this.updateAxes();
+    this.flightPath.copy(this.forward);
+    this.position.addScaledVector(this.forward, this.speed * dt);
+    this.velocity.copy(this.forward).multiplyScalar(this.speed);
+    this.dodgeWait = Math.max(0, this.dodgeWait - dt);
+    this.dodgeElapsed = -1;
+  }
+
+  /** Out of a hover-stall: off along the nose at `speed` */
+  launch(speed: number) {
+    this.updateAxes();
+    this.speed = speed;
+    this.flightPath.copy(this.forward);
+    this.velocity.copy(this.forward).multiplyScalar(speed);
+  }
+
+  /**
+   * Glancing off a surface (Acrobatic Recovery, run mode): out along `normal`
+   * by `push` metres, the nose and the path turned to run along the surface,
+   * keeping `keep` of the speed
+   */
+  deflect(normal: Vector3, push: number, keep: number) {
+    this.position.addScaledVector(normal, push);
+    const into = this.flightPath.dot(normal);
+    if (into < 0) {
+      desiredPath.copy(this.flightPath).addScaledVector(normal, -into * 1.15).normalize();
+      turn.setFromUnitVectors(this.flightPath, desiredPath);
+      this.quaternion.premultiply(turn).normalize();
+      this.flightPath.copy(desiredPath);
+    }
+    this.speed *= keep;
+    this.updateAxes();
+    this.velocity.copy(this.flightPath).multiplyScalar(this.speed);
+  }
+
   /** Steering bank relative to the pitch frame; continuous through vertical flight. */
   get bank(): number {
     return this.steeringBank;
   }
 
   step(dt: number, input: FlightInput, proximity: number, p = FLIGHT, mods: FlightMods | null = null) {
+    if (mods?.hang) {
+      this.hangStep(dt, input);
+      return;
+    }
     this.updateAxes();
     const brakeInput = clamp(input.brake ?? 0, 0, 1);
     const boostInput = brakeInput > 0 ? 0 : clamp(input.boost ?? 0, 0, 1);
@@ -267,6 +337,15 @@ export class Flight {
       const angle = Math.asin(clamp(this.forward.y, -1, 1));
       locked.pitch = clamp((-GLIDE_ANGLE - angle) * 2.5, -0.6, 0.6);
       locked.roll = input.roll;
+      input = locked;
+    }
+    // A plunge: the nose is hauled down towards a steep dive (steering still works)
+    if (mods && mods.dive > 0) {
+      const angle = Math.asin(clamp(this.forward.y, -1, 1));
+      locked.pitch = clamp((-mods.diveAngle - angle) * 4, -1, 1) * mods.dive + input.pitch * (1 - mods.dive);
+      locked.roll = input.roll;
+      locked.boost = input.boost;
+      locked.brake = input.brake;
       input = locked;
     }
 
@@ -358,6 +437,7 @@ export class Flight {
     const pathAccel = -p.gravity * this.flightPath.y * (1 - (mods?.hover ?? 0)) - glideLoss
       + p.proximityBoost * (mods?.proximityBoost ?? 1) * clamp(proximity, 0, 1)
       + this.boost * p.boostAcceleration * (1 + (mods?.boost ?? 0))
+      + (mods?.thrust ?? 0)
       - this.brake * p.brakeDrag * Math.max(0, this.speed ** 2 - p.brakeFloor ** 2);
     // Extra drag above the design speed replaces the old hard speed cutoff.
     const overspeed = Math.max(0, previousSpeed - p.maxSpeed);

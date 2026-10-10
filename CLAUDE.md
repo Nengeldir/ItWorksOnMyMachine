@@ -1624,6 +1624,76 @@ palette cross-fading), HUD for score, objectives and a minimap or compass,
 and a meta layer (unlocks between runs). Races and time trials stay as modes
 that reuse a fixed biome.
 
+## Items and abilities (the design list)
+
+Given on 2026-10-10. Where a description doesn't match the game as it is
+(there are no "ships", no stamina bar but the boost reserve and the
+wingbeat's stamina, gates are the "hoops"), follow the game's design and do
+what is reasonable. Everything here is **run mode only**: it reaches the
+flight model through `FlightMods` and the run controller, never races, time
+trials or ghosts (rule 6). Each one gets its own models and animations in the
+Genshin / Sky style.
+
+- **Items** are things you find or carry (consumables and gadgets): pickups
+  placed in levels (`ItemDisplay`), an inventory, `Game.useItem`. Some item
+  models already exist in `game/items/` (the giant firework, candies,
+  feathers, helmets, fruits).
+- **Abilities** are the pilot's own traits and skills: run upgrades offered
+  at portals (`run/upgrades.ts`). Passives change the flight or scoring;
+  actives have a key and a cooldown or a charge.
+
+Status: **done** = mechanics, models and animations in the game.
+
+### Items
+
+| # | Item | What it does | Status |
+| :- | :- | :- | :- |
+| 1 | Anemo Catcher (Bottle of Wind) | Releases a localized updraft, propelling you straight upward if you miss a high hoop | planned |
+| 2 | Starflake Shield | A shimmering, fragile aura that shatters on impact: protects you from one collision with terrain | planned |
+| 3 | Luminescent Glider Wax | For a while, no drag: hold top speed without losing altitude | planned |
+| 4 | Comet Tail Firework | A massive rocket strapped to your back: a terrifying, uncontrollable burst of forward speed and a trail of sparks (the giant firework model exists) | planned |
+| 5 | Spirit Lantern | Shows hidden, high-value "ghost hoops" that are invisible in dark or foggy areas | planned |
+| 6 | Echoing Conch | A sonar pulse that highlights the best path through the next three hoops | planned |
+| 7 | Feather of the Great Phoenix | A single-use revive: on a crash you burst into flames and respawn in mid-air, briefly invulnerable | planned |
+| 8 | Cloud-Spun Silk Ribbon | 10 s of much tighter turns and sharper handling, for threading canyons | planned |
+| 9 | Vortex Geode | Pulls nearby loose collectibles (points, energy) towards you for a short time | planned |
+| 10 | Aero-Boots of the Adepti | Three "mid-air jumps" (stepping on the air) to correct your altitude quickly | planned |
+| 11 | Stormcaller's Kite | A kite that catches high winds and tows you upward for 5 s | planned |
+| 12 | Glacial Prism | Freezes the timer or the combo's decay for a few seconds | planned |
+| 13 | Sun-Kissed Nectar | Fills the boost reserve (and stamina) at once | planned |
+| 14 | Tether of the Wind Spirit | A grappling hook of light to a nearby hoop or cliff, swinging you round it for a sharp turn | planned |
+| 15 | Illusory Moth Cape | Intangible for 3 s: fly straight through rock | planned |
+| 16 | Resonant Chimes | Passing a hoop while active sends a shockwave that widens the next hoop | planned |
+| 17 | Crystallized Updraft | A trampoline of wind dropped on a surface: bounce off it for a big vertical boost | planned |
+| 18 | Dusk-Weaver's Hourglass | Slows time for the world around you while you move at normal speed | planned |
+| 19 | Electro-Charged Prism | An electric aura: near misses throw chain lightning that scores bonus points | planned |
+| 20 | Tear of the Dragon | A heavy teardrop: while held, a rapid dive-bomb straight down to low hoops | planned |
+
+### Abilities (passive and active)
+
+| # | Ability | What it does | Status |
+| :- | :- | :- | :- |
+| 1 | Featherfalling (passive) | Much less pull from gravity: slower descent, less drag | in progress |
+| 2 | Skim-Booster (passive) | Near misses with the ground, walls or obstacles make "thrill energy": you can boost as long as you stay dangerously close | in progress |
+| 3 | Cloud-Surfing (passive) | Flying right over cloud layers restores stamina and gives a slight speed buff | in progress |
+| 4 | Plunging Attack (active) | A rapid, steep dive; hitting a hoop in it sends out a shockwave for bonus points | in progress |
+| 5 | Wind-Shear Dash (active) | A short, instant sideways blink to dodge a cliff face or snap into a misaligned hoop | in progress |
+| 6 | Thermal Vision (passive) | Updrafts, wind currents and boost rings glow brightly from much further away | in progress |
+| 7 | Slipstream Rider (passive) | Flying right behind moving things (giant flying manta rays, other players) makes you much faster | in progress |
+| 8 | Elemental Burst: Gale Force (active) | Stored energy unleashed as a huge wind tunnel ahead: faster, and every hoop in it gets a wider hitbox | in progress |
+| 9 | Acrobatic Recovery (passive) | Clip a wall without crashing outright and you barrel roll away, keeping your momentum | in progress |
+| 10 | Hover-Stall (active) | Stop dead and hover for 2 s, to turn and pick a new direction | in progress |
+| 11 | Moth's Attraction (passive) | The closer to a hoop's centre you pass, the more speed you come out with | planned |
+| 12 | Zenith Climber (passive) | Upward momentum lasts 20% longer when flying vertically, to scale big cliffs | planned |
+| 13 | Resonance (active) | Sing or "honk" a wave of energy: a hoop it hits turns to face you | planned |
+| 14 | Ley-Line Surger (passive) | 5 hoops in quick succession start a "Ley-Line" state: endless boost until the combo breaks | planned |
+| 15 | Aero-Braking (active) | Throw the cape and wings forward to brake hard, for hairpin turns | planned |
+| 16 | Draft-Weaving (passive) | A tight corkscrew or spiral spins up a little tornado that shields you from minor impacts | planned |
+| 17 | Ascension (active) | Give up all horizontal momentum to shoot straight up | planned |
+| 18 | Gliding Stance: Falcon (toggle) | Wings tucked: falls much faster, higher top speed, very stiff steering | planned |
+| 19 | Gliding Stance: Butterfly (toggle) | Cape spread wide: falls slowest, turns tightest, but very slow | planned |
+| 20 | Echo-Trail (passive) | You leave a ribbon of light; close a full circle across it and it becomes a wind ring that speeds you up | planned |
+
 ## Biome proposals and construction plan
 
 Each biome is a **level** in the roguelike run: a generator recipe (landforms,

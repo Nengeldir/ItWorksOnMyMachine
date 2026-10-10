@@ -329,6 +329,14 @@ export class Avatar {
    * head, x swings it to the back), `elbow` bends the forearm
    */
   readonly armPose = { amount: 0, x: 0, y: 0, z: 0, elbow: 0 };
+  /**
+   * Whole-body poses for a run's abilities (game/abilities/), each 0..1 and
+   * eased by whoever sets them: `tuck` dives like a falling star (Plunging
+   * Attack), `hover` hangs upright with the wings fluttering (Hover-Stall),
+   * `cast` throws both arms forward and flares the wings (Gale Force), `surf`
+   * crouches low with a hand trailing through the clouds (Cloud-Surfing)
+   */
+  readonly stance = { tuck: 0, hover: 0, cast: 0, surf: 0 };
   /** How far each wing (left, right) is folded in during a crash, to keep it out of rock it is wedged against (0..1) */
   private readonly folded = [0, 0];
   /** A crash playing out: the body flails, then goes limp (Game moves `group`) */
@@ -725,9 +733,11 @@ export class Avatar {
     let effort =
       0.18 + clamp(this.climb, 0, 1) * 0.9 + Math.abs(this.yawRate) * 0.35 + Math.abs(this.rollRate) * 0.08 + slow * 0.7;
     effort = clamp(effort * (1 - diving * 0.75), 0, 1);
+    const st = this.stance;
+    effort = Math.max(effort * (1 - st.tuck * 0.9), st.hover, st.cast * 0.8);
     this.effort += (effort - this.effort) * (1 - Math.exp(-dt * 3));
     const before = Math.sin(this.flapPhase);
-    this.flapPhase += TAU * (ANIM.flapRate + ANIM.flapBoost * this.effort) * dt * (this.barrel.t >= 0 ? 1.6 : 1);
+    this.flapPhase += TAU * (ANIM.flapRate + ANIM.flapBoost * this.effort) * dt * (this.barrel.t >= 0 ? 1.6 : 1) * (1 + st.hover * 0.9);
     const after = Math.sin(this.flapPhase);
     if (before > 0 && after <= 0 && this.time - this.lastFlap > 0.15) {
       this.lastFlap = this.time;
@@ -761,27 +771,30 @@ export class Avatar {
     const bob = Math.sin(t * TAU * A.bobRate) * A.bobAmount * calm;
     const flapLift = Math.sin(this.flapPhase + Math.PI / 2) * 0.05 * this.effort;
     this.rig.position.set(Math.sin(t * TAU * A.bobRate * 0.5) * A.bobAmount * 0.4 * calm, bob + flapLift, 0);
+    const st = this.stance;
+    // Hovering, the body swings upright under the wings; surfing, it sits back a little
     this.rig.rotation.set(
-      Math.cos(t * TAU * A.bobRate) * 0.04 * calm - this.pitchRate * 0.05,
+      Math.cos(t * TAU * A.bobRate) * 0.04 * calm - this.pitchRate * 0.05 + st.hover * 0.95 + st.surf * 0.18 - st.tuck * 0.1,
       0,
-      roll,
+      roll + Math.sin(t * 1.3) * 0.12 * st.surf,
     );
     const stretch = 1 + clamp((this.speed - 55) / 60, 0, 1) * 0.06;
     this.rig.scale.set(SCALE / Math.sqrt(stretch), SCALE / Math.sqrt(stretch), SCALE * stretch);
 
     // Body: a superhero arch, more when climbing; the head looks ahead and into turns
-    this.chest.rotation.set(this.brake * 0.18 - this.boost * 0.08 + 0.1 + clamp(this.climb, 0, 1) * 0.12 + this.pitchRate * 0.05, -turn * 0.08 * A.limbSwing, 0);
-    this.head.rotation.set(0.85 - this.pitchRate * 0.08, -turn * 0.35 * A.headLook, turn * 0.25 * A.headLook);
+    this.chest.rotation.set(this.brake * 0.18 - this.boost * 0.08 + 0.1 + clamp(this.climb, 0, 1) * 0.12 + this.pitchRate * 0.05 + st.cast * 0.3 + st.surf * 0.25 - st.tuck * 0.12, -turn * 0.08 * A.limbSwing, 0);
+    this.head.rotation.set(0.85 - this.pitchRate * 0.08 - st.hover * 0.55 - st.surf * 0.15, -turn * 0.35 * A.headLook, turn * 0.25 * A.headLook);
     this.pelvis.rotation.set(0, turn * 0.06 * A.limbSwing, -this.lean * 0.15);
 
     // Wings
-    const amp = (A.flapAngle * this.effort + A.glideFlutter * (1 - this.effort)) * (1 - this.brake * 0.85) * (1 - this.boost * 0.5);
+    const amp = (A.flapAngle * this.effort + A.glideFlutter * (1 - this.effort)) * (1 - this.brake * 0.85) * (1 - this.boost * 0.5) * (1 - st.tuck * 0.85) * (1 - st.surf * 0.6) * (1 + st.hover * 0.25);
     const stroke = Math.sin(this.flapPhase) + 0.22 * Math.sin(this.flapPhase * 2);
     const strokeOuter = Math.sin(this.flapPhase - 0.7) + 0.22 * Math.sin(this.flapPhase * 2 - 1.4);
     const barrelTuck = this.barrel.t >= 0 ? Math.sin(Math.PI * this.barrel.t) : 0;
-    const sweep = A.sweepAtSpeed * speedK + barrelTuck * 0.45 - slow01(this.speed) * 0.1 + this.boost * A.boostSweep - this.brake * A.brakeSweep;
+    const sweep = A.sweepAtSpeed * speedK + barrelTuck * 0.45 - slow01(this.speed) * 0.1 + this.boost * A.boostSweep - this.brake * A.brakeSweep
+      + st.tuck * 0.95 - st.hover * 0.3 - st.cast * 0.35;
     // Positive lift raises the wing (towards the back)
-    const lift = (s: 1 | -1) => 0.12 + amp * stroke + turn * 0.12 * s * A.limbSwing;
+    const lift = (s: 1 | -1) => 0.12 + amp * stroke + turn * 0.12 * s * A.limbSwing + st.cast * 0.35 - st.tuck * 0.15;
     for (const [side, s] of [
       [this.right, 1],
       [this.left, -1],
@@ -790,15 +803,21 @@ export class Avatar {
       side.wingOuter.rotation.set(0, -(amp * 0.8 * strokeOuter + 0.05) * s, (-0.1 - sweep * 0.7) * s);
 
       // Arms reach out like a Sky glide and follow the wings a little
-      const spread = 1.3 - speedK * 0.35 - barrelTuck * 0.5 + this.brake * 0.25 - this.boost * 0.15;
-      const armLift = 0.25 + stroke * amp * 0.35 + turn * 0.25 * s * A.limbSwing;
+      const glide = 1.3 - speedK * 0.35 - barrelTuck * 0.5 + this.brake * 0.25 - this.boost * 0.15;
+      // Tucked, the arms reach past the head like a diver's; casting, they thrust ahead; the
+      // surfer's left hand trails low, through the cloud
+      const reach = Math.max(st.tuck, st.cast);
+      const trailing = s < 0 ? st.surf : st.surf * 0.4;
+      const spread = glide + (2.75 - glide) * reach + st.hover * 0.25 - trailing * 0.55;
+      const armLift = (0.25 + stroke * amp * 0.35 + turn * 0.25 * s * A.limbSwing) * (1 - reach) - trailing * 0.7;
       side.shoulder.rotation.set(0, -armLift * s, spread * s);
-      side.elbow.rotation.set(0, 0, 0.25 * s);
+      side.elbow.rotation.set(0, 0, (0.25 + st.cast * 0.1 - st.tuck * 0.2) * s);
 
       // Legs together, knees soft, toes pointed; they swing like a rudder in turns
       const kick = Math.sin(t * 2.4 + (s > 0 ? 0 : 1.6)) * 0.06 * calm;
-      side.hip.rotation.set(0.06 + kick, 0, 0.05 * s - turn * 0.12 * A.limbSwing);
-      side.knee.rotation.set(-this.brake * 0.3 - 0.32 - clamp(this.climb, 0, 1) * 0.35 - kick * 1.4 - barrelTuck * 0.4, 0, 0);
+      // Hovering, the legs dangle; surfing, they swing under the body, knees bent as if on a board
+      side.hip.rotation.set(0.06 + kick + st.hover * 0.35 * (s > 0 ? 1 : 0.7) + st.surf * 0.75, 0, 0.05 * s - turn * 0.12 * A.limbSwing + st.surf * 0.12 * s);
+      side.knee.rotation.set((-this.brake * 0.3 - 0.32 - clamp(this.climb, 0, 1) * 0.35 - kick * 1.4 - barrelTuck * 0.4) * (1 - st.tuck * 0.85) - st.hover * 0.45 - st.surf * 0.9, 0, 0);
     }
 
     // Item animations take over the right arm

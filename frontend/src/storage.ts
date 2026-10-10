@@ -29,15 +29,17 @@ export function normalizeSettings(value: unknown): Settings {
     const candidate = saved.bindings as Bindings;
     const used = new Set<string>();
     let valid = true;
+    // Actions added since these were saved keep their default keys, unless that would clash
+    const saved = (action: (typeof bindingActions)[number]) => candidate[action] === undefined ? bindings[action] : candidate[action];
     for (const action of bindingActions) {
-      const codes = candidate[action];
+      const codes = saved(action);
       if (!Array.isArray(codes) || codes.length < 1 || codes.length > 2) { valid = false; break; }
       for (const code of codes) {
         if (typeof code !== "string" || !bindable(code) || used.has(code)) valid = false;
         used.add(code);
       }
     }
-    if (valid) for (const action of bindingActions) bindings[action] = [...candidate[action]];
+    if (valid) for (const action of bindingActions) bindings[action] = [...saved(action)];
   }
   return { ...defaults, bindings,
     nickname: typeof saved.nickname === "string" ? saved.nickname.slice(0,24) : "",
