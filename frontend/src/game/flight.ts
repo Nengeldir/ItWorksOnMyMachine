@@ -30,6 +30,15 @@ export const FLIGHT = {
   brakeDrag: 0.025,
   brakeFloor: 22, // brake force fades here; climbing can still stall
   minSpeed: 6, // steering denominator only; never injects speed
+  // The hitbox (see touching()): a ball for the body, a flat rectangle per wing.
+  // A little smaller than the pilot drawn, so near misses stay graceful
+  hitBody: 0.5, // radius of the body's ball (m)
+  hitBodyAhead: 0.4, // the ball's centre, ahead of the hips (the pilot's origin): it covers the head too
+  hitWingFrom: 0.35, // each wing's rectangle spans this far out from the middle…
+  hitWingTo: 2.1, // …to this far
+  hitWingChord: 0.9, // front to back
+  hitWingAhead: -0.15, // the rectangle's middle, ahead of the hips (negative: behind; the wings sweep back)
+  hitWingDihedral: 0.15, // radians the rectangles tilt up towards the tips, like the wings drawn mid-stroke
 };
 
 /**
@@ -72,6 +81,66 @@ const lookMatrix = new Matrix4();
 const ORIGIN = new Vector3();
 const desiredPath = new Vector3();
 const locked: FlightInput = { pitch: 0, roll: 0 };
+const probe = new Vector3();
+
+/** Which part of the pilot touched a surface */
+export type HitPart = "body" | "left" | "right";
+
+/** The wings' rectangles sit on the back, a little above the hips */
+const WING_UP = 0.15;
+/** Samples across each wing's rectangle: corners and edges catch flat rock exactly, the inner rows bumps and trunks */
+const SPAN_SAMPLES = 4;
+const CHORD_SAMPLES = 3;
+
+/**
+ * The pilot's hitbox against a distance field (negative inside): a ball for
+ * the body and a flat rectangle for each wing, tilted up a little like the
+ * wings drawn. It's fixed in the flight frame: the animated pose, flaps and
+ * barrel rolls never change what you hit. `center` is the field at
+ * `position`, which the caller already has: far from everything, nothing
+ * else is sampled. Returns the part touching, and writes
+ * the contact's offset in the pilot's own frame to `local`; null if clear.
+ */
+export function touching(
+  field: (x: number, y: number, z: number) => number,
+  position: Vector3,
+  quaternion: Quaternion,
+  center: number,
+  local: Vector3,
+  p = FLIGHT,
+): HitPart | null {
+  const lift = Math.tan(p.hitWingDihedral);
+  const reach = Math.max(p.hitBodyAhead + p.hitBody, Math.hypot(p.hitWingTo, WING_UP + Math.abs(lift) * p.hitWingTo, Math.abs(p.hitWingAhead) + p.hitWingChord / 2));
+  if (center > reach + 0.25) return null;
+  local.set(0, 0, -p.hitBodyAhead);
+  probe.copy(local).applyQuaternion(quaternion).add(position);
+  if (field(probe.x, probe.y, probe.z) < p.hitBody) return "body";
+
+  // Half the rectangle's diagonal (its span measured along the tilt)
+  const halfDiagonal = Math.hypot(((p.hitWingTo - p.hitWingFrom) / 2) * Math.hypot(1, lift), p.hitWingChord / 2);
+  for (let side = 1; side >= -1; side -= 2) {
+    // The wing's middle first: if the nearest surface is beyond its corners, the whole wing is clear
+    const middle = (p.hitWingFrom + p.hitWingTo) / 2;
+    probe.set(middle * side, WING_UP + middle * lift, -p.hitWingAhead).applyQuaternion(quaternion).add(position);
+    if (field(probe.x, probe.y, probe.z) > halfDiagonal) continue;
+    let deepest = 0;
+    for (let i = 0; i < SPAN_SAMPLES; i++) {
+      const x = (p.hitWingFrom + ((p.hitWingTo - p.hitWingFrom) * i) / (SPAN_SAMPLES - 1)) * side;
+      for (let j = 0; j < CHORD_SAMPLES; j++) {
+        const z = -p.hitWingAhead + p.hitWingChord * (j / (CHORD_SAMPLES - 1) - 0.5);
+        const y = WING_UP + Math.abs(x) * lift;
+        probe.set(x, y, z).applyQuaternion(quaternion).add(position);
+        const d = field(probe.x, probe.y, probe.z);
+        if (d < deepest) {
+          deepest = d;
+          local.set(x, y, z);
+        }
+      }
+    }
+    if (deepest < 0) return side > 0 ? "right" : "left";
+  }
+  return null;
+}
 
 export class Flight {
   readonly position = new Vector3();

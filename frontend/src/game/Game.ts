@@ -10,7 +10,7 @@ import { Debris } from "./effects";
 import { debugModeRequested, type DebugSettings } from "./debugMode";
 import type { DebugPanel } from "./debug/panel";
 import type { DebugAction } from "./debug/actions";
-import { FLIGHT, Flight, type FlightInput } from "./flight";
+import { FLIGHT, Flight, type FlightInput, type HitPart, touching } from "./flight";
 import { GlideIn } from "./glidein";
 import { Equipment } from "./items/equip";
 import type { ItemId, ItemSlot } from "./items/models";
@@ -35,7 +35,6 @@ import { reloadForNewBuild } from "../staleBuild";
 
 const STEP = 1 / 120; // physics runs at a fixed rate, rendering interpolates
 const MAX_STEPS_PER_FRAME = 12;
-const CRASH_DISTANCE = 0.7; // metres from a surface
 const SCORE_RANGE = 10; // proximity counts within this many metres
 const RESPAWN_DELAY = 1.4; // seconds
 const START_SPEED = 32; // m/s
@@ -145,6 +144,9 @@ const basisB = new THREE.Vector3();
 const color = new THREE.Color();
 const normal = new THREE.Vector3();
 const surface = new THREE.Vector3();
+const hitLocal = new THREE.Vector3();
+const hitPoint = new THREE.Vector3();
+const ORIGIN = new THREE.Vector3();
 const waterHit: WaterHit = { distance: 0, level: 0, kind: "water" };
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
@@ -696,21 +698,25 @@ export class Game implements RunHost {
     this.respawn(this.raceState === "free" ? 0 : this.checkpoints);
   }
 
-  /** `lost`: fell below the islands rather than hitting something */
-  private crash(lost: boolean) {
+  /** `part` hit something (at `hitLocal` in the pilot's frame), or null: fell below the islands */
+  private crash(part: HitPart | null) {
     const f = this.flight;
+    const lost = part === null;
     this.crashedAt = this.elapsed;
     this.flight.releaseControls();
-    // How the hit plays out depends on how you met the surface (seen from the last step, still outside it)
-    fieldNormal(this.field, this.prevPosition, normal);
-    const kind = classifyCrash(tmp.copy(f.velocity).normalize(), f.right, normal, lost);
-    this.death.start(kind, this.prevPosition, f.velocity, f.quaternion, f.right, f.up, normal);
+    // How the hit plays out depends on how that part met the surface (seen from the last step, still outside it)
+    hitPoint.copy(lost ? ORIGIN : hitLocal).applyQuaternion(this.prevQuaternion).add(this.prevPosition);
+    fieldNormal(this.field, hitPoint, normal);
+    const kind = classifyCrash(tmp.copy(f.velocity).normalize(), f.right, normal, lost, part);
+    this.death.start(kind, this.prevPosition, f.velocity, f.quaternion, f.right, f.up, normal, part === "left" ? -1 : part === "right" ? 1 : undefined);
+    this.avatar.wingPoints(this.death.wing);
     this.avatar.die(kind, this.death.side);
+    this.rig.startFall(this.prevPosition);
     this.dissolved = false;
     this.deathDebt = 0;
     this.fx.hide();
-    if (!lost) this.debris.burst(f.position, f.velocity);
-    this.crashBurst(kind, normal);
+    if (!lost) this.debris.burst(hitPoint, f.velocity);
+    this.crashBurst(kind, normal, hitPoint);
     this.audio.crash();
     this.combo = 0;
     this.run?.crashed();
@@ -726,8 +732,10 @@ export class Game implements RunHost {
 
     const { x, y, z } = this.flight.position;
     const distance = this.world.distance(x, y, z);
-    if (distance < CRASH_DISTANCE || this.world.lost(y, z)) {
-      this.crash(distance >= CRASH_DISTANCE);
+    // The hitbox: a ball for the body, a rectangle for each wing (flight.ts)
+    const part = touching(this.field, this.flight.position, this.flight.quaternion, distance, hitLocal);
+    if (part || this.world.lost(y, z)) {
+      this.crash(part);
       return;
     }
     this.proximity = clamp((SCORE_RANGE - distance) / (SCORE_RANGE - 1.5), 0, 1);
@@ -888,9 +896,8 @@ export class Game implements RunHost {
   }
 
   /** Stars and puffs off the impact, thrown away from the surface; each kind of crash adds its own */
-  private crashBurst(kind: DeathKind, away: THREE.Vector3) {
+  private crashBurst(kind: DeathKind, away: THREE.Vector3, p: THREE.Vector3) {
     const amount = this.particles.budget;
-    const p = this.flight.position;
     color.set(this.world.palette.accent);
     // Fewer and smaller than they'd be for a vanishing pilot: the body stays on screen
     for (let k = 0; k < Math.round(40 * amount); k++) {
@@ -1163,9 +1170,10 @@ export class Game implements RunHost {
       body.position.copy(this.death.position);
       body.quaternion.copy(this.death.quaternion);
       this.avatar.update(dt, this.death.speed, 0);
+      this.avatar.wingPoints(this.death.wing);
       this.equipment.update(dt);
       this.deathEffects(dt);
-      this.rig.follow(body.position, dt, this.clearance);
+      this.rig.fall(body.position, dt, this.field);
     }
     this.debris.update(dt);
 

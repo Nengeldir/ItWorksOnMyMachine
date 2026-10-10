@@ -100,21 +100,21 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | Path | What it does |
 | :--- | :--- |
 | `game/Game.ts` | The game: frame loop, fixed 120 Hz physics steps, race state, ring checks, HUD data, effects wiring (gate bursts, skim spray, gate motes), rendering with optional bloom, adaptive quality, the `?tune` panel |
-| `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only. `FlightMods` (run upgrades: drag, sink, stall, proximity boost, dash boost, thermal lift, hover, glide lock) are only ever passed in run mode; `flap()` is a run ability |
+| `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only. `touching()` is the pilot's hitbox (`FLIGHT.hit*`): a ball for the body and a rectangle per wing, tilted up at a dihedral, fixed in the flight frame (never the animated pose), sampled against the distance field with early-outs. `FlightMods` (run upgrades: drag, sink, stall, proximity boost, dash boost, thermal lift, hover, glide lock) are only ever passed in run mode; `flap()` is a run ability |
 | `game/avatar.ts` | The pilot: a cel-shaded chibi flyer built from primitives (merged per body part, vertex-colored), a procedural cape and scarf (`Cloth`), two-segment feathered wings, and all its animation: bank lead spring, barrel rolls, flapping driven by effort, bobbing, cloth ripples, limb reactions. Also `createLabel` and `glowTexture` |
 | `game/toon.ts` | Toon material (3-band gradient, rim light tinted by the biome's sun, self-lit `glow` vertex attribute for trims and wingtips) and the inverted-hull ink outline. `TOON_LIGHT` is set per biome |
 | `game/pilotfx.ts` | Per-pilot effects: wingtip and cape ribbons, light motes, downstroke puffs, barrel-roll star spiral. Shared by you, other players and ghosts |
 | `game/particles.ts` | One GPU particle system (ring buffer, physics in the vertex shader). Kinds: Glow, Star, Shard, Wisp. `fxTime` is the shared shader clock; `FX_LIGHT.boost` scales all glowing effects per biome |
 | `game/trail.ts` | Glowing additive ribbon (shader: soft edges, light pulses, fades near the camera) |
 | `game/speedlines.ts` | Wind streaks that hang in the air and rush past at speed |
-| `game/camera.ts` | Chase camera (`CAMERA` tuning): lag, partial horizon roll, FOV with speed, FOV kick on gates, shake when skimming |
+| `game/camera.ts` | Chase camera (`CAMERA` tuning): lag, partial horizon roll, FOV with speed, FOV kick on gates, shake when skimming; after a crash (`startFall`, `fall`) it arcs up over the pilot and looks down on the fall (`CAMERA.fall*`) |
 | `game/tuning.ts` | `ANIM`, `FX`, `RINGS`, `CAMERA`: every look constant, slider ranges, localStorage persistence |
 | `game/input.ts` | Keyboard, pointer-lock mouse and gamepad, merged into pitch and roll, plus actions (respawn, mute, barrel rolls) |
 | `game/pilots.ts` | Remote players and ghosts: interpolated samples driving an `Avatar` and `PilotFx` |
 | `game/ghost.ts` | Recording and decoding ghost runs (15 Hz) |
 | `game/glidein.ts` | `GlideIn`: while the land near you is loading (free flight, runs, explore; never races), the pilot glides in on rails instead of hanging frozen: no input, no physics step, no scoring; at most 70 m and never within 30 m of the next gate, slowing before rock; control comes back at `START_SPEED` when the land is ready, and a run's level clock keeps running meanwhile |
 | `game/items/` | Items, models and animations only (what they do comes later). `models.ts`: `ITEMS` (id, name, kind, slot) and `buildItem(id)`: the giant firework (worn on the back like a jetpack, with `fireworkFlame`), three candies, the golden feather, two helmets, five fruits, all primitives painted per vertex with the toon material and ink. `equip.ts`: `Equipment` (pull an item out with a sparkle; the firework from the hand over the shoulder onto the back, helmets drop onto the head, hand items are held up; `use()` eats; `setThrust()` lights the firework) and `ItemDisplay` (a floating pickup). `gallery.ts`: the `/?gallery` scene. `Game.equip/unequip/useItem/thrust` drive it on your pilot; `Avatar.slots` and `Avatar.armPose` are the hooks |
-| `game/death.ts` | Crash animations, looks only: `classifyCrash` picks headfirst (into a wall: bounce and tumble), slide (glancing ground: roll down the slope), wing (a wing clipped: spin down) or fall (below the islands); `DeathFall` is a small rigid-body tumble kept out of the rock by the distance field. The avatar plays `die(kind)`, the camera `follow`s, the body dissolves into light at `DISSOLVE_AT`, all inside `RESPAWN_DELAY` |
+| `game/death.ts` | Crash animations, looks only: `classifyCrash` picks headfirst (into a wall: bounce and tumble), slide (glancing ground: roll down the slope), wing (a wing clipped: spin down) or fall (below the islands); `DeathFall` is a small rigid-body tumble (impulses at contact points: balls for head, hips and feet, five points per wing from the live pose via `Avatar.wingPoints`) kept out of the rock by the distance field. The avatar plays `die(kind)`, the camera `follow`s, the body dissolves into light at `DISSOLVE_AT`, all inside `RESPAWN_DELAY` |
 | `game/effects.ts` | Crash debris: feathers knocked loose that flutter down (instanced) |
 | `game/audio.ts` | Synthesized wind and event sounds, run stingers (portal, upgrade, dash; sidequest and item are unused for now), the wingbeat sample (`public/audio/sfx/wingbeat.mp3`, pitch-randomized, played on each of your downstrokes and on the Wingbeat ability) and the `MusicPlayer` |
 | `game/music.ts` | `MusicPlayer`: one looping track per biome from `public/audio/music/<biome>_<title>.mp3`, crossfaded on biome change (`TRACK_OF` maps biomes to tracks; similar biomes share one). Night dims and muffles the same track. Loaded lazily, decoded with Web Audio, no music if a file fails |
@@ -126,7 +126,8 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/world/biomes/` | Biomes as data (`types.ts`: `Biome`, `Level`, `LevelKey`). `index.ts`: the registry, `raceLevel(seed)` (races and time trials: always Sky Isles) and `runLevel(runSeed, index, biome)` (roguelike levels, deterministic from the run seed and level number). `skyIsles.ts`: the race map, frozen |
 | `game/world/World.ts` | Everything a level decides: course, rock field, trees, palette; built from a `Level` (biome + seed + mood). `distance()` for collisions, `lost()` below the islands. No rendering |
 | `game/world/islands.ts` | `RockField`: the floating islands as one signed distance field (shapes melted with `smin`, roughened, a tube carved along the racing line) |
-| `game/world/mesher.ts`, `mesher.worker.ts` | Cuts chunks of the rock field into flat-shaded meshes in Web Workers, and places trees. Workers rebuild the World from a `LevelKey` |
+| `game/world/mesher.ts`, `mesher.worker.ts` | Cuts chunks of the rock field into flat-shaded meshes in Web Workers, and places trees (from the grid's own vertices, so the race map's tree colliders never move; `treeSink` stretches a trunk down to snapped rock, drawn only). Workers rebuild the World from a `LevelKey` |
+| `game/world/snap.ts` | Makes the land drawn match the land you hit: `snapToSurface` moves surface-nets vertices onto the field's zero surface (Newton steps), `SurfaceCutter` splits faces whose edges or middles still stray more than 0.5 m (crack-free: an edge's split depends only on its ends). Used by both meshers (v2 at full detail only) |
 | `game/world/trees.ts` | Tree colliders and their lookup index |
 | `game/world/course.ts` | The racing line (a descending curve in z) and the gates along it |
 | `game/world/palette.ts` | The `Palette` type: a lighting mood (colors, sun elevation and azimuth, night factor, mist, effect glow), and `sunDirection(palette)`. Each biome lists its moods |
@@ -190,6 +191,55 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Crash camera from above, pilot hitbox, land matching its collisions (Claude)
+
+Asked for: after a crash the camera changes to a view from the top to see
+the fall; collisions that don't visibly clip into the terrain, with the
+player's hitbox a small ball for the body and two small rectangles for the
+wings (a little clip is fine if it isn't obvious); then a check that the
+terrain's hitbox matches what's drawn, and a fix if not. A deliberate
+gameplay change (rule 6): what crashes you changed, in races too.
+- **Hitbox** (`flight.ts` `touching()`, used by `Game.step`): replaces the
+  0.7 m point test at the hips. A 0.5 m ball 0.4 m ahead of the hips (covers
+  the head), and per wing a 0.9 m × 1.75 m rectangle from 0.35 to 2.1 m out,
+  tilted up 0.15 rad like the wings mid-stroke, sampled 4 × 3. Skipped when
+  the field at the hips is beyond its reach, a wing skipped when its middle
+  is beyond its corners, so it costs one extra field sample a step in open
+  air. Fixed in the flight frame: animation never changes what you hit.
+  Proximity scoring still measures from the hips (unchanged). A wing hit
+  plays the "wing" crash on that side; the crash normal and debris come
+  from the contact point.
+- **Tumble** (`death.ts`): rigid-body contacts with impulses and Coulomb
+  friction at balls for head, hips and feet and five points per wing taken
+  from the live pose each frame (`Avatar.wingPoints`, a new `trail` marker
+  at the last primary's tip), substepped at 120 Hz. A wingtip catching a
+  slope now spins the body. Measured over seven crashes on Sky Isles: no
+  ball ever inside its radius of the rock, wing points ≥ 0.03 m off it.
+- **Camera** (`camera.ts`): `startFall` at the crash, then `fall`: arcs up
+  on the chase view's side to 11 m at 70° above the horizon (`CAMERA.
+  fallDistance`, `fallAngle`, `fallSwing`, `fallTrack`) and looks down,
+  trailing the body slightly so the drop reads; pulled in out of rock and
+  trees. Replaces `follow`.
+- **Land vs collisions** (new `world/snap.ts`): measured first. Drawn land
+  was off the collision field by a mean 0.65 m (Verdant) to 1 m (Sky Isles),
+  p95 2.3 to 3 m, worst ±10 m (surface nets on a 6 m grid put vertices at
+  linear edge crossings, and 6 m faces cut across ridges and creases). Now
+  vertices are snapped onto the surface, and faces that still stray more
+  than 0.5 m are cut (crack-free). After: vertices mean 0.06 to 0.08 m;
+  face centres mean 0.35 m, p95 1.15 m on Sky Isles (was 1.16 / 3.03 m).
+  Sky Isles' trees and colors still come from the grid's vertices, so
+  `__raceHashes()` keeps trees, dist and rings; only mesh changed (new
+  values in `docs/dev-snippets.js`). Trees whose rock moved down get their
+  drawn trunk stretched to it (`treeSink`), never their collider.
+- Cost: about 4.4× the rock triangles on Sky Isles (sampled), a full-detail
+  v2 node meshes in about 29 ms instead of about 22 ms (main thread, dev
+  build). Not measured in a focused window.
+- Verified: build and lint pass; race hashes as above. In Chrome (Sky Isles
+  seed 42, `__crash` and scripted approaches with a 15 to 30 m run-up): the
+  overhead view during headfirst, slide and wing crashes; with real flying
+  poses, the drawn wing at a crash is a median 0.49 m clear of the rock, worst
+  0.78 m into it for one frame. Not played with a mouse.
 
 ### 2026-10-10: Victory lap and the finish screen (Claude)
 
@@ -994,6 +1044,16 @@ ported to the islands world:
   through islands and gates, no console errors.
 
 ## Next up
+
+- **Hitbox and land follow-ups**: features thinner than the 6 m grid (thin
+  needles, sharp spikes) still collide where nothing is drawn (snapping
+  leaves those vertices; p99 at face centres is about 2 m). Coarse v2 nodes
+  (12 m and up) aren't snapped. The extra rock triangles (about 4×) want a
+  frame-time check in a focused window; `SurfaceCutter`'s tolerance (0.5 m)
+  is the knob. Remote pilots don't use the hitbox (they never crash).
+- `__crash` teleports the pilot 5 m from the rock: the crash often comes in
+  the first frame, before the avatar's pose has updated, so that frame's wing
+  points are stale. Harmless in play.
 
 **Resume here:** the five roguelike milestones are done, and so are the
 crash animations, the glide-in, items (models only), portal wormholes, the
