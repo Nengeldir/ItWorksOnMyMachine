@@ -1,6 +1,7 @@
 import { useEffect, useEffectEvent, useRef } from "react";
 import { loadSettings, type Settings } from "../storage";
 import { type AttractMode, Game } from "../game/Game";
+import type { Level } from "../game/world/biomes/types";
 
 const ART_ASPECT = 2.2; // map-select card art, width / height (CourseSelect.css draws it at about this shape)
 const ART_WIDTH = 720;
@@ -9,6 +10,8 @@ const READY_POLL_MS = 400;
 
 interface MenuBackdropProps {
   seed: number;
+  /** Instead of the course on `seed`: any level, of any biome (the adventure's map select) */
+  level?: Level | null;
   mode: AttractMode;
   settings?: Settings;
   /** Gets a picture of each course once its land has loaded (map-select card art) */
@@ -16,7 +19,7 @@ interface MenuBackdropProps {
 }
 
 /** The live course behind the menu. Without WebGL the menu keeps its plain background. */
-const MenuBackdrop = ({ seed, mode, onSnapshot, settings }: MenuBackdropProps) => {
+const MenuBackdrop = ({ seed, level = null, mode, onSnapshot, settings }: MenuBackdropProps) => {
   const container = useRef<HTMLDivElement>(null);
   const game = useRef<Game | null>(null);
   const shown = useRef(seed);
@@ -41,9 +44,13 @@ const MenuBackdrop = ({ seed, mode, onSnapshot, settings }: MenuBackdropProps) =
     };
   }, [mode]);
 
-  // Another course (the map select): the same game builds it, so the canvas never goes blank.
-  // Once its land is in, take a picture of it.
+  // Another course or level (the map selects): the same game builds it, so the canvas never goes blank.
+  // Once a course's land is in, take a picture of it (levels have their art drawn ahead of time).
   useEffect(() => {
+    if (level) {
+      game.current?.setLevel(level);
+      return;
+    }
     shown.current = seed;
     game.current?.setSeed(seed);
     let timer = 0;
@@ -59,7 +66,7 @@ const MenuBackdrop = ({ seed, mode, onSnapshot, settings }: MenuBackdropProps) =
     };
     timer = window.setTimeout(check, READY_POLL_MS);
     return () => clearTimeout(timer);
-  }, [seed]);
+  }, [seed, level]);
 
   useEffect(() => { if (settings) game.current?.setControls(settings); }, [settings]);
 

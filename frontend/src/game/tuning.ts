@@ -82,10 +82,29 @@ export const CAMERA = {
   fallTrack: 7, // how tightly it keeps up with the falling body
 };
 
-/** Generator-v2 land: level of detail and the terrain shader. Looks only; collisions never change */
+export const TERRAIN_DETAIL = { mountainRelief: 3, facetScatter: 0.16 }; // bounded relief × biome roughness; reload workers after edits
+
+// Worker geometry settings: changing these requires rebuilding/reloading workers.
+export const MESH_CLEANUP = {
+  fragmentMaxSize: 36, // only small closed fragments are removed (m)
+  fragmentMinThickness: 0.18, // 3 * enclosed volume / surface area (m)
+  fragmentThinRatio: 0.055, // thickness / longest extent: reject sheets and needles
+  stoneMaxSize: 24, // compact pebbles get one subdivision below this size (m)
+  stoneMaxFaces: 80, // cap refinement work; broad terrain stays coarse
+  tipMinHeight: 1.5, // minimum attached needle height (m)
+  tipWidthRatio: 0.3, // neighbour-ring radius / tip height
+  tipMaxTrim: 3, // maximum attached-tip shortening (m)
+};
+
+/** Generator-v2 terrain streaming and appearance. Collisions follow the visible meshes. */
 export const TERRAIN = {
-  lodNear: 300, // metres: land closer than this is meshed at full detail (6 m)
+  lodLookAheadSeconds: 2, // prepare approaching terrain two seconds ahead of current velocity
+  lodLookAheadMax: 240, // cap extra detail extent during fast dives (m)
+  lodDetail: 140, // metres from any terrain node: finest 3 m cells, including side mountains
+  lodNear: 300, // metres: 6 m cells before the finest approach tier
   lodFar: 700, // closer than this at half detail (12 m), further at quarter (24 m)
+  lodHysteresis: 48, // extra distance before merging fine detail again
+  cacheMiB: 48, // bounded cache of hidden terrain (estimated CPU + GPU buffers)
   viewDistance: 1500,
   readyRadius: 260, // the start waits until the land this close has arrived
   uploadsPerFrame: 4, // arrived land meshes taken in per frame once you're flying (smooths frame times)
@@ -156,6 +175,14 @@ export const ABILITIES_FX = {
   echo: 1, // the Echo-Trail ribbon and its wind rings
 };
 
+/** Companion movement and scale: looks only, independent of all flight rules. */
+export const PET_LOOKS = { size: 1.8, spacing: 2.9, height: 0.7, trail: 0.8, follow: 8, snapDistance: 30, bob: 0.12, wingbeat: 1, tailSway: 1, lead: 20 };
+/** Small ornaments and particle emission, never the pilot's hitbox. */
+export const COSMETIC_FX = { capeDetail: 1, wingParticles: 22, wingParticleSize: .22 };
+/** Collection models and motion; reward rules live on the server. */
+export const COLLECTION_FX = { bob: 0.5, spin: 0.65, size: 2.2, viewDistance: 240, burst: 1 };
+
+
 /** Music and sound levels */
 export const AUDIO = {
   music: 0.45, // volume of the background music
@@ -165,15 +192,9 @@ export const AUDIO = {
   nightMuffle: 0.55, // how much the highs are rolled off at night
 };
 
-export const PET_LOOKS = { size: 1.8, spacing: 2.9, height: 0.7, trail: 0.8, follow: 8, snapDistance: 30, bob: 0.12, wingbeat: 1, tailSway: 1, lead: 20 };
-/** Small ornaments and particle emission, never the pilot's hitbox. */
-export const COSMETIC_FX = { capeDetail: 1, wingParticles: 22, wingParticleSize: .22 };
-/** Collection models and motion; reward rules live on the server. */
-export const COLLECTION_FX = { bob: 0.5, spin: 0.65, size: 2.2, viewDistance: 240, burst: 1 };
-
 const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, STRUCTURES, WATER, DEEP, RUN, AUTOPILOT, ABILITIES_FX, PET_LOOKS, COSMETIC_FX, COLLECTION_FX, AUDIO } as const;
 const DEFAULTS = JSON.parse(JSON.stringify(GROUPS)) as typeof GROUPS;
-const STORAGE_KEY = "wingrace.tuning.speed-control-v1";
+const STORAGE_KEY = "windrider.tuning.speed-control-v1";
 
 type Group = Record<string, number | boolean>;
 
@@ -213,6 +234,18 @@ export function resetTuning() {
 
 /** Slider ranges for the ?tune panel; anything missing gets a range from its default */
 export const RANGES: Record<string, [number, number, number?]> = {
+  size: [0, 3],
+  lead: [8, 45],
+  capeDetail: [0, 2],
+  wingParticles: [0, 50],
+  wingParticleSize: [0.05, 0.5],
+  spacing: [2.5, 4.5],
+  trail: [0, 3],
+  follow: [2, 16],
+  snapDistance: [10, 60],
+  bob: [0, 0.4],
+  wingbeat: [0, 2],
+  tailSway: [0, 2],
   boostSweep: [0, 0.6],
   brakeSweep: [0, 1.2],
   boostTrailGlow: [0, 2],
@@ -273,6 +306,11 @@ export const RANGES: Record<string, [number, number, number?]> = {
   fallAngle: [20, 85],
   fallSwing: [0.5, 10],
   fallTrack: [1, 20],
+  lodHysteresis: [0, 120, 4],
+  cacheMiB: [0, 128, 8],
+  lodLookAheadSeconds: [0, 3, 0.25],
+  lodLookAheadMax: [0, 360, 20],
+  lodDetail: [60, 240, 10],
   lodNear: [120, 600, 10],
   lodFar: [300, 1400, 10],
   viewDistance: [600, 2500, 10],
@@ -313,9 +351,6 @@ export const RANGES: Record<string, [number, number, number?]> = {
 };
 
 export const TUNING_GROUPS: [string, Group][] = [
-  ["Companions", PET_LOOKS],
-  ["Cosmetic detail", COSMETIC_FX],
-  ["Collection pickups", COLLECTION_FX],
   ["Pilot animation", ANIM],
   ["Trails & particles", FX],
   ["Crystal gates", RINGS],
@@ -328,5 +363,8 @@ export const TUNING_GROUPS: [string, Group][] = [
   ["Run", RUN],
   ["Autopilot", AUTOPILOT],
   ["Ability looks", ABILITIES_FX],
+  ["Companions", PET_LOOKS],
+  ["Cosmetic detail", COSMETIC_FX],
+  ["Collection pickups", COLLECTION_FX],
   ["Audio", AUDIO],
 ];

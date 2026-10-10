@@ -37,6 +37,7 @@ const PARS = /* glsl */ `
   varying vec4 vRock;
   varying vec4 vCover;
   varying float vSnow;
+  varying float vCrystal;
 
   float terrainHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float terrainNoise(vec2 p) {
@@ -86,13 +87,16 @@ export function terrainMaterial(layers: Layers): { material: THREE.MeshLambertMa
         `attribute vec4 rock;
         attribute vec4 cover;
         attribute float snow;
+        attribute float crystal;
         varying vec4 vRock;
         varying vec4 vCover;
         varying float vSnow;
+        varying float vCrystal;
         void main() {
           vRock = rock;
           vCover = cover;
-          vSnow = snow;`,
+          vSnow = snow;
+          vCrystal = crystal;`,
       );
     shader.fragmentShader = shader.fragmentShader
       .replace("void main() {", `${PARS}\nvoid main() {`)
@@ -120,16 +124,33 @@ export function terrainMaterial(layers: Layers): { material: THREE.MeshLambertMa
           float steep = 1.0 - smoothstep(0.35, 0.8, abs(up));
           float paint = terrainTriplanar(vAtmoWorld * 0.07 * terrainTextureScale, faceNormal);
           color *= 1.0 + (paint - 0.5) * (0.08 + 0.24 * steep) * terrainTexture;
+          if (vCrystal > 0.5) {
+            vec3 viewDir = normalize(cameraPosition - vAtmoWorld);
+            float edge = pow(1.0 - abs(dot(faceNormal, viewDir)), 3.0);
+            // A saturated core and pale reflective edges suggest optical depth.
+            // Stay opaque: no sorting, refraction pass, or see-through colliders.
+            color = mix(vRock.rgb * 0.78, mix(vRock.rgb, vec3(0.8, 0.88, 1.0), 0.5), edge * 0.8);
+          }
           diffuseColor.rgb = color;
         }`,
       )
       .replace(
         "#include <emissivemap_fragment>",
         `#include <emissivemap_fragment>
-        totalEmissiveRadiance += terrainGlowColor * vRock.a * terrainGlow;`,
+        // Restrained inner glow follows the existing facets. No projected
+        // contour stripes and no randomly selected full-bright triangles.
+        totalEmissiveRadiance += terrainGlowColor * vRock.a * terrainGlow * 0.18;
+        if (vCrystal > 0.5) {
+          vec3 crystalNormal = normalize(cross(dFdx(vAtmoWorld), dFdy(vAtmoWorld)));
+          vec3 viewDir = normalize(cameraPosition - vAtmoWorld);
+          float edge = pow(1.0 - abs(dot(crystalNormal, viewDir)), 3.0);
+          vec3 halfDirection = normalize(viewDir + normalize(vec3(0.35, 0.8, 0.45)));
+          float sheen = pow(max(0.0, dot(crystalNormal, halfDirection)), 24.0);
+          totalEmissiveRadiance += mix(vRock.rgb, vec3(0.85, 0.92, 1.0), 0.6) * (edge * 0.16 + sheen * 0.22);
+        }`,
       );
   };
-  material.customProgramCacheKey = () => "wingrace-terrain";
+  material.customProgramCacheKey = () => "windrider-terrain-crystal-v3";
   return { material, uniforms };
 }
 

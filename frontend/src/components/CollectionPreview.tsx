@@ -43,10 +43,11 @@ export default function CollectionPreview({ item, appearance, rear = false }: { 
     };
     container.appendChild(renderer.domElement);
     const observer = new ResizeObserver(resize); observer.observe(container); resize();
+    const motion = matchMedia("(prefers-reduced-motion: reduce)");
     let frame = 0, last = performance.now(), time = 0;
     const loop = (now: number) => {
       const dt = Math.min(.04, Math.max(0, (now - last) / 1000)); last = now; time += dt;
-      if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      if (!motion.matches) {
         root.rotation.y = Math.sin(time * .45) * .45;
         avatar?.update(dt, 24, 0); model?.animate?.(dt);
       }

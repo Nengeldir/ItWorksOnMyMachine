@@ -3,8 +3,8 @@ import { smoothstep } from "../math";
 import { hash3 } from "../rng";
 import { TUBE_RADIUS } from "./course";
 import type { Palette } from "./palette";
-import { SurfaceCutter, snapToSurface } from "./snap";
 import type { World } from "./World";
+import { cleanMesh, remapFaces } from "./meshCleanup";
 
 // Surface nets: sample the rock's distance field on a grid, put one vertex in
 // every cell the surface crosses, and join the vertices of the four cells around
@@ -125,7 +125,6 @@ export function meshChunk(world: World, ix: number, iy: number, iz: number): Chu
 
   // One vertex per crossed cell, at the average of where its edges cross the surface
   const vertices = new Float32Array(C * C * C * 3);
-  const used: number[] = [];
   const values = new Float32Array(8);
   for (let k = 0; k < C; k++) {
     for (let j = 0; j < C; j++) {
@@ -157,16 +156,13 @@ export function meshChunk(world: World, ix: number, iy: number, iz: number): Chu
         vertices[v] = ox + (i + sx / count) * S;
         vertices[v + 1] = oy + (j + sy / count) * S;
         vertices[v + 2] = oz + (k + sz / count) * S;
-        used.push(v);
       }
     }
   }
-  // The rock drawn goes onto the surface collisions use. Trees and colors still come from the
-  // grid's own vertices (`grid`): the race map's tree colliders must never move
-  const grid = vertices.slice();
+  // Keep the original net vertices and triangle diagonal: tree placement and
+  // colors on the race map depend on them. Emit the original faces.
+  const grid = vertices;
   const distance = (x: number, y: number, z: number) => world.legacy!.distance(x, y, z);
-  snapToSurface(vertices, used, distance, { ox, oy, oz, size: S, cells: C });
-  const cutter = new SurfaceCutter(distance);
 
   const positions: number[] = [];
   const colors: number[] = [];
@@ -175,8 +171,7 @@ export function meshChunk(world: World, ix: number, iy: number, iz: number): Chu
   const palette = colorsFor(world.palette);
   const color = new Color();
   const cell = (i: number, j: number, k: number) => (i + C * (j + C * k)) * 3;
-  // Every piece of a cut face gets the face's color
-  cutter.emit = (ax, ay, az, bx, by, bz, cx, cy, cz) => {
+  const emit = (ax: number, ay: number, az: number, bx: number, by: number, bz: number, cx: number, cy: number, cz: number) => {
     positions.push(ax, ay, az, bx, by, bz, cx, cy, cz);
     for (let i = 0; i < 3; i++) colors.push(color.r, color.g, color.b);
   };
@@ -212,7 +207,7 @@ export function meshChunk(world: World, ix: number, iy: number, iz: number): Chu
     if (world.course.distance(mx, my, mz) < TUBE_RADIUS + 3) color.lerp(palette.tunnel, 0.6);
     color.multiplyScalar(0.92 + 0.16 * jitter);
 
-    cutter.triangle(vertices[a], vertices[a + 1], vertices[a + 2], vertices[b], vertices[b + 1], vertices[b + 2], vertices[c], vertices[c + 1], vertices[c + 2], nx, ny, nz);
+    emit(vertices[a], vertices[a + 1], vertices[a + 2], vertices[b], vertices[b + 1], vertices[b + 2], vertices[c], vertices[c + 1], vertices[c + 2]);
 
     // A pine now and then on flat grass, never in the way of the racing line
     if (up > 0.88 && !snowy && jitter < 0.08) {
@@ -259,9 +254,10 @@ export function meshChunk(world: World, ix: number, iy: number, iz: number): Chu
     }
   }
 
+  const cleaned = cleanMesh(new Float32Array(positions), [ix * CHUNK_SIZE, iy * CHUNK_SIZE, iz * CHUNK_SIZE], CHUNK_SIZE, S);
   return {
-    positions: new Float32Array(positions),
-    colors: new Float32Array(colors),
+    positions: cleaned.positions,
+    colors: remapFaces(new Float32Array(colors), cleaned.sources, 9),
     trees: new Float32Array(trees),
     treeSink: new Float32Array(treeSink),
   };

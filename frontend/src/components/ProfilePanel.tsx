@@ -14,6 +14,7 @@ export default function ProfilePanel({ onClose }: { onClose: () => void }) {
   const [selected, setSelected] = useState("cape:classic");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [rear, setRear] = useState(true);
   useEffect(() => {
     const el = dialog.current!; el.showModal();
     const stop = (e: KeyboardEvent) => { e.stopPropagation(); };
@@ -53,7 +54,7 @@ export default function ProfilePanel({ onClose }: { onClose: () => void }) {
         {entries.map(entry => {
           const quantity = profile.inventory[entry.key] ?? 0;
           return <button key={entry.key} className={`inventory-entry ${quantity ? "owned" : "locked"}`} aria-pressed={entry.key === selected}
-            onClick={() => { setSelected(entry.key); setMessage(""); }} style={{ borderColor: RARITY_COLOR[entry.rarity] }}>
+            onClick={() => { setSelected(entry.key); setRear(entry.kind === "cape" || entry.kind === "wings"); setMessage(""); }} style={{ borderColor: RARITY_COLOR[entry.rarity] }}>
             <span className="inventory-symbol" aria-hidden="true">{entry.kind === "pet" ? "✦" : entry.kind === "item" ? "◇" : "❧"}</span>
             <b>{entry.name}</b><small>{entry.kind} · {entry.rarity}</small>
             <span>{quantity ? entry.kind === "item" ? `×${quantity}` : entry.slot && profile.equipped[entry.slot] === entry.asset ? "Equipped" : "Collected" : <><IconLock size={12} /> Undiscovered</>}</span>
@@ -61,7 +62,8 @@ export default function ProfilePanel({ onClose }: { onClose: () => void }) {
         })}
         {!entries.length && <p className="inventory-empty">No discoveries here yet. Follow the crystals and look beside the hoops.</p>}
       </div>
-      {item && <aside className="inventory-detail"><CollectionPreview item={item} appearance={profile.equipped} />
+      {item && <aside className="inventory-detail"><CollectionPreview item={item} appearance={profile.equipped} rear={rear} />
+        <button onClick={() => setRear(!rear)}>{rear ? "View front" : "View back"}</button>
         <h3>{item.name}</h3><p>{item.rarity} · {item.kind}</p>
         <p>{count ? item.kind === "item" ? `${count} keepsakes collected` : "In your collection" : "Find this on an adventure"}</p>
         {item.slot && <button className="primary" disabled={!count || equipped || saving} onClick={() => void equip()}>{saving ? "Saving…" : equipped ? "Equipped" : count ? "Equip" : "Undiscovered"}</button>}

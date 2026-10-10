@@ -162,7 +162,7 @@ export function atmospheric<T extends THREE.MeshLambertMaterial>(material: T, st
         }`,
       );
   };
-  material.customProgramCacheKey = () => `wingrace-atmosphere-${strata > 0}`;
+  material.customProgramCacheKey = () => `windrider-atmosphere-${strata > 0}`;
   return material;
 }
 

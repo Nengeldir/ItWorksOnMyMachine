@@ -1,0 +1,156 @@
+/* The tutorial's prompt: where the start button will be, one control at a time */
+.coach {
+  position: absolute;
+  top: 6.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 15rem;
+  max-width: calc(100% - 2rem);
+  padding: 0.95rem 1.2rem 0.75rem;
+  border-radius: 26px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.coach-step {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2.6rem;
+  animation: coach-in 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+.coach-step strong {
+  font-size: 1.35rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.coach-keys {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.coach .key-group {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.coach .key-group + .key-group::before {
+  content: "/";
+  margin: 0 0.05rem;
+  line-height: 1;
+  color: var(--ink-45);
+  font-weight: 600;
+}
+
+/* Raised keycaps, as in How to fly, a size up */
+.coach kbd {
+  min-width: 2.5rem;
+  height: 2.5rem;
+  padding: 0 0.65rem;
+  box-sizing: border-box;
+  display: inline-grid;
+  place-items: center;
+  border: none;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink);
+  background: linear-gradient(180deg, #fff 0%, color-mix(in srgb, var(--tint) 16%, #fff) 100%);
+  box-shadow:
+    0 3px 0 color-mix(in srgb, var(--ink) 20%, transparent),
+    0 5px 12px color-mix(in srgb, var(--ink) 10%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--ink) 9%, transparent),
+    inset 0 1px 0 #fff;
+  transform: translateY(-1.5px);
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+/* Done: the keys press down and fill with ink, a tick pops in */
+.coach-step.done kbd {
+  color: #fff;
+  background: var(--ink);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--ink) 60%, #000);
+  transform: translateY(1px);
+}
+
+.coach-tick {
+  color: var(--ink);
+  animation: coach-tick 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
+}
+
+.coach-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.coach-dots {
+  display: flex;
+  gap: 5px;
+}
+
+.coach-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--ink-12);
+  transition:
+    width 0.2s ease,
+    background 0.2s ease;
+}
+
+.coach-dots i.now {
+  width: 20px;
+  background: var(--ink-45);
+}
+
+.coach-dots i.on {
+  background: var(--ink);
+}
+
+.game .coach-skip {
+  padding: 0.15rem 0.6rem;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  font-size: 0.85rem;
+  color: var(--ink-70);
+}
+
+.game .coach-skip:hover {
+  background: var(--ink-06);
+  color: var(--ink);
+}
+
+@keyframes coach-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+}
+
+@keyframes coach-tick {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coach-step,
+  .coach-tick {
+    animation: none;
+  }
+}

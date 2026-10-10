@@ -8,12 +8,13 @@ export interface Settings extends ControlSettings {
   nickname: string;
 }
 
-const SETTINGS_KEY = "wingrace.settings";
-const CLIENT_KEY = "wingrace.client";
+const SETTINGS_KEY = "windrider.settings";
+const CLIENT_KEY = "windrider.client";
+const TUTORIAL_KEY = "windrider.tutorial";
 
 export function defaultSettings(): Settings {
-  return { nickname: "", invertPitch: false, invertMouse: false, invertGamepad: false,
-    mouseSensitivity: 2, bindings: defaultBindings(), deadZone: 0.12,
+  return { nickname: "", invertPitch: false, invertMouse: false, invertGamepad: false, invertTouch: false,
+    mouseSensitivity: 2, tiltSensitivity: 1, bindings: defaultBindings(), deadZone: 0.12,
     reducedMotion: false, quality: "auto", musicVolume: 1, effectsVolume: 1, muted: false };
 }
 
@@ -59,6 +60,7 @@ export function normalizeSettings(value: unknown): Settings {
     invertPitch: flag("invertPitch"), invertMouse: flag("invertMouse", flag("invertPitch")),
     invertGamepad: flag("invertGamepad", flag("invertPitch")),
     mouseSensitivity: number("mouseSensitivity", 0.3, 6, 2),
+    invertTouch: flag("invertTouch"), tiltSensitivity: number("tiltSensitivity", 0.4, 2.5, 1),
     deadZone: number("deadZone", 0, 0.4, 0.12), reducedMotion: flag("reducedMotion"), muted: flag("muted"),
     musicVolume: number("musicVolume", 0, 1, 1), effectsVolume: number("effectsVolume", 0, 1, 1),
     quality: ["auto","high","medium","low"].includes(String(saved.quality)) ? saved.quality as Settings["quality"] : "auto",
@@ -98,5 +100,28 @@ export function clientId(): string {
   } catch {
     fallbackClientId ||= randomId();
     return fallbackClientId;
+  }
+}
+
+export type TutorialState = "started" | "skipped";
+
+function loadTutorials(): Record<string, TutorialState> {
+  try {
+    return JSON.parse(localStorage.getItem(TUTORIAL_KEY) ?? "{}");
+  } catch {
+    return {};
+  }
+}
+
+/** Whether this player (a user id: a login, or a guest's browser) has started or skipped the tutorial here */
+export function tutorialState(userId: string): TutorialState | null {
+  return loadTutorials()[userId] ?? null;
+}
+
+export function saveTutorialState(userId: string, state: TutorialState) {
+  try {
+    localStorage.setItem(TUTORIAL_KEY, JSON.stringify({ ...loadTutorials(), [userId]: state }));
+  } catch {
+    // Not persisted: the tutorial shows again next visit
   }
 }

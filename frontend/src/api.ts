@@ -4,6 +4,7 @@ export interface User {
   id: string;
   name: string;
   verified: boolean; // logged in through the VIScon portal
+  has_played?: boolean; // ever finished a race or time trial (this login, or this browser for guests)
 }
 
 export interface LeaderboardEntry {
@@ -91,8 +92,8 @@ export async function request<T>(endpoint: string, method: "GET" | "POST" = "GET
   return response.json();
 }
 
-export function getMe(): Promise<User> {
-  return request("/api/me");
+export function getMe(clientId: string): Promise<User> {
+  return request(`/api/me?client_id=${encodeURIComponent(clientId)}`);
 }
 
 export function getLeaderboard(seed: number, clientId: string): Promise<LeaderboardEntry[]> {

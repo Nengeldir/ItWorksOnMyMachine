@@ -14,7 +14,19 @@ def ghost(n=3):
 def test_time_and_me():
     assert client.get("/api/time").json()["t"] > 0
     me = client.get("/api/me", headers={"X-User-Id": "zoe@ethz.ch", "X-User-Name": "Zo%C3%AB"}).json()
-    assert me == {"id": "zoe@ethz.ch", "name": "Zoë", "verified": True}
+    assert me == {"id": "zoe@ethz.ch", "name": "Zoë", "verified": True, "has_played": False}
+
+
+def test_me_has_played():
+    # Newcomers get the tutorial: anyone (or any guest browser) with a finished run doesn't
+    portal = {"X-User-Id": "max@ethz.ch", "X-User-Name": "Max"}
+    assert client.get("/api/me", headers=portal).json()["has_played"] is False
+    assert client.get("/api/me", params={"client_id": "fresh"}).json()["has_played"] is False
+    app_module.store.add_run(7, "max@ethz.ch", "Max", 61_000, None)
+    app_module.store.add_run(7, "guest:fresh", "Guest", 62_000, None)
+    assert client.get("/api/me", headers=portal).json()["has_played"] is True
+    assert client.get("/api/me", params={"client_id": "fresh"}).json()["has_played"] is True
+    assert client.get("/api/me", params={"client_id": "other"}).json()["has_played"] is False
 
 
 def test_room_flow():

@@ -18,8 +18,8 @@ the last ring.
   and Ember Wastes in an order the run's seed decides, and the Aurora Summit
   last. Chain gates, skim for style, and pick an upgrade at every portal
   (stronger boost, wingbeats, glide lock, and abilities like Hover-Stall,
-  Plunging Attack, Gale Force, a spirit manta to draft behind, Resonance,
-  Ascension and the falcon and butterfly gliding stances).
+  Plunging Attack, Gale Force and a spirit manta to draft behind).
+  A map select on the Adventure tab shows every biome.
 
 Races and time trials always fly Sky Isles, so recorded ghosts and
 leaderboards stay valid; the other biomes are for the adventure.
@@ -87,6 +87,29 @@ docker compose up -d --build
 | `Shift+P` in `?test`       | Spawn a usable portal ahead of the pilot            |
 | `Shift+O` in `?test`       | Show the victory screen (nothing saved)             |
 | `Shift+S` in `?test`       | Toggle the whole simulation and animations between ½× and 1× speed |
+| `?` (top right)           | How to fly: every key and what it does             |
+
+New players are asked once whether they want a tutorial: a short flight that
+asks for each control in turn (skippable).
+
+### Phones and tablets
+
+The game is flown sideways (landscape). Held upright, a phone is asked to turn;
+on Android the first tap goes full screen and turns the screen for you.
+
+| Touch                     | Action                                             |
+| :------------------------ | :------------------------------------------------- |
+| Drag anywhere on the view | A stick appears under your thumb: pitch and turn   |
+| **Tilt**                  | Steer by tilting the device instead: turn it like a wheel to bank, lean it away to dive. Level is how you hold it when you turn Tilt on or resume from pause. Needs an https page; iOS asks for permission |
+| Hold **Boost** / **Brake** | Boost / air brake                                 |
+| `‹` `›`                   | 5 m sideways dodge                                 |
+| **Flap** / **Hover** / **Plunge** / **Gale** | Tap to use the adventure ability once you have its upgrade |
+| **Respawn**, **Pause**    | As `R` and `P`                                     |
+
+Tilt sensitivity and "Invert touch and tilt up / down" are in Settings.
+The tutorial follows touch and tilt as well as keys and gamepad. Tilt works
+on either side of a flat hold; enabling it or resuming calibrates both axes.
+In test mode, touch buttons open a portal, preview victory and change speed.
 
 Pitch can be inverted in the menu. Diving turns height into speed, climbing
 turns speed back into height. Flying within a few metres of rock or trees fills
@@ -258,6 +281,29 @@ Test mode is included in the normal production build. Use the existing
 `?test` to your deployed URL). No Dockerfile changes, build arguments,
 `VITE_ENABLE_DEBUG` flag, or debug Compose override are required.
 
+Terrain meshing preserves shared chunk edges, removes small closed slivers,
+and shortens narrow attached tips without deleting faces. Compact floating
+stones gain a single rounder subdivision at full detail; broad terrain keeps
+its low-poly silhouette. Border-crossing fragments remain intact to protect
+seams. Mountain surface noise uses the same slope scale as the ground distance,
+preventing floating sheets above steep peaks at every detail level. Glowing
+terrain uses restrained facet emission without painted stripes or random bright
+triangles. Aurora crystals fake translucency with a tinted core, pale edges
+and view-dependent highlights while remaining opaque. Selected rock patches
+vary facet spacing and diagonal direction; bounded mountain relief stays
+attached to the heightfield. Terrain sampling progresses through 24/12/6/3 metres: these are
+cell sizes, not activation distances. The closest tier is requested within
+140 metres of chunk bounds in all directions, plus two seconds of velocity
+look-ahead (capped at 240 metres). The 6/12-metre tiers begin at 300/700 metres.
+The existing mesh stays visible while finer replacements load. `MESH_CLEANUP` in `tuning.ts` controls thickness, size and tip thresholds
+(worker settings: edit and reload, not live sliders). Recently hidden terrain is
+cached, and detail-level changes use separate split/merge distances to avoid
+repeated rebuilding. In the developer `?tune` panel, `Terrain` exposes
+`cacheMiB` (48 by default), `lodHysteresis` (48 metres), `lodDetail`,
+`lodLookAheadSeconds` and `lodLookAheadMax`. The cache is bounded
+by estimated buffer memory and 256 hidden nodes. Mixed-detail terrain still
+uses overlapping border cells; it is not a fully stitched adaptive mesh.
+
 **Flight model** ([`frontend/src/game/flight.ts`](frontend/src/game/flight.ts)):
 an arcade, energy-based wingsuit. The nose points where you go, gravity along
 the flight path speeds you up or slows you down, drag caps the speed, and
@@ -317,20 +363,21 @@ capes have distinct embroidered hems.
 
 | Path                                   | Purpose                                                  |
 | :------------------------------------- | :------------------------------------------------------- |
-| `backend/app.py`                       | API endpoints, login headers, solo runs                  |
-| `backend/rooms.py`                     | Rooms, race state machine, SSE listeners, tick loop      |
 | `backend/profiles.py`                  | Persistent adventure profiles, inventory, issued rewards and XP |
 | `frontend/src/profile/`               | Profile API client, types and durable pickup outbox       |
 | `frontend/src/game/run/collection.ts` | Hoop-distance rarity, terrain-safe pickups and collection models |
 | `frontend/src/game/cosmetics/`, `game/pets/` | Toon outfits, decorated wing fans and animated hoop guides |
 | `frontend/src/components/ProfilePanel.tsx`, `CollectionPreview.tsx`, `TestCollectionPanel.tsx` | Profile, inventory, equip controls, preview and unsaved test fitting room |
+| `backend/app.py`                       | API endpoints, login headers, solo runs                  |
+| `backend/rooms.py`                     | Rooms, race state machine, SSE listeners, tick loop      |
 | `backend/store.py`                     | SQLite runs, leaderboards and ghosts                     |
 | `backend/models.py`                    | Request and response models (Pydantic)                   |
 | `backend/tests/`                       | pytest tests for rooms and the API                       |
 | `frontend/src/game/Game.ts`            | The game: loop, physics steps, race state, HUD data      |
 | `frontend/src/game/input.ts`           | Input, actions and shared keyboard bindings (including pause) |
+| `frontend/src/game/touch.ts`, `tilt.ts` | Phones and tablets: on-screen stick and buttons, tilt steering |
 | `frontend/src/game/world/`             | Racing line, rock field, meshing workers, palettes, view |
-| `frontend/src/game/world/snap.ts`      | Snaps meshed land onto the distance field                |
+| `frontend/src/game/world/meshCleanup.ts` | Preserves compact stones, removes closed slivers and trims narrow tips; protects chunk borders |
 | `frontend/src/game/world/landCollider.ts` | Collisions with the land exactly as drawn             |
 | `frontend/src/game/world/structures/`  | Towers, lanterns, windmills and a shipwreck in the adventure's biomes |
 | `frontend/src/game/world/deep.ts`      | Under the sea: light shafts, schools of fish, jellyfish  |
@@ -361,7 +408,7 @@ All routes start with `/api`; interactive docs are at `/api/docs`.
 
 | Method | Path                       | Description                                              |
 | :----- | :------------------------- | :------------------------------------------------------- |
-| `GET`  | `/api/me`                  | The current user (portal login or guest)                 |
+| `GET`  | `/api/me`                  | The current user (portal login or guest), `has_played`   |
 | `GET`  | `/api/time`                | Server clock in ms, for clock sync                       |
 | `POST` | `/api/rooms/{code}/join`   | Join (or create) a room; returns your id and token       |
 | `GET`  | `/api/rooms/{code}/stream` | SSE: room events and position snapshots                  |
@@ -414,8 +461,9 @@ browser console, handy for teleporting around or poking at the race state.
 
 ## Ideas for Next Steps
 
-- Touch and tilt controls for phones
 - More gate types (spirals, crumbling bridges) and difficulty settings for the tube radius
 - AI race commentary or course names through the hackathon's LLM proxy
 - Spectator camera that follows the race leader
 - Daily challenge history and per-ring split times
+
+Terrain detail replacements keep normal flight active while existing terrain covers the area. The loading glide remains only for genuinely missing nearby terrain, including initial loading.

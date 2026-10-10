@@ -37,6 +37,7 @@ class Store:
         if "rules" not in columns:
             self.db.execute("ALTER TABLE runs ADD COLUMN rules TEXT NOT NULL DEFAULT 'legacy'")
         self.db.execute("CREATE INDEX IF NOT EXISTS runs_seed_time ON runs (seed, time_ms)")
+        self.db.execute("CREATE INDEX IF NOT EXISTS runs_user ON runs (user_id)")
         self.db.commit()
 
     def _best(self, seed: int, user_id: str) -> int | None:
@@ -68,6 +69,11 @@ class Store:
         )
         self.db.commit()
         return time_ms if is_best else previous_best
+
+    def has_played(self, user_id: str) -> bool:
+        """Any finished run by this user, on any seed and under any ruleset"""
+        with self.lock:
+            return self.db.execute("SELECT 1 FROM runs WHERE user_id = ? LIMIT 1", (user_id,)).fetchone() is not None
 
     def leaderboard(self, seed: int, limit: int = 10, me: str | None = None) -> list[LeaderboardEntry]:
         # SQLite fills the bare columns (name) from the row that holds MIN(time_ms)

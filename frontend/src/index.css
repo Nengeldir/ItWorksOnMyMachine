@@ -28,8 +28,14 @@
   --good: #2c8a5c;
   --bad: #c8463d;
   --radius: 18px;
+  --font-body: "Philosopher", Georgia, serif;
+  /* Numbers that change as you watch (clocks, speed, countdowns, times): Philosopher's digits differ in
+     width, so they'd jitter; this one has even-width digits */
+  --font-numbers: "Plus Jakarta Sans Variable", system-ui, sans-serif;
+  /* Titles: carved capitals. No real lowercase and no even-width digits, so never for numbers */
+  --font-display: "Cinzel Variable", Georgia, serif;
 
-  font-family: "Plus Jakarta Sans Variable", system-ui, sans-serif;
+  font-family: var(--font-body);
   line-height: 1.45;
   color: var(--ink);
   background: var(--bg);
@@ -57,6 +63,12 @@ h2,
 h3 {
   margin: 0;
   line-height: 1.15;
+}
+
+h1,
+h2 {
+  font-family: var(--font-display);
+  letter-spacing: 0.01em;
 }
 
 .glass {
@@ -260,6 +272,7 @@ kbd {
 }
 
 .leaderboard .time {
+  font-family: var(--font-numbers);
   font-weight: 500;
   color: var(--ink-70);
   font-variant-numeric: tabular-nums;

@@ -3,6 +3,7 @@ import type { RoomInfo, Snapshot } from "../api";
 import { type FinishResult, Game, type HudState } from "../game/Game";
 import { type ConnectionStatus, type Identity, RoomClient } from "../net/RoomClient";
 import type { Settings } from "../storage";
+import type { InputObserver } from "../game/input";
 import { Store } from "./store";
 
 const SEND_INTERVAL_MS = 66; // ~15 Hz up, matching the server's snapshot rate
@@ -76,6 +77,8 @@ export class RoomSession {
     this.settings = settings;
     this.game?.setControls(settings);
   }
+
+  observeInput = (observer: InputObserver): (() => void) => this.game?.observeInput(observer) ?? (() => {});
 
   engage() {
     this.game?.engage();

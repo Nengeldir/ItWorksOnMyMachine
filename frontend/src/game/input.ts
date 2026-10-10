@@ -1,6 +1,7 @@
 import type { FlightInput } from "./flight";
 import { clamp } from "./math";
 import { DEFAULT_BINDINGS, type Bindings, type BindingAction } from "./bindings";
+import { tilt } from "./tilt";
 export { keyLabel } from "./bindings";
 
 export interface ControlSettings {
@@ -8,6 +9,9 @@ export interface ControlSettings {
   mouseSensitivity: number; // 0.3..6, 2 = default
   invertMouse?: boolean;
   invertGamepad?: boolean;
+  /** The touch stick and tilting: up / top away from you climbs instead of diving */
+  invertTouch?: boolean;
+  tiltSensitivity?: number; // 0.4..2.5, 1 = default
   bindings?: Bindings;
   deadZone?: number;
   reducedMotion?: boolean;
@@ -23,6 +27,11 @@ export type TestAction = "portal" | "win" | "speed";
 /** One-off presses. Wingbeat, hover-stall, plunge, Gale Force, Resonance, Ascension and the stances need their adventure upgrades. */
 export type InputAction = "pause" | "respawn" | "mute" | "barrelLeft" | "barrelRight" | "flap" | "hover" | "plunge" | "burst" | "resonance" | "ascend" | "stance";
 
+export interface InputObserver {
+  sample?: (input: FlightInput) => void;
+  action?: (action: InputAction) => void;
+}
+
 export function controlsBlocked(): boolean {
   return !!document.querySelector?.("dialog[open]");
 }
@@ -33,13 +42,24 @@ function deadZone(value: number, threshold = 0.12): number {
   return (value - Math.sign(value) * threshold) / (1 - threshold);
 }
 
+// Tilting the phone: how far is full deflection, and how much of it around level does nothing
+const TILT_ROLL = 0.5; // radians, about 29°
+const TILT_PITCH = 0.36; // about 21°
+const TILT_DEAD = 0.035; // about 2°
+
+function tiltAxis(angle: number, full: number, sensitivity: number): number {
+  const beyond = Math.max(0, Math.abs(angle) - TILT_DEAD);
+  return clamp((Math.sign(angle) * beyond * sensitivity) / (full - TILT_DEAD), -1, 1);
+}
+
 function isTyping(event: KeyboardEvent): boolean {
   const target = event.target as HTMLElement | null;
   return !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
 }
 
 /**
- * Keyboard, mouse (pointer lock) and gamepad, merged into pitch and roll.
+ * Keyboard, mouse (pointer lock), gamepad, the touch stick and buttons
+ * (`TouchControls`) and tilting the phone (`tilt`), merged into pitch and roll.
  * Flight-stick convention by default: forward / W / mouse up dives.
  */
 export class Input {
@@ -50,10 +70,16 @@ export class Input {
   locked = false;
   private readonly element: HTMLElement;
   private readonly keys = new Set<string>();
+  private readonly observers = new Set<InputObserver>();
   // The mouse moves a virtual stick that drifts back to center
   private stickX = 0;
   private stickY = 0;
   private padButtons: boolean[] = [];
+  // The on-screen stick (-1..1, down and right positive) and held buttons, set by TouchControls
+  touchX = 0;
+  touchY = 0;
+  touchBoost = false;
+  touchBrake = false;
 
   constructor(element: HTMLElement, settings: ControlSettings) {
     this.element = element;
@@ -66,6 +92,7 @@ export class Input {
   }
 
   dispose() {
+    this.observers.clear();
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
     window.removeEventListener("blur", this.onBlur);
@@ -74,10 +101,23 @@ export class Input {
     if (document.pointerLockElement === this.element) document.exitPointerLock();
   }
 
+  /** Watch what the pilot actually receives (used by the tutorial). */
+  observe(observer: InputObserver): () => void {
+    this.observers.add(observer);
+    return () => { this.observers.delete(observer); };
+  }
+
+  dispatchAction(action: InputAction) {
+    if (controlsBlocked() || !document.hasFocus()) return;
+    for (const observer of this.observers) observer.action?.(action);
+    this.onAction?.(action);
+  }
+
   /** Call from a click handler: browsers only lock the pointer on a user gesture */
   lockPointer() {
+    // Phones have no pointer to lock (and Safari there has no such method)
     if (document.pointerLockElement !== this.element) {
-      this.element.requestPointerLock()?.catch?.(() => {});
+      this.element.requestPointerLock?.()?.catch?.(() => {});
     }
   }
 
@@ -107,7 +147,7 @@ export class Input {
     for (const action of ACTIONS) {
       if (this.binding(action).includes(event.code)) {
         if (atGame || action === "pause") event.preventDefault();
-        this.onAction?.(action);
+        this.dispatchAction(action);
         break;
       }
     }
@@ -125,6 +165,8 @@ export class Input {
     this.keys.clear();
     this.stickX = this.stickY = 0;
     this.padButtons = [];
+    this.touchX = this.touchY = 0;
+    this.touchBoost = this.touchBrake = false;
   }
 
   private onMouseMove = (event: MouseEvent) => {
@@ -162,27 +204,36 @@ export class Input {
       + this.stickY * ((this.settings.invertMouse ?? this.settings.invertPitch) ? -1 : 1);
     let roll = this.key("turnRight") - this.key("turnLeft") + this.stickX;
 
-    let boost = this.key("boost");
-    let brake = this.key("brake");
+    const touchSign = this.settings.invertTouch ? -1 : 1;
+    pitch += this.touchY * touchSign;
+    roll += this.touchX;
+    if (tilt.active) {
+      const sensitivity = this.settings.tiltSensitivity ?? 1;
+      roll += tiltAxis(tilt.roll, TILT_ROLL, sensitivity);
+      pitch += tiltAxis(tilt.pitch, TILT_PITCH, sensitivity) * touchSign;
+    }
+
+    let boost = this.touchBoost ? 1 : this.key("boost");
+    let brake = this.touchBrake ? 1 : this.key("brake");
     const pad = navigator.getGamepads?.().find((p) => p?.connected);
     if (pad) {
       roll += deadZone(pad.axes[0] ?? 0, this.settings.deadZone);
       pitch += deadZone(pad.axes[1] ?? 0, this.settings.deadZone) * ((this.settings.invertGamepad ?? this.settings.invertPitch) ? -1 : 1);
       // Y / triangle respawns, the shoulder buttons barrel roll
       const pressed = pad.buttons.map((b) => b.pressed);
-      if (pressed[3] && !this.padButtons[3]) this.onAction?.("respawn");
-      if (pressed[4] && !this.padButtons[4]) this.onAction?.("barrelLeft");
-      if (pressed[5] && !this.padButtons[5]) this.onAction?.("barrelRight");
+      if (pressed[3] && !this.padButtons[3]) this.dispatchAction("respawn");
+      if (pressed[4] && !this.padButtons[4]) this.dispatchAction("barrelLeft");
+      if (pressed[5] && !this.padButtons[5]) this.dispatchAction("barrelRight");
       // In adventure: A flaps, B hover-stalls, X plunges, the right stick's click is Gale Force,
       // the left stick's click sings (Resonance), d-pad up ascends, d-pad down changes stance.
       // Triggers control speed in every mode.
-      if (pressed[0] && !this.padButtons[0]) this.onAction?.("flap");
-      if (pressed[1] && !this.padButtons[1]) this.onAction?.("hover");
-      if (pressed[2] && !this.padButtons[2]) this.onAction?.("plunge");
-      if (pressed[11] && !this.padButtons[11]) this.onAction?.("burst");
-      if (pressed[10] && !this.padButtons[10]) this.onAction?.("resonance");
-      if (pressed[12] && !this.padButtons[12]) this.onAction?.("ascend");
-      if (pressed[13] && !this.padButtons[13]) this.onAction?.("stance");
+      if (pressed[0] && !this.padButtons[0]) this.dispatchAction("flap");
+      if (pressed[1] && !this.padButtons[1]) this.dispatchAction("hover");
+      if (pressed[2] && !this.padButtons[2]) this.dispatchAction("plunge");
+      if (pressed[11] && !this.padButtons[11]) this.dispatchAction("burst");
+      if (pressed[10] && !this.padButtons[10]) this.dispatchAction("resonance");
+      if (pressed[12] && !this.padButtons[12]) this.dispatchAction("ascend");
+      if (pressed[13] && !this.padButtons[13]) this.dispatchAction("stance");
       boost = Math.max(boost, deadZone(pad.buttons[7]?.value ?? 0));
       brake = Math.max(brake, deadZone(pad.buttons[6]?.value ?? 0));
       this.padButtons = pressed;
@@ -190,6 +241,8 @@ export class Input {
       this.padButtons = [];
     }
 
-    return { pitch: clamp(pitch, -1, 1), roll: clamp(roll, -1, 1), boost, brake };
+    const sample = { pitch: clamp(pitch, -1, 1), roll: clamp(roll, -1, 1), boost, brake };
+    for (const observer of this.observers) observer.sample?.(sample);
+    return sample;
   }
 }

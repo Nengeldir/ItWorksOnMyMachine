@@ -2,17 +2,44 @@ import { useEffect } from "react";
 import { formatTime } from "../format";
 import type { RunHud as RunHudState, RunSummary } from "../game/run/run";
 import { UPGRADES, type Upgrade, type UpgradeId } from "../game/run/upgrades";
+import type { BindingAction } from "../game/bindings";
 import { BIOMES, type BiomeId } from "../game/world/biomes";
+import { boundKeys } from "./keys";
 import "./RunHud.css";
 
 const icon = (id: UpgradeId) => UPGRADES.find((u) => u.id === id)?.icon ?? "•";
 
+// Abilities use the keys the player bound in the settings, not the defaults written in the upgrades
+const TOUCH_ABILITY: Partial<Record<UpgradeId, string>> = {
+  dash: "Hold Boost", flap: "Tap Flap", hoverStall: "Tap Hover",
+  plunge: "Tap Plunge", galeForce: "Tap Gale", windShear: "Tap ‹ or ›",
+};
+
+const ABILITY_ACTIONS: Partial<Record<UpgradeId, BindingAction>> = {
+  dash: "boost",
+  flap: "flap",
+  hoverStall: "hover",
+  plunge: "plunge",
+  galeForce: "burst",
+};
+
+/** The ability's key as bound now, else the upgrade's own label */
+function abilityKey(id: UpgradeId, fallback: string): string {
+  const action = ABILITY_ACTIONS[id];
+  const key = action ? boundKeys(action)[0]?.[0] : undefined;
+  return key ?? fallback;
+}
+
 /** The run on top of the flight HUD: score, objectives, the portal compass, abilities */
 export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compassScale: number; toasts: boolean }) => (
   <div className="run-hud">
-    <div className="run-score">
+    {/* Like the race timer: a glass pill at the top, the score big, where you are small */}
+    <div className="run-score glass">
       <strong>{run.score.toLocaleString()}</strong>
-      {run.chain > 1 && <span className="run-chain">gate chain ×{run.chain}</span>}
+      <span>
+        Level {run.level} / {run.length}
+        {run.chain > 1 && <b className="run-chain"> · chain ×{run.chain}</b>}
+      </span>
     </div>
 
     {run.compass && run.phase !== "pick" && run.phase !== "portal" && (
@@ -26,27 +53,29 @@ export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compas
       </div>
     )}
 
-    <ul className="run-objectives">
-      {run.objectives.map((o) => (
-        <li key={o.title} className={o.done ? "done" : o.failed ? "failed" : undefined}>
-          <span className="check">{o.done ? "✔" : o.failed ? "✖" : "◇"}</span>
-          <span className="title">{o.title}</span>
-          <span className="progress">{o.progress}</span>
-          {!o.done && !o.failed && o.fraction > 0 && (
-            <span className="bar">
-              <span style={{ width: `${Math.round(o.fraction * 100)}%` }} />
-            </span>
-          )}
-        </li>
-      ))}
-    </ul>
+    {run.objectives.length > 0 && (
+      <ul className="run-objectives glass">
+        {run.objectives.map((o) => (
+          <li key={o.title} className={o.done ? "done" : o.failed ? "failed" : undefined}>
+            <span className="check">{o.done ? "✔" : o.failed ? "✖" : "◇"}</span>
+            <span className="title">{o.title}</span>
+            <span className="progress">{o.progress}</span>
+            {!o.done && !o.failed && o.fraction > 0 && (
+              <span className="bar">
+                <span style={{ width: `${Math.round(o.fraction * 100)}%` }} />
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    )}
 
     {run.abilities.length > 0 && (
       <div className="run-abilities">
         {run.abilities.map((a) => (
-          <div key={a.id} className={a.ready ? "ready" : undefined}>
+          <div key={a.id} className={`glass ${a.ready ? "ready" : ""}`}>
             <span className="icon">{icon(a.id)}</span>
-            <span className="key">{a.key}</span>
+            <span className="key">{abilityKey(a.id, a.key)}</span>
             {a.count !== undefined && <span className="count">{a.count}</span>}
             <span className="charge" style={{ height: `${Math.round(Math.min(1, a.charge) * 100)}%` }} />
           </div>
@@ -63,7 +92,7 @@ export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compas
     )}
 
     {toasts && run.toast && (
-      <div className="run-toast" key={run.toast.id}>
+      <div className="run-toast glass" key={run.toast.id}>
         {run.toast.text}
         {run.toast.points > 0 && <b> +{run.toast.points.toLocaleString()}</b>}
       </div>
@@ -189,7 +218,10 @@ export const UpgradePicker = ({
           <button key={u.id} className={`card ${u.kind}`} onClick={() => onPick(u.id)}>
             <span className="icon">{u.icon}</span>
             <strong>{u.name}</strong>
-            <span className="kind">{u.kind === "ability" ? `ability · ${u.key}` : "passive"}</span>
+            <span className="kind">{u.kind === "ability" ? <>
+              ability <span className="no-touch">· {abilityKey(u.id, u.key ?? "")}</span>
+              <span className="touch-only">· {TOUCH_ABILITY[u.id]}</span>
+            </> : "passive"}</span>
             <span className="text">{u.description}</span>
             <kbd>{i + 1}</kbd>
           </button>

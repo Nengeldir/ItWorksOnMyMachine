@@ -9,13 +9,13 @@ import type { World } from "../World";
 import { NODE_SIZE, type TerrainMesh, VOXEL, nodeKey } from "./mesh";
 
 // Streams generator-v2 land around the camera as an octree of nodes: 384 m
-// nodes far away, split into 192 m and then 96 m nodes as you get close. Every
+// nodes far away, split into 192, 96 and finally 48 m nodes as you get close. Every
 // node has 16 cells a side, so the triangle count per node stays the same and
 // far land is coarse. A coarse node stays on screen until all of its finer
 // replacements have arrived (and the other way round when merging), so the land
 // never shows holes or two levels at once.
 
-export const LOD_LEVELS = 3;
+export const LOD_LEVELS = 4;
 const ROOT_LOD = LOD_LEVELS - 1;
 
 export interface NodeRequest {
@@ -43,6 +43,7 @@ interface Node {
   plants: Float32Array | null;
   tufts: Float32Array | null;
   shown: boolean;
+  split: boolean; // hysteresis: keep fine detail until beyond the outer threshold
   desired: number; // the update stamp it was last wanted in
 }
 
@@ -58,6 +59,11 @@ export class LandStreamer {
   private readonly ranges = new Map<number, [number, number] | null>();
   private readonly lastUpdate = new THREE.Vector3(Infinity, 0, 0);
   private stamp = 0;
+  private readonly lookAhead = new THREE.Vector3();
+  private readonly lastLookAhead = new THREE.Vector3(Infinity, 0, 0);
+  private predicting = false;
+  private readonly cache = new Map<number, { node: Node; bytes: number }>();
+  private cacheBytes = 0;
   private desired: Node[] = [];
   private readonly wanted: { node: Node; d: number }[] = [];
 
@@ -114,6 +120,7 @@ export class LandStreamer {
       plants: null,
       tufts: null,
       shown: false,
+      split: false,
       desired: -1,
     };
     this.byKey.set(key, node);
@@ -155,15 +162,23 @@ export class LandStreamer {
   }
 
   /** Which nodes should be on screen from here, and which to ask the workers for next */
-  update(at: THREE.Vector3, request: (r: NodeRequest) => boolean) {
+  update(at: THREE.Vector3, request: (r: NodeRequest) => boolean, velocity?: THREE.Vector3) {
+    this.lookAhead.copy(at);
+    this.predicting = !!velocity && velocity.lengthSq() > 1;
+    if (this.predicting) {
+      const seconds = Math.min(TERRAIN.lodLookAheadSeconds, TERRAIN.lodLookAheadMax / velocity!.length());
+      this.lookAhead.addScaledVector(velocity!, seconds);
+    }
     // Take in a few of the arrived meshes (all of them while nothing is on screen yet)
+    this.trimCache();
     if (this.arrived.length) {
       const budget = this.ready ? TERRAIN.uploadsPerFrame : this.arrived.length;
       for (const result of this.arrived.splice(0, budget)) this.take(result);
       this.settle();
     }
-    if (this.lastUpdate.distanceToSquared(at) > 8 * 8 || this.stamp === 0) {
+    if (this.lastUpdate.distanceToSquared(at) > 8 * 8 || this.lastLookAhead.distanceToSquared(this.lookAhead) > 8 * 8 || this.stamp === 0) {
       this.lastUpdate.copy(at);
+      this.lastLookAhead.copy(this.lookAhead);
       this.stamp++;
       this.desired.length = 0;
       for (const root of this.roots) this.visit(root, at);
@@ -178,7 +193,7 @@ export class LandStreamer {
     for (const node of this.desired) {
       if (node.shown) continue;
       const d = node.box.distanceToPoint(at);
-      if (d < TERRAIN.readyRadius) missingNearby = true;
+      if (d < TERRAIN.readyRadius && !this.shownAncestor(node) && !this.visibleCoverage(node)) missingNearby = true;
       if (node.state === "idle") wanted.push({ node, d: d + node.lod * 120 });
     }
     this.ready = !missingNearby;
@@ -192,8 +207,10 @@ export class LandStreamer {
   private visit(node: Node, at: THREE.Vector3) {
     const d = node.box.distanceToPoint(at);
     if (d > TERRAIN.viewDistance) return;
-    const split = node.lod === 2 ? TERRAIN.lodFar : TERRAIN.lodNear;
-    if (node.lod > 0 && d < split) {
+    const split = node.lod === 3 ? TERRAIN.lodFar : node.lod === 2 ? TERRAIN.lodNear : TERRAIN.lodDetail;
+    const detailDistance = this.predicting ? Math.min(d, node.box.distanceToPoint(this.lookAhead)) : d;
+    node.split = node.lod > 0 && detailDistance < split + (node.split ? TERRAIN.lodHysteresis : 0);
+    if (node.split) {
       for (const child of this.childrenOf(node)) this.visit(child, at);
     } else {
       node.desired = this.stamp;
@@ -211,12 +228,19 @@ export class LandStreamer {
   private take(result: NodeResult) {
     const node = this.byKey.get(result.key);
     if (!node || node.state !== "pending") return;
+    // A worker may finish after we have flown away. Avoid uploading obsolete
+    // geometry or planting its colliders; it can be requested again if needed.
+    if (node.desired !== this.stamp) {
+      node.state = "idle";
+      return;
+    }
     node.state = "loaded";
     if (result.positions.length) {
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.BufferAttribute(result.positions, 3));
       geometry.setAttribute("rock", new THREE.BufferAttribute(result.rock, 4, true));
       geometry.setAttribute("cover", new THREE.BufferAttribute(result.cover, 4, true));
+      geometry.setAttribute("crystal", new THREE.BufferAttribute(result.crystal ?? new Uint8Array(result.positions.length / 3), 1, true));
       geometry.setAttribute("snow", new THREE.BufferAttribute(result.snow, 1));
       geometry.computeBoundingSphere();
       node.mesh = new THREE.Mesh(geometry, this.material);
@@ -260,6 +284,11 @@ export class LandStreamer {
     return null;
   }
 
+  /** Existing collision/render coverage remains usable while its LOD replacement loads. */
+  private visibleCoverage(node: Node): boolean {
+    return node.shown || (!!node.children?.length && node.children.every(child => this.visibleCoverage(child)));
+  }
+
   /** Are all the nodes wanted under `node` loaded? */
   private allLoaded(node: Node): boolean {
     if (!node.children) return true;
@@ -282,6 +311,11 @@ export class LandStreamer {
   }
 
   private show(node: Node) {
+    const cached = this.cache.get(node.key);
+    if (cached) {
+      this.cacheBytes -= cached.bytes;
+      this.cache.delete(node.key);
+    }
     node.shown = true;
     if (node.mesh) {
       this.group.add(node.mesh);
@@ -295,14 +329,31 @@ export class LandStreamer {
     if (node.shown) this.flora?.hide(node.key);
     node.shown = false;
     this.collider.remove(node.key);
-    if (node.mesh) {
-      this.group.remove(node.mesh);
-      node.mesh.geometry.dispose();
+    if (node.mesh) this.group.remove(node.mesh);
+    if (node.state !== "loaded" || this.cache.has(node.key)) return;
+    // Retain recently replaced nodes, bounded by both bytes and entry count.
+    // This avoids regenerating them when turning around or crossing a LOD ring.
+    let bytes = 128 + (node.plants?.byteLength ?? 0) + (node.tufts?.byteLength ?? 0);
+    if (node.mesh) for (const attribute of Object.values(node.mesh.geometry.attributes)) bytes += attribute.array.byteLength * 2; // CPU + GPU
+    this.cache.set(node.key, { node, bytes });
+    this.cacheBytes += bytes;
+    this.trimCache();
+  }
+
+  private trimCache() {
+    const budget = TERRAIN.cacheMiB * 1024 * 1024;
+    while (this.cacheBytes > budget || this.cache.size > 256) {
+      const entry = this.cache.values().next().value;
+      if (!entry) break;
+      const { node, bytes } = entry;
+      this.cache.delete(node.key);
+      this.cacheBytes -= bytes;
+      node.mesh?.geometry.dispose();
       node.mesh = null;
+      node.plants = null;
+      node.tufts = null;
+      node.state = "idle";
     }
-    node.plants = null;
-    node.tufts = null;
-    node.state = "idle";
   }
 
   private hideTree(node: Node) {
@@ -344,6 +395,9 @@ export class LandStreamer {
   dispose() {
     for (const node of this.byKey.values()) if (node.mesh) node.mesh.geometry.dispose();
     this.byKey.clear();
+    this.cache.clear();
+    this.cacheBytes = 0;
+    this.arrived.length = 0;
   }
 }
 

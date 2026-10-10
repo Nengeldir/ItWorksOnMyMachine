@@ -61,6 +61,8 @@ export interface RunHud {
   phase: RunPhase;
   score: number;
   chain: number;
+  /** Gates passed in this level: a crash puts you back after the last one */
+  checkpoint: number;
   objectives: Objective[];
   /** Where the portal is: angle on screen (0 = straight up, clockwise, radians), metres, and whether it is ahead */
   compass: { angle: number; distance: number; ahead: boolean } | null;

@@ -2,33 +2,44 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
   font-variant-numeric: tabular-nums;
 }
 
+/* The race timer's pill, for the score */
 .run-score {
   position: absolute;
-  top: 3.4rem;
+  top: 4.5rem;
   left: 50%;
   transform: translateX(-50%);
+  width: max-content;
+  padding: 0.45rem 1.5rem 0.55rem;
+  border-radius: 22px;
   text-align: center;
 }
 
 .run-score strong {
+  font-family: var(--font-numbers);
   display: block;
-  font-size: 2.4rem;
+  font-size: 2.3rem;
   font-weight: 800;
+  line-height: 1.1;
   letter-spacing: -0.02em;
+}
+
+.run-score span {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink-70);
 }
 
 .run-chain {
   color: var(--warm-deep);
-  font-weight: 700;
 }
 
+/* Under the score pill, white with an ink edge like the ring marker: it reads on any sky */
 .run-compass {
   position: absolute;
-  top: 7.6rem;
+  top: 10rem;
   left: 50%;
   text-align: center;
   transform-origin: top center;
@@ -43,9 +54,12 @@
 }
 
 .run-compass .label {
-  font-size: 0.8rem;
-  color: var(--ink-70);
-  font-weight: 600;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow:
+    0 1px 2px color-mix(in srgb, var(--ink) 90%, transparent),
+    0 0 10px color-mix(in srgb, var(--ink) 50%, transparent);
 }
 
 .run-objectives {
@@ -54,9 +68,8 @@
   left: 1rem;
   list-style: none;
   margin: 0;
-  padding: 0.6rem 0.8rem;
-  background: var(--glass-strong);
-  border-radius: var(--radius);
+  padding: 0.7rem 0.9rem;
+  border-radius: 20px;
   min-width: 15rem;
   max-width: 20rem;
   display: flex;
@@ -95,12 +108,9 @@
   background: linear-gradient(90deg, var(--warm), var(--warm-deep));
 }
 
-.run-objectives li.done {
-  color: var(--good);
-}
-
+.run-objectives li.done,
 .run-objectives li.done .check {
-  color: var(--good);
+  color: var(--ink);
 }
 
 .run-objectives li.failed {
@@ -120,8 +130,7 @@
   position: relative;
   width: 3.4rem;
   height: 3.4rem;
-  border-radius: 12px;
-  background: var(--glass-strong);
+  border-radius: 14px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -174,10 +183,10 @@
 
 .run-toast {
   position: absolute;
-  top: 26%;
+  /* Keep notifications below the compass on short laptop screens. */
+  top: max(26%, 14rem);
   left: 50%;
   transform: translateX(-50%);
-  background: var(--glass-strong);
   padding: 0.45rem 1.1rem;
   border-radius: 999px;
   font-weight: 700;
@@ -424,7 +433,6 @@
   font-size: clamp(2rem, 5vw, 2.8rem);
   font-weight: 900;
   font-style: italic;
-  letter-spacing: -0.02em;
   margin-top: -0.4rem;
 }
 
@@ -436,6 +444,7 @@
 }
 
 .finish-score strong {
+  font-family: var(--font-numbers);
   font-size: 2.6rem;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
@@ -466,6 +475,7 @@
 }
 
 .finish-stats dd {
+  font-family: var(--font-numbers);
   margin: 0;
   font-size: 1.15rem;
   font-weight: 800;

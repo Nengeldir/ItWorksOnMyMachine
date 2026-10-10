@@ -4,11 +4,12 @@ import { runOrder, type RunSummary } from "../game/run/run";
 import type { Upgrade, UpgradeId } from "../game/run/upgrades";
 import { type BiomeId, runLevel } from "../game/world/biomes";
 import type { Settings } from "../storage";
+import type { InputObserver } from "../game/input";
 import { Store } from "./store";
 import { profileClient } from "../profile/client";
 
 const COLOR = "#ff5d73";
-const BEST_KEY = "wingrace.runs";
+const BEST_KEY = "windrider.runs";
 
 export interface RunState {
   hud: HudState | null;
@@ -105,6 +106,8 @@ export class RunSession {
     this.settings = settings;
     this.game?.setControls(settings);
   }
+
+  observeInput = (observer: InputObserver): (() => void) => this.game?.observeInput(observer) ?? (() => {});
 
   engage() {
     this.game?.engage();

@@ -9,19 +9,19 @@ import { Ambient } from "./ambient";
 import { Autopilot } from "./autopilot";
 import { GameAudio } from "./audio";
 import { Avatar } from "./avatar";
-import { APPEARANCE_EVENT } from "./cosmetics/storage";
-import { Companion } from "./pets/companion";
-import { validateAppearance, type Appearance } from "./cosmetics/storage";
+import { APPEARANCE_EVENT, validateAppearance, type Appearance } from "./cosmetics/storage";
 import { profileClient } from "../profile/client";
+import { Companion } from "./pets/companion";
 import { CameraRig } from "./camera";
 import { DISSOLVE_AT, type DeathKind, DeathFall, classifyCrash, fieldNormal } from "./death";
 import { Debris } from "./effects";
+import { TouchControls } from "./touch";
 import { FLIGHT, Flight, type FlightInput, type HitPart, hitboxWorld, touching } from "./flight";
 import { GlideIn } from "./glidein";
 import { Equipment } from "./items/equip";
 import type { ItemId, ItemSlot } from "./items/models";
 import { type GhostData, GhostRecorder, type GhostRun, ghostSamples } from "./ghost";
-import { type ControlSettings, Input } from "./input";
+import { type ControlSettings, type InputObserver, type TestAction, Input, controlsBlocked } from "./input";
 import { FX_LIGHT, Kind, Particles, fx, fxTime } from "./particles";
 import { PilotFx } from "./pilotfx";
 import { INTERPOLATION_DELAY_MS, Pilot, type PilotSample } from "./pilots";
@@ -39,7 +39,9 @@ import { type Level, levelId, raceLevel } from "./world/biomes";
 import type { WaterKind } from "./world/terrain/river";
 import { type WaterHit, World } from "./world/World";
 import { WorldView } from "./world/WorldView";
+import type { Palette } from "./world/palette";
 import { reloadForNewBuild } from "../staleBuild";
+import { onHold } from "./hold";
 
 const STEP = 1 / 120; // physics runs at a fixed rate, rendering interpolates
 const MAX_STEPS_PER_FRAME = 12;
@@ -87,6 +89,7 @@ export interface HudState {
   run: RunHud | null;
   biomeName: string;
   paletteName: string;
+  palette: Palette; // the level's lighting mood: the UI takes its colors from it
   speedKmh: number;
   boostCharge: number;
   boosting: boolean;
@@ -244,6 +247,8 @@ export class Game implements RunHost {
   private run: RunController | null = null;
   private frozen = false;
   private paused = false;
+  private pausedByHold = false; // paused because an overlay holds the game (hold.ts), not by the player
+  private unhold: (() => void) | null = null;
   private selfId = "";
   private startSlot: number | null = null; // place on the start grid, null = alone
   private participants: Participant[] = [];
@@ -278,6 +283,8 @@ export class Game implements RunHost {
   private frame = 0;
   private readonly resizeObserver: ResizeObserver;
   private gui: { destroy(): void } | null = null;
+  /** The on-screen stick and buttons of phones and tablets */
+  private touch: TouchControls | null = null;
 
   constructor(container: HTMLElement, options: GameOptions) {
     this.container = container;
@@ -321,6 +328,7 @@ export class Game implements RunHost {
       };
     }
     if (!this.attract) {
+      this.touch = new TouchControls(container, this.renderer.domElement, this.input);
       this.renderer.domElement.addEventListener("click", this.engage);
       // Audio may only start after a user gesture: take the first one, mouse or keyboard
       window.addEventListener("keydown", this.startAudio, { once: true });
@@ -378,6 +386,7 @@ export class Game implements RunHost {
     this.audio.setPreferences(options.controls.musicVolume ?? 1, options.controls.effectsVolume ?? 1, options.controls.muted ?? false);
     this.resize();
     this.frame = requestAnimationFrame(this.loop);
+    if (!this.attract) this.unhold = onHold((held) => this.hold(held));
 
     if (new URLSearchParams(location.search).has("tune")) void this.openTuning();
     // Lets browser tests drive the game in development
@@ -390,13 +399,26 @@ export class Game implements RunHost {
   // --- public API --------------------------------------------------------------
 
   /** Call from a click: locks the mouse and starts audio (browsers need a gesture for both) */
-  engage = () => {
+  engage = (event?: Event) => {
     if (this.paused) return;
-    if (!this.autopiloting) this.input.lockPointer();
+    // A finger has no pointer to lock
+    if (!this.autopiloting && (event as PointerEvent | undefined)?.pointerType !== "touch") this.input.lockPointer();
     this.audio.start();
   };
 
   private startAudio = () => this.audio.start();
+
+  /** An overlay over the game pauses it while open, and lets go only of a pause it made itself */
+  private hold(held: boolean) {
+    // Mark the pause first: togglePause reports it to the HUD straight away
+    if (held && !this.paused) {
+      this.pausedByHold = true;
+      this.togglePause();
+    } else if (!held && this.pausedByHold) {
+      this.pausedByHold = false;
+      if (this.paused) this.togglePause();
+    }
+  }
 
   /** Freeze local gameplay; the server-validated race clock keeps running. */
   togglePause() {
@@ -547,6 +569,7 @@ export class Game implements RunHost {
   insideWormhole(on: boolean) {
     if (this.inWormhole === on) return;
     this.inWormhole = on;
+    if (on && this.companion.group) this.companion.group.visible = false;
     this.view.group.visible = !on;
     this.abilityFx.group.visible = !on;
     this.abilityFx2.group.visible = !on;
@@ -706,6 +729,19 @@ export class Game implements RunHost {
     this.debris.setColor(color);
   }
 
+  testAction(action: TestAction) {
+    if (controlsBlocked()) return;
+    this.input.reset();
+    this.input.onTestAction?.(action);
+  }
+
+  observeInput(observer: InputObserver): () => void {
+    return this.input.observe({
+      sample: (input) => { if (!this.paused) observer.sample?.(input); },
+      action: (action) => { if (!this.paused) observer.action?.(action); },
+    });
+  }
+
   setControls(controls: ControlSettings) {
     const previous = this.input.settings;
     this.input.settings = controls;
@@ -793,11 +829,13 @@ export class Game implements RunHost {
 
   dispose() {
     cancelAnimationFrame(this.frame);
+    this.unhold?.();
     this.resizeObserver.disconnect();
     this.renderer.domElement.removeEventListener("click", this.engage);
     window.removeEventListener("keydown", this.startAudio);
     window.removeEventListener("pointerdown", this.startAudio);
     this.testPlayback?.dispose();
+    this.touch?.dispose();
     this.input.dispose();
     this.audio.dispose();
     this.gui?.destroy();
@@ -1456,7 +1494,7 @@ export class Game implements RunHost {
 
     const camera = this.rig.camera;
     camera.updateMatrixWorld();
-    this.view.update(camera, dt);
+    this.view.update(camera, dt, crashed ? undefined : this.flight.velocity);
     this.run?.frame(dt);
     if (!this.inWormhole) {
       this.gateMotes(dt);
@@ -1494,6 +1532,7 @@ export class Game implements RunHost {
           ? this.finishMs
           : null;
     const runHud = this.run?.hud() ?? null;
+    let flap = false, hover = false, plunge = false, gale = false;
     if (runHud) for (const ability of runHud.abilities) {
       const bindings = this.input.settings.bindings;
       if (ability.id === "flap") ability.key = bindingLabel(bindings, "flap");
@@ -1505,12 +1544,18 @@ export class Game implements RunHost {
       else if (ability.id === "ascension") ability.key = bindingLabel(bindings, "ascend");
       else if (ability.id === "aeroBrake") ability.key = bindingLabel(bindings, "brake");
       else if (ability.id === "falcon" || ability.id === "butterfly") ability.key = bindingLabel(bindings, "stance");
+      flap ||= ability.id === "flap";
+      hover ||= ability.id === "hoverStall";
+      plunge ||= ability.id === "plunge";
+      gale ||= ability.id === "galeForce";
     }
+    this.touch?.sync(this.paused, !this.autopiloting && !this.frozen, flap, hover, plunge, gale);
     return {
       seed: this.world.seed,
       run: runHud,
       biomeName: this.world.biome.name,
       paletteName: this.world.palette.name,
+      palette: this.world.palette,
       boostCharge: this.flight.boostCharge,
       boosting: this.flight.boost > 0.05,
       braking: this.flight.brake > 0.05,
@@ -1527,7 +1572,8 @@ export class Game implements RunHost {
       style: Math.round(this.style),
       multiplier: this.multiplier,
       crashed,
-      paused: this.paused,
+      // An overlay's pause (hold.ts) explains itself: no "Paused" over it
+      paused: this.paused && !this.pausedByHold,
       locked: this.input.locked,
       muted: this.audio.isMuted,
       standings: this.standings(),
@@ -1702,7 +1748,7 @@ export class Game implements RunHost {
       this.slowFrames = 0;
       this.measured = 0;
       this.setQuality((this.quality - 1) as Quality);
-      if (import.meta.env.DEV) console.info(`[wind-rider] frame rate low, quality now ${this.quality}`);
+      if (import.meta.env.DEV) console.info(`[windrider] frame rate low, quality now ${this.quality}`);
     }
   }
 
