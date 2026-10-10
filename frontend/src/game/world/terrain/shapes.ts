@@ -204,6 +204,14 @@ export class Mesa extends BaseShape {
   }
 }
 
+/**
+ * The thinnest a column or tube of rock may be (radius, metres). The land is
+ * meshed on a 6 m grid, which holds a column for certain only from 6/√2 ≈
+ * 4.24 m: anything thinner would be drawn broken or not at all, while the
+ * distance field still has it.
+ */
+export const MIN_RADIUS = 4.5;
+
 /** A tapering column between two points: needles, karst pillars, ice shards, hanging roots */
 export class Spire extends BaseShape {
   private readonly ax: number;
@@ -218,9 +226,26 @@ export class Spire extends BaseShape {
   private readonly notchY: number;
   private readonly notch: number;
 
-  /** From `base` (radius r0) to `tip` (radius r1). A notch narrows it around `notchY` (sea stacks, cut by the waves) */
+  /**
+   * From `base` (radius r0) to `tip` (radius r1). A notch narrows it around
+   * `notchY` (sea stacks, cut by the waves). Never thinner than `MIN_RADIUS`:
+   * a tapering end stops (rounded) where it would get thinner, a notch stops
+   * short of it, and a spire thin all along shrinks to a stub at its base.
+   */
   constructor(base: Vector3, tip: Vector3, r0: number, r1: number, look: ShapeLook = {}, notch?: { y: number; depth: number }) {
     super(look, r0 * 0.22);
+    if (Math.max(r0, r1) < MIN_RADIUS) {
+      tip = r0 >= r1 ? base : tip;
+      base = tip;
+      r0 = r1 = MIN_RADIUS;
+    } else if (r1 < MIN_RADIUS) {
+      tip = base.clone().lerp(tip, (r0 - MIN_RADIUS) / (r0 - r1));
+      r1 = MIN_RADIUS;
+    } else if (r0 < MIN_RADIUS) {
+      base = tip.clone().lerp(base, (r1 - MIN_RADIUS) / (r1 - r0));
+      r0 = MIN_RADIUS;
+    }
+    if (notch) notch = { y: notch.y, depth: Math.min(notch.depth, Math.max(0, Math.min(r0, r1) - MIN_RADIUS)) };
     this.ax = base.x;
     this.ay = base.y;
     this.az = base.z;
@@ -296,7 +321,9 @@ export class RockRing extends BaseShape {
   private readonly radius: number;
   private readonly tube: number;
 
+  /** The tube is never thinner than `MIN_RADIUS` */
   constructor(center: Vector3, axis: Vector3, radius: number, tube: number, look: ShapeLook = {}) {
+    tube = Math.max(tube, MIN_RADIUS);
     super(look, tube * 0.3);
     this.axis = axis.clone();
     this.radius = radius;

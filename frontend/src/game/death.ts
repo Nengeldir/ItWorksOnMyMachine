@@ -17,6 +17,12 @@ import { clamp } from "./math";
 export type DeathKind = "headfirst" | "slide" | "wing" | "fall";
 
 type Field = (x: number, y: number, z: number) => number;
+/**
+ * The signed distance from a point to the nearest surface within about
+ * `radius` (anything at least `radius` when there is none), writing the way
+ * out of it to `normal`
+ */
+export type Contact = (p: THREE.Vector3, radius: number, normal: THREE.Vector3) => number;
 
 const GRAVITY = 20;
 /**
@@ -36,6 +42,8 @@ export const WING_POINTS = 5;
 const INERTIA = 0.3;
 /** Longest physics step; frames are cut into these so fast spins don't tunnel into rock */
 const MAX_STEP = 1 / 120;
+/** Rounds of pushing the contact points out per step, until all are clear */
+const PASSES = 4;
 /** Seconds after which the body starts dissolving into light (Game respawns at RESPAWN_DELAY) */
 export const DISSOLVE_AT = 1.1;
 
@@ -48,6 +56,7 @@ const point = new THREE.Vector3();
 const pointVelocity = new THREE.Vector3();
 const across = new THREE.Vector3();
 const local = new THREE.Vector3();
+const normalOut = new THREE.Vector3();
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
 
 /** The surface normal of a distance field at a point (the direction away from the nearest surface) */
@@ -104,6 +113,12 @@ export class DeathFall {
   readonly normal = new THREE.Vector3(0, 1, 0);
   /** Wing contact points in the body's frame, left wing then right (Avatar.wingPoints) */
   readonly wing = Array.from({ length: WING_POINTS * 2 }, () => new THREE.Vector3());
+  /**
+   * How far each wing (left, right) is still in the rock after this frame's
+   * pushing: wedged under an overhang or in a crevice, where moving the body
+   * can't free it. The pose folds that wing in (Avatar.foldWing)
+   */
+  readonly wedged = [0, 0];
   /** Angular velocity in world space (axis × rad/s) */
   private readonly omega = new THREE.Vector3();
   private friction = 0;
@@ -159,16 +174,17 @@ export class DeathFall {
     }
   }
 
-  update(dt: number, field: Field) {
+  update(dt: number, field: Contact) {
     if (dt <= 0) return;
     this.time += dt;
     this.grounded = false;
+    this.wedged[0] = this.wedged[1] = 0;
     const steps = Math.ceil(dt / MAX_STEP);
     for (let i = 0; i < steps; i++) this.step(dt / steps, field);
     this.speed = this.velocity.length();
   }
 
-  private step(dt: number, field: Field) {
+  private step(dt: number, field: Contact) {
     const v = this.velocity;
     v.y -= GRAVITY * dt;
     // Air drag: a wing-spinning body falls slower, like a seed
@@ -184,23 +200,41 @@ export class DeathFall {
 
     // Lost below the islands: nothing to hit
     if (this.kind === "fall") return;
-    for (const [x, y, z, r] of BODY) this.contact(field, local.set(x, y, z), r);
-    for (const p of this.wing) this.contact(field, p, WING_RADIUS);
+    // Pushing one point out can push another back in (wedged in a crevice, both wings on rock):
+    // go round again until every point is clear, a few times at most
+    let pushed = false;
+    for (let pass = 0; pass < PASSES; pass++) {
+      pushed = false;
+      for (const [x, y, z, r] of BODY) pushed = this.contact(field, local.set(x, y, z), r) || pushed;
+      for (const p of this.wing) pushed = this.contact(field, p, WING_RADIUS) || pushed;
+      if (!pushed) break;
+    }
+    // Still not clear: how deep is each wing stuck?
+    if (pushed) {
+      for (let i = 0; i < this.wing.length; i++) {
+        point.copy(this.wing[i]).applyQuaternion(this.quaternion).add(this.position);
+        const depth = WING_RADIUS - field(point, WING_RADIUS, normalOut);
+        const side = i < WING_POINTS ? 0 : 1;
+        if (depth > this.wedged[side]) this.wedged[side] = depth;
+      }
+    }
   }
 
   /** One contact point (in the body's frame) against the rock: push out, bounce and rub along the surface */
-  private contact(field: Field, at: THREE.Vector3, radius: number) {
+  /** Returns whether the point had to be pushed out (more than a centimetre) */
+  private contact(field: Contact, at: THREE.Vector3, radius: number): boolean {
     arm.copy(at).applyQuaternion(this.quaternion);
     point.copy(this.position).add(arm);
-    const d = field(point.x, point.y, point.z);
-    if (d >= radius) return;
-    const n = fieldNormal(field, point, this.normal);
+    const d = field(point, radius, normalOut);
+    if (d >= radius) return false;
+    const n = this.normal.copy(normalOut);
     this.position.addScaledVector(n, radius - d);
     this.grounded = true;
+    const pushed = radius - d > 0.01;
     // The point's own velocity: the body's plus its spin
     pointVelocity.crossVectors(this.omega, arm).add(this.velocity);
     const into = pointVelocity.dot(n);
-    if (into >= 0) return;
+    if (into >= 0) return pushed;
     across.crossVectors(arm, n);
     const push = (-(1 + this.bounce) * into) / (1 + across.lengthSq() / INERTIA);
     this.velocity.addScaledVector(n, push);
@@ -208,11 +242,12 @@ export class DeathFall {
     // Friction: rolling without slipping when it grips, sliding when it doesn't
     tangent.copy(pointVelocity).addScaledVector(n, -into);
     const slip = tangent.length();
-    if (slip < 1e-4) return;
+    if (slip < 1e-4) return pushed;
     tangent.divideScalar(slip);
     across.crossVectors(arm, tangent);
     const rub = Math.min(slip / (1 + across.lengthSq() / INERTIA), this.friction * push);
     this.velocity.addScaledVector(tangent, -rub);
     this.omega.addScaledVector(across, -rub / INERTIA);
+    return pushed;
   }
 }

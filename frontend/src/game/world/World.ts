@@ -117,7 +117,12 @@ export class World {
 
   /** Distance from a point to the nearest rock, tree or water surface (negative inside) */
   distance(x: number, y: number, z: number): number {
-    let d = Math.min(this.rock.distance(x, y, z), this.trees.distance(x, y, z));
+    return Math.min(this.rock.distance(x, y, z), this.otherDistance(x, y, z));
+  }
+
+  /** Distance to everything solid but the rock: trees, river pools, the sea */
+  otherDistance(x: number, y: number, z: number): number {
+    let d = this.trees.distance(x, y, z);
     if (this.steps) d = Math.min(d, this.steps.waterDistance(x, y, z));
     if (this.seaLevel !== null) d = Math.min(d, y - this.seaLevel);
     return d;

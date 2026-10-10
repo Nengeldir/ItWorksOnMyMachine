@@ -98,7 +98,7 @@ export const EMBER: Biome = {
       gates: { shards: 3, arch: 2, spur: 2, pillars: 2, overhang: 1 },
       gateSurface: 2,
       features: [
-        { kind: "shards", count: 60, radius: [4, 10], rise: [30, 120], lateral: [60, 380], tilt: 0.4, surface: 1 },
+        { kind: "shards", count: 60, radius: [6, 11], rise: [30, 120], lateral: [60, 380], tilt: 0.4, surface: 1 },
         { kind: "mesas", count: 9, radius: [50, 110], rise: [80, 200], lateral: [300, 800], step: 18, surface: 2 },
         { kind: "volcano", lateral: 900, radius: 420, rise: 520, surface: 3 },
         { kind: "boulders", count: 100, size: [2, 5], lateral: [20, 150], surface: 0 },

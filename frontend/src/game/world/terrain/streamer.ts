@@ -3,8 +3,9 @@ import { TERRAIN } from "../../tuning";
 import { PLANT_STRIDE, SPECIES } from "../flora/species";
 import type { FloraView } from "../flora/view";
 import { Plant } from "../trees";
+import type { LandCollider } from "../landCollider";
 import type { World } from "../World";
-import { NODE_SIZE, type TerrainMesh, nodeKey } from "./mesh";
+import { NODE_SIZE, type TerrainMesh, VOXEL, nodeKey } from "./mesh";
 
 // Streams generator-v2 land around the camera as an octree of nodes: 384 m
 // nodes far away, split into 192 m and then 96 m nodes as you get close. Every
@@ -50,6 +51,7 @@ export class LandStreamer {
   private readonly group: THREE.Group;
   private readonly material: THREE.Material;
   private readonly flora: FloraView | null;
+  private readonly collider: LandCollider;
   private readonly roots: Node[] = [];
   private readonly byKey = new Map<number, Node>();
   private readonly ranges = new Map<number, [number, number] | null>();
@@ -58,8 +60,9 @@ export class LandStreamer {
   private desired: Node[] = [];
   private readonly wanted: { node: Node; d: number }[] = [];
 
-  constructor(world: World, group: THREE.Group, material: THREE.Material, flora: FloraView | null) {
+  constructor(world: World, group: THREE.Group, material: THREE.Material, flora: FloraView | null, collider: LandCollider) {
     this.world = world;
+    this.collider = collider;
     this.group = group;
     this.material = material;
     this.flora = flora;
@@ -280,13 +283,18 @@ export class LandStreamer {
 
   private show(node: Node) {
     node.shown = true;
-    if (node.mesh) this.group.add(node.mesh);
+    if (node.mesh) {
+      this.group.add(node.mesh);
+      // What is on screen is what you hit
+      this.collider.add(node.key, node.mesh.geometry.getAttribute("position").array as Float32Array, VOXEL << node.lod);
+    }
     if (node.plants && this.flora) this.flora.show(node.key, node.lod, node.plants, node.tufts!, node.box);
   }
 
   private hide(node: Node) {
     if (node.shown) this.flora?.hide(node.key);
     node.shown = false;
+    this.collider.remove(node.key);
     if (node.mesh) {
       this.group.remove(node.mesh);
       node.mesh.geometry.dispose();
@@ -316,8 +324,29 @@ export class LandStreamer {
     return wanted;
   }
 
+  /**
+   * Is the land at this point on screen (or is there none to show)? Until it
+   * is, collisions there fall back to the distance field
+   */
+  covers(x: number, y: number, z: number): boolean {
+    for (const root of this.roots) if (inside(root.box, x, y, z)) return this.coveredIn(root, x, y, z);
+    return true;
+  }
+
+  private coveredIn(node: Node, x: number, y: number, z: number): boolean {
+    if (node.shown) return true;
+    if (!node.children) return false;
+    for (const child of node.children) if (inside(child.box, x, y, z)) return this.coveredIn(child, x, y, z);
+    // No finer node holds this spot: no land there
+    return true;
+  }
+
   dispose() {
     for (const node of this.byKey.values()) if (node.mesh) node.mesh.geometry.dispose();
     this.byKey.clear();
   }
+}
+
+function inside(box: THREE.Box3, x: number, y: number, z: number): boolean {
+  return x >= box.min.x && x < box.max.x && y >= box.min.y && y < box.max.y && z >= box.min.z && z < box.max.z;
 }

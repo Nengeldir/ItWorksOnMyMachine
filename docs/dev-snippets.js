@@ -63,10 +63,10 @@ window.__shot = async (view, ms = 4000) => {
 // tree colliders (trees), collision distances (dist) and rings. trees, dist and
 // rings must never change, or recorded ghosts stop matching their maps; mesh may
 // change when the looks do. Expected (trees, dist and rings since the Sky Isles
-// port; mesh since the rock was snapped onto its collision surface, 2026-10-10):
-//   1: mesh a241c372 trees f4f3226a dist 9086de69 rings 583fd555 (Winter)
-//   7: mesh 7642bb08 trees fb4fc91d dist 6aab8c08 rings c8cc2d15 (Misty pines)
-//  42: mesh 2ebb4b50 trees 112f6564 dist 3b43c006 rings 40f33295 (Misty pines)
+// port; mesh since the rock collides as drawn, 2026-10-10):
+//   1: mesh bbf7b0a1 trees f4f3226a dist 9086de69 rings 583fd555 (Winter)
+//   7: mesh df8c6ea1 trees fb4fc91d dist 6aab8c08 rings c8cc2d15 (Misty pines)
+//  42: mesh d9c31b5b trees 112f6564 dist 3b43c006 rings 40f33295 (Misty pines)
 window.__raceHashes = async () => {
   const v = Date.now();
   const { World } = await import(`/src/game/world/World.ts?t=${v}`);
