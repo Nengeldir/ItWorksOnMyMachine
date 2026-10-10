@@ -82,8 +82,9 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 ```
 
 - `/?seed=42` opens a time trial on seed 42. Add `&tune` for the tuning panel.
-- `/?test` (optionally `?test=verdant&seed=2`) opens the explore-style test
-  sandbox: Shift+P spawns a portal ahead, Shift+O previews victory, Shift+S
+- `/?test` (optionally `?test=verdant&seed=2`, or `&test` added to any
+  single-player URL: `?explore=verdant&test`, `?seed=42&test`, `?run=5&test`)
+  opens the explore-style test sandbox (`docs/debug-mode.md`): Shift+P spawns a portal ahead, Shift+O previews victory, Shift+S
   toggles simulation and all visual animations between half and normal speed.
   Nothing is saved; world/light controls and N/B/V switching are explore-only.
   Included in the standard production build; no Docker changes or debug flags.
@@ -148,6 +149,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `staleBuild.ts` | After a redeploy, an open tab's lazy chunks (bloom, `?tune`) and mesher worker are 404s: `reloadForNewBuild` reloads the page once (at most every 30 s, production only) |
 | `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, controls, and the run's HUD, title card and upgrade picker (`RunHud.tsx`). The menu's live course behind the glass is `MenuBackdrop` (a `Game` in `drift` attract mode, which switches courses with `setSeed` and snapshots each one for card art); today's best folds into a flag (`TodaysBest`). `CourseSelect` is the map select (a carousel of course cards; featured art in `public/courses/`). Before a race, `GameScreen`'s `ReadyCard` sits where the timer will be; its `Panel` (results) folds to its heading and main buttons on narrow screens |
 | `theme.ts` | The UI's colors per map: `useUiTheme(seed)` sets `--ink` (picked per palette name, else derived from the sky) and `--tint` (the horizon); every other shade comes from those two with `color-mix()` |
+| `route.ts` | The URL ↔ screen mapping (`screenFromSearch`, `urlFor`, `Screen`), pure so it's tested; `test` is honored on every single-player URL |
 | `media.ts` | `useMediaToggle(query)`: an open/closed toggle that starts open where a media query matches and follows the screen when it changes |
 
 Backend (`backend/`): `app.py` endpoints, `rooms.py` race state machine and
@@ -210,6 +212,46 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Test mode: `&test` on any URL, run HUD, panel layout (Claude)
+
+Asked for: verify what's wrong with test mode, fix it, and make sure the
+debug panel works as intended.
+- **URL** (new `route.ts`, out of `App.tsx`): `test` only counted as
+  `test=<world>`, so `?explore=verdant&test` and `?test&explore=ember` opened
+  Sky Isles, and `?run=5&test` opened a normal, saved run. Now `test` wins
+  over run, explore and solo URLs (world from `test=` or `explore=`, seed from
+  `seed=` or `run=`); rooms and the gallery ignore it. `ExploreSession` drops
+  the leftover `explore`/`run` params when it rewrites the URL. Removed
+  `ExploreSession.valid` (now `validBiome` in `route.ts`).
+- **Screen** (`GameScreen.tsx`, `GameScreen.css`): test mode flies a run but
+  showed none of it; it now has the run HUD (score, chain, "Reach the portal"
+  with its distance, compass), style points, and `level n/8 · world · mood` in
+  the top bar. The panel is a short list whose Shift+S line says what it
+  will do (half or normal speed). It overlapped the flight panel below about
+  1100 px wide; now compact, and below 840 px it sits on the right under the
+  compass.
+- **Docs**: `docs/debug-mode.md` described the other branch's `?debug` mode
+  (`VITE_ENABLE_DEBUG`, `__PLAYTEST__`, a portal-distance setting) and is
+  rewritten for `?test`. README: the `&test` URLs; removed a `Shift+V`
+  quarter-speed explore slow motion that doesn't exist in the code.
+- **Correction** to the entry below: `tests/test-mode.test.mjs` was never
+  committed, and the four failing untracked test files it mentions aren't in
+  this checkout. The file exists now: URL parsing (15 URLs) and the chords
+  (consumed before pause/boost/pitch, once per press).
+- Verified: on a clean worktree of `4acb722` plus these files, build and lint
+  pass, and all 33 frontend tests pass (Node 22.14, run with a
+  `module.register` resolver: `tests/register.mjs` needs 22.15). In Chrome
+  (dev server): every URL above lands in the right world and seed; Shift+P
+  moves the objective to 45 m; Shift+S flips the panel's label; Shift+O shows
+  "Test #n · complete", nothing in localStorage; Enter flies again; explore
+  still switches worlds with N. Panel bounds checked at 390, 700, 840, 900,
+  1000 and 1440 px against the flight panel, score, compass, objectives and
+  abilities: no overlap. Shortcuts were sent as script events, not typed.
+- Not done: the main working tree has another session's uncommitted
+  abilities work (`Game.ts`, `audio.ts`, `avatar.ts`, `run/controller.ts`,
+  `tuning.ts`, `game/abilities/`) that doesn't compile yet; it was left
+  untouched, and these changes were verified without it.
 
 ### 2026-10-10: Confirm test mode works with the existing Docker build
 
@@ -1435,9 +1477,9 @@ ported to the islands world:
 
 ## Next up
 
-- Test mode: check shortcut feel with physical keyboard/mouse and the debug
-  panel on narrow screens; browser automation verified behavior and timing,
-  not focused-window performance or audio listening.
+- Test mode: check shortcut feel with a physical keyboard and mouse;
+  browser automation verified behavior, timing and layout, not
+  focused-window performance or audio.
 
 - Playtest the settings dead zone with a real gamepad and listen to the separate
   audio levels; check mouse sensitivity 2× across different devices.

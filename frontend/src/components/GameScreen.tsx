@@ -281,15 +281,20 @@ const ExploreScreen = ({ biome, seed, settings, onSettings, onExit, testMode = f
   });
 
   const moods = BIOMES[current].moods;
-  const phase = hud?.run?.phase;
+  const run = hud?.run ?? null;
+  const phase = run?.phase;
   const transitioning = phase === "portal" || phase === "pick" || phase === "finale" || phase === "won";
   return (
     <div className="game">
       <div ref={ref} className="game-view" />
-      {hud && !summary && (!transitioning || hud.paused) && <Hud hud={hud} settings={settings} onSettings={onSettings} />}
-      {!summary && <TopBar title={`${testMode ? "Test" : "Explore"} · ${hud ? `${hud.biomeName} · ${hud.paletteName}` : ""} · #${seed}${testMode ? ` · ${speed}× speed` : ""}`} onExit={onExit} />}
+      {hud && !summary && (!transitioning || hud.paused) && <Hud hud={hud} settings={settings} onSettings={onSettings} showStyle={testMode} />}
+      {/* Test mode flies a real run: its score, chain and compass to the portal */}
+      {testMode && run && !summary && !transitioning && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
+      {!summary && <TopBar title={testMode
+        ? `Test · #${seed}${run ? ` · level ${run.level}/${run.length} · ${run.biome} · ${run.mood}` : ""} · ${speed}× speed`
+        : `Explore · ${hud ? `${hud.biomeName} · ${hud.paletteName}` : ""} · #${seed}`} onExit={onExit} />}
       {error && <div className="banner">{error}</div>}
-      {!summary && !transitioning && <aside className="debug-panel glass">
+      {!summary && !transitioning && <aside className={`debug-panel glass${testMode ? " test" : ""}`}>
         {!testMode && <>
         <h3>Worlds</h3>
         <div className="debug-row">
@@ -316,10 +321,14 @@ const ExploreScreen = ({ biome, seed, settings, onSettings, onExit, testMode = f
           <kbd>N</kbd> next world · <kbd>B</kbd> previous · <kbd>V</kbd> next light
         </p>
         </>}
-        {testMode && <p className="debug-keys">
-          <kbd>Shift+P</kbd> portal ahead · <kbd>Shift+O</kbd> victory · <kbd>Shift+S</kbd> half speed / normal
-          <br />Test mode · nothing saved
-        </p>}
+        {testMode && <>
+          <h3>Test mode · nothing saved</h3>
+          <ul className="debug-keys">
+            <li><kbd>Shift+P</kbd> portal ahead</li>
+            <li><kbd>Shift+O</kbd> victory</li>
+            <li><kbd>Shift+S</kbd> {speed === 1 ? "half speed" : "normal speed"}</li>
+          </ul>
+        </>}
       </aside>}
       {testMode && phase === "finale" && <div className="finale-skip"><kbd>Enter</kbd> skip</div>}
       {testMode && offers.length > 0 && !hud?.paused && <UpgradePicker offers={offers} next={next} onPick={(id) => session.pick(id)} />}

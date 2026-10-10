@@ -207,12 +207,13 @@ glowing ponds), soft clouds, valley mist, auroras and ambient particles
 (fireflies, snow, embers, spores). Fly any biome freely at
 `/?explore=<id>&seed=<n>` (ids: `verdant`, `glacier`, `archipelago`,
 `lagoon`, `twilight`, `ember`, `aurora`).
-In explore mode only, `Shift+V` toggles quarter-speed slow motion for flight
-and animations; `V` still switches lighting.
 
-**Test mode:** open `/?test` (or `/?test=verdant&seed=2`). It shows the test
-shortcut hints, with world/light selectors and N/B/V switching reserved for
-explore mode. Spawned portals use
+**Test mode:** open `/?test` (or `/?test=verdant&seed=2`), or add `&test` to
+any single-player URL: `/?explore=verdant&seed=2&test` tests that world,
+`/?seed=42&test` and `/?run=5&test` that seed (from Sky Isles). Rooms and the
+gallery ignore it. It flies a real adventure run (score, gate chain and the
+compass to the portal) with a small panel of the test shortcuts; world/light
+selectors and N/B/V switching stay in explore mode. Spawned portals use
 adventure's wormhole and upgrade picker; victory uses its finish screen and
 autopilot. Slow motion scales the shared physics/animation clock, including
 scenery shaders, particles, camera motion, transitions and animated UI overlays.
