@@ -5,9 +5,12 @@ export interface Palette {
   name: string;
   horizon: string; // sky at the horizon, also the fog color
   zenith: string; // sky straight up
-  ground: string; // canyon floor
-  rock: string; // steep walls and obstacles
-  top: string; // high plateaus
+  grass: string; // the islands' grassy tops
+  forest: string; // pine needles, and the darker ground under them
+  trunk: string;
+  rock: string; // steep faces and the bare slopes below the snow
+  snow: string;
+  cloud: string;
   accent: string; // the next ring
   sun: string;
   sunIntensity: number;
@@ -82,14 +85,17 @@ export const PALETTES: readonly Palette[] = [
     glow: 1.2,
   },
   {
-    name: "Desert",
-    horizon: "#ffe2a8",
-    zenith: "#e27f3a",
-    ground: "#e0a35b",
-    rock: "#b5603c",
-    top: "#fff1cc",
+    name: "Autumn",
+    horizon: "#ffe2bd",
+    zenith: "#5f9bd6",
+    grass: "#a9a24c",
+    forest: "#c4642c",
+    trunk: "#5a3b25",
+    rock: "#8a6b58",
+    snow: "#fffaf2",
+    cloud: "#fff8ee",
     accent: "#2b7fff",
-    sun: "#fff4dc",
+    sun: "#fff1d6",
     sunIntensity: 2.3,
     ambient: 1.4,
     sunElevation: 24,
@@ -120,13 +126,16 @@ export const PALETTES: readonly Palette[] = [
     glow: 0.9,
   },
   {
-    name: "Lagoon",
-    horizon: "#a6ebf9",
-    zenith: "#1e6bd0",
-    ground: "#40c0b0",
-    rock: "#2c7a8c",
-    top: "#fdf4cf",
-    accent: "#ff6a3d",
+    name: "Winter",
+    horizon: "#dde8f4",
+    zenith: "#5e86c2",
+    grass: "#e6edf4",
+    forest: "#2e4f48",
+    trunk: "#4d3b30",
+    rock: "#7a8594",
+    snow: "#ffffff",
+    cloud: "#ffffff",
+    accent: "#ff3d5a",
     sun: "#ffffff",
     sunIntensity: 2.3,
     ambient: 1.4,

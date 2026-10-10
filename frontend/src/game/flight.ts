@@ -1,5 +1,5 @@
 import { Matrix4, Quaternion, Vector3 } from "three";
-import { clamp } from "./world/terrain";
+import { clamp } from "./math";
 
 // An arcade wingsuit: the nose points where you go. Diving turns height into
 // speed, climbing turns speed back into height, and air drag caps both.
@@ -14,7 +14,7 @@ export const FLIGHT = {
   stallSpeed: 16, // below this the nose drops
   sink: 1.3, // m/s of sink at sinkSpeed, growing as you slow down
   sinkSpeed: 30,
-  proximityBoost: 5, // extra m/s² while skimming the terrain
+  proximityBoost: 5, // extra m/s² while skimming rock
   minSpeed: 6,
   maxSpeed: 120,
 };

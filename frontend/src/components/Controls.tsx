@@ -13,7 +13,7 @@ const Controls = ({ settings, onSettings }: ControlsProps) => (
         <kbd>Mouse</kbd> or <kbd>WASD</kbd> / arrows or a gamepad stick: pitch and roll
       </li>
       <li>Bank to turn. Dive for speed, pull up to trade it for height.</li>
-      <li>Skim the rock for style points and a speed boost.</li>
+      <li>Skim the rock and trees for style points and a speed boost.</li>
       <li>
         <kbd>Q</kbd> / <kbd>E</kbd> or double-tap a roll key: barrel roll
       </li>

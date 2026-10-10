@@ -56,7 +56,8 @@ export interface HudState {
   seed: number;
   paletteName: string;
   speedKmh: number;
-  altitude: number;
+  clearance: number; // metres to the nearest rock or tree
+  loading: boolean; // the islands near you are still being built
   raceState: RaceState;
   raceTimeMs: number | null;
   countdown: number | null; // whole seconds left
@@ -145,7 +146,7 @@ export class Game {
   private world!: World;
   private view!: WorldView;
   private selfId = "";
-  private startSlot = 0;
+  private startSlot: number | null = null; // place on the start grid, null = alone
   private participants: Participant[] = [];
 
   private raceState: RaceState = "free";
@@ -229,6 +230,9 @@ export class Game {
 
   private startAudio = () => this.audio.start();
 
+  /** Keeps the camera out of the rock */
+  private clearance = (x: number, y: number, z: number) => this.world.rock.distance(x, y, z);
+
   get seed(): number {
     return this.world.seed;
   }
@@ -270,7 +274,7 @@ export class Game {
 
   /** No race: fly around, rings are just scenery */
   freeFlight(respawn: boolean) {
-    this.startSlot = 0;
+    this.startSlot = null;
     this.raceState = "free";
     this.checkpoints = 0;
     this.finishMs = null;
@@ -278,8 +282,8 @@ export class Game {
     if (respawn) this.respawn(0);
   }
 
-  /** Puts you on the start grid (slot 0, 1, …), frozen until the clock reaches startAt */
-  startCountdown(startAt: number, slot = 0) {
+  /** Puts you on the start line (or grid slot 0, 1, … in a room), frozen until the clock reaches startAt */
+  startCountdown(startAt: number, slot: number | null = null) {
     this.startSlot = slot;
     this.raceState = "countdown";
     this.startAt = startAt;
@@ -370,7 +374,7 @@ export class Game {
 
   private respawn(checkpoints: number) {
     const { position, direction } = this.world.spawnPoint(checkpoints);
-    if (checkpoints === 0 && this.startSlot > 0) {
+    if (checkpoints === 0 && this.startSlot !== null) {
       // A start grid four abreast, so racers don't spawn inside each other
       const side = tmp.crossVectors(direction, THREE.Object3D.DEFAULT_UP).normalize();
       const column = (this.startSlot % 4) - 1.5;
@@ -414,7 +418,7 @@ export class Game {
 
     const { x, y, z } = this.flight.position;
     const distance = this.world.distance(x, y, z);
-    if (distance < CRASH_DISTANCE) {
+    if (distance < CRASH_DISTANCE || this.world.lost(y, z)) {
       this.crash();
       return;
     }
@@ -658,9 +662,11 @@ export class Game {
     }
 
     this.input0 = this.input.sample(dt);
+    // Before a race, wait for the islands around you to show up: no flying into invisible rock
+    const waiting = !this.view.ready && this.raceState === "free";
     if (this.crashedAt !== null) {
       if (this.elapsed - this.crashedAt > RESPAWN_DELAY) this.respawnNow();
-    } else if (this.raceState !== "countdown") {
+    } else if (this.raceState !== "countdown" && !waiting) {
       this.accumulator += dt;
       let steps = 0;
       while (this.accumulator >= STEP && steps++ < MAX_STEPS_PER_FRAME) {
@@ -690,7 +696,7 @@ export class Game {
         this.flight.up,
         this.flight.speed,
         this.smoothProximity,
-        this.world.terrain,
+        this.clearance,
       );
     } else {
       this.rig.watch(this.crashPoint, dt);
@@ -735,7 +741,8 @@ export class Game {
       seed: this.world.seed,
       paletteName: this.world.palette.name,
       speedKmh: Math.round(this.flight.speed * 3.6),
-      altitude: Math.round(y - this.world.terrain.height(x, z)),
+      clearance: Math.max(0, Math.round(this.world.distance(x, y, z))),
+      loading: !this.view.ready,
       raceState: this.raceState,
       raceTimeMs,
       countdown: this.raceState === "countdown" ? Math.max(0, Math.ceil((this.startAt - t) / 1000)) : null,

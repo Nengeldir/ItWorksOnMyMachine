@@ -31,8 +31,12 @@ function useMountedSession(session: Mountable, settings: Settings) {
 function useHotkeys(keys: Record<string, () => void>) {
   const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
     const target = event.target as HTMLElement | null;
-    if (target && ["INPUT", "BUTTON", "TEXTAREA"].includes(target.tagName)) return;
-    keys[event.code]?.();
+    if (target && ["INPUT", "TEXTAREA"].includes(target.tagName)) return;
+    const action = keys[event.code];
+    if (!action || event.repeat) return;
+    // Otherwise Enter would also click whichever button still has focus
+    event.preventDefault();
+    action();
   });
   useEffect(() => {
     window.addEventListener("keydown", onKeyDown);
@@ -59,7 +63,10 @@ const TopBar = ({ title, onExit, children }: { title: string; onExit: () => void
 const SoloScreen = ({ seed, settings, onSettings, onExit }: ScreenProps & { seed: number }) => {
   const [session] = useState(() => new SoloSession(seed, clientId(), settings));
   const ref = useMountedSession(session, settings);
-  const { hud, stage, result, leaderboard, ghosts } = useSyncExternalStore(session.store.subscribe, session.store.get);
+  const { hud, stage, result, leaderboard, ghosts, error } = useSyncExternalStore(
+    session.store.subscribe,
+    session.store.get,
+  );
 
   useHotkeys({
     Enter: () => stage !== "racing" && session.start(),
@@ -71,8 +78,9 @@ const SoloScreen = ({ seed, settings, onSettings, onExit }: ScreenProps & { seed
       <div ref={ref} className="game-view" />
       {hud && <Hud hud={hud} />}
       <TopBar title={`Time trial · course #${seed}${hud ? ` · ${hud.paletteName}` : ""}`} onExit={onExit} />
+      {error && <div className="banner">{error}</div>}
 
-      {stage === "ready" && (
+      {stage === "ready" && !error && (
         <aside className="panel">
           <h2>Course #{seed}</h2>
           <p>

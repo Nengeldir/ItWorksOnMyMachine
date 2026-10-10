@@ -65,3 +65,11 @@ export function dailySeed(date = new Date()): number {
 export function randomSeed(): number {
   return 1 + Math.floor(Math.random() * 999_999);
 }
+
+/** A fast hash of three integers to 0..1, for per-vertex and per-face variation */
+export function hash3(a: number, b: number, c: number): number {
+  let h = Math.imul(a | 0, 374761393) ^ Math.imul(b | 0, 668265263) ^ Math.imul(c | 0, 2147483647);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}

@@ -45,22 +45,22 @@ export class RoomClient {
 
   async connect() {
     this.handlers.status("connecting");
+    // Closing the tab or reloading: say goodbye, so you don't linger in the room
+    window.addEventListener("pagehide", this.onPageHide);
     await this.clock.sync();
     await this.join();
   }
 
+  private onPageHide = () => this.close();
+
   private async join() {
     if (this.closed) return;
+    let joined: Joined;
     try {
-      const joined = await request<Joined>(this.url("join"), "POST", {
+      joined = await request<Joined>(this.url("join"), "POST", {
         client_id: this.identity.clientId,
         nickname: this.identity.nickname,
       });
-      if (this.closed) return;
-      this.token = joined.token;
-      this.handlers.joined(joined.id);
-      this.handlers.room(joined.room);
-      this.openStream();
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         this.handlers.status("failed", e.message); // room is full
@@ -68,7 +68,21 @@ export class RoomClient {
         this.handlers.status("reconnecting", "Can't reach the server, retrying…");
         this.scheduleRejoin(2000);
       }
+      return;
     }
+    if (this.closed) return;
+    this.token = joined.token;
+    try {
+      this.handlers.joined(joined.id);
+      this.handlers.room(joined.room);
+    } catch (e) {
+      // Not a network problem (e.g. no WebGL): rejoining wouldn't help
+      console.error(e);
+      this.handlers.status("failed", `The game couldn't start: ${(e as Error).message}`);
+      this.close();
+      return;
+    }
+    this.openStream();
   }
 
   private scheduleRejoin(delay: number) {
@@ -104,13 +118,15 @@ export class RoomClient {
   sendState(state: NetState) {
     if (!this.token || this.sending || this.closed) return;
     this.sending = true;
+    const token = this.token;
     fetch(this.url("state"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: this.token, t: Math.round(this.clock.now()), ...state }),
+      body: JSON.stringify({ token, t: Math.round(this.clock.now()), ...state }),
     })
       .then((response) => {
-        if (response.status === 404) this.scheduleRejoin(500);
+        // Only if we haven't rejoined since this was sent
+        if (response.status === 404 && token === this.token) this.scheduleRejoin(500);
       })
       .catch(() => {})
       .finally(() => {
@@ -131,7 +147,9 @@ export class RoomClient {
   }
 
   close() {
+    if (this.closed) return;
     this.closed = true;
+    window.removeEventListener("pagehide", this.onPageHide);
     window.clearTimeout(this.rejoinTimer);
     this.source?.close();
     if (this.token) {

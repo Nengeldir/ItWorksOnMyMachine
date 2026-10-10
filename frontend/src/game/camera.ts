@@ -7,6 +7,7 @@ const WORLD_UP = new Vector3(0, 1, 0);
 const desired = new Vector3();
 const blendedUp = new Vector3();
 const target = new Vector3();
+const pulled = new Vector3();
 
 /** Third-person chase camera: trails behind, banks with you, widens with speed */
 export class CameraRig {
@@ -43,7 +44,7 @@ export class CameraRig {
     up: Vector3,
     speed: number,
     proximity: number,
-    terrain: Terrain | null,
+    clearance: ((x: number, y: number, z: number) => number) | null,
   ) {
     this.time += dt;
     const k = 1 - Math.exp(-dt * CAMERA.stiffness);

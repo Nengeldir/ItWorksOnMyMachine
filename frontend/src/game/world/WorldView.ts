@@ -7,7 +7,7 @@ import { Arch, Pillar, Rock } from "./obstacles";
 import { CELL, CHUNK_CELLS, CHUNK_SIZE, smoothstep } from "./terrain";
 import type { World } from "./World";
 
-export const VIEW_DISTANCE = 1500;
+export const VIEW_DISTANCE = 1400;
 const FOG_NEAR = 250;
 const FOG_FAR = 1350;
 export type { RingMode };
@@ -26,12 +26,44 @@ function roughen(geometry: THREE.BufferGeometry, amount: number, salt: string) {
   geometry.computeVertexNormals();
 }
 
-/** All the meshes for one World: terrain chunks streamed around the camera, obstacles, rings, sky */
+/** Paints every vertex of a geometry one color */
+function paint(geometry: THREE.BufferGeometry, color: THREE.Color): THREE.BufferGeometry {
+  const count = geometry.getAttribute("position").count;
+  const colors = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) color.toArray(colors, i * 3);
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  return geometry;
+}
+
+/** A low-poly pine, 1 m tall with branches 1 m wide at the bottom; instances scale it */
+function pineGeometry(foliage: THREE.Color, trunk: THREE.Color): THREE.BufferGeometry {
+  const parts = [
+    paint(new THREE.CylinderGeometry(0.1, 0.14, 0.3, 5).translate(0, 0.15, 0), trunk),
+    paint(new THREE.ConeGeometry(1, 0.5, 6).translate(0, 0.43, 0), foliage.clone().multiplyScalar(0.9)),
+    paint(new THREE.ConeGeometry(0.75, 0.42, 6).translate(0, 0.63, 0), foliage),
+    paint(new THREE.ConeGeometry(0.5, 0.38, 6).translate(0, 0.81, 0), foliage.clone().multiplyScalar(1.12)),
+  ];
+  const merged = mergeGeometries(parts)!;
+  parts.forEach((p) => p.dispose());
+  return merged;
+}
+
+/**
+ * All the meshes for one World: floating islands streamed in around the camera
+ * (cut in web workers), their pines, the sea of clouds, rings and sky.
+ */
 export class WorldView {
   readonly group = new THREE.Group();
+  /** False until the rock near the camera has arrived */
+  ready = false;
   private readonly world: World;
-  private readonly chunks = new Map<number, THREE.Mesh>();
-  private readonly terrainMaterial: THREE.MeshLambertMaterial;
+  private readonly chunks: RockChunk[];
+  private readonly byKey = new Map<number, RockChunk>();
+  private readonly workers: Worker[] = [];
+  private readonly busy: number[] = [];
+  private readonly rockMaterial: THREE.MeshLambertMaterial;
+  private readonly treeMaterial: THREE.MeshLambertMaterial;
+  private readonly treeGeometry: THREE.BufferGeometry;
   private readonly materials: THREE.Material[] = [];
   private readonly geometries: THREE.BufferGeometry[] = [];
   readonly gates: CrystalGates;
@@ -41,12 +73,7 @@ export class WorldView {
   constructor(world: World, scene: THREE.Scene) {
     this.world = world;
     const palette = world.palette;
-    this.colors = {
-      ground: new THREE.Color(palette.ground),
-      rock: new THREE.Color(palette.rock),
-      top: new THREE.Color(palette.top),
-      accent: new THREE.Color(palette.accent),
-    };
+    this.accent = new THREE.Color(palette.accent);
 
     scene.background = new THREE.Color(palette.horizon);
     scene.fog = new THREE.Fog(palette.horizon, FOG_NEAR, FOG_FAR);
@@ -99,74 +126,39 @@ export class WorldView {
     return geometry;
   }
 
-  // --- terrain chunks ----------------------------------------------------------
-
-  private chunkKey(ix: number, iz: number): number {
-    return (ix + 32768) * 65536 + (iz + 32768);
-  }
-
-  private buildChunk(ix: number, iz: number): THREE.Mesh {
-    const { terrain } = this.world;
-    const n = CHUNK_CELLS + 1;
-    const x0 = ix * CHUNK_SIZE;
-    const z0 = iz * CHUNK_SIZE;
-
-    // Heights with a one-cell border, for slopes at the edges
-    const stride = n + 2;
-    const heights = new Float32Array(stride * stride);
-    for (let j = -1; j <= n; j++) {
-      for (let i = -1; i <= n; i++) {
-        heights[(j + 1) * stride + (i + 1)] = terrain.rawHeight(x0 + i * CELL, z0 + j * CELL);
-      }
-    }
-
-    const positions = new Float32Array(n * n * 3);
-    const colors = new Float32Array(n * n * 3);
+  /** A lumpy, faceted floor of clouds far below the islands, sloping down with the course */
+  private buildCloudSea() {
+    const { course, palette } = this.world;
+    const step = 50;
+    const columns = 80;
+    const z0 = course.start.z - 1500;
+    const rows = Math.ceil((course.endZ + 2000 - z0) / step);
+    const point = (row: number, column: number) => {
+      const z = z0 + row * step;
+      const bump = (hash3(row, column, 11) - 0.5) * 14;
+      return [course.x(z) + (column - columns / 2) * step, course.y(z) - CLOUD_SEA_DEPTH + bump, z];
+    };
+    const positions: number[] = [];
+    const colors: number[] = [];
+    const base = new THREE.Color(palette.cloud);
     const color = new THREE.Color();
-    const { ground, rock, top } = this.colors;
-    for (let j = 0; j < n; j++) {
-      for (let i = 0; i < n; i++) {
-        const h = heights[(j + 1) * stride + (i + 1)];
-        const sx = (heights[(j + 1) * stride + (i + 2)] - heights[(j + 1) * stride + i]) / (2 * CELL);
-        const sz = (heights[(j + 2) * stride + (i + 1)] - heights[j * stride + (i + 1)]) / (2 * CELL);
-        const slope = Math.sqrt(sx * sx + sz * sz);
-        const wz = z0 + j * CELL;
-        const above = h - terrain.floorY(wz);
-
-        const rocky = smoothstep(0.5, 1.2, slope);
-        const high = smoothstep(120, 200, above) * (1 - rocky * 0.7);
-        color.copy(ground).lerp(rock, rocky).lerp(top, high);
-        // A little noise per vertex for the low-poly look
-        color.multiplyScalar(0.93 + 0.14 * hashToUnit(`${x0 + i * CELL},${wz}`));
-
-        const v = (j * n + i) * 3;
-        positions[v] = i * CELL;
-        positions[v + 1] = h;
-        positions[v + 2] = j * CELL;
-        colors[v] = color.r;
-        colors[v + 1] = color.g;
-        colors[v + 2] = color.b;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < columns; c++) {
+        for (const tri of [
+          [point(r, c), point(r + 1, c), point(r + 1, c + 1)],
+          [point(r, c), point(r + 1, c + 1), point(r, c + 1)],
+        ]) {
+          color.copy(base).multiplyScalar(0.9 + 0.1 * hash3(r, c, tri[2][0] | 0));
+          for (const v of tri) {
+            positions.push(...v);
+            colors.push(color.r, color.g, color.b);
+          }
+        }
       }
     }
-
-    // Two triangles per cell, split along the 00-11 diagonal (Terrain.height does the same)
-    const index = new Uint16Array(CHUNK_CELLS * CHUNK_CELLS * 6);
-    let k = 0;
-    for (let j = 0; j < CHUNK_CELLS; j++) {
-      for (let i = 0; i < CHUNK_CELLS; i++) {
-        const a = j * n + i;
-        const b = a + 1;
-        const c = a + n;
-        const d = c + 1;
-        index.set([a, c, d, a, d, b], k);
-        k += 6;
-      }
-    }
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    geometry.setIndex(new THREE.BufferAttribute(index, 1));
+    const geometry = this.geometry(new THREE.BufferGeometry());
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
     geometry.computeVertexNormals();
     geometry.computeBoundingSphere();
 
@@ -268,6 +260,20 @@ export class WorldView {
     }
   }
 
+  private unload(chunk: RockChunk) {
+    if (chunk.mesh) {
+      this.group.remove(chunk.mesh);
+      chunk.mesh.geometry.dispose();
+      chunk.mesh = null;
+    }
+    if (chunk.trees) {
+      this.group.remove(chunk.trees);
+      chunk.trees.dispose(); // its instance buffers; the pine geometry is shared
+      chunk.trees = null;
+    }
+    chunk.state = "idle";
+  }
+
   // --- rings ---------------------------------------------------------------------
 
   /** "race": the next gate glows, passed ones are gone. "free": all shown quietly. */
@@ -287,8 +293,10 @@ export class WorldView {
   }
 
   dispose() {
-    for (const mesh of this.chunks.values()) mesh.geometry.dispose();
-    this.chunks.clear();
+    this.disposed = true;
+    this.workers.forEach((w) => w.terminate());
+    for (const chunk of this.chunks) this.unload(chunk);
+    this.instanced.forEach((m) => m.dispose());
     this.geometries.forEach((g) => g.dispose());
     this.materials.forEach((m) => m.dispose());
     this.gates.dispose();
