@@ -1,29 +1,45 @@
-:root {
-  --bg: #0b0d1a;
-  --panel: rgba(12, 14, 30, 0.78);
-  --panel-border: rgba(255, 255, 255, 0.12);
-  --text: #f3f4ff;
-  --muted: #a6abc9;
-  --accent: #00e0ff;
-  --accent-2: #ff4f9a;
-  --good: #5dffa8;
-  --bad: #ff6b6b;
-  --radius: 12px;
+/* Registered so a map change fades the UI to its new colors (see theme.ts) */
+@property --ink {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #2e1b3a;
+}
 
-  font-family:
-    "Inter",
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    sans-serif;
+@property --tint {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #fff4ec;
+}
+
+:root {
+  --bg: #2b1d3a;
+  --ink: #2e1b3a;
+  --tint: #fff4ec;
+  --ink-70: color-mix(in srgb, var(--ink) 72%, transparent);
+  --ink-45: color-mix(in srgb, var(--ink) 48%, transparent);
+  --ink-12: color-mix(in srgb, var(--ink) 12%, transparent);
+  --ink-06: color-mix(in srgb, var(--ink) 6%, transparent);
+  --glass: color-mix(in srgb, color-mix(in srgb, #fff 78%, var(--tint)) 56%, transparent);
+  --glass-strong: color-mix(in srgb, color-mix(in srgb, #fff 82%, var(--tint)) 86%, transparent);
+  --glass-border: rgba(255, 255, 255, 0.7);
+  --warm: #e9a04f; /* proximity and combo: warm, never neon */
+  --warm-deep: #c96f32;
+  --gold: #e6b740;
+  --good: #2c8a5c;
+  --bad: #c8463d;
+  --radius: 18px;
+
+  font-family: "Plus Jakarta Sans Variable", system-ui, sans-serif;
   line-height: 1.45;
-  color: var(--text);
+  color: var(--ink);
   background: var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition:
+    --ink 0.8s,
+    --tint 0.8s;
 }
 
 * {
@@ -43,21 +59,35 @@ h3 {
   line-height: 1.15;
 }
 
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(20px) saturate(1.2);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    0 18px 50px color-mix(in srgb, var(--ink) 18%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
 button {
   font: inherit;
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid var(--panel-border);
-  border-radius: 999px;
-  padding: 0.5em 1.1em;
+  font-weight: 600;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  padding: 0.55em 1.1em;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
   transition:
     background 0.15s,
     transform 0.1s;
 }
 
 button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.85);
 }
 
 button:active:not(:disabled) {
@@ -70,42 +100,67 @@ button:disabled {
 }
 
 button.primary {
-  background: linear-gradient(135deg, var(--accent), #6c7bff);
-  color: #071018;
+  min-height: 3.25rem;
+  background: var(--ink);
+  color: #fff;
   font-weight: 700;
   border: none;
+  border-radius: 16px;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--ink) 28%, transparent);
 }
 
 button.primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #5cefff, #8a96ff);
+  background: color-mix(in srgb, var(--ink) 86%, #fff);
+}
+
+button.primary kbd {
+  border: none;
+  background: rgba(255, 255, 255, 0.18);
+  opacity: 1;
 }
 
 input {
   font: inherit;
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid var(--panel-border);
-  border-radius: 8px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid var(--ink-12);
+  border-radius: 12px;
   padding: 0.5em 0.75em;
   min-width: 0;
 }
 
+input::placeholder {
+  color: var(--ink-45);
+}
+
 input:focus {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--ink);
   outline-offset: 1px;
+}
+
+input[type="range"] {
+  accent-color: var(--ink);
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+input[type="checkbox"] {
+  accent-color: var(--ink);
 }
 
 kbd {
   font: inherit;
-  font-size: 0.8em;
-  padding: 0.05em 0.45em;
-  border-radius: 5px;
+  font-size: 0.72em;
+  font-weight: 700;
+  padding: 0.12em 0.45em;
+  border-radius: 6px;
   border: 1px solid currentColor;
   opacity: 0.8;
 }
 
 .hint {
-  color: var(--muted);
+  color: var(--ink-70);
   font-size: 0.9em;
   margin: 0.2em 0 0.6em;
 }
@@ -128,7 +183,7 @@ kbd {
 }
 
 .field > span {
-  color: var(--muted);
+  color: var(--ink-70);
   font-size: 0.85em;
 }
 
@@ -150,27 +205,52 @@ kbd {
 .leaderboard {
   list-style: none;
   padding: 0;
-  margin: 0.4em 0;
+  margin: 0.2em 0;
 }
 
 .leaderboard li {
   display: grid;
-  grid-template-columns: 2em 1fr auto;
-  gap: 0.5em;
-  padding: 0.3em 0.5em;
-  border-radius: 6px;
+  grid-template-columns: 1.6em 1fr auto;
+  gap: 0.6em;
+  align-items: center;
+  padding: 0.4em 0.5em;
+  border-radius: 10px;
+  font-weight: 600;
 }
 
-.leaderboard li:nth-child(odd) {
-  background: rgba(255, 255, 255, 0.04);
+.leaderboard li:nth-child(even) {
+  background: var(--ink-06);
 }
 
 .leaderboard li.me {
-  background: rgba(0, 224, 255, 0.16);
+  background: var(--ink-12);
 }
 
 .leaderboard .rank {
-  color: var(--muted);
+  width: 1.6em;
+  height: 1.6em;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.75em;
+  font-weight: 800;
+  color: var(--ink-70);
+  background: var(--ink-06);
+}
+
+.leaderboard li:nth-child(1) .rank {
+  color: #fff;
+  background: var(--gold);
+}
+
+.leaderboard li:nth-child(2) .rank {
+  color: #fff;
+  background: #a9b2c0;
+}
+
+.leaderboard li:nth-child(3) .rank {
+  color: #fff;
+  background: #c08457;
 }
 
 .leaderboard .name {
@@ -180,12 +260,14 @@ kbd {
 }
 
 .leaderboard .time {
+  font-weight: 500;
+  color: var(--ink-70);
   font-variant-numeric: tabular-nums;
 }
 
 .controls .keys {
   padding-left: 1.1em;
   margin: 0.4em 0;
-  color: var(--muted);
+  color: var(--ink-70);
   font-size: 0.9em;
 }
