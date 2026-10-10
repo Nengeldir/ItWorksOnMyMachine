@@ -18,6 +18,7 @@ from models import (
     GhostRun,
     JoinRequest,
     LeaderboardEntry,
+    Me,
     RunFinishRequest,
     RunFinishResponse,
     RunStartRequest,
@@ -103,9 +104,10 @@ def room_error(e: RoomError) -> HTTPException:
     return HTTPException(status.HTTP_409_CONFLICT, str(e))
 
 
-@app.get("/api/me", response_model=User)
-def auth_me(request: Request):
-    return extract_user(request)
+@app.get("/api/me", response_model=Me)
+async def auth_me(request: Request, client_id: str = ""):
+    user = extract_user(request, client_id)
+    return Me(**user.model_dump(), has_played=await run_in_threadpool(store.has_played, user.id))
 
 
 @app.get("/api/time")

@@ -10,6 +10,7 @@ export interface Settings extends ControlSettings {
 
 const SETTINGS_KEY = "wingrace.settings";
 const CLIENT_KEY = "wingrace.client";
+const TUTORIAL_KEY = "wingrace.tutorial";
 
 export function defaultSettings(): Settings {
   return { nickname: "", invertPitch: false, invertMouse: false, invertGamepad: false,
@@ -85,5 +86,28 @@ export function clientId(): string {
   } catch {
     fallbackClientId ||= randomId();
     return fallbackClientId;
+  }
+}
+
+export type TutorialState = "started" | "skipped";
+
+function loadTutorials(): Record<string, TutorialState> {
+  try {
+    return JSON.parse(localStorage.getItem(TUTORIAL_KEY) ?? "{}");
+  } catch {
+    return {};
+  }
+}
+
+/** Whether this player (a user id: a login, or a guest's browser) has started or skipped the tutorial here */
+export function tutorialState(userId: string): TutorialState | null {
+  return loadTutorials()[userId] ?? null;
+}
+
+export function saveTutorialState(userId: string, state: TutorialState) {
+  try {
+    localStorage.setItem(TUTORIAL_KEY, JSON.stringify({ ...loadTutorials(), [userId]: state }));
+  } catch {
+    // Not persisted: the tutorial shows again next visit
   }
 }

@@ -35,6 +35,7 @@ import type { WaterKind } from "./world/terrain/river";
 import { type WaterHit, World } from "./world/World";
 import { WorldView } from "./world/WorldView";
 import { reloadForNewBuild } from "../staleBuild";
+import { onHold } from "./hold";
 
 const STEP = 1 / 120; // physics runs at a fixed rate, rendering interpolates
 const MAX_STEPS_PER_FRAME = 12;
@@ -230,6 +231,8 @@ export class Game implements RunHost {
   private run: RunController | null = null;
   private frozen = false;
   private paused = false;
+  private pausedByHold = false; // paused because an overlay holds the game (hold.ts), not by the player
+  private unhold: (() => void) | null = null;
   private selfId = "";
   private startSlot: number | null = null; // place on the start grid, null = alone
   private participants: Participant[] = [];
@@ -356,6 +359,7 @@ export class Game implements RunHost {
     this.audio.setPreferences(options.controls.musicVolume ?? 1, options.controls.effectsVolume ?? 1, options.controls.muted ?? false);
     this.resize();
     this.frame = requestAnimationFrame(this.loop);
+    if (!this.attract) this.unhold = onHold((held) => this.hold(held));
 
     if (new URLSearchParams(location.search).has("tune")) void this.openTuning();
     // Lets browser tests drive the game in development
@@ -375,6 +379,18 @@ export class Game implements RunHost {
   };
 
   private startAudio = () => this.audio.start();
+
+  /** An overlay over the game pauses it while open, and lets go only of a pause it made itself */
+  private hold(held: boolean) {
+    // Mark the pause first: togglePause reports it to the HUD straight away
+    if (held && !this.paused) {
+      this.pausedByHold = true;
+      this.togglePause();
+    } else if (!held && this.pausedByHold) {
+      this.pausedByHold = false;
+      if (this.paused) this.togglePause();
+    }
+  }
 
   /** Freeze local gameplay; the server-validated race clock keeps running. */
   togglePause() {
@@ -762,6 +778,7 @@ export class Game implements RunHost {
 
   dispose() {
     cancelAnimationFrame(this.frame);
+    this.unhold?.();
     this.resizeObserver.disconnect();
     this.renderer.domElement.removeEventListener("click", this.engage);
     window.removeEventListener("keydown", this.startAudio);
@@ -1472,7 +1489,8 @@ export class Game implements RunHost {
       style: Math.round(this.style),
       multiplier: this.multiplier,
       crashed,
-      paused: this.paused,
+      // An overlay's pause (hold.ts) explains itself: no "Paused" over it
+      paused: this.paused && !this.pausedByHold,
       locked: this.input.locked,
       muted: this.audio.isMuted,
       standings: this.standings(),

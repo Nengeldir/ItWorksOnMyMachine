@@ -80,6 +80,7 @@ docker compose up -d --build
 | `N`                       | New map (in a room's lobby)                        |
 | `←` `→` / `A` `D`         | Switch course in the map select (`Esc` goes back)  |
 | `Esc`                     | Free the mouse                                     |
+| `?` (top right)           | How to fly: every key and what it does             |
 | `Shift+P` in `?test`       | Spawn a usable portal ahead of the pilot            |
 | `Shift+O` in `?test`       | Show the victory screen (nothing saved)             |
 | `Shift+S` in `?test`       | Toggle the whole simulation and animations between ½× and 1× speed |
@@ -326,7 +327,7 @@ All routes start with `/api`; interactive docs are at `/api/docs`.
 
 | Method | Path                       | Description                                              |
 | :----- | :------------------------- | :------------------------------------------------------- |
-| `GET`  | `/api/me`                  | The current user (portal login or guest)                 |
+| `GET`  | `/api/me`                  | The current user (portal login or guest), `has_played`   |
 | `GET`  | `/api/time`                | Server clock in ms, for clock sync                       |
 | `POST` | `/api/rooms/{code}/join`   | Join (or create) a room; returns your id and token       |
 | `GET`  | `/api/rooms/{code}/stream` | SSE: room events and position snapshots                  |

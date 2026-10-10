@@ -11,6 +11,7 @@ import { type Settings, clientId } from "../storage";
 import { useUiTheme } from "../theme";
 import SettingsPanel from "./SettingsPanel";
 import CourseSelect from "./CourseSelect";
+import { HelpButton } from "./Help";
 import MenuBackdrop from "./MenuBackdrop";
 import TodaysBest from "./TodaysBest";
 import "./Menu.css";
@@ -93,6 +94,7 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
     <main className="menu">
       <MenuBackdrop seed={shown} mode="drift" onSnapshot={keepArt} settings={settings} />
 
+      <HelpButton className="menu-help" />
       <button
         className="menu-icon glass settings-button"
         aria-label="Settings"

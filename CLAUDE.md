@@ -121,6 +121,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/ghost.ts` | Recording and decoding ghost runs (15 Hz) |
 | `game/autopilot.ts` | `Autopilot`: while nobody plays (the menu's `chase` backdrop, the victory lap) the pilot flies the racing line on rails (`Flight.place`), through the middle of every gate and inside the 11 m tube the land is carved away from; speed from the slope against drag, bank from the line's curve (`AUTOPILOT` in `tuning.ts`). Never scored; Game loops it 40 m past the finish |
 | `game/glidein.ts` | `GlideIn`: while the land near you is loading (free flight, runs, explore; never races), the pilot glides in on rails instead of hanging frozen: no input, no physics step, no scoring; at most 70 m and never within 30 m of the next gate, slowing before rock; control comes back at `START_SPEED` when the land is ready, and a run's level clock keeps running meanwhile |
+| `game/hold.ts` | `holdGame()`: an overlay over the game (How to fly, the newcomer's question) pauses it while open; `Game.hold` resumes only a pause it made, and the HUD shows no "Paused" for it |
 | `game/items/` | Items, models and animations only (what they do comes later). `models.ts`: `ITEMS` (id, name, kind, slot) and `buildItem(id)`: the giant firework (worn on the back like a jetpack, with `fireworkFlame`), three candies, the golden feather, two helmets, five fruits, all primitives painted per vertex with the toon material and ink. `equip.ts`: `Equipment` (pull an item out with a sparkle; the firework from the hand over the shoulder onto the back, helmets drop onto the head, hand items are held up; `use()` eats; `setThrust()` lights the firework) and `ItemDisplay` (a floating pickup). `gallery.ts`: the `/?gallery` scene. `Game.equip/unequip/useItem/thrust` drive it on your pilot; `Avatar.slots` and `Avatar.armPose` are the hooks |
 | `game/abilities/` | The run abilities' looks (rules: `run/abilities.ts`; looks only). `models.ts`: down feathers, the spirit manta (`buildManta`: toon primitives, flapping two-part wings, a whip of a tail), `RingQuads` (instanced rings of light: gate markers through rock, wind halos, shockwaves), wind blades, the Gale Force tunnel, the Hover-Stall sigil and chevrons, the recovery helix. `lanes.ts`: `CloudLanes`, the cloud rivers drawn as soft puffs fitted clear of the rock. `fx.ts`: `AbilityFx`, which reads `Abilities` every frame and animates all of it, sets `Avatar.stance` (tuck, hover, cast, surf) and plays `GameAudio.ability` sounds. Additive light is kept for small things: big shapes (sigil, tunnel, blades) are painted with normal blending, or they white out a bright day sky under bloom |
 | `game/death.ts` | Crash animations, looks only: `classifyCrash` picks headfirst (into a wall: bounce and tumble), slide (glancing ground: roll down the slope), wing (a wing clipped: spin down) or fall (below the islands); `DeathFall` is a small rigid-body tumble (impulses at contact points: balls for head, hips and feet, five points per wing from the live pose via `Avatar.wingPoints`; a few position passes per step) kept out of the land drawn by `Game.contact`; a wing still wedged (`wedged`) is folded in by `Avatar.foldWings`. The avatar plays `die(kind)`, the camera arcs up overhead (`startFall`, `fall`), the body dissolves into light at `DISSOLVE_AT`, all inside `RESPAWN_DELAY` |
@@ -150,7 +151,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `session/` | Solo, room, explore and run sessions wiring a `Game` to the network and UI. `ExploreSession`: free flight through any biome (`/?explore=verdant&seed=2`), nothing saved; `?test` reuses it with a RunController for real portals/upgrades and unsaved victory previews, showing only test shortcuts rather than biome/light controls. `RunSession`: a roguelike run (`/?run=<seed>`), best score per run seed in localStorage |
 | `net/` | Server clock sync and the room connection (SSE down, POST up) |
 | `staleBuild.ts` | After a redeploy, an open tab's lazy chunks (bloom, `?tune`) and mesher worker are 404s: `reloadForNewBuild` reloads the page once (at most every 30 s, production only) |
-| `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, controls, and the run's HUD, title card and upgrade picker (`RunHud.tsx`). The menu's live course behind the glass is `MenuBackdrop` (a `Game` in `drift` attract mode, which switches courses with `setSeed` and snapshots each one for card art); today's best folds into a flag (`TodaysBest`). `CourseSelect` is the map select (a carousel of course cards; featured art in `public/courses/`). Before a race, `GameScreen`'s `ReadyCard` sits where the timer will be; its `Panel` (results) folds to its heading and main buttons on narrow screens |
+| `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, controls, and the run's HUD, title card and upgrade picker (`RunHud.tsx`). The menu's live course behind the glass is `MenuBackdrop` (a `Game` in `drift` attract mode, which switches courses with `setSeed` and snapshots each one for card art); today's best folds into a flag (`TodaysBest`). `CourseSelect` is the map select (a carousel of course cards; featured art in `public/courses/`). Before a race, `GameScreen`'s `ReadyCard` sits where the timer will be; its `Panel` (results) folds to its heading and main buttons on narrow screens. `Help` is the "?" with its How to fly card and the newcomer's "First flight?" (`keys.ts`: the keys as the player bound them) |
 | `theme.ts` | The UI's colors per map: `useUiTheme(seed)` sets `--ink` (picked per palette name, else derived from the sky) and `--tint` (the horizon); every other shade comes from those two with `color-mix()` |
 | `route.ts` | The URL ↔ screen mapping (`screenFromSearch`, `urlFor`, `Screen`), pure so it's tested; `test` is honored on every single-player URL |
 | `media.ts` | `useMediaToggle(query)`: an open/closed toggle that starts open where a media query matches and follows the screen when it changes |
@@ -216,6 +217,39 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Key guide, newcomer question, overlays pause the game (Claude)
+
+Asked for by the UX group, on `shiyu-tutorial`: a "?" left of the settings
+gear (landing) and at the top right in game that shows the keys, a "First
+flight?" question for newcomers, and the game paused behind both.
+
+- **How to fly** (`Help.tsx`, `Help.css`): the "?" opens a card with every
+  key and what it does, in two equal panels: Dive, Climb, Turn left, Turn
+  right, Boost, Brake, Dodge | Respawn, Pause, Mute, Mouse control (click /
+  `Esc`). Keys come from the player's bindings (`components/keys.ts`,
+  `boundKeys`): both slots (`W` / `↑`), either Shift as one, Dive and Climb
+  swapped under "Invert pitch". Wingbeat and Hover are left out (adventure
+  upgrades; the run HUD shows them once you have them).
+- **First flight?** (`FirstFlight` in `App.tsx`): asked once on entering a
+  time trial, room or run, when the server has no finished run for the
+  player (`/api/me` now returns `has_played`: by login, or by browser id for
+  guests via `?client_id=`) and nothing was started or skipped in this
+  browser (`wingrace.tutorial` in localStorage, per user id). "Start with a
+  tutorial" opens How to fly for now (the interactive tutorial is next),
+  "Skip tutorial" ends it. `/?tutorial` asks anyway, for demos.
+- **Overlays pause the game** (`game/hold.ts`, `Game.hold`): an open overlay
+  holds the game paused and resumes only a pause it made; the HUD shows no
+  "Paused" for it. Enter and `Esc` go to the overlay first (Enter would start
+  the run behind it). Race clocks keep running, as with `P`.
+- **Run HUD:** the ability keys on the HUD and the upgrade cards follow the
+  bindings (they were fixed "C", "F", "Shift").
+- Backend: `Store.has_played`, an index on `runs.user_id`, the `Me` model.
+  Deploy frontend and backend together.
+- Verified: build, lint, frontend tests (31), backend tests (23, one new).
+  In the app's browser on the Docker build: the question and its keys, the
+  guide's rows from the bindings, the game frozen behind both overlays and
+  running again after, no "Paused" over them. Not checked: gamepad, phones,
+  a real portal login.
 ### 2026-10-10: Merged `main` (Sunken Reef, Lagoon sea, portal rework, Wind Rider) into `Pengyue` (Claude)
 
 For PR #30. Conflicts, both sides kept: `audio.ts` has the abilities'
@@ -1886,10 +1920,12 @@ finale and the finish screen. What's open:
   change (drift view at z = 400 or 900, see the change log); rendered on a real
   GPU with bloom they'd look better. Swipe on touch screens. More cards
   (yesterday's course, a friend's seed) if wanted.
-- What left the game screen needs a new home: boost (`Shift`), brake
-  (`Space`) and mouse steering in the tutorial; controls in the settings
-  overlay; the room's pilot list and last race, if missed, in the pause
-  overlay.
+- **Interactive tutorial** (next, UX group): a first flight that teaches
+  steering, boost, brake and the mouse in the air; it replaces How to fly
+  behind "Start with a tutorial" (`App.tsx`). The room's pilot list and last
+  race, if missed, could go in the pause overlay.
+- The gamepad can't press Enter (start a run, answer the overlays) or pause;
+  `Backspace` abandons a running time trial at once and isn't in How to fly.
 - Misclicks that throw a run away, to judge once the in-game UI is settled
   (a Menu confirmation was tried and reverted): Menu in any mode, the
   browser's Back (mouse side button, touchpad swipe, Alt+←), and Backspace,

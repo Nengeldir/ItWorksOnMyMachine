@@ -50,8 +50,15 @@
   text-overflow: ellipsis;
 }
 
-.connection {
+/* The right end: the room's connection, the "?" with the keys */
+.topbar-end {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.connection {
   height: 2.25rem;
   display: flex;
   align-items: center;
