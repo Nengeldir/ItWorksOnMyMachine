@@ -58,7 +58,7 @@ test("held controls, repeat handling, focus loss and gamepad disconnect", () => 
     doc.querySelector=()=>({open:true});
     const before=actions.length; key("KeyO"); key("KeyG");
     pads=[{connected:true,axes:[1,1],buttons:Array.from({length:8},()=>({pressed:true,value:1}))}];
-    assert.deepEqual(input.sample(0),{pitch:0,roll:0,boost:0,brake:0});
+    assert.deepEqual(input.sample(0),{pitch:0,roll:0,boost:0,brake:0,use:0});
     assert.equal(actions.length,before,"a settings dialog blocks keyboard and gamepad actions");
   } finally {
     input.dispose(); delete globalThis.window; delete globalThis.document;
