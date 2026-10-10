@@ -118,13 +118,14 @@ const fragmentShader = /* glsl */ `
       vec2 glint = uv + vec2(0.35);
       a = smoothstep(1.0, 0.86, r) * (0.16 + 0.84 * smoothstep(0.5, 0.9, r)) + exp(-dot(glint, glint) * 30.0) * 0.8;
     } else if (vKind < 0.5 || vKind > 3.5) {
-      a = exp(-r2 * 5.0);
+      // A readable grain with a narrow soft edge, plus just a trace of halo.
+      a = 0.88 * (1.0 - smoothstep(0.12, 0.48, sqrt(r2))) + 0.12 * exp(-r2 * 10.0);
     } else if (vKind < 1.5) {
       // A twinkle: bright core and two rays that slowly turn
       float c = cos(vSpin * 0.4), s = sin(vSpin * 0.4);
       vec2 q = abs(mat2(c, -s, s, c) * uv);
       float rays = exp(-q.x * 18.0) * exp(-q.y * 2.5) + exp(-q.y * 18.0) * exp(-q.x * 2.5);
-      a = rays + exp(-r2 * 14.0);
+      a = min(1.0, rays * 0.35 + exp(-r2 * 20.0));
     } else if (vKind < 2.5) {
       float c = cos(vSpin), s = sin(vSpin);
       vec2 q = abs(mat2(c, -s, s, c) * uv);
@@ -207,7 +208,8 @@ export class Particles {
     this.points.material.uniforms.pixelScale.value = height / (2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2));
   }
 
-  emit(position: THREE.Vector3, velocity: THREE.Vector3, spec: ParticleSpec) {
+  /** `age`: seconds since a subframe birth, so moving emitters do not spawn in batches. */
+  emit(position: THREE.Vector3, velocity: THREE.Vector3, spec: ParticleSpec, age = 0) {
     const i = this.cursor;
     this.cursor = (this.cursor + 1) % this.capacity;
     this.pending++;
@@ -217,7 +219,7 @@ export class Particles {
     this.velocity[i * 3] = velocity.x;
     this.velocity[i * 3 + 1] = velocity.y;
     this.velocity[i * 3 + 2] = velocity.z;
-    this.timing[i * 4] = fxTime.value;
+    this.timing[i * 4] = fxTime.value - age;
     this.timing[i * 4 + 1] = spec.life;
     this.timing[i * 4 + 2] = spec.size;
     this.timing[i * 4 + 3] = spec.kind;

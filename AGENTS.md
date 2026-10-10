@@ -109,11 +109,11 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/run/collection.ts` | Adventure-only hoop-distance rarity placement, streamed obstacle clearance, swept collection (5.2 m crystals, 3.2 m treasures), toon crystal/cape tokens, nearby budgeted crystal motes and pickup animation |
 | `game/cosmetics/`, `game/pets/` | Cape/hat/shoe/wing catalogs and toon models; eight detailed bird/mythological pets leading on their own unscored autopilot rail |
 | `components/ProfilePanel.tsx`, `components/CollectionPreview.tsx`, `components/TestCollectionPanel.tsx` | Persistent profile/inventory, equip controls, XP/crystal HUD, animated model preview and unsaved test fitting room |
-| `game/Game.ts` | The game: frame loop, fixed 120 Hz physics steps, race state, ring checks, HUD data, effects wiring (gate bursts, skim spray, gate motes), rendering with optional bloom, adaptive quality, test-only shared time scaling, the `?tune` panel |
+| `game/Game.ts` | The game: frame loop, fixed 120 Hz physics steps, race state, ring checks, HUD data, effects wiring (gate bursts, skim spray, gate motes), rendering with optional bloom and bounded broad halos (`FX.bloomHalo`), adaptive quality, test-only shared time scaling, the `?tune` panel |
 | `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only. `touching()` is the pilot's hitbox (`FLIGHT.hit*`): a ball for the body and a rectangle per wing, tilted up at a dihedral, fixed in the flight frame (never the animated pose), sampled against the distance field with early-outs; `hitboxWorld()` is the same hitbox in world space, which `Game.step` tests against the land drawn (`LandCollider`). `FlightMods` (run upgrades: drag, sink, stall, proximity boost, dash boost, thermal lift, hover, glide lock, `thrust`, a plunge's `dive`, Hover-Stall's `hang`, `turn` for stances and Aero-Braking, Zenith's `climb`, Ascension's `ascend`, a rise on rails in `ascendStep`) are only ever passed in run mode; `flap()`, `launch()`, `deflect()`, `surge()` and a forced `dodge()` are run abilities |
 | `game/avatar.ts` | The pilot: a cel-shaded chibi flyer built from primitives (merged per body part, vertex-colored), a procedural cape and scarf (`Cloth`), two-segment feathered wings, and all its animation: bank lead spring, barrel rolls, flapping driven by effort, bobbing, cloth ripples, limb reactions. Also `createLabel` and `glowTexture` |
 | `game/toon.ts` | Toon material (3-band gradient, rim light tinted by the biome's sun, self-lit `glow` vertex attribute for trims and wingtips) and the inverted-hull ink outline. `TOON_LIGHT` is set per biome |
-| `game/pilotfx.ts` | Per-pilot effects: wingtip and cape ribbons, light motes, downstroke puffs, barrel-roll star spiral. Shared by you, other players and ghosts |
+| `game/pilotfx.ts` | Per-pilot effects: wingtip and cape ribbons, fine motes sampled along the swept wing pose with subframe births, compact downstroke puffs, barrel-roll stars. Shared by you, other players and ghosts |
 | `game/particles.ts` | One GPU particle system (ring buffer, physics in the vertex shader). Kinds: Glow, Star, Shard, Wisp, Firefly, Bubble. `fxTime` is the shared shader clock; `FX_LIGHT.boost` scales all glowing effects per biome |
 | `game/trail.ts` | Glowing additive ribbon (shader: soft edges, light pulses, fades near the camera) |
 | `game/speedlines.ts` | Wind streaks that hang in the air and rush past at speed |
@@ -222,6 +222,29 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Fine wing grains and tighter light halos
+
+- Reproduced frame-batched wing motes with a deterministic `PilotFx` test:
+  multiple births occupied the same wingtip position, particularly at 30 fps.
+  Continuous wingtip, cosmetic, brake and roll emitters now sample the previous
+  and current wing pose and preserve each birth's subframe age in `Particles`.
+  Reset/stationary handling prevents streaks across respawn teleports.
+- Smaller, shorter-lived wing motes and decorated-wing accents, fewer bright
+  stars, and compact, dimmer downstroke/braking puffs replace overlapping blobs.
+  Glow/firefly sprites have a defined core and narrow soft edge; stars retain
+  delicate rays with bounded brightness.
+- Bloom keeps its close glow but reduces the three broadest blur layers, strength,
+  radius and night amplification so lamps/crystals keep their silhouettes.
+  `FX.wingGrainSize`, `wingGrainLight`, `wingPuffSize` and `bloomHalo` are live
+  tuning controls, documented in README. No gameplay or collision changes.
+- Files: `game/pilotfx.ts`, `particles.ts`, `Game.ts`, `tuning.ts`,
+  `tests/pilotfx.test.mjs`, README and this log. Build and lint pass; all 104
+  frontend tests pass using a temporary compatible loader for local Node 22.14
+  (`npm test`'s existing `registerHooks` requires a newer Node).
+- Visual verification remains pending: in-app browser unavailable, and browser/
+  native-app inventory returned no surfaces (Computer Use service startup failed).
+
 
 ### 2026-10-10: Clearer crystal pickups and gentler portal crossings
 
@@ -2015,6 +2038,11 @@ ported to the islands world:
   through islands and gates, no console errors.
 
 ## Next up
+
+- Wing grains/light halos: inspect day/night flight, boost, braking and rolls
+  with bloom on/off and decorated wings; check lamp and gate edges in a focused
+  browser. Browser control was unavailable for this change.
+
 
 - Crystal/portal tuning: visually check larger crystal models and drifting stars
   in day/night with and without bloom; playtest the 5.2 m crystal pickup radius,

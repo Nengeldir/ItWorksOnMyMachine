@@ -31,15 +31,19 @@ export const FX = {
   trailWidth: 1,
   trailGlow: 1, // brightness of the ribbons
   bodyTrail: true, // the wide silk ribbon from the cape
-  sparkles: 1, // wingtip motes per metre, as a multiplier
-  flapPuffs: 1, // feather puffs on each downstroke
+  sparkles: 0.65, // wingtip motes per metre, as a multiplier
+  flapPuffs: 0.6, // feather puffs on each downstroke
+  wingGrainSize: 0.1, // metres; small, distinct wingtip motes
+  wingGrainLight: 1.1, // restrained brightness keeps adjacent grains separate
+  wingPuffSize: 0.35, // metres; compact downstroke air, not glowing clouds
   skimDust: 1, // spray from the ground while skimming
   speedLines: 1, // wind streaks at speed
   speedLinesFrom: 45, // m/s where the wind streaks start
   aura: 1, // soft glow around the pilot
   vignette: 1, // speed vignette at the screen edges
-  bloom: 0.6, // glow strength (0 turns post-processing off)
-  bloomRadius: 0.55,
+  bloom: 0.4, // glow strength (0 turns post-processing off)
+  bloomRadius: 0.12,
+  bloomHalo: 0.12, // contribution from the widest blur layers
   bloomThreshold: 1.3,
   bloomResolution: 1, // the bloom renders at most at this pixel ratio (its cost grows fast with it)
   bloomMsaa: 2, // antialiasing samples of the bloom's render target
@@ -183,7 +187,7 @@ export const ABILITIES_FX = {
 /** Companion movement and scale: looks only, independent of all flight rules. */
 export const PET_LOOKS = { size: 1.8, spacing: 2.9, height: 0.7, trail: 0.8, follow: 8, snapDistance: 30, bob: 0.12, wingbeat: 1, tailSway: 1, lead: 20 };
 /** Small ornaments and particle emission, never the pilot's hitbox. */
-export const COSMETIC_FX = { capeDetail: 1, wingParticles: 22, wingParticleSize: .22 };
+export const COSMETIC_FX = { capeDetail: 1, wingParticles: 22, wingParticleSize: .1 };
 /** Collection models and motion; reward rules live on the server. */
 export const COLLECTION_FX = { bob: 0.5, spin: 0.65, size: 2.2, crystalSize: 3.8, crystalMotes: 10, moteDistance: 80, viewDistance: 240, burst: 1 };
 
@@ -278,13 +282,17 @@ export const RANGES: Record<string, [number, number, number?]> = {
   trailGlow: [0, 3],
   sparkles: [0, 4],
   flapPuffs: [0, 4],
+  wingGrainSize: [0.04, 0.25],
+  wingGrainLight: [0.2, 2],
+  wingPuffSize: [0.1, 0.8],
   skimDust: [0, 4],
   speedLines: [0, 3],
   speedLinesFrom: [10, 100],
   aura: [0, 3],
   vignette: [0, 2],
   bloom: [0, 2.5],
-  bloomRadius: [0, 1.5],
+  bloomRadius: [0, 1],
+  bloomHalo: [0, 1],
   bloomThreshold: [0.5, 1.5],
   bloomResolution: [0.5, 2, 0.05],
   bloomMsaa: [0, 4, 1],

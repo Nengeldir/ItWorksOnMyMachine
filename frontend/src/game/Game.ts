@@ -1680,9 +1680,14 @@ export class Game implements RunHost {
     this.softParticles.setViewport(this.renderer.domElement.height, camera.fov);
     if (this.bloomOn && !this.composer) void this.createComposer();
     if (this.bloomOn && this.composer && this.bloomPass) {
-      this.bloomPass.strength = FX.bloom * (1 + this.world.palette.night * 0.6);
+      this.bloomPass.strength = FX.bloom * (1 + this.world.palette.night * 0.25);
       this.bloomPass.radius = FX.bloomRadius;
       this.bloomPass.threshold = FX.bloomThreshold;
+      // Radius alone still includes the broad low-resolution blur layers.
+      // Keep a close glow; suppress those layers so lamps retain their silhouette.
+      for (let i = 0; i < this.bloomPass.bloomTintColors.length; i++) {
+        this.bloomPass.bloomTintColors[i].setScalar(i < 2 ? 1 : FX.bloomHalo);
+      }
       this.composer.render();
     } else {
       this.renderer.render(this.scene, camera);
