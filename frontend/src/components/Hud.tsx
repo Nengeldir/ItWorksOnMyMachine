@@ -9,7 +9,7 @@ const Hud = ({ hud }: { hud: HudState }) => {
   return (
     <div className="hud">
       {hud.raceState !== "free" && (
-        <div className="hud-race">
+        <div className="hud-race glass">
           <div className="hud-timer">{formatTime(hud.raceTimeMs ?? 0)}</div>
           <div className="hud-rings">
             {hud.raceState === "finished"
@@ -20,16 +20,16 @@ const Hud = ({ hud }: { hud: HudState }) => {
       )}
 
       {hud.countdown !== null && hud.countdown > 0 && (
-        <div className="hud-big" key={hud.countdown}>
+        <div className="hud-big glass" key={hud.countdown}>
           {hud.countdown}
         </div>
       )}
-      {go && <div className="hud-big go">GO!</div>}
-      {hud.crashed && <div className="hud-big crashed">Crashed!</div>}
-      {hud.loading && hud.raceState === "free" && <div className="hud-loading">Building islands…</div>}
+      {go && <div className="hud-big glass go">GO!</div>}
+      {hud.crashed && <div className="hud-crash glass">Crashed!</div>}
+      {hud.loading && hud.raceState === "free" && <div className="hud-loading glass">Building islands…</div>}
 
       {hud.standings.length > 1 && (
-        <ol className="hud-standings">
+        <ol className="hud-standings glass">
           {hud.standings.map((s) => (
             <li key={s.id} className={s.me ? "me" : undefined}>
               <span className="dot" style={{ background: s.color }} />
@@ -42,7 +42,7 @@ const Hud = ({ hud }: { hud: HudState }) => {
         </ol>
       )}
 
-      <div className="hud-flight">
+      <div className="hud-flight glass">
         <div className="hud-speed">
           <strong>{hud.speedKmh}</strong> km/h
         </div>
@@ -56,9 +56,8 @@ const Hud = ({ hud }: { hud: HudState }) => {
       </div>
 
       {!hud.locked && (
-        <div className="hud-hint">
-          {racing ? "Click to steer with the mouse" : "Click the view to steer with the mouse"} · keys and
-          gamepads work anytime
+        <div className="hud-hint glass">
+          {racing ? "Click to steer with the mouse" : "Click the view to steer with the mouse · keys and gamepads work anytime"}
         </div>
       )}
     </div>
