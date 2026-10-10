@@ -7,7 +7,7 @@ import { Builder, GOLD, GOLD_DEEP, blend, cyl, lathe, leaf, sphere, star } from 
 // is a hand's length or two); `y` is up, `-z` the front. The giant firework
 // (the Comet Tail Firework) is in models.ts.
 
-export type RelicId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether" | "mothCape";
+export type RelicId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether" | "mothCape" | "resonantChimes";
 
 const ANEMO = "#5fe6c6";
 const ANEMO_LIGHT = "#c8fff1";
@@ -153,7 +153,14 @@ function mothCape(): THREE.BufferGeometry {
  b.add(star(0.018,0.007,0.005,4),"#fff1ce",0.8,[0,0.08,-0.015]);return b.build();
 }
 
+function resonantChimes(): THREE.BufferGeometry {
+ const b=new Builder();b.add(cyl(0.08,0.1,0.025,12),"#d9ebe2",0,[0,0.18,0]);
+ for(let j=0;j<3;j++){const x=(j-1)*0.055;b.add(cyl(0.002,0.002,0.045,5),GOLD,0,[x,0.145,0]);b.add(cyl(0.012,0.012,0.1+j*0.015,8),j%2 ? "#b4dbe4":GOLD,0.2,[x,0.07,0]);}
+ b.add(leaf(0.075,0.024,0.005),"#6bb8ba",0,[0,0.02,0],[0,0,Math.PI]);return b.build();
+}
+
 export const RELIC_BUILDERS: Record<RelicId, () => THREE.BufferGeometry> = {
+  resonantChimes,
   mothCape,
   windTether,
   sunNectar,

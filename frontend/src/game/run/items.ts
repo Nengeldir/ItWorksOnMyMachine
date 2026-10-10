@@ -36,6 +36,8 @@ export const ITEM = {
   tetherRange: 110,
   tetherPull: 85,
   phaseTime: 3,
+  chimeTime: 12,
+  chimeWiden: 5,
   bag: 3, // items carried at once
   // Anemo Catcher: a bottled updraft
   updraftTime: 1.6, // seconds
@@ -59,7 +61,7 @@ export const ITEM = {
   fireWobble: 0.45, // how hard it yanks the controls about
 };
 
-export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether" | "mothCape";
+export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether" | "mothCape" | "resonantChimes";
 
 /** How an item saved the pilot from a hit */
 export type ItemSave = "starflake";
@@ -103,12 +105,14 @@ export const RUN_ITEMS: readonly RunItemInfo[] = [
   { id: "sunNectar", model: "sunNectar", name: "Sun-Kissed Nectar", icon: "🌼", rarity: 0, charges: 1, description: "Drink golden nectar to refill your boost reserve and wingbeat stamina immediately." },
   { id: "windTether", model: "windTether", name: "Tether of the Wind Spirit", icon: "🪝", rarity: 2, charges: 1, description: "A hook of light pulls you into a sharp swing around a nearby gate. Find an anchor within 110 metres." },
   { id: "mothCape", model: "mothCape", name: "Illusory Moth Cape", icon: "🦋", rarity: 3, charges: 1, description: "Become a spirit for three seconds and pass through rock. Trees, water and the abyss still matter." },
+  { id: "resonantChimes", model: "resonantChimes", name: "Resonant Chimes", icon: "🎐", rarity: 1, charges: 1, description: "For twelve seconds, each gate sends a shockwave that widens the next gate." },
 ];
 
 export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.id === id)!;
 
 /** How long each item's effect lasts once used (seconds) */
 const DURATION: Record<RunItemId, () => number> = {
+  resonantChimes: () => ITEM.chimeTime,
   mothCape: () => ITEM.phaseTime,
   windTether: () => ITEM.tetherTime,
   sunNectar: () => 0.8,
@@ -159,7 +163,7 @@ export class Items {
   /** Seconds since each item's effect began (absent: not under way) */
   readonly active = new Map<RunItemId, number>();
   /** One-off moments, counted so the looks can tell a new one happened */
-  readonly cue = { pickup: 0, use: 0, full: 0, auto: 0, shatter: 0, phoenix: 0 };
+  readonly cue = { pickup: 0, use: 0, full: 0, auto: 0, shatter: 0, phoenix: 0, chime: 0 };
   /** The item last picked up, and last used */
   picked: RunItemId | null = null;
   used: RunItemId | null = null;
@@ -175,6 +179,7 @@ export class Items {
   readonly lights: { position: THREE.Vector3; energy: boolean; collected: boolean }[] = [];
   readonly ghostGates: { position: THREE.Vector3; normal: THREE.Vector3; radius: number; collected: boolean }[] = [];
   readonly path: THREE.Vector3[] = [];
+  chimeTarget = -1;
   readonly anchor = new THREE.Vector3();
   readonly previous = new THREE.Vector3();
   private sampled = false;
@@ -186,6 +191,7 @@ export class Items {
   setLevel(world: ItemWorld) {
     this.world = world;
     this.active.clear();
+    this.chimeTarget=-1;
     this.version++;
     this.sampled = false;
     this.ghostGates.length = 0;
@@ -291,6 +297,14 @@ export class Items {
       this.active.delete("starflakeShield");
       this.cue.shatter++;
     }
+  }
+
+  /** A gate passed under the chimes widens the following gate. */
+  gate(index: number) {
+    if(this.active.has("resonantChimes")){this.chimeTarget=index+1;this.cue.chime++;}
+  }
+  widening(index: number): number {
+    return this.active.has("resonantChimes") && index===this.chimeTarget ? ITEM.chimeWiden : 0;
   }
 
   /** A carried Phoenix feather revives from terrain or the abyss onto the clear course tube. */

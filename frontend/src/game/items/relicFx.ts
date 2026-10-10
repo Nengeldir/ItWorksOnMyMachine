@@ -107,6 +107,10 @@ export class RelicFx {
       this.lightScale.setScalar(1);
     }
     this.moths.end();
+    if(items.time("resonantChimes")>=0 && items.chimeTarget>=0){
+      const gate=items.world?.course.rings[items.chimeTarget];
+      if(gate)this.markers.add(gate.position,gate.normal,gate.radius+items.widening(items.chimeTarget),0.6 * ITEMS_FX.relics,0.025,2,GOLD);
+    }
     const kiteTime=items.time("stormKite");
     this.kite.visible=this.cord.visible=kiteTime>=0;
     if(kiteTime>=0){
