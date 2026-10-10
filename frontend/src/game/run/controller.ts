@@ -349,7 +349,9 @@ export class RunController {
 
   /** A crash costs a life and breaks the gate chain; the last life's crash ends the run. Flight resets the shared boost state. */
   crashed() {
-    if (this.phase !== "explore" && this.phase !== "arrive") return;
+    // The way out of a portal hands control back while the blur still clears: a crash there counts too
+    const leaving = this.phase === "portal" && this.exiting && this.unfrozen;
+    if (this.phase !== "explore" && this.phase !== "arrive" && !leaving) return;
     this.crashes++;
     this.abilities.crashed();
     const chain = this.chain;
@@ -358,6 +360,13 @@ export class RunController {
     if (this.lives <= 0) {
       this.lives = 0;
       this.bankLevel();
+      if (leaving) {
+        // The lost phase no longer runs the transition: finish it here, or the blur stays under the white
+        this.host.veil(0);
+        this.blendSky(1);
+        this.skyFrom = null;
+        this.exiting = false;
+      }
       this.phase = "lost";
       this.phaseTime = 0;
       return;

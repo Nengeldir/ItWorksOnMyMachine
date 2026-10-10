@@ -229,6 +229,32 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Crashes on the way out of a portal count; lives rebased onto main (Claude)
+
+From the review of the lives PR (PengyueW, P2), then a rebase onto main
+(`d92001e`: one map pool, abilities 11 to 20).
+- **The bug** (`run/controller.ts`): on the way out of a portal the game is
+  unfrozen once the blur peaks (`BLUR_OUT`), but the phase stays `portal`
+  for another `RUN.tunnelFade` s (1.4) while the blur clears. Flight and
+  collisions run in that time, and `crashed()`'s new phase guard dropped
+  those crashes: no life lost, no crash counted, the chain kept, and a pilot
+  on the last feather lived on. Before the lives work they were counted.
+- **The fix**: `crashed()` also counts while leaving (`portal`, `exiting`
+  and `unfrozen`). When that crash is the last life's, it ends the
+  transition first (veil to 0, the sky fully the new biome's), because the
+  `lost` phase returns before the code that clears them. Crashes inside the
+  wormhole (frozen) still don't count. The respawn needed no change: it waits
+  for the phase to reach `arrive`. Runs only (rule 6).
+- **Rebase**: conflicts in this file (the `game/run/` and `components/`
+  rows, the change log: both sides kept) and `run.ts` (main's description of
+  the run order, plus the line about lives). Main's `destination(seed, path)`
+  and its 27 upgrades merged cleanly; with the Spare feather there are 28.
+- Verified: build and lint pass; 87 frontend tests (3 new in
+  `tests/lives.test.mjs`: a crash while leaving costs a life, the last
+  life's ends the run with the veil cleared, a crash inside the wormhole
+  doesn't count; the first two fail without the fix). **Not looked at in a
+  browser**: the last feather lost under the clearing blur. Backend untouched.
+
 ### 2026-10-10: Lives in the adventure (Claude)
 
 Asked for: a run could be crashed in for ever; give it a life system: three
@@ -2540,8 +2566,13 @@ ported to the islands world:
   feathers"
   finish screen), then balance: three lives over eight levels may be harsh,
   and the Spare feather may need to come up more often than one card in
-  eighteen. Idea: a feather back for a perfect level. A spent feather's ink
+  twenty-eight. Idea: a feather back for a perfect level. A spent feather's ink
   outline is faint on night skies.
+- **The first 1.4 s after a portal**: `RunController.step` returns early
+  while the phase is still `portal`, so the level clock, gates and abilities
+  are off until the blur has cleared (from before the lives work). The root
+  fix is to enter `arrive` when control comes back and run the veil's fade
+  on its own; that moves the HUD's and title card's timing, so decide first.
 - Extreme flare pose: the coat can still expose a body ink outline through
   its surface (also present before the ribbon fix). Ribbon/coat and leg/cloth
   clearance do not resolve all body/coat intersections; inspect the torso
