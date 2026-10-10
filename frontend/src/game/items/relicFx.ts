@@ -7,6 +7,7 @@ import type { Particles } from "../particles";
 import { Kind, fx } from "../particles";
 import { ITEM, type Items, type RunItemId } from "../run/items";
 import { ITEMS_FX } from "../tuning";
+import { auraMesh } from "./auras";
 import { Trail } from "../trail";
 import { buildItem, disposeItem } from "./models";
 import type { Equipment } from "./equip";
@@ -27,6 +28,7 @@ export class RelicFx {
   private readonly lightScale = new THREE.Vector3(1,1,1);
   private readonly lightQuat = new THREE.Quaternion();
   private readonly lightColor = new THREE.Color();
+  private readonly temporal = auraMesh(3,"#9c95d7","#d6e8ff");
   private readonly moths = new Swarm("moth",8);
   private readonly markers = new RingQuads(64, false);
   private readonly ribbon = new Trail("#d6c5fa", { width: 0.3, shimmer: 0.5, length: 1.2 });
@@ -37,7 +39,7 @@ export class RelicFx {
   private readonly particles: Particles;
   constructor(avatar: Avatar, equipment: Equipment, particles: Particles) {
     this.avatar = avatar; this.equipment = equipment; this.particles = particles;
-    this.group.add(this.markers.mesh, this.ribbon.mesh, this.lights, this.kite, this.cord, this.tether, this.moths.mesh);
+    this.group.add(this.markers.mesh, this.ribbon.mesh, this.lights, this.kite, this.cord, this.tether, this.moths.mesh, this.temporal);
   }
   used(id: RunItemId) {
     if(id === "sunNectar"){
@@ -116,6 +118,12 @@ export class RelicFx {
       at.copy(items.pad).addScaledVector(UP,2);
       this.markers.add(at,UP,ITEM.padRadius*0.7,0.3 * ITEMS_FX.relics,0.02,3,ICE);
     }
+    this.temporal.visible=items.worldRate<1;
+    if(this.temporal.visible){
+      this.temporal.position.copy(this.avatar.group.position);this.temporal.scale.setScalar(3.5);
+      this.temporal.material.uniforms.opacity.value=0.5 * ITEMS_FX.relics;
+      this.markers.add(this.avatar.group.position,null,3.8,0.5 * ITEMS_FX.relics,0.03,4,ICE);
+    }
     const kiteTime=items.time("stormKite");
     this.kite.visible=this.cord.visible=kiteTime>=0;
     if(kiteTime>=0){
@@ -163,5 +171,5 @@ export class RelicFx {
     this.markers.end();
   }
   hide() { this.group.visible = false; this.avatar.spectral(0); }
-  dispose() { this.avatar.spectral(0); this.moths.dispose(); disposeItem(this.kite); this.tether.geometry.dispose(); this.tether.material.dispose(); this.cord.geometry.dispose(); this.cord.material.dispose(); this.lights.geometry.dispose(); this.lights.material.dispose(); this.ribbon.dispose(); this.markers.dispose(); this.group.removeFromParent(); }
+  dispose() { this.avatar.spectral(0); this.temporal.geometry.dispose(); this.temporal.material.dispose(); this.moths.dispose(); disposeItem(this.kite); this.tether.geometry.dispose(); this.tether.material.dispose(); this.cord.geometry.dispose(); this.cord.material.dispose(); this.lights.geometry.dispose(); this.lights.material.dispose(); this.ribbon.dispose(); this.markers.dispose(); this.group.removeFromParent(); }
 }

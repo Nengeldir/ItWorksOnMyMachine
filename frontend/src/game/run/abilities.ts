@@ -155,6 +155,8 @@ const SIDE = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 
 export class Abilities {
+  /** World motion rate; only moving environmental actors use it. */
+  worldRate = 1;
   private stats: RunStats | null = null;
   private course: Course | null = null;
   private endZ = 0;
@@ -619,7 +621,7 @@ export class Abilities {
     // Slipstream Rider: the spirit manta, and its wake
     let slip = 0;
     if (this.has("slipstream")) {
-      this.stepManta(dt, flight, course);
+      this.stepManta(dt * this.worldRate, flight, course);
       const m = this.manta;
       if (m.active) {
         rel.subVectors(flight.position, m.position);

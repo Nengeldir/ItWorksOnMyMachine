@@ -43,6 +43,8 @@ export const ITEM = {
   padRadius: 6,
   padHeight: 8,
   padSpeed: 48,
+  hourglassTime: 4,
+  worldSlow: 0.25,
   bag: 3, // items carried at once
   // Anemo Catcher: a bottled updraft
   updraftTime: 1.6, // seconds
@@ -66,7 +68,7 @@ export const ITEM = {
   fireWobble: 0.45, // how hard it yanks the controls about
 };
 
-export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether" | "mothCape" | "resonantChimes" | "crystalUpdraft";
+export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether" | "mothCape" | "resonantChimes" | "crystalUpdraft" | "duskHourglass";
 
 /** How an item saved the pilot from a hit */
 export type ItemSave = "starflake";
@@ -112,12 +114,14 @@ export const RUN_ITEMS: readonly RunItemInfo[] = [
   { id: "mothCape", model: "mothCape", name: "Illusory Moth Cape", icon: "🦋", rarity: 3, charges: 1, description: "Become a spirit for three seconds and pass through rock. Trees, water and the abyss still matter." },
   { id: "resonantChimes", model: "resonantChimes", name: "Resonant Chimes", icon: "🎐", rarity: 1, charges: 1, description: "For twelve seconds, each gate sends a shockwave that widens the next gate." },
   { id: "crystalUpdraft", model: "crystalUpdraft", name: "Crystallized Updraft", icon: "🌪️", rarity: 1, charges: 1, description: "Drop a wind trampoline on the surface below. Dip toward it to bounce high into the sky." },
+  { id: "duskHourglass", model: "duskHourglass", name: "Dusk-Weaver's Hourglass", icon: "⌛", rarity: 3, charges: 1, description: "For four seconds, scenery and the spirit manta move at a quarter pace while your flight stays normal." },
 ];
 
 export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.id === id)!;
 
 /** How long each item's effect lasts once used (seconds) */
 const DURATION: Record<RunItemId, () => number> = {
+  duskHourglass: () => ITEM.hourglassTime,
   crystalUpdraft: () => ITEM.padTime,
   resonantChimes: () => ITEM.chimeTime,
   mothCape: () => ITEM.phaseTime,
@@ -354,6 +358,8 @@ export class Items {
     this.cue.phoenix++;
     return true;
   }
+
+  get worldRate(): number { return this.active.has("duskHourglass") ? ITEM.worldSlow : 1; }
 
   get phasing(): boolean { return this.active.has("mothCape"); }
 

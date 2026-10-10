@@ -20,7 +20,7 @@ import { ItemFx } from "./items/fx";
 import type { ItemId, ItemSlot } from "./items/models";
 import { type GhostData, GhostRecorder, type GhostRun, ghostSamples } from "./ghost";
 import { type ControlSettings, type InputObserver, type TestAction, Input, controlsBlocked } from "./input";
-import { FX_LIGHT, Kind, Particles, fx, fxTime } from "./particles";
+import { FX_LIGHT, Kind, Particles, fx, fxTime, sceneryTime } from "./particles";
 import { PilotFx } from "./pilotfx";
 import { INTERPOLATION_DELAY_MS, Pilot, type PilotSample } from "./pilots";
 // import { Trail } from "./trail";
@@ -281,6 +281,7 @@ export class Game implements RunHost {
   private accumulator = 0;
   private lastFrame = 0;
   private elapsed = 0;
+  private sceneryClock = 0;
   private readonly testPlayback?: TestPlayback;
   private lastHud = 0;
   private frame = 0;
@@ -1433,6 +1434,8 @@ export class Game implements RunHost {
     }
     this.elapsed += dt;
     fxTime.value = this.elapsed;
+    const worldDt=dt * (this.run?.items.worldRate ?? 1);
+    this.sceneryClock+=worldDt;sceneryTime.value=this.sceneryClock;
     this.adaptQuality(realDt);
 
     const selfFlying = this.attract === "chase" || this.autopiloting;
@@ -1543,7 +1546,7 @@ export class Game implements RunHost {
 
     const camera = this.rig.camera;
     camera.updateMatrixWorld();
-    this.view.update(camera, dt, crashed ? undefined : this.flight.velocity);
+    this.view.update(camera, worldDt, crashed ? undefined : this.flight.velocity);
     this.run?.frame(dt);
     if (!this.inWormhole) {
       this.gateMotes(dt);
@@ -1551,7 +1554,7 @@ export class Game implements RunHost {
     }
     const flying = !crashed && this.raceState !== "countdown" && !waiting && this.attract !== "drift";
     this.speedLines.update(dt, body.position, flying ? this.flight.velocity : tmp.set(0, 0, 0), camera, this.particles.budget);
-    if (!this.inWormhole) this.ambient.update(dt, camera.position, flying ? this.flight.velocity : tmp.set(0, 0, 0), this.particles.budget);
+    if (!this.inWormhole) this.ambient.update(worldDt, camera.position, flying ? this.flight.velocity : tmp.set(0, 0, 0), this.particles.budget);
 
     const liveTime = t - INTERPOLATION_DELAY_MS;
     this.live.forEach((pilot) => pilot.update(liveTime, dt, camera.position));

@@ -44,6 +44,8 @@ export function fx(life: number, size: number, color: THREE.Color, kind: Kind, g
 
 /** Shared by everything that animates with time in a shader: trails, particles, crystals */
 export const fxTime = { value: 0 };
+/** Scenery clock: hourglass slows the world while pilot/item clocks keep normal pace. */
+export const sceneryTime = { value: 0 };
 
 /** How bright glowing effects are in this biome's light (bright skies wash additive light out) */
 export const FX_LIGHT = { boost: { value: 1 } };
