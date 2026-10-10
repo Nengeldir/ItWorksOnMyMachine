@@ -149,10 +149,10 @@ yourself, with your run's stats and what to do next.
 
 In an adventure there is no clock. Gates score more in a chain without a
 crash, and skimming earns style points. The arrow at the top of the screen
-points to the portal. You start with three lives (the hearts at the top
-left). A crash costs one, puts you back at the last gate and breaks your gate
+points to the portal. You start with three lives (the golden feathers at the
+top left). A crash costs one, puts you back at the last gate and breaks your gate
 chain; the crash on your last life ends the run where you fell, and the
-finish screen shows how far you got. The Second wind upgrade adds a life (up
+finish screen shows how far you got. The Spare feather upgrade adds a life (up
 to three times).
 
 Boost starts with a 2.5-second reserve and recharges in roughly 4.5 seconds

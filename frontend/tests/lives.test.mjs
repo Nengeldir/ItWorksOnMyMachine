@@ -25,10 +25,10 @@ const makeRun = (lives) => {
   return { run, host, summaries };
 };
 
-test("Second wind is an upgrade worth one life a stack", () => {
-  const upgrade = UPGRADES.find((u) => u.id === "secondWind");
+test("A spare feather is an upgrade worth one life a stack", () => {
+  const upgrade = UPGRADES.find((u) => u.id === "spareFeather");
   assert.equal(upgrade?.effect.lives, 1);
-  assert.equal(statsFor(["secondWind", "secondWind"]).lives, 2);
+  assert.equal(statsFor(["spareFeather", "spareFeather"]).lives, 2);
   assert.equal(START_LIVES, 3);
 });
 
@@ -63,10 +63,10 @@ test("a run starts with three lives, a crash costs one, and the last one's crash
   assert.equal(s.crashes, 3);
 });
 
-test("Second wind adds a life when it is gained, and a finished run reports what's left", () => {
+test("A spare feather adds a life when it is gained, and a finished run reports what's left", () => {
   const { run, summaries } = makeRun();
   run.crashed();
-  run.grant("secondWind");
+  run.grant("spareFeather");
   assert.equal(run.hud().lives, 3);
   run.grant("dash");
   assert.equal(run.hud().lives, 3);

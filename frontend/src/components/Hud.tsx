@@ -65,7 +65,7 @@ const Hud = ({ hud, settings, showStyle = false }: { hud: HudState; settings: Se
       {!hud.paused && go && <div className="hud-big glass go">GO!</div>}
       {!hud.paused && hud.crashed && (
         <div className="hud-crash glass">
-          {hud.run?.phase === "lost" ? "Out of lives" : "Crashed!"}
+          {hud.run?.phase === "lost" ? "Out of feathers" : "Crashed!"}
           <small>
             {respawnLabel(hud)}
           </small>
