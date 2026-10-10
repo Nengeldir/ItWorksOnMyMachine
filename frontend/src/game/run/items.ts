@@ -15,6 +15,7 @@ import type { Course } from "../world/course";
 export const ITEM = {
   lanternTime: 15,
   ghostBonus: 500,
+  conchTime: 8,
   bag: 3, // items carried at once
   // Anemo Catcher: a bottled updraft
   updraftTime: 1.6, // seconds
@@ -38,7 +39,7 @@ export const ITEM = {
   fireWobble: 0.45, // how hard it yanks the controls about
 };
 
-export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern";
+export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch";
 
 /** How an item saved the pilot from a hit */
 export type ItemSave = "starflake";
@@ -72,12 +73,14 @@ export const RUN_ITEMS: readonly RunItemInfo[] = [
   { id: "gliderWax", model: "gliderWax", name: "Luminescent Glider Wax", icon: "🍯", rarity: 1, charges: 1, description: "Wax your wings with sunlight: for eight seconds there is no drag and no sink. Hold your top speed without losing height." },
   { id: "cometFirework", model: "firework", name: "Comet Tail Firework", icon: "🎆", rarity: 2, charges: 1, description: "A giant rocket strapped to your back: a terrifying, barely steerable burst of speed and a tail of sparks." },
   { id: "spiritLantern", model: "spiritLantern", name: "Spirit Lantern", icon: "🏮", rarity: 1, charges: 1, description: "Light the lantern for 15 seconds to reveal and collect hidden ghost gates worth 500 points." },
+  { id: "echoConch", model: "echoConch", name: "Echoing Conch", icon: "🐚", rarity: 0, charges: 1, description: "A sonar song highlights a safe route through the next three gates." },
 ];
 
 export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.id === id)!;
 
 /** How long each item's effect lasts once used (seconds) */
 const DURATION: Record<RunItemId, () => number> = {
+  echoConch: () => ITEM.conchTime,
   spiritLantern: () => ITEM.lanternTime,
   anemoCatcher: () => ITEM.updraftTime,
   starflakeShield: () => ITEM.shieldTime,
@@ -198,6 +201,13 @@ export class Items {
 
   /** Starts an item's effect; false if it can't be used right now */
   private start(id: RunItemId, flight: Flight): boolean {
+    if (id === "echoConch") {
+      this.path.length = 0;
+      for (const ring of this.world?.course.rings ?? []) {
+        if (ring.position.z > flight.position.z && this.path.length < 3) this.path.push(ring.position.clone());
+      }
+      if (!this.path.length) return false;
+    }
     // ITEM STARTS
     // A shield already up would be wasted
     if (id === "starflakeShield" && this.active.has(id)) return false;
