@@ -220,6 +220,75 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Review PR #33 against current main
+
+- Resolved the change-log conflict with main, preserving the Adventure UX
+  entry and the newer terrain/streaming entries in `CLAUDE.md`.
+- GitHub required the asynchronous stack merge API; the other stack PR (#31)
+  was already merged. Automatic rebase failed, so replayed the two PR commits
+  directly onto main, preserving their authors, with the same reviewed source.
+- Reviewed biome previews, theme updates, checkpoint labels and the settings
+  overlay's pause/input handling. The PR's game changes expose HUD data only.
+- `RunHud.css`: give toast notifications a minimum top offset of 14rem so
+  they stay below the compass moved to 10rem. `GameScreen.css`: move the
+  narrow test panel below it too. This corrects overlapping positions on
+  short screens; inferred from CSS, not visually confirmed.
+- Verified frontend production build, lint and all 64 tests. On local Node
+  22.14, tests use `--experimental-strip-types` and an equivalent asynchronous
+  `module.register` resolver (the checked-in hook needs Node 22.15 or newer).
+  The build succeeds with its existing bundle-size warning. Backend untouched.
+- Browser verification unavailable: Chrome connected, but the control tool
+  rejects the API-key session with `unsupported Codex auth method: apikey`.
+  Follow-up: inspect toasts, compass and the test panel at laptop and phone
+  sizes, plus the three menu tabs, all nine biome previews and in-game settings.
+
+### 2026-10-10: Adventure in the Solo look, a map select for every biome (Claude)
+
+Asked for by the UX group, on `shiyu-unify-ui` (from `shiyu-tutorial`): the
+landing page's other tabs and the adventure's screens in the style of Solo,
+and a map select that shows off every biome (wished for by the roguelike
+designer). UI only: runs play as before.
+
+- **Landing tabs** (`Menu.tsx`, `Menu.css`): With friends and Adventure get
+  Solo's layout: a card (label, title, chips), the big button, a row of small
+  links. Adventure: "Today's run · #seed" / "Eight biomes", chips for your
+  best and "New in", Start today's run (`Enter` works on this tab too),
+  Choose a map, New random run. With friends: "Race room" / "Same map, same
+  time" / "Up to 12 pilots", Create a room, and a quieter join row (rounded
+  field, light button).
+- **Choose a map** (`BiomeSelect.tsx`, on `CourseSelect.css`): the course
+  select's carousel, a card per biome in run order (Sky Isles, Verdant, the
+  middle six, Aurora): its place in a run, name, tagline, moods, and art
+  from `public/biomes/<id>.jpg`. The backdrop flies the biome's showcase
+  level (`runLevel(2, 1, biome)`, what `/?explore=<id>&seed=2` flies;
+  `MenuBackdrop`'s new `level` prop) and the UI takes its colors. Start
+  today's run (`Enter`) starts a normal run: the chosen biome doesn't change
+  where a run starts (that would be a gameplay change, for the run's
+  designer).
+- **In a run** (`GameScreen.tsx`, `RunHud.tsx`, `RunHud.css`): the intro
+  panel is now the time trial's start pill (Take off); the score sits in a
+  glass pill like the race timer, with "Level N / 8" and the chain under it;
+  the compass under the pill, its label white with an ink edge; objectives
+  (hidden when empty), abilities and toasts on glass; done objectives in
+  ink. The intro's text and Controls fold-out are gone (How to fly and the
+  settings have them).
+- **Colors follow the level** in runs and explore (`usePaletteTheme`,
+  `HudState.palette`); before, they kept the menu's. The landing page takes
+  the colors of whatever its backdrop shows.
+- **Crash note in runs:** "Back to gate N" (the run's last gate,
+  `RunHud.checkpoint`) instead of "Back to the start".
+- **Settings in game:** a gear at the top right, after the "?", as on the
+  landing page (`SettingsButton` in `GameScreen.tsx`, the `TopBar`'s
+  `controls`): it opens the settings with the game held paused
+  (`holdGame`). The pause box lost its Settings button and sits in the
+  middle of the screen.
+- Biome card art rendered in headless Chromium (software GL, so no bloom)
+  from the backdrop's drift view at z = 400 or 900.
+- Verified: build, lint and the frontend tests pass. In the app's browser
+  on the Docker build: the three tabs, the map select through all nine
+  biomes (labels, moods, colors), `Esc` back to today's colors, a run's start
+  pill, score pill, compass and colors. Not looked at: the upgrade picker,
+  title card and finish screen (unchanged), phones.
 ### 2026-10-10 — Rebase mesh fixes for review
 
 - Rebased onto main at `9f3d70c`, preserving both sides of documentation
@@ -337,53 +406,6 @@ the course. `__raceHashes()` checks the race map hasn't moved.
   hashes. Browser inspected before/after Verdant stone from two angles, Ember
   cliff and Glacier fragments under neutral light, plus Verdant gameplay with
   no rendering errors. Full seed coverage and integrated-GPU profiling remain.
-### 2026-10-10: Adventure in the Solo look, a map select for every biome (Claude)
-
-Asked for by the UX group, on `shiyu-unify-ui` (from `shiyu-tutorial`): the
-landing page's other tabs and the adventure's screens in the style of Solo,
-and a map select that shows off every biome (wished for by the roguelike
-designer). UI only: runs play as before.
-
-- **Landing tabs** (`Menu.tsx`, `Menu.css`): With friends and Adventure get
-  Solo's layout: a card (label, title, chips), the big button, a row of small
-  links. Adventure: "Today's run · #seed" / "Eight biomes", chips for your
-  best and "New in", Start today's run (`Enter` works on this tab too),
-  Choose a map, New random run. With friends: "Race room" / "Same map, same
-  time" / "Up to 12 pilots", Create a room, and a quieter join row (rounded
-  field, light button).
-- **Choose a map** (`BiomeSelect.tsx`, on `CourseSelect.css`): the course
-  select's carousel, a card per biome in run order (Sky Isles, Verdant, the
-  middle six, Aurora): its place in a run, name, tagline, moods, and art
-  from `public/biomes/<id>.jpg`. The backdrop flies the biome's showcase
-  level (`runLevel(2, 1, biome)`, what `/?explore=<id>&seed=2` flies;
-  `MenuBackdrop`'s new `level` prop) and the UI takes its colors. Start
-  today's run (`Enter`) starts a normal run: the chosen biome doesn't change
-  where a run starts (that would be a gameplay change, for the run's
-  designer).
-- **In a run** (`GameScreen.tsx`, `RunHud.tsx`, `RunHud.css`): the intro
-  panel is now the time trial's start pill (Take off); the score sits in a
-  glass pill like the race timer, with "Level N / 8" and the chain under it;
-  the compass under the pill, its label white with an ink edge; objectives
-  (hidden when empty), abilities and toasts on glass; done objectives in
-  ink. The intro's text and Controls fold-out are gone (How to fly and the
-  settings have them).
-- **Colors follow the level** in runs and explore (`usePaletteTheme`,
-  `HudState.palette`); before, they kept the menu's. The landing page takes
-  the colors of whatever its backdrop shows.
-- **Crash note in runs:** "Back to gate N" (the run's last gate,
-  `RunHud.checkpoint`) instead of "Back to the start".
-- **Settings in game:** a gear at the top right, after the "?", as on the
-  landing page (`SettingsButton` in `GameScreen.tsx`, the `TopBar`'s
-  `controls`): it opens the settings with the game held paused
-  (`holdGame`). The pause box lost its Settings button and sits in the
-  middle of the screen.
-- Biome card art rendered in headless Chromium (software GL, so no bloom)
-  from the backdrop's drift view at z = 400 or 900.
-- Verified: build, lint and the frontend tests pass. In the app's browser
-  on the Docker build: the three tabs, the map select through all nine
-  biomes (labels, moods, colors), `Esc` back to today's colors, a run's start
-  pill, score pill, compass and colors. Not looked at: the upgrade picker,
-  title card and finish screen (unchanged), phones.
 
 ### 2026-10-10: Rebased onto main's Pengyue adventure (Claude)
 
@@ -2068,6 +2090,9 @@ ported to the islands world:
   through islands and gates, no console errors.
 
 ## Next up
+
+- PR #33: visually verify the compass, toast and test-panel spacing on short
+  screens; browser control failed during review with an API-key auth error.
 
 - Playtest the new 3 m tier and two-second look-ahead at boost/dive speeds on
   integrated GPUs; tune the 140 m activation range against worker readiness.
