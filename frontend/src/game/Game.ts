@@ -81,6 +81,7 @@ export interface HudState {
   style: number;
   multiplier: number;
   crashed: boolean;
+  paused: boolean;
   locked: boolean;
   muted: boolean;
   standings: Standing[];
@@ -174,6 +175,7 @@ export class Game implements RunHost {
   /** The roguelike run, when this game is one (never in races) */
   private run: RunController | null = null;
   private frozen = false;
+  private paused = false;
   private selfId = "";
   private startSlot: number | null = null; // place on the start grid, null = alone
   private participants: Participant[] = [];
@@ -215,6 +217,12 @@ export class Game implements RunHost {
     this.rig = new CameraRig(1);
     this.input = new Input(this.renderer.domElement, options.controls);
     this.input.onAction = (action) => {
+      if (this.attract) return;
+      if (action === "pause") {
+        this.togglePause();
+        return;
+      }
+      if (this.paused && action !== "mute") return;
       if (action === "respawn") this.respawnNow();
       if (action === "mute") this.audio.toggleMute();
       if (action === "barrelLeft" || action === "barrelRight") this.barrelRoll(action === "barrelLeft" ? -1 : 1);
@@ -262,11 +270,24 @@ export class Game implements RunHost {
 
   /** Call from a click: locks the mouse and starts audio (browsers need a gesture for both) */
   engage = () => {
+    if (this.paused) return;
     this.input.lockPointer();
     this.audio.start();
   };
 
   private startAudio = () => this.audio.start();
+
+  /** Freeze local gameplay; the server-validated race clock keeps running. */
+  togglePause() {
+    if (this.attract) return;
+    this.paused = !this.paused;
+    // Resume with a fresh frame delta instead of catching up on time spent paused.
+    this.lastFrame = 0;
+    this.input.reset();
+    if (this.paused) this.input.releasePointer();
+    this.audio.setPaused(this.paused);
+    this.events.hud(this.hud(this.clock()));
+  }
 
   // --- the roguelike run (RunHost) ---------------------------------------------------
 
@@ -279,6 +300,7 @@ export class Game implements RunHost {
 
   /** Holds the pilot on the start line until the player takes off */
   holdRun(hold: boolean) {
+    if (this.paused) this.togglePause();
     this.freeze(hold);
     if (!hold) {
       this.respawn(0);
@@ -288,6 +310,7 @@ export class Game implements RunHost {
 
   /** The upgrade chosen at a portal */
   pickUpgrade(id: Parameters<RunController["pick"]>[0]) {
+    if (this.paused) return;
     this.run?.pick(id);
   }
 
@@ -387,6 +410,7 @@ export class Game implements RunHost {
 
   /** No race: fly around, rings are just scenery */
   freeFlight(respawn: boolean) {
+    if (this.paused) this.togglePause();
     this.startSlot = null;
     this.raceState = "free";
     this.checkpoints = 0;
@@ -397,6 +421,7 @@ export class Game implements RunHost {
 
   /** Puts you on the start line (or grid slot 0, 1, … in a room), frozen until the clock reaches startAt */
   startCountdown(startAt: number, slot: number | null = null) {
+    if (this.paused) this.togglePause();
     this.startSlot = slot;
     this.raceState = "countdown";
     this.startAt = startAt;
@@ -804,22 +829,34 @@ export class Game implements RunHost {
     this.frame = requestAnimationFrame(this.loop);
     const dt = this.lastFrame ? Math.min(0.1, (now - this.lastFrame) / 1000) : 0;
     this.lastFrame = now;
-    this.elapsed += dt;
-    fxTime.value = this.elapsed;
-    this.adaptQuality(dt);
     const t = this.clock();
 
     if (this.raceState === "countdown") {
       const left = Math.ceil((this.startAt - t) / 1000);
-      if (left <= 3 && left > 0 && left < this.lastBeep) this.audio.beep(false);
+      if (!this.paused && left <= 3 && left > 0 && left < this.lastBeep) this.audio.beep(false);
       this.lastBeep = Math.min(this.lastBeep, left);
       if (t >= this.startAt) {
         this.raceState = "racing";
         this.recorder.reset();
-        this.audio.beep(true);
+        if (!this.paused) this.audio.beep(true);
         this.events.raceStarted?.();
       }
     }
+
+    if (this.paused) {
+      // Poll gamepad buttons so presses made while paused aren't queued for resume.
+      this.input.sample(0);
+      // Redraw the frozen scene so resizing the canvas still works.
+      this.render();
+      if (now - this.lastHud > HUD_INTERVAL) {
+        this.lastHud = now;
+        this.events.hud(this.hud(t));
+      }
+      return;
+    }
+    this.elapsed += dt;
+    fxTime.value = this.elapsed;
+    this.adaptQuality(dt);
 
     this.input0 = this.attract === "chase" ? this.autopilot() : this.input.sample(dt);
     // Before a race, wait for the islands around you to show up: no flying into invisible rock
@@ -924,6 +961,7 @@ export class Game implements RunHost {
       style: Math.round(this.style),
       multiplier: this.multiplier,
       crashed: this.crashedAt !== null,
+      paused: this.paused,
       locked: this.input.locked,
       muted: this.audio.isMuted,
       standings: this.standings(),

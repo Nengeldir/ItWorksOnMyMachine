@@ -1,5 +1,6 @@
 import { formatTime } from "../format";
 import type { HudState } from "../game/Game";
+import { KEY_BINDINGS, keyLabel } from "../game/input";
 import "./Hud.css";
 
 /** Speed, timer, rings, style and standings over the game view */
@@ -19,14 +20,21 @@ const Hud = ({ hud }: { hud: HudState }) => {
         </div>
       )}
 
-      {hud.countdown !== null && hud.countdown > 0 && (
+      {!hud.paused && hud.countdown !== null && hud.countdown > 0 && (
         <div className="hud-big glass" key={hud.countdown}>
           {hud.countdown}
         </div>
       )}
-      {go && <div className="hud-big glass go">GO!</div>}
-      {hud.crashed && <div className="hud-crash glass">Crashed!</div>}
-      {hud.loading && hud.raceState === "free" && <div className="hud-loading glass">Building islands…</div>}
+      {!hud.paused && go && <div className="hud-big glass go">GO!</div>}
+      {!hud.paused && hud.crashed && <div className="hud-crash glass">Crashed!</div>}
+      {hud.paused && (
+        <div className="hud-pause glass" role="status">
+          <strong>Paused</strong>
+          <span>Press <kbd>{keyLabel(KEY_BINDINGS.pause)}</kbd> to resume</span>
+          {racing && <small>The race clock keeps running</small>}
+        </div>
+      )}
+      {!hud.paused && hud.loading && hud.raceState === "free" && <div className="hud-loading glass">Building islands…</div>}
 
       {hud.standings.length > 1 && (
         <ol className="hud-standings glass">
@@ -55,7 +63,7 @@ const Hud = ({ hud }: { hud: HudState }) => {
         <div className="hud-altitude">{hud.clearance < 40 ? `${hud.clearance} m to the rock` : "\u00a0"}</div>
       </div>
 
-      {!hud.locked && (
+      {!hud.locked && !hud.paused && (
         <div className="hud-hint glass">
           {racing ? "Click to steer with the mouse" : "Click the view to steer with the mouse · keys and gamepads work anytime"}
         </div>
