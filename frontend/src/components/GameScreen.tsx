@@ -330,6 +330,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
     Enter: () => {
       if (stage === "intro") session.begin();
       else if (stage === "summary") session.again();
+      else if (run?.phase === "finale") session.skip();
     },
     KeyN: () => stage === "summary" && onNewRun(),
   });
@@ -340,8 +341,14 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
   return (
     <div className="game">
       <div ref={ref} className="game-view" />
-      {hud && (hud.paused || (stage !== "pick" && run?.phase !== "portal")) && <Hud hud={hud} />}
-      {run && stage !== "intro" && stage !== "summary" && stage !== "pick" && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
+      {/* Nothing but the wormhole while passing through a portal */}
+      {hud && (hud.paused || (stage !== "pick" && run?.phase !== "portal" && run?.phase !== "finale" && run?.phase !== "won")) && <Hud hud={hud} />}
+      {run && stage !== "intro" && stage !== "summary" && stage !== "pick" && run.phase !== "finale" && run.phase !== "won" && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
+      {run?.phase === "finale" && (
+        <div className="finale-skip">
+          <kbd>Enter</kbd> skip
+        </div>
+      )}
       {showTitle && arrived && <TitleCard level={arrived.level} length={run!.length} biome={arrived.biome} />}
       <TopBar
         title={`Run #${seed}${run ? ` · level ${run.level}/${run.length} · ${run.biome} · ${run.mood}` : ""}`}

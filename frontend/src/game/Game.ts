@@ -175,6 +175,9 @@ export class Game implements RunHost {
   /** Blur and sparkles over the screen while passing through a portal */
   private readonly portalVeil: HTMLDivElement;
   private veilAmount = 0;
+  /** White light over everything (the end of a run's finale) */
+  private readonly whiteLight: HTMLDivElement;
+  private white = 0;
   /** Inside a portal's wormhole: the level is hidden */
   private inWormhole = false;
   private readonly crystalPoints: THREE.Vector3[] = [];
@@ -294,6 +297,9 @@ export class Game implements RunHost {
     this.portalVeil = document.createElement("div");
     this.portalVeil.className = "portal-veil";
     container.appendChild(this.portalVeil);
+    this.whiteLight = document.createElement("div");
+    this.whiteLight.className = "white-light";
+    container.appendChild(this.whiteLight);
 
     this.setLevel(options.level ?? raceLevel(options.seed));
 
@@ -424,6 +430,18 @@ export class Game implements RunHost {
     this.veilAmount = amount;
     this.portalVeil.style.setProperty("--veil", amount.toFixed(3));
     this.portalVeil.classList.toggle("on", amount > 0.002);
+  }
+
+  whiteOut(amount: number) {
+    if (Math.abs(amount - this.white) < 0.002 && amount !== 0) return;
+    this.white = amount;
+    const text = amount.toFixed(3);
+    if (this.whiteLight.style.opacity !== text) this.whiteLight.style.opacity = text;
+  }
+
+  /** The finale's Enter: skip to the end */
+  skipFinale() {
+    this.run?.skipFinale();
   }
 
   insideWormhole(on: boolean) {
@@ -608,6 +626,7 @@ export class Game implements RunHost {
     this.marker.remove();
     this.vignette.remove();
     this.portalVeil.remove();
+    this.whiteLight.remove();
   }
 
   // --- flying ------------------------------------------------------------------

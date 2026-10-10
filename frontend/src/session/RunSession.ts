@@ -110,6 +110,11 @@ export class RunSession {
     this.game?.engage();
   }
 
+  /** Enter during the finale: skip to the white light */
+  skip() {
+    this.game?.skipFinale();
+  }
+
   pick(id: UpgradeId) {
     if (this.store.get().stage !== "pick") return;
     this.store.set({ stage: "flying", offers: [] });
