@@ -34,7 +34,8 @@ test("test chords are consumed before ordinary bindings, once per press", () => 
   input.onAction = (a) => actions.push(a);
   const key = (code, { shift = false, repeat = false, type = "keydown" } = {}) => {
     const e = new Event(type, { cancelable: true });
-    Object.defineProperties(e, { code: { value: code }, shiftKey: { value: shift }, ctrlKey: { value: false }, altKey: { value: false }, metaKey: { value: false }, repeat: { value: repeat } });
+    const character = code.startsWith("Key") ? (shift ? code.slice(3) : code.slice(3).toLowerCase()) : code.startsWith("Shift") ? "Shift" : code;
+    Object.defineProperties(e, { code: { value: code }, key: { value: character }, shiftKey: { value: shift }, ctrlKey: { value: false }, altKey: { value: false }, metaKey: { value: false }, repeat: { value: repeat } });
     win.dispatchEvent(e);
     return e;
   };

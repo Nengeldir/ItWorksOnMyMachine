@@ -116,7 +116,8 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/camera.ts` | Chase camera (`CAMERA` tuning): lag, partial horizon roll, FOV with speed, FOV kick on gates, shake when skimming; after a crash (`startFall`, `fall`) it arcs up over the pilot and looks down on the fall (`CAMERA.fall*`) |
 | `game/tuning.ts` | `ANIM`, `FX`, `RINGS`, `CAMERA`: every look constant, slider ranges, localStorage persistence |
 | `game/testPlayback.ts` | Test-only playback rate: the frame loop scales its delta, CSS animations/transitions follow through the Web Animations API, and a scoped observer handles new overlays; cleanup restores normal playback |
-| `game/input.ts` | Keyboard, pointer-lock mouse and gamepad. Items: Y/right mouse button use, U/wheel cycle; d-pad right/left. Test Shift+I gives items in design-list order; Shift+P/O/S retain portal, victory and playback controls. |
+| `game/input.ts` | Layout-aware keyboard via `keyboardBinding`, pointer-lock mouse and gamepad. Held keys release by physical code. Items: Y/right mouse button use, U/wheel cycle; d-pad right/left. Test Shift+I gives items in design-list order; Shift+P/O/S retain portal, victory and playback controls. |
+| `game/bindings.ts` | Saved binding identifiers, labels and defaults; `keyboardBinding` maps active-layout characters to bindings for gameplay, settings and the unified map selector. |
 | `game/pilots.ts` | Remote players and ghosts: interpolated samples driving an `Avatar` and `PilotFx` |
 | `game/ghost.ts` | Recording and decoding ghost runs (15 Hz) |
 | `game/autopilot.ts` | `Autopilot`: while nobody plays (the menu's `chase` backdrop, the victory lap) the pilot flies the racing line on rails (`Flight.place`), through the middle of every gate and inside the 11 m tube the land is carved away from; speed from the slope against drag, bank from the line's curve (`AUTOPILOT` in `tuning.ts`). Never scored; Game loops it 40 m past the finish |
@@ -218,6 +219,11 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Rebase keyboard layouts onto profile and touch integration
+
+- Replayed keyboard-layout support onto local main at `ad462f1`. Resolved `input.ts` imports without restoring removed tilt steering, preserving touch controls and item shortcuts. Merged both sides of the CLAUDE.md architecture and follow-up entries.
+- Build and lint pass; all seven targeted control/settings/test-mode/item/profile/collection test files pass with standard test isolation. A shared-process run exposed profile-test global-state interference; the normal isolated run passes. Untracked files are unchanged. No browser or physical-keyboard playtest this session; those checks remain in Next up.
+
 ### 2026-10-10: All twenty adventure items and island pickups
 
 Completed the design list: items 11–20 have toon models and distinct effects
@@ -248,6 +254,11 @@ Frozen previews exercise rules/equipment but do not replace real flights.
 The build emits a non-fatal bundle-size warning. Remaining playtests:
 audio mix, mouse/gamepad handling, balance and focused-window GPU performance.
 Removed the obsolete mechanics/pickups implementation entries from Next up.
+
+### 2026-10-10: Rebase keyboard layouts onto local main
+
+- Replayed the keyboard-layout commit onto main, preserving item use/cycle keys and Shift+I. Applied layout-aware navigation to the unified MapSelect; retained its capture-phase input handling and removed the obsolete BiomeSelect. Kept both branches' documentation in CLAUDE.md and updated the input/bindings architecture map here.
+- Updated the tracked touch-control fixture for main's added `use` field. Build and lint pass. 19 control/settings/item/test-mode tests pass, plus seven keyboard checks using a temporary copy with fixtures adapted to main, including layout-aware item shortcuts. The original untracked keyboard-layout test remains unchanged and has three stale fixture failures. Browser checks and physical keyboard playtesting were not performed.
 
 ### 2026-10-10: Adventure items (continued)
 
@@ -1887,6 +1898,9 @@ ported to the islands world:
 ## Next up
 
 - All twenty adventure items and seeded island pickups are implemented. Playtest item balance, audio mix, mouse/gamepad handling and focused-window performance. Tune rarity heights and the three-slot bag through real flights.
+
+- Keyboard layouts: update the untracked keyboard test fixtures for item controls and verify AZERTY/QWERTZ/Dvorak on physical keyboards. Rebase validation used explicit character/code pairs; no browser playtest this session.
+
 
 - Wormhole camera: watch the orbit and the 0.4 s swing back to the chase
   view in a focused window and tune `RUN.orbit*` and `wormholeFlow`; the
