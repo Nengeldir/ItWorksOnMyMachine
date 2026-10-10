@@ -12,6 +12,8 @@ import { type ControlSettings, Input } from "./input";
 import { FX_LIGHT, Kind, Particles, fx, fxTime } from "./particles";
 import { PilotFx } from "./pilotfx";
 import { INTERPOLATION_DELAY_MS, Pilot, type PilotSample } from "./pilots";
+// import { Trail } from "./trail";
+// import { WINGTIPS, createAirplane } from "./airplane";
 import { clamp } from "./math";
 import { SpeedLines } from "./speedlines";
 import { TOON_LIGHT } from "./toon";
@@ -828,12 +830,14 @@ export class Game implements RunHost {
     } else if (this.raceState !== "countdown" && !waiting && this.attract !== "drift") {
       this.accumulator += dt;
       let steps = 0;
-      while (this.accumulator >= STEP && steps++ < MAX_STEPS_PER_FRAME) {
+      while (this.accumulator >= STEP && steps < MAX_STEPS_PER_FRAME) {
+        steps++;
         this.step(this.input0);
         this.accumulator -= STEP;
         if (this.crashedAt !== null) break;
       }
-      if (steps >= MAX_STEPS_PER_FRAME) this.accumulator = 0;
+      // Drop only whole excess steps; preserve the fractional rendering phase.
+      if (this.accumulator >= STEP) this.accumulator %= STEP;
     }
     if (this.attract === "chase" && this.flight.position.z > this.world.course.endZ + 100) this.respawn(0);
 
