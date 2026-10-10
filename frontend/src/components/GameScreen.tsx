@@ -1,6 +1,7 @@
-import { IconArrowLeft, IconChevronDown, IconChevronUp } from "@tabler/icons-react";
+import { IconArrowLeft, IconChevronDown, IconChevronUp, IconSettings } from "@tabler/icons-react";
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from "react";
 import type { Screen } from "../App";
+import { holdGame } from "../game/hold";
 import { formatTime, ordinal } from "../format";
 import { controlsBlocked } from "../game/input";
 import { webglAvailable } from "../game/webgl";
@@ -18,6 +19,7 @@ import { type Settings, clientId } from "../storage";
 import { usePaletteTheme, useUiTheme } from "../theme";
 import Coach from "./Coach";
 import { HelpButton } from "./Help";
+import SettingsPanel from "./SettingsPanel";
 import Hud from "./Hud";
 import Leaderboard from "./Leaderboard";
 import "./GameScreen.css";
@@ -65,7 +67,28 @@ interface ScreenProps {
   onTutorialEnd?: () => void;
 }
 
-const TopBar = ({ title, onExit, children }: { title: string; onExit: () => void; children?: ReactNode }) => (
+interface TopBarControls {
+  settings: Settings;
+  onSettings: (settings: Settings) => void;
+  /** The game's own mute (M), shown and changed in the settings */
+  muted: boolean;
+}
+
+/** The gear: the settings, as on the landing page, over the game held paused */
+const SettingsButton = ({ settings, onSettings, muted }: TopBarControls) => {
+  const [open, setOpen] = useState(false);
+  useEffect(() => (open ? holdGame() : undefined), [open]);
+  return (
+    <>
+      <button className="help-button glass" aria-label="Settings" onClick={() => setOpen(true)}>
+        <IconSettings size={20} />
+      </button>
+      {open && <SettingsPanel settings={{ ...settings, muted }} onSettings={onSettings} onClose={() => setOpen(false)} />}
+    </>
+  );
+};
+
+const TopBar = ({ title, onExit, controls, children }: { title: string; onExit: () => void; controls?: TopBarControls; children?: ReactNode }) => (
   <div className="topbar">
     <button className="glass" onClick={onExit}>
       <IconArrowLeft size={18} /> Menu
@@ -74,6 +97,7 @@ const TopBar = ({ title, onExit, children }: { title: string; onExit: () => void
     <div className="topbar-end">
       {children}
       <HelpButton />
+      {controls && <SettingsButton {...controls} />}
     </div>
   </div>
 );
@@ -140,8 +164,8 @@ const SoloScreen = ({ seed, settings, onSettings, onExit, tutorial, onTutorialEn
   return (
     <div className="game">
       <div ref={ref} className="game-view" />
-      {hud && <Hud hud={hud} settings={settings} onSettings={onSettings} />}
-      <TopBar title={`Time trial · #${seed}${hud ? ` · ${hud.paletteName}` : ""}`} onExit={onExit} />
+      {hud && <Hud hud={hud} settings={settings} />}
+      <TopBar title={`Time trial · #${seed}${hud ? ` · ${hud.paletteName}` : ""}`} onExit={onExit} controls={{ settings, onSettings, muted: !!hud?.muted }} />
       {error && <div className="banner glass">{error}</div>}
 
       {coaching && <Coach onEnd={onTutorialEnd} />}
@@ -223,8 +247,8 @@ const RoomScreen = ({ code, settings, onSettings, onExit, tutorial, onTutorialEn
   return (
     <div className="game">
       <div ref={ref} className="game-view" />
-      {hud && <Hud hud={hud} settings={settings} onSettings={onSettings} />}
-      <TopBar title={`Room ${code}${hud ? ` · course #${hud.seed} · ${hud.paletteName}` : ""}`} onExit={onExit}>
+      {hud && <Hud hud={hud} settings={settings} />}
+      <TopBar title={`Room ${code}${hud ? ` · course #${hud.seed} · ${hud.paletteName}` : ""}`} onExit={onExit} controls={{ settings, onSettings, muted: !!hud?.muted }}>
         <span className={`connection glass ${connection}`}>
           <span className="dot" />
           {connection === "connected" ? "online" : connection}
@@ -301,12 +325,12 @@ const ExploreScreen = ({ biome, seed, settings, onSettings, onExit, testMode = f
   return (
     <div className="game">
       <div ref={ref} className="game-view" />
-      {hud && !summary && (!transitioning || hud.paused) && <Hud hud={hud} settings={settings} onSettings={onSettings} showStyle={testMode} />}
+      {hud && !summary && (!transitioning || hud.paused) && <Hud hud={hud} settings={settings} showStyle={testMode} />}
       {/* Test mode flies a real run: its score, chain and compass to the portal */}
       {testMode && run && !summary && !transitioning && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
       {!summary && <TopBar title={testMode
         ? `Test · #${seed}${run ? ` · level ${run.level}/${run.length} · ${run.biome} · ${run.mood}` : ""} · ${speed}× speed`
-        : `Explore · ${hud ? `${hud.biomeName} · ${hud.paletteName}` : ""} · #${seed}`} onExit={onExit} />}
+        : `Explore · ${hud ? `${hud.biomeName} · ${hud.paletteName}` : ""} · #${seed}`} onExit={onExit} controls={{ settings, onSettings, muted: !!hud?.muted }} />}
       {error && <div className="banner">{error}</div>}
       {!summary && !transitioning && <aside className={`debug-panel glass${testMode ? " test" : ""}`}>
         {!testMode && <>
@@ -382,7 +406,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onT
     <div className="game">
       <div ref={ref} className="game-view" />
       {/* Nothing but the wormhole while passing through a portal */}
-      {hud && (hud.paused || (stage !== "pick" && stage !== "summary" && run?.phase !== "portal" && run?.phase !== "finale" && run?.phase !== "won")) && <Hud hud={hud} settings={settings} onSettings={onSettings} showStyle />}
+      {hud && (hud.paused || (stage !== "pick" && stage !== "summary" && run?.phase !== "portal" && run?.phase !== "finale" && run?.phase !== "won")) && <Hud hud={hud} settings={settings} showStyle />}
       {run && stage !== "intro" && stage !== "summary" && stage !== "pick" && run.phase !== "finale" && run.phase !== "won" && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
       {run?.phase === "finale" && (
         <div className="finale-skip">
@@ -395,6 +419,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onT
         <TopBar
           title={`Run #${seed}${run ? ` · level ${run.level}/${run.length} · ${run.biome} · ${run.mood}` : ""}`}
           onExit={onExit}
+          controls={{ settings, onSettings, muted: !!hud?.muted }}
         />
       )}
       {error && <div className="banner">{error}</div>}
