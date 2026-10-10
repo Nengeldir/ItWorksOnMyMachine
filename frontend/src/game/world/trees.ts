@@ -59,6 +59,10 @@ export class Plant implements Collider {
   private readonly nz: number;
   private readonly dr: number;
   private readonly dt: number;
+  private readonly gx: number;
+  private readonly gr: number;
+  private readonly gy: number;
+  private readonly gb: number;
 
   constructor(x: number, ground: number, z: number, height: number, radius: number, yaw: number, shape: ColliderShape) {
     this.x = x;
@@ -90,6 +94,10 @@ export class Plant implements Collider {
     this.dy = ground + (disc?.y ?? 0) * height;
     this.dr = (disc?.r ?? 0) * height;
     this.dt = (disc?.t ?? 0) * height;
+    this.gx = (shape.gate?.x ?? 0) * height;
+    this.gr = (shape.gate?.r ?? 0) * height;
+    this.gy = (shape.gate?.y ?? 0) * height;
+    this.gb = (shape.gate?.bar ?? 0) * height;
     this.radius = Math.max(radius, Math.abs(lean) + radius * 0.9);
   }
 
@@ -123,6 +131,17 @@ export class Plant implements Collider {
       const rim = Math.hypot(qx - along * this.nx, qy, qz - along * this.nz) - this.dr;
       const face = Math.abs(along) - this.dt;
       d = Math.min(d, Math.min(Math.max(rim, face), 0) + Math.hypot(Math.max(rim, 0), Math.max(face, 0)));
+    }
+    if (this.gx > 0) {
+      // A gate, in its own frame: u along the bar (the model's x axis), w through the opening
+      const qx = px - this.x;
+      const qz = pz - this.z;
+      const u = qx * this.nz - qz * this.nx;
+      const w = qx * this.nx + qz * this.nz;
+      const v = py - this.ground;
+      const post = Math.hypot(Math.abs(u) - this.gx, w, v - clamp(v, 0, this.gy)) - this.gr;
+      const bar = Math.hypot(u - clamp(u, -this.gx, this.gx), w, v - this.gy) - this.gb;
+      d = Math.min(d, post, bar);
     }
     return d;
   }

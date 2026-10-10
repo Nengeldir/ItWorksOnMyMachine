@@ -39,7 +39,7 @@ const FRAME_Y1 = 1.1;
  * `built`: a structure, whose lights follow STRUCTURES.lights and whose `spin` parts
  * turn about the model's z axis at height `spin.y`
  */
-function plantMaterial(sway: number, grass = false, grassGlow = 0, built: { spin: { y: number; rate: number } | null } | null = null): THREE.MeshLambertMaterial {
+function plantMaterial(sway: number, grass = false, grassGlow = 0, built: { spin: { y: number; rate: number; upright?: boolean } | null } | null = null): THREE.MeshLambertMaterial {
   const spin = built?.spin ?? null;
   const material = atmospheric(new THREE.MeshLambertMaterial({ vertexColors: !grass, side: grass ? THREE.DoubleSide : THREE.FrontSide }), 0);
   const atmosphere = material.onBeforeCompile;
@@ -85,8 +85,10 @@ function plantMaterial(sway: number, grass = false, grassGlow = 0, built: { spin
           if (spin > 0.5) {
             // Sails turn about the hub (their faces look along the axis, so normals stay)
             float turn = floraTime * floraSpin + phase * 3.0;
+            ${spin.upright ? `
+            transformed.xz = vec2(transformed.x * cos(turn) - transformed.z * sin(turn), transformed.x * sin(turn) + transformed.z * cos(turn));` : `
             vec2 arm = transformed.xy - vec2(0.0, ${spin.y.toFixed(4)});
-            transformed.xy = vec2(arm.x * cos(turn) - arm.y * sin(turn), arm.x * sin(turn) + arm.y * cos(turn)) + vec2(0.0, ${spin.y.toFixed(4)});
+            transformed.xy = vec2(arm.x * cos(turn) - arm.y * sin(turn), arm.x * sin(turn) + arm.y * cos(turn)) + vec2(0.0, ${spin.y.toFixed(4)});`}
           }` : ""}
           // Gusts roll across the land
           float gust = 0.55 + 0.45 * sin(floraTime * 0.7 - root.x * 0.012 - root.z * 0.008);
@@ -125,7 +127,7 @@ function plantMaterial(sway: number, grass = false, grassGlow = 0, built: { spin
           totalEmissiveRadiance += diffuseColor.rgb * vGlow * floraGlow * floraLights;`,
       );
   };
-  material.customProgramCacheKey = () => `wingrace-flora-${grass}-${grassGlow}-${spin ? spin.y : ""}`;
+  material.customProgramCacheKey = () => `wingrace-flora-${grass}-${grassGlow}-${spin ? `${spin.y}${spin.upright ? "u" : ""}` : ""}`;
   return material;
 }
 

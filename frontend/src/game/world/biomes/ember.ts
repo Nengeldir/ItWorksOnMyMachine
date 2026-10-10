@@ -121,6 +121,13 @@ export const EMBER: Biome = {
     ],
     grass: { spacing: 3.2, height: [0.35, 0.7], color: "#3a2a20", tip: "#8a5a2a", flowers: ["#ff6a1a", "#ffb02a"], flowerShare: 0.15, glow: 0.6 },
   },
+  structures: [
+    // A forge-temple running with lava; obelisks cut with runes, braziers still burning, the columns of a broken aqueduct
+    { id: "forgeTemple", landmark: 1100, spacing: 60, chance: 1, height: [28, 34], colors: { stone: "#3a3136", stone2: "#2a2428", roof: "#1a1620", cloth: "#ffd24a", light: "#ff7a2a", trim: "#c98a2e" }, where: { above: [0, 140], lateral: [90, 380], facing: true } },
+    { id: "obelisk", spacing: 130, chance: 0.7, height: [9, 15], colors: { stone: "#221d26", stone2: "#3a3136", roof: "#3b3350", light: "#ff8a3a" }, where: { lateral: [30, 450] } },
+    { id: "brazier", spacing: 55, chance: 0.5, height: [3, 4.2], colors: { stone: "#3a3136", stone2: "#2a2428", roof: "#3a3136", cloth: "#ffd24a", light: "#ff7a2a", trim: "#8a6a3a" }, where: { above: [-30, 30], lateral: [0, 260] } },
+    { id: "ruinColumn", spacing: 90, chance: 0.6, height: [12, 18], colors: { stone: "#4a4046", stone2: "#2a2428", roof: "#4a4046" }, where: { above: [-30, 60], lateral: [40, 420] } },
+  ],
   sky: { cloudSea: null, puffs: 25, puffsBelow: false, puffLift: 350, mist: { mode: "valley", above: 10, thickness: 26 } },
   particles: {
     ambient: [

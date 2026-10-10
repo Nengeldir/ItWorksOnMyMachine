@@ -66,6 +66,45 @@ function upness(world: World, x: number, y: number, z: number): number {
   return length > 1e-6 ? gy / length : 0;
 }
 
+const LANDMARKS = new WeakMap<World, Map<number, number[] | null>>();
+
+/**
+ * A landmark's site in one stretch (`band`) of the course: of every candidate
+ * within `lateral` metres of the line that can stand, the one with the lowest
+ * draw. Worked out once per world: [x, y, z, height, gi, gk], or null
+ */
+function landmark(
+  world: World,
+  index: number,
+  band: number,
+  length: number,
+  step: number,
+  lateral: number,
+  salt: number,
+  siteAt: (index: number, gi: number, gk: number) => [number, number, number, number] | null,
+): number[] | null {
+  let cache = LANDMARKS.get(world);
+  if (!cache) LANDMARKS.set(world, (cache = new Map()));
+  const key = index * 4096 + band + 2048;
+  const known = cache.get(key);
+  if (known !== undefined) return known;
+  let best: number[] | null = null;
+  let draw = Infinity;
+  for (let gk = Math.ceil((band * length) / step - 0.5); (gk + 0.5) * step < (band + 1) * length; gk++) {
+    const cx = world.course.x((gk + 0.5) * step);
+    for (let gi = Math.floor((cx - lateral) / step); gi <= Math.floor((cx + lateral) / step); gi++) {
+      const d = hash3(gi, gk, salt + 6);
+      if (d >= draw) continue;
+      const site = siteAt(index, gi, gk);
+      if (!site) continue;
+      draw = d;
+      best = [...site, gi, gk];
+    }
+  }
+  cache.set(key, best);
+  return best;
+}
+
 /** 0..1: how much of a forest a spot is in (fireflies gather in its shade) */
 export function forestAt(world: World, x: number, z: number): number {
   const veg = world.biome.vegetation;
@@ -104,69 +143,120 @@ export function placeFlora(world: World, box: Box, withTufts: boolean): { plants
   // --- structures -----------------------------------------------------------------
   // A site depends only on where it is, never on the node's box: a tower stands
   // in the same spot at every level of detail. They come after the species in
-  // the plant list (see structures/kinds.ts). Standing on the ground only, for now
+  // the plant list (see structures/kinds.ts)
   const plants: number[] = [];
   const sites: number[] = [];
   const ground = field.ground;
-  const structures = ground ? structuresOf(world.biome) : [];
+  const structures = structuresOf(world.biome);
   const start = world.course.start;
+  /** Candidate (gi, gk) of a structure's grid: [x, y, z, height] if it can stand there, or null */
+  const siteAt = (index: number, gi: number, gk: number): [number, number, number, number] | null => {
+    const spec = structures[index];
+    const info = STRUCTURE_INFO[spec.id];
+    const s0 = salt + 101 + index * 37;
+    const where = spec.where;
+    const x = (gi + 0.5 + (hash3(gi, gk, s0 + 1) - 0.5) * 0.6) * spec.spacing;
+    const z = (gk + 0.5 + (hash3(gi, gk, s0 + 2) - 0.5) * 0.6) * spec.spacing;
+    const height = spec.height[0] + (spec.height[1] - spec.height[0]) * hash3(gi, gk, s0 + 3);
+    const foot = info.foot * height;
+    const on = where?.on ?? "ground";
+    let top = -Infinity;
+    let bottom = Infinity;
+    for (const s of field.shapes) {
+      if (x < s.min.x - foot - 2 || x > s.max.x + foot + 2 || z < s.min.z - foot - 2 || z > s.max.z + foot + 2) continue;
+      top = Math.max(top, s.max.y);
+      bottom = Math.min(bottom, s.min.y);
+    }
+    let y: number;
+    if (top === -Infinity) {
+      // Open ground: start from the heightfield and settle onto the real surface
+      if (on === "rock" || !ground) return null;
+      y = ground.height(x, z);
+      for (let i = 0; i < 3; i++) y -= field.distance(x, y, z);
+      if (Math.abs(field.distance(x, y, z)) > 0.4) return null;
+    } else {
+      // Rock about (an island, a mesa, a sea stack): march down onto whatever is topmost here
+      if (on === "ground") return null;
+      y = top + 1;
+      let hit = false;
+      for (let i = 0; i < 240 && y > bottom - 2 && !hit; i++) {
+        const d = field.distance(x, y, z);
+        if (d < 0.08) hit = d > -1;
+        else y -= Math.max(d, 0.35);
+      }
+      if (!hit || surfaces[field.surfaceAt(x, y, z)]?.bare) return null;
+    }
+    const above = y - world.course.y(z);
+    if (where?.above && (above < where.above[0] || above > where.above[1])) return null;
+    const lateral = Math.abs(x - world.course.x(z));
+    if (where?.lateral && (lateral < where.lateral[0] || lateral > where.lateral[1])) return null;
+    const depth = sea !== null ? sea - y : -1;
+    if (where?.water ? depth < where.water[0] || depth > where.water[1] : inWater(x, y, z)) return null;
+    if (where?.wet !== undefined && where.wet !== nearWater(x, y, z)) return null;
+    if (where?.forest !== undefined && where.forest !== forestAt(world, x, z) > 0.5) return null;
+    if (upness(world, x, y, z) < 0.75) return null;
+    // Level ground under the whole plinth
+    const slack = info.sink * height;
+    for (let i = 0; i < 4; i++) {
+      const fx = x + (i % 2 ? foot : -foot);
+      const fz = z + (i < 2 ? foot : -foot);
+      if (Math.abs(field.distance(fx, y, fz)) > slack || (!where?.water && inWater(fx, y, fz))) return null;
+    }
+    if (where?.hilltop) {
+      // The land falls away on at least half its sides
+      const ring = Math.max(height * 2.2, 14);
+      const drop = Math.max(height * 0.2, 2.5);
+      let open = 0;
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        if (field.distance(x + Math.cos(a) * ring, y - drop, z + Math.sin(a) * ring) > 0) open++;
+      }
+      if (open < 4) return null;
+    }
+    // Keep the racing line and the start clear
+    if (world.course.distance(x, y + height / 2, z) < TUBE_RADIUS + height / 2 + 3) return null;
+    if (Math.hypot(x - start.x, y - start.y, z - start.z) < 40 + height) return null;
+    return [x, y, z, height];
+  };
   for (let index = 0; index < structures.length; index++) {
     const spec = structures[index];
     const info = STRUCTURE_INFO[spec.id];
     const step = spec.spacing;
     const s0 = salt + 101 + index * 37;
-    const where = spec.where;
     const earlier = sites.length;
+    const place = (site: [number, number, number, number], gi: number, gk: number) => {
+      const [x, y, z, height] = site;
+      // Structures listed earlier come first where two would stand in each other's way
+      const clear = info.foot * height + 1.5;
+      let taken = false;
+      for (let o = 0; o < earlier && !taken; o += SITE_STRIDE) taken = Math.hypot(x - sites[o], z - sites[o + 2]) < clear + sites[o + 3];
+      // (a site that loses still counts for the kinds after it, so no node sees a different outcome)
+      sites.push(x, y, z, clear);
+      if (taken) return;
+      if (x < box.x0 || x >= box.x1 || z < box.z0 || z >= box.z1 || y < box.y0 || y >= box.y1) return;
+      const yaw = spec.where?.facing ? Math.atan2(world.course.x(z) - x, 0.001) + (hash3(gi, gk, s0 + 4) - 0.5) * 0.5 : hash3(gi, gk, s0 + 4) * Math.PI * 2;
+      plants.push(veg.species.length + index, x, y - 0.1, z, height, height, yaw, hash3(gi, gk, s0 + 5));
+    };
+    if (spec.landmark) {
+      // One per stretch of the course: the candidate with the lowest draw that can stand
+      const reach = info.foot * spec.height[1] + 1.5 + SITE_MARGIN;
+      for (let band = Math.floor((box.z0 - reach) / spec.landmark); band <= Math.floor((box.z1 + reach) / spec.landmark); band++) {
+        const found = landmark(world, index, band, spec.landmark, step, spec.where?.lateral?.[1] ?? 400, s0, siteAt);
+        if (!found) continue;
+        if (found[0] < box.x0 - reach || found[0] >= box.x1 + reach || found[2] < box.z0 - reach || found[2] >= box.z1 + reach) continue;
+        place([found[0], found[1], found[2], found[3]], found[4], found[5]);
+      }
+      continue;
+    }
     for (let gi = Math.floor((box.x0 - SITE_MARGIN) / step) - 1; gi <= Math.floor((box.x1 + SITE_MARGIN) / step) + 1; gi++) {
       for (let gk = Math.floor((box.z0 - SITE_MARGIN) / step) - 1; gk <= Math.floor((box.z1 + SITE_MARGIN) / step) + 1; gk++) {
         if (hash3(gi, gk, s0) > spec.chance) continue;
+        // (the same jitter as in siteAt: skip what lies outside before the costly tests)
         const x = (gi + 0.5 + (hash3(gi, gk, s0 + 1) - 0.5) * 0.6) * step;
         const z = (gk + 0.5 + (hash3(gi, gk, s0 + 2) - 0.5) * 0.6) * step;
         if (x < box.x0 - SITE_MARGIN || x >= box.x1 + SITE_MARGIN || z < box.z0 - SITE_MARGIN || z >= box.z1 + SITE_MARGIN) continue;
-        const height = spec.height[0] + (spec.height[1] - spec.height[0]) * hash3(gi, gk, s0 + 3);
-        const foot = info.foot * height;
-        if (field.shapes.some((s) => x >= s.min.x - foot - 2 && x <= s.max.x + foot + 2 && z >= s.min.z - foot - 2 && z <= s.max.z + foot + 2)) continue;
-        let y = ground!.height(x, z);
-        for (let i = 0; i < 3; i++) y -= field.distance(x, y, z);
-        if (Math.abs(field.distance(x, y, z)) > 0.4) continue;
-        const above = y - world.course.y(z);
-        if (where?.above && (above < where.above[0] || above > where.above[1])) continue;
-        const lateral = Math.abs(x - world.course.x(z));
-        if (where?.lateral && (lateral < where.lateral[0] || lateral > where.lateral[1])) continue;
-        if (inWater(x, y, z)) continue;
-        if (where?.wet !== undefined && where.wet !== nearWater(x, y, z)) continue;
-        if (where?.forest !== undefined && where.forest !== forestAt(world, x, z) > 0.5) continue;
-        if (upness(world, x, y, z) < 0.75) continue;
-        // Level ground under the whole plinth
-        const slack = info.sink * height;
-        let level = true;
-        for (let i = 0; i < 4 && level; i++) {
-          const fx = x + (i % 2 ? foot : -foot);
-          const fz = z + (i < 2 ? foot : -foot);
-          level = Math.abs(field.distance(fx, y, fz)) < slack && !inWater(fx, y, fz);
-        }
-        if (!level) continue;
-        if (where?.hilltop) {
-          // The land falls away on at least half its sides
-          let open = 0;
-          for (let i = 0; i < 8; i++) {
-            const a = (i / 8) * Math.PI * 2;
-            if (field.distance(x + Math.cos(a) * height * 2.2, y - height * 0.2, z + Math.sin(a) * height * 2.2) > 0) open++;
-          }
-          if (open < 4) continue;
-        }
-        // Keep the racing line and the start clear
-        if (world.course.distance(x, y + height / 2, z) < TUBE_RADIUS + height / 2 + 3) continue;
-        if (Math.hypot(x - start.x, y - start.y, z - start.z) < 40 + height) continue;
-        // Structures listed earlier come first where two would stand in each other's way
-        const clear = foot + 1.5;
-        let taken = false;
-        for (let o = 0; o < earlier && !taken; o += SITE_STRIDE) taken = Math.hypot(x - sites[o], z - sites[o + 2]) < clear + sites[o + 3];
-        // (a site that loses still counts for the kinds after it, so no node sees a different outcome)
-        sites.push(x, y, z, clear);
-        if (taken) continue;
-        if (x < box.x0 || x >= box.x1 || z < box.z0 || z >= box.z1 || y < box.y0 || y >= box.y1) continue;
-        plants.push(veg.species.length + index, x, y - 0.1, z, height, height, hash3(gi, gk, s0 + 4) * Math.PI * 2, hash3(gi, gk, s0 + 5));
+        const site = siteAt(index, gi, gk);
+        if (site) place(site, gi, gk);
       }
     }
   }

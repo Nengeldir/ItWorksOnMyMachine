@@ -30,6 +30,8 @@ export interface ColliderShape {
   lean: number; // the top leans sideways by this share of the height (palms), along the plant's yaw
   /** An upright disc facing along the yaw (a windmill's sails): center height and distance out front, radius, half thickness (shares of the height) */
   disc?: { y: number; out: number; r: number; t: number };
+  /** A gate: two posts `x` either side along the model's x axis (radius `r`, up to `y`) and a bar of radius `bar` across their tops (shares of the height) */
+  gate?: { x: number; r: number; y: number; bar: number };
 }
 
 export interface SpeciesInfo {

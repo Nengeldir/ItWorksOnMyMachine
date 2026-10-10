@@ -160,6 +160,8 @@ export interface StructureSpec {
   spacing: number; // metres between candidate sites (a jittered grid)
   chance: number; // share of candidates tried
   height: [number, number]; // metres
+  /** A landmark: at most one per this many metres of the course, on the best site there (`chance` is ignored; `where.lateral` bounds the search). List landmarks first */
+  landmark?: number;
   colors: {
     stone: string; // walls
     stone2?: string; // mossy or weathered patches
@@ -168,13 +170,17 @@ export interface StructureSpec {
     cloth?: string; // banners, sails
     trim?: string; // gold caps and finials
     light?: string; // windows and lanterns: dim by day, glowing at night
+    snow?: string; // snow lying on its roofs
   };
   where?: {
     above?: [number, number]; // metres above the racing line
     lateral?: [number, number]; // metres to the side of the racing line
     wet?: boolean; // only near water (true) or away from it (false)
+    water?: [number, number]; // standing in the sea, on ground this deep under it (stilts, sunken ruins)
     forest?: boolean; // true: only in forests, false: only in the open
     hilltop?: boolean; // only where the land falls away on most sides
+    on?: "ground" | "rock" | "any"; // open ground (the default), or on top of rock shapes: islands, islets, mesas, sea stacks
+    facing?: boolean; // its front turned towards the racing line (otherwise any way)
   };
 }
 

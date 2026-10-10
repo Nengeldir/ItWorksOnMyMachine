@@ -78,3 +78,47 @@ test("bridges span the river with an arch to fly through, well under the racing 
   assert.ok(total >= 4, `only ${total} bridges over three levels`);
   console.log("bridges over three levels:", total);
 });
+
+test("a shrine gate collides with its posts and lintel, and is open in between", () => {
+  const h = 20;
+  // Yaw 0: the posts stand 0.36 h either side along x, the opening looks along z
+  const gate = new Plant(0, 0, 0, h, h, 0, STRUCTURE_INFO.shrineGate.collider);
+  assert.ok(gate.distance(0.36 * h, 0.4 * h, 0) < 0, "inside a post");
+  assert.ok(gate.distance(0, 0.86 * h, 0) < 0, "inside the lintel");
+  assert.ok(gate.distance(0, 0.4 * h, 0) > 4, "through the opening");
+  const turned = new Plant(0, 0, 0, h, h, Math.PI / 2, STRUCTURE_INFO.shrineGate.collider);
+  assert.ok(turned.distance(0, 0.4 * h, 0.36 * h) < 0, "a post, turned a quarter");
+});
+
+test("every run biome has a landmark and scattered structures, the same at every level of detail", () => {
+  for (const biome of ["glacier", "archipelago", "lagoon", "twilight", "ember", "aurora"]) {
+    const world = new World(runLevel(5, 3, biome));
+    const species = world.biome.vegetation.species.length;
+    const kinds = world.biome.structures;
+    assert.ok(species + kinds.length <= 16, `${biome}: more kinds than the impostor atlas has cells`);
+    assert.ok(kinds[0].landmark, `${biome}: the landmark comes first`);
+    const built = (box, out) => {
+      const { plants } = placeFlora(world, box, false);
+      for (let o = 0; o < plants.length; o += PLANT_STRIDE) if (plants[o] >= species) out.push(Array.from(plants.slice(o, o + PLANT_STRIDE)).map((n) => n.toFixed(3)).join(","));
+    };
+    const coarse = [];
+    const fine = [];
+    const landmarks = new Set();
+    for (let band = 0; band < 6; band++) {
+      const z0 = band * 384;
+      const x0 = Math.floor(world.course.x(z0 + 192) / 384) * 384;
+      const y0 = Math.floor(world.course.y(z0 + 192) / 384) * 384;
+      for (const dx of [-384, 0, 384]) for (const dy of [-384, 0]) built({ x0: x0 + dx, y0: y0 + dy, z0, x1: x0 + dx + 384, y1: y0 + dy + 384, z1: z0 + 384 }, coarse);
+      if (band !== 2) continue;
+      for (const dy of [-384, 0]) for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) for (let k = 0; k < 4; k++) {
+        const x = x0 + i * 96, y = y0 + dy + j * 96, z = z0 + k * 96;
+        built({ x0: x, y0: y, z0: z, x1: x + 96, y1: y + 96, z1: z + 96 }, fine);
+      }
+    }
+    for (const p of coarse) if (Number(p.split(",")[0]) === species) landmarks.add(p);
+    assert.ok(landmarks.size >= 1 && landmarks.size <= 3, `${biome}: ${landmarks.size} landmarks`);
+    assert.ok(coarse.length > 15, `${biome}: only ${coarse.length} structures`);
+    const here = new Set(coarse);
+    assert.ok(fine.length > 0 && fine.every((p) => here.has(p)), `${biome}: full-detail nodes disagree with coarse ones`);
+  }
+});

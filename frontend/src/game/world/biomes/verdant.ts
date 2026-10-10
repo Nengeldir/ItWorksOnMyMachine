@@ -124,6 +124,7 @@ export const VERDANT: Biome = {
     // Old mills on the shoulders of the hills, watchtowers above the valley, lanterns along the river
     { id: "windmill", spacing: 130, chance: 0.9, height: [15, 19], colors: { stone: "#d9cfbb", stone2: "#b9b59a", roof: "#b5533c", cloth: "#f6ecd6" }, where: { above: [-10, 150], lateral: [60, 700], forest: false, hilltop: true } },
     { id: "watchtower", spacing: 170, chance: 0.6, height: [15, 21], colors: { stone: "#cfc6b4", stone2: "#9aa784", roof: "#3f6f8f", cloth: "#d84a4a" }, where: { above: [-15, 170], lateral: [50, 800] } },
+    { id: "shrineGate", spacing: 130, chance: 0.6, height: [8, 11], colors: { stone: "#bdb6a6", stone2: "#93a07c", roof: "#3a3a44", cloth: "#d84a3a" }, where: { above: [-18, 120], lateral: [30, 500], facing: true } },
     { id: "stoneLantern", spacing: 12, chance: 0.7, height: [2.6, 3.6], colors: { stone: "#bdb6a6", stone2: "#93a07c", roof: "#7a7466" }, where: { lateral: [0, 160], wet: true } },
   ],
   sky: { cloudSea: null, puffs: 50, puffsBelow: false, puffLift: 380, mist: { mode: "valley", above: 18, thickness: 34 } },

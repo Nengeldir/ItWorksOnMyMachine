@@ -118,6 +118,13 @@ export const AURORA: Biome = {
     ],
     grass: null,
   },
+  structures: [
+    // An observatory under a dome of crystal; pylons of the ancients, altars where stars fell, lanterns in the snow
+    { id: "observatory", landmark: 1100, spacing: 60, chance: 1, height: [26, 32], colors: { stone: "#dfe6f2", stone2: "#8f9ab3", roof: "#8f9ab3", cloth: "#c9a8ff", light: "#9fe8ff", trim: "#f2d37a" }, where: { above: [0, 150], lateral: [80, 360], facing: true } },
+    { id: "pylon", spacing: 70, chance: 0.7, height: [8, 13], colors: { stone: "#b9c3d6", stone2: "#8f9ab3", roof: "#8f9ab3", cloth: "#d8c8ff", light: "#9fe8ff", trim: "#f2d37a" }, where: { lateral: [30, 450], hilltop: true } },
+    { id: "starAltar", spacing: 55, chance: 0.45, height: [3, 4], colors: { stone: "#b9c3d6", stone2: "#8f9ab3", roof: "#8f9ab3", cloth: "#ffffff", light: "#ffe9a8" }, where: { above: [-36, 90], lateral: [20, 320] } },
+    { id: "stoneLantern", spacing: 30, chance: 0.3, height: [2.6, 3.4], colors: { stone: "#c9d1e0", stone2: "#8f9ab3", roof: "#6f7a96", light: "#d8c8ff" }, where: { lateral: [0, 260] } },
+  ],
   sky: { cloudSea: { depth: 320 }, puffs: 30, puffsBelow: false, puffLift: 350, mist: { mode: "valley", above: 14, thickness: 40 } },
   particles: {
     ambient: [
