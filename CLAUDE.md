@@ -100,7 +100,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | Path | What it does |
 | :--- | :--- |
 | `game/Game.ts` | The game: frame loop, fixed 120 Hz physics steps, race state, ring checks, HUD data, effects wiring (gate bursts, skim spray, gate motes), rendering with optional bloom, adaptive quality, the `?tune` panel |
-| `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only. `touching()` is the pilot's hitbox (`FLIGHT.hit*`): a ball for the body and a rectangle per wing, tilted up at a dihedral, fixed in the flight frame (never the animated pose), sampled against the distance field with early-outs. `FlightMods` (run upgrades: drag, sink, stall, proximity boost, dash boost, thermal lift, hover, glide lock) are only ever passed in run mode; `flap()` is a run ability |
+| `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only. `touching()` is the pilot's hitbox (`FLIGHT.hit*`): a ball for the body and a rectangle per wing, tilted up at a dihedral, fixed in the flight frame (never the animated pose), sampled against the distance field with early-outs; `hitboxWorld()` is the same hitbox in world space, which `Game.step` tests against the land drawn (`LandCollider`). `FlightMods` (run upgrades: drag, sink, stall, proximity boost, dash boost, thermal lift, hover, glide lock) are only ever passed in run mode; `flap()` is a run ability |
 | `game/avatar.ts` | The pilot: a cel-shaded chibi flyer built from primitives (merged per body part, vertex-colored), a procedural cape and scarf (`Cloth`), two-segment feathered wings, and all its animation: bank lead spring, barrel rolls, flapping driven by effort, bobbing, cloth ripples, limb reactions. Also `createLabel` and `glowTexture` |
 | `game/toon.ts` | Toon material (3-band gradient, rim light tinted by the biome's sun, self-lit `glow` vertex attribute for trims and wingtips) and the inverted-hull ink outline. `TOON_LIGHT` is set per biome |
 | `game/pilotfx.ts` | Per-pilot effects: wingtip and cape ribbons, light motes, downstroke puffs, barrel-roll star spiral. Shared by you, other players and ghosts |
@@ -114,7 +114,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/ghost.ts` | Recording and decoding ghost runs (15 Hz) |
 | `game/glidein.ts` | `GlideIn`: while the land near you is loading (free flight, runs, explore; never races), the pilot glides in on rails instead of hanging frozen: no input, no physics step, no scoring; at most 70 m and never within 30 m of the next gate, slowing before rock; control comes back at `START_SPEED` when the land is ready, and a run's level clock keeps running meanwhile |
 | `game/items/` | Items, models and animations only (what they do comes later). `models.ts`: `ITEMS` (id, name, kind, slot) and `buildItem(id)`: the giant firework (worn on the back like a jetpack, with `fireworkFlame`), three candies, the golden feather, two helmets, five fruits, all primitives painted per vertex with the toon material and ink. `equip.ts`: `Equipment` (pull an item out with a sparkle; the firework from the hand over the shoulder onto the back, helmets drop onto the head, hand items are held up; `use()` eats; `setThrust()` lights the firework) and `ItemDisplay` (a floating pickup). `gallery.ts`: the `/?gallery` scene. `Game.equip/unequip/useItem/thrust` drive it on your pilot; `Avatar.slots` and `Avatar.armPose` are the hooks |
-| `game/death.ts` | Crash animations, looks only: `classifyCrash` picks headfirst (into a wall: bounce and tumble), slide (glancing ground: roll down the slope), wing (a wing clipped: spin down) or fall (below the islands); `DeathFall` is a small rigid-body tumble (impulses at contact points: balls for head, hips and feet, five points per wing from the live pose via `Avatar.wingPoints`) kept out of the rock by the distance field. The avatar plays `die(kind)`, the camera `follow`s, the body dissolves into light at `DISSOLVE_AT`, all inside `RESPAWN_DELAY` |
+| `game/death.ts` | Crash animations, looks only: `classifyCrash` picks headfirst (into a wall: bounce and tumble), slide (glancing ground: roll down the slope), wing (a wing clipped: spin down) or fall (below the islands); `DeathFall` is a small rigid-body tumble (impulses at contact points: balls for head, hips and feet, five points per wing from the live pose via `Avatar.wingPoints`; a few position passes per step) kept out of the land drawn by `Game.contact`; a wing still wedged (`wedged`) is folded in by `Avatar.foldWings`. The avatar plays `die(kind)`, the camera arcs up overhead (`startFall`, `fall`), the body dissolves into light at `DISSOLVE_AT`, all inside `RESPAWN_DELAY` |
 | `game/effects.ts` | Crash debris: feathers knocked loose that flutter down (instanced) |
 | `game/audio.ts` | Synthesized wind and event sounds, run stingers (portal, upgrade, dash; sidequest and item are unused for now), the wingbeat sample (`public/audio/sfx/wingbeat.mp3`, pitch-randomized, played on each of your downstrokes and on the Wingbeat ability) and the `MusicPlayer` |
 | `game/music.ts` | `MusicPlayer`: one looping track per biome from `public/audio/music/<biome>_<title>.mp3`, crossfaded on biome change (`TRACK_OF` maps biomes to tracks; similar biomes share one). Night dims and muffles the same track. Loaded lazily, decoded with Web Audio, no music if a file fails |
@@ -122,19 +122,20 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/run/` | The roguelike run. `run.ts`: run length, biome order from the run seed, portal destinations, scoring constants, `RunHud`. `upgrades.ts`: nine data-defined upgrades and the 3-of-N offer. `controller.ts`: `RunController` (levels, gates and chains, abilities as `FlightMods`, the portal transition: blur in, the next level built under the blur (`buildNext`), wormhole and upgrade pick while it streams, blur out with the palette cross-fade; HUD data). `finale.ts`: `Finale`, the last portal's cutscene (space under a world-fixed Milky Way with dust lanes and its core overhead, the camera's scripted pan beneath the pilot and back, then white light; Enter skips). `portal.ts`: the portal (ring, a flat disk like a window onto night, beam), the `Wormhole` (a camera-centred shell mapping the view onto an endless twisting tube of lensed stars and nebula with the exit glowing ahead, spirit motes, its own lights) and `screenSparkle`. Game's `veil(k)` (the `.portal-veil` DOM blur and sparkles) and `insideWormhole(on)` (hides the level: land, sky, soft particles, speed lines, ambient, gate effects) serve it |
 | `game/devtools.ts` | Dev builds only: `__shot(view)` (freeze, stream the land around a fixed camera, render once), `__raceHashes()` (the race map's determinism check), `__run(s)`, `__bench(q)` and `__crash(kind, after)` (flies into rock near the start and stops `after` s into the crash animation) on `window` |
 | `game/math.ts` | `clamp`, `smoothstep`, `smin` (smooth minimum for distance fields) |
-| `game/world/terrain/` | Generator v2 (every biome but Sky Isles). `noise.ts`: seeded fbm, ridged multifractal, domain-warped ridges, terraces. `shapes.ts`: distance-field primitives with boxes, surface ids and grain (Island, NoiseIsland from 3D noise with tunnels, Mesa with ledges, Spire between two points, Slab, RockRing, Cap, Bridge: a humped stone bridge with one arch). `ground.ts`: the heightfield following the line (valley, hills, warped ridged mountains, terraces, crevasses, carved river channel, overhang noise on cliffs). `river.ts`: `Steps`, a valley floor stepping down in pools and falls, and the river in it (water distance for collisions). `field.ts`: `TerrainField`, ground + shapes as one field, `fill()` for whole blocks (same arithmetic as `distance()`). `recipes.ts`: gates and scenery from a biome's `LandRecipe`. `mesh.ts`: surface nets per LOD node, faces painted for the shader. `streamer.ts`: `LandStreamer`, the LOD octree (384/192/96 m nodes, 16 cells each). `material.ts`: the terrain shader |
+| `game/world/terrain/` | Generator v2 (every biome but Sky Isles). `noise.ts`: seeded fbm, ridged multifractal, domain-warped ridges, terraces. `shapes.ts`: distance-field primitives (spires and rock rings never thinner than `MIN_RADIUS`, 4.5 m, what the 6 m meshing grid always holds) with boxes, surface ids and grain (Island, NoiseIsland from 3D noise with tunnels, Mesa with ledges, Spire between two points, Slab, RockRing, Cap, Bridge: a humped stone bridge with one arch). `ground.ts`: the heightfield following the line (valley, hills, warped ridged mountains, terraces, crevasses, carved river channel, overhang noise on cliffs). `river.ts`: `Steps`, a valley floor stepping down in pools and falls, and the river in it (water distance for collisions). `field.ts`: `TerrainField`, ground + shapes as one field, `fill()` for whole blocks (same arithmetic as `distance()`). `recipes.ts`: gates and scenery from a biome's `LandRecipe`. `mesh.ts`: surface nets per LOD node, faces painted for the shader. `streamer.ts`: `LandStreamer`, the LOD octree (384/192/96 m nodes, 16 cells each). `material.ts`: the terrain shader |
 | `game/world/biomes/` | Biomes as data (`types.ts`: `Biome`, `Level`, `LevelKey`). `index.ts`: the registry, `raceLevel(seed)` (races and time trials: always Sky Isles) and `runLevel(runSeed, index, biome)` (roguelike levels, deterministic from the run seed and level number). `skyIsles.ts`: the race map, frozen |
-| `game/world/World.ts` | Everything a level decides: course, rock field, trees, palette; built from a `Level` (biome + seed + mood). `distance()` for collisions, `lost()` below the islands. No rendering |
+| `game/world/World.ts` | Everything a level decides: course, rock field, trees, palette; built from a `Level` (biome + seed + mood). `distance()` (rock, trees, water) for proximity, the camera and the fallback collisions; `otherDistance()` is everything but the rock (the rock collides as drawn, see `landCollider.ts`); `lost()` below the islands. No rendering |
 | `game/world/islands.ts` | `RockField`: the floating islands as one signed distance field (shapes melted with `smin`, roughened, a tube carved along the racing line) |
 | `game/world/mesher.ts`, `mesher.worker.ts` | Cuts chunks of the rock field into flat-shaded meshes in Web Workers, and places trees (from the grid's own vertices, so the race map's tree colliders never move; `treeSink` stretches a trunk down to snapped rock, drawn only). Workers rebuild the World from a `LevelKey` |
-| `game/world/snap.ts` | Makes the land drawn match the land you hit: `snapToSurface` moves surface-nets vertices onto the field's zero surface (Newton steps), `SurfaceCutter` splits faces whose edges or middles still stray more than 0.5 m (crack-free: an edge's split depends only on its ends). Used by both meshers (v2 at full detail only) |
+| `game/world/snap.ts` | Brings the land drawn close to the distance field: `snapToSurface` moves surface-nets vertices onto the field's zero surface (Newton steps), each kept inside its own cell; `SurfaceCutter` splits faces whose edges or middles still stray more than 0.5 m (crack-free: an edge's split depends only on its ends; midpoints move only across their edge, a face's middle only along its normal) and drops pieces that end up facing into the rock (never drawn, so never hit). Used by both meshers (v2 at full detail only) |
+| `game/world/landCollider.ts` | `LandCollider`: collisions with exactly the land drawn. Every land mesh on screen (Sky Isles chunks, shown v2 nodes, added and removed with them) as triangles in a lazily built grid per mesh; exact tests: ball, segment (sweeps between steps), convex quad (separating axes) and signed `nearest` (the crash tumble). Rock that is in the field but not drawn (thinner than the 6 m grid) is never hit |
 | `game/world/trees.ts` | Tree colliders and their lookup index. `Plant` is the collider of generator-v2 plants and structures: a tapered trunk, an optional canopy ellipsoid, an optional upright disc (a windmill's sails) an optional gate (two posts and a bar, open in between) and an optional hall (a long box: the ETH building's wings) |
 | `game/world/flora/` | Generator-v2 vegetation: `species.ts` (sizes, colliders), `meshes.ts` (models from primitives), `placement.ts` (`placeFlora`, run in the mesher workers: structures first, then plants keeping clear of them, then grass), `view.ts` (`FloraView`: one instanced pool per kind, impostor atlas, grass), `pool.ts` |
 | `game/world/structures/` | Built things (20 kinds: towers, lanterns, windmills, a monastery, a lighthouse, shrine gates…) riding the flora pipeline as extra kinds after a biome's species. `kinds.ts`: `StructureId`, `STRUCTURE_INFO` (collider, footprint, plinth depth, spinning parts), `kindInfo(biome, kind)`. `models.ts`: `structureGeometry` (1 m tall, true proportions, vertex color / sway / glow / spin). A biome lists them in `Biome.structures` (`StructureSpec`: spacing, chance, height, colors, `landmark` for one per stretch of the course, `where` site rules: above, lateral, wet, `water` depth, forest, hilltop, `on` ground or rock, facing the line). Species plus structures must fit the impostor atlas (16). Run biomes only; they collide |
 | `game/world/course.ts` | The racing line (a descending curve in z) and the gates along it |
 | `game/world/palette.ts` | The `Palette` type: a lighting mood (colors, sun elevation and azimuth, night factor, mist, effect glow), and `sunDirection(palette)`. Each biome lists its moods |
 | `game/world/atmosphere.ts` | `ATMOSPHERE` light uniforms shared per biome; `atmospheric()` patches Lambert materials (sun-tinted haze matching the sky, valley mist, backlit rims, rock strata); `skyMaterial()` (gradient, HDR sun or moon disc and halo, painted clouds, twinkling stars at night) |
-| `game/world/WorldView.ts` | Meshes for a World, as its biome describes them: land streamed from the workers (Sky Isles' chunks, or a `LandStreamer` for v2 land), pines, the sea of clouds and cloud puffs, sky, gates. `ready` is false until the land near you has arrived |
+| `game/world/WorldView.ts` | Meshes for a World, as its biome describes them: land streamed from the workers (Sky Isles' chunks, or a `LandStreamer` for v2 land), pines, the sea of clouds and cloud puffs, sky, gates. `ready` is false until the land near you has arrived. `collider` (a `LandCollider`) holds the land on screen; `covers(x, y, z)` says whether the land at a point is on screen (or there is none), else collisions there fall back to the distance field |
 | `game/world/crystals.ts` | Crystal gates: instanced crystals (bob, spin, pass flare and burst in the shader), veil discs with the pass shockwave, light pillars over the next gate and the finish |
 | `session/` | Solo, room, explore and run sessions wiring a `Game` to the network and UI. `ExploreSession`: free flight through any biome (`/?explore=verdant&seed=2`), nothing saved. `RunSession`: a roguelike run (`/?run=<seed>`), best score per run seed in localStorage |
 | `net/` | Server clock sync and the room connection (SSE down, POST up) |
@@ -154,6 +155,14 @@ Players never collide, so the server only relays positions.
   and the nose drops. Skimming rock (proximity) adds style points, a
   multiplier and acceleration. Crash means respawn at the last ring, with the
   clock still running.
+- **Collisions:** the pilot's hitbox (a ball and two wing rectangles,
+  `FLIGHT.hit*`) collides with the land **as drawn** (`LandCollider`: the
+  triangles on screen, plus sweeps so nothing slips through between steps),
+  and with trees, water and the sea by their distance fields. Where the land
+  isn't on screen yet, the rock's distance field stands in. Proximity, skim
+  spray, the camera and the glide-in still read the distance field. The race
+  map's field (`__raceHashes()` dist) never changes; only what you crash on
+  follows the mesh.
 - **Rendering:** `Game.loop` interpolates between physics states, animates
   the avatar on top, updates effects, then renders. High quality uses an
   `EffectComposer` (RenderPass → UnrealBloomPass → OutputPass) with HDR
@@ -195,6 +204,105 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Merged main's structures into Pengyue for the PR (Claude)
+
+- Merged `origin/main` (`37ed067`: structures in every run biome, stone
+  bridges, the ETH and Einstein Easter eggs). Code merged cleanly; README's
+  file table and this file conflicted. Kept both sides: `MIN_RADIUS` and
+  `Bridge` in the terrain row, `snap.ts` and `landCollider.ts` next to main's
+  `trees.ts`, `flora/` and `structures/` rows, both change logs, and one
+  hitbox follow-up in Next up (the obsolete "thin features still collide
+  where nothing is drawn" item is gone: the land collider fixed that).
+- Structures collide through `World.trees` (`otherDistance`), and the bridge
+  is rock, so it collides as drawn.
+- Verified: build and lint pass; 27 frontend tests (Node 24 in Docker) and
+  22 backend tests pass. Not looked at in a browser after the merge.
+
+### 2026-10-10: `docker compose up --build` looked stuck at `npm ci` (Claude)
+
+Reported: the build hangs at `Step 4/10 : RUN npm ci`. Not reproduced: on
+this machine (Colima, 4 CPUs, 4 GiB) the step finished in 1 to 2 min and
+the stack served `/` and `/api/time`. DNS and connect take milliseconds, but
+downloads from npm run at about 0.5 MB/s (single tarballs 50 to 120 s), and
+without `docker buildx` Compose falls back to the classic builder, which
+prints nothing until a step ends.
+- `frontend/Dockerfile`: `npm ci --no-audit --no-fund --loglevel=http`, so
+  every download is logged and a slow build is distinguishable from a hung
+  one.
+- Verified: `docker compose build --no-cache frontend` and
+  `docker compose up --build -d`; `/` returns 200. The user's own hang is
+  not diagnosed yet (needs their log). Installing `docker-buildx` would add
+  live progress and npm cache mounts.
+
+### 2026-10-10: Collisions with the land exactly as drawn (Claude)
+
+Asked for: make absolutely sure the terrain's hitbox matches the visuals,
+even for thin islands; where needed, change the generation so thin isles
+like the poles in some maps become unlikely. A deliberate gameplay change
+(rule 6): crashes now follow the mesh, in races too.
+- **Why the field couldn't do it**: the land is meshed on a 6 m grid, so
+  anything thinner (needle tips, thin rings, slivers of noise) is in the
+  distance field but drawn broken or not at all. On Sky Isles (seed 42),
+  about 2% of points within 2 m of the rock were "rock the field has, but
+  nothing drawn there"; the old hitbox crashed on every one of them.
+- **`world/landCollider.ts`** (new): the triangles of every land mesh on
+  screen, added and removed with them (Sky Isles chunks in `WorldView`,
+  shown nodes in `LandStreamer`), each in a grid built the first time
+  something comes near. Exact tests: ball against triangles, segments
+  (Möller–Trumbore), convex quads (separating axes), signed `nearest`.
+- **`Game.step`**: the body ball and both wing rectangles where they are
+  now, plus the paths of the ball and both wingtips since the last step (so
+  nothing slips through a thin sheet between steps), against the land drawn
+  (`landTouched`). Trees, water and the sea still collide by their fields
+  (`World.otherDistance`). Where the land around you isn't on screen yet
+  (`WorldView.covers`), the rock's distance field stands in. The crash's
+  normal is the face's. Measured: 0.02 ms per step right next to rock,
+  0.03 ms on average over 21 s of autopilot flight on Sky Isles (grids
+  built as the land streams in included). The racing-line autopilot crashed
+  once in those 21 s (a wing, z ≈ 395); with the distance field alone it
+  crashed too (the body, z ≈ 233): it was never crash-proof.
+  Of 12 "invisible rock" points, the mesh hitbox touched 2 (the wings
+  reaching real rock nearby), the old one all 12.
+- **Meshes made honest**: snapping (previous entry) folded about 4% of
+  faces over, back to front: never drawn (back faces are culled), but there
+  to hit. Vertices now stay inside their own cell, edge midpoints move only
+  across their edge (at most 30% of its length), a face's middle only along
+  its normal, and any piece still facing into the rock is dropped (seen from
+  outside it was never visible). Face centres are a little further from the
+  field than before (mean 0.40 m, p95 1.35 m on Sky Isles).
+- **Tumble** (`death.ts`): contacts through `Game.contact` (the land drawn
+  where it's shown), looking up to 3 m behind a face so a point that started
+  deep (a wingtip in the rock at the crash) is still pushed out; the pose is
+  animated before the contacts so what's drawn is resolved; up to four
+  position passes per step; a wing still wedged (under an overhang, in a
+  slot) is folded in (`Avatar.foldWings`). In the last 10 test crashes on
+  Sky Isles, two still had a point in the rock for a moment (0.3 m for 4
+  frames, 0.8 m for 9 frames, in the same slot); four more runs at that
+  spot were clean.
+- **Generation** (v2 biomes; Sky Isles is frozen): `MIN_RADIUS` (4.5 m) in
+  `shapes.ts`: a spire's tapering end stops (rounded) where it would get
+  thinner than the grid holds, a sea stack's notch stops short of it, a
+  spire thin all along shrinks to a stub, and rock rings' tubes are at least
+  that thick. Shards start from 6 m (Ember, Glacier, Aurora). Needles and
+  spikes keep about the height that was drawn before. Ember seed 1: 0.5% of
+  near-rock points are field-only rock (Sky Isles: 2%). Runs' levels change
+  a little.
+- **Crash camera under overhangs**: when the sky over the pilot is blocked,
+  the fall camera now lowers its arc (70°, then 50, 30, 12) to the first
+  angle with a clear view instead of being pulled in against the pilot
+  (`CameraRig.fall`, `FALL_ANGLES`).
+- Race hashes: trees, dist and rings unchanged; mesh changed (new values in
+  `docs/dev-snippets.js`).
+- Rebased onto `main` (`30f2d85`: the rebased Pengyue work and the new
+  flight controls) and merged into `Pengyue`; collisions keep the
+  `speed-control-v3` rules tag (not bumped: that would hide every v3 time).
+  The 20 frontend tests pass (run on Node 22.14 with an equivalent
+  `module.register` resolver; `tests/register.mjs` needs Node ≥ 22.15).
+- Verified: build and lint pass. In Chrome: crashes of every kind on Sky
+  Isles through the mesh path (`land: true`), the measurements above,
+  Glacier and Ember after the generation change; no console errors. Not
+  measured in a focused window; not played with a mouse.
 
 ### 2026-10-10: A bust of Einstein as a second Easter egg (Claude)
 
@@ -1272,16 +1380,22 @@ ported to the islands world:
   for species plus structures; Verdant's cottages and shrine gates aren't
   built; the windmill is plain up close (no balcony, few windows).
 
+- **Hitbox and land follow-ups**: proximity (style points), skim spray and
+  the glide-in still read the distance field, so rock that isn't drawn can
+  still give a few style points or a puff of spray (never a crash). The
+  crash tumble can still clip for a few frames when wedged in a slot
+  narrower than the body (2 of 10 test crashes, briefly). About 1.7% of
+  vertical rays through Sky Isles cross the mesh inconsistently (slivers
+  where snapped faces meet); harmless for flying, it can confuse the
+  tumble's inside test. Coarse v2 nodes (12 m and up) aren't snapped. The
+  extra rock triangles (about 4×) want a frame-time check in a focused
+  window; `SurfaceCutter`'s tolerance (0.5 m) is the knob. Remote pilots
+  don't use the hitbox (they never crash).
+
 - Play through the integrated portal/finale and victory lap; check multiplayer
   and gamepad controls. Make the explore debug panel usable at narrow widths
   without covering the HUD.
 
-- **Hitbox and land follow-ups**: features thinner than the 6 m grid (thin
-  needles, sharp spikes) still collide where nothing is drawn (snapping
-  leaves those vertices; p99 at face centres is about 2 m). Coarse v2 nodes
-  (12 m and up) aren't snapped. The extra rock triangles (about 4×) want a
-  frame-time check in a focused window; `SurfaceCutter`'s tolerance (0.5 m)
-  is the knob. Remote pilots don't use the hitbox (they never crash).
 - `__crash` teleports the pilot 5 m from the rock: the crash often comes in
   the first frame, before the avatar's pose has updated, so that frame's wing
   points are stale. Harmless in play.
