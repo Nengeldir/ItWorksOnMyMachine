@@ -5,6 +5,7 @@ import { ATMOSPHERE } from "./world/atmosphere";
 import { ANIM, FX } from "./tuning";
 import { clamp, smoothstep } from "./math";
 import { DISSOLVE_AT, type DeathKind } from "./death";
+import type { ItemSlot } from "./items/models";
 
 // The pilot: a small cel-shaded flyer with Genshin / Sky proportions (a big
 // head, slim limbs), a Sky-style cape, a scarf, and a pair of feathered
@@ -299,6 +300,14 @@ export class Avatar {
   private detailed = true;
   /** 0..1 while a barrel roll is under way */
   barrelProgress = -1;
+  /** Where carried items go: on the back (the firework), on the head (helmets), in the right hand */
+  readonly slots: Record<ItemSlot, THREE.Object3D>;
+  /**
+   * Blends the right arm towards a pose, for item animations (items/equip.ts):
+   * `amount` 0..1, shoulder angles in radians (z raises the arm towards the
+   * head, x swings it to the back), `elbow` bends the forearm
+   */
+  readonly armPose = { amount: 0, x: 0, y: 0, z: 0, elbow: 0 };
   /** A crash playing out: the body flails, then goes limp (Game moves `group`) */
   private death: { kind: DeathKind; t: number; side: number } | null = null;
 
@@ -522,6 +531,18 @@ export class Avatar {
     };
     this.right = makeSide(1);
     this.left = makeSide(-1);
+
+    // Item slots: between the shoulder blades over the cape, the middle of the head, the right palm
+    const back = new THREE.Object3D();
+    back.position.set(0, -0.12, 0.25);
+    this.chest.add(back);
+    const crown = new THREE.Object3D();
+    crown.position.set(0, 0.15, 0);
+    this.head.add(crown);
+    const hand = new THREE.Object3D();
+    hand.position.set(0, -0.215, -0.02);
+    this.right.elbow.add(hand);
+    this.slots = { back, head: crown, hand };
 
     // The cape: wide, long and rippling, with a golden hem and an emblem
     this.cape = new Cloth(
@@ -753,6 +774,16 @@ export class Avatar {
       const kick = Math.sin(t * 2.4 + (s > 0 ? 0 : 1.6)) * 0.06 * calm;
       side.hip.rotation.set(0.06 + kick, 0, 0.05 * s - turn * 0.12 * A.limbSwing);
       side.knee.rotation.set(-0.32 - clamp(this.climb, 0, 1) * 0.35 - kick * 1.4 - barrelTuck * 0.4, 0, 0);
+    }
+
+    // Item animations take over the right arm
+    const arm = this.armPose;
+    if (arm.amount > 0) {
+      const k = clamp(arm.amount, 0, 1);
+      const sh = this.right.shoulder.rotation;
+      sh.set(sh.x + (arm.x - sh.x) * k, sh.y + (arm.y - sh.y) * k, sh.z + (arm.z - sh.z) * k);
+      const el = this.right.elbow.rotation;
+      el.z += (arm.elbow - el.z) * k;
     }
 
     // Ponytail trails the head and swings

@@ -12,7 +12,8 @@ export type Screen =
   | { kind: "solo"; seed: number }
   | { kind: "room"; code: string }
   | { kind: "explore"; biome: BiomeId; seed: number }
-  | { kind: "run"; seed: number };
+  | { kind: "run"; seed: number }
+  | { kind: "gallery" };
 
 // Screens live in the URL, so a room link can be shared and reloads keep you in place
 function screenFromUrl(): Screen {
@@ -25,6 +26,7 @@ function screenFromUrl(): Screen {
   const seed = Number(params.get("seed"));
   const run = Number(params.get("run"));
   if (Number.isInteger(run) && run >= 1 && run < 2 ** 31) return { kind: "run", seed: run };
+  if (params.has("gallery")) return { kind: "gallery" };
   const explore = params.get("explore");
   if (explore && ExploreSession.valid(explore)) {
     return { kind: "explore", biome: explore, seed: Number.isInteger(seed) && seed >= 1 ? seed : 1 };
@@ -38,6 +40,7 @@ function urlFor(screen: Screen): string {
   if (screen.kind === "room") return `/?room=${screen.code}`;
   if (screen.kind === "explore") return `/?explore=${screen.biome}&seed=${screen.seed}`;
   if (screen.kind === "run") return `/?run=${screen.seed}`;
+  if (screen.kind === "gallery") return "/?gallery";
   return "/";
 }
 

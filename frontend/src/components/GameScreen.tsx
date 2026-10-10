@@ -9,6 +9,8 @@ import { UPGRADES } from "../game/run/upgrades";
 import { BIOMES } from "../game/world/biomes";
 import { ExploreSession } from "../session/ExploreSession";
 import { RunSession } from "../session/RunSession";
+import { ITEMS } from "../game/items/models";
+import type { ItemGallery } from "../game/items/gallery";
 import { RunHud, TitleCard, UpgradePicker } from "./RunHud";
 import { RoomSession } from "../session/RoomSession";
 import { SoloSession } from "../session/SoloSession";
@@ -363,6 +365,60 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
   );
 };
 
+// --- Item gallery ------------------------------------------------------------------
+
+/** Every item model, and the pilot showing how they're taken out, worn and used */
+const GalleryScreen = ({ onExit }: { onExit: () => void }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const gallery = useRef<ItemGallery | null>(null);
+  const [demo, setDemo] = useState(true);
+  useEffect(() => {
+    let disposed = false;
+    void import("../game/items/gallery").then(({ ItemGallery }) => {
+      if (disposed || !ref.current) return;
+      gallery.current = new ItemGallery(ref.current);
+      if (import.meta.env.DEV) Object.assign(window, { __gallery: gallery.current });
+    });
+    return () => {
+      disposed = true;
+      gallery.current?.dispose();
+      gallery.current = null;
+    };
+  }, []);
+  const act = (f: (g: ItemGallery) => void) => {
+    if (!gallery.current) return;
+    f(gallery.current);
+    setDemo(false);
+  };
+  return (
+    <div className="game">
+      <div ref={ref} className="game-view" />
+      <TopBar title="Item gallery" onExit={onExit} />
+      <aside className="panel glass gallery-panel">
+        <header className="panel-head">
+          <small>Models and animations{demo ? " · demo playing" : ""}</small>
+          <h2>Items</h2>
+        </header>
+        <p className="hint">Put one on the pilot. What they do in a run comes later.</p>
+        <div className="gallery-items">
+          {ITEMS.map((item) => (
+            <button key={item.id} onClick={() => act((g) => g.equip(item.id))}>
+              {item.name}
+              <small>{item.slot === "back" ? "on the back" : item.slot === "head" ? "on the head" : "in hand"}</small>
+            </button>
+          ))}
+        </div>
+        <div className="row">
+          <button onClick={() => act((g) => g.use())}>Eat / use</button>
+          <button onClick={() => act((g) => g.thrust(true))}>Firework on</button>
+          <button onClick={() => act((g) => g.thrust(false))}>Off</button>
+          <button onClick={() => act((g) => g.clear())}>Put away</button>
+        </div>
+      </aside>
+    </div>
+  );
+};
+
 /** Shown instead of the game when the browser can't create a WebGL context */
 const NoWebGL = ({ onExit }: { onExit: () => void }) => (
   <div className="game">
@@ -398,6 +454,7 @@ const GameScreen = ({ screen, onNewRun, ...props }: ScreenProps & { screen: Excl
   if (!webglAvailable()) return <NoWebGL onExit={props.onExit} />;
   if (screen.kind === "explore") return <ExploreScreen biome={screen.biome} seed={screen.seed} {...props} />;
   if (screen.kind === "run") return <RunScreen seed={screen.seed} onNewRun={onNewRun} {...props} />;
+  if (screen.kind === "gallery") return <GalleryScreen onExit={props.onExit} />;
   return screen.kind === "solo" ? (
     <SoloScreen seed={screen.seed} {...props} />
   ) : (
