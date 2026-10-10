@@ -256,7 +256,10 @@
 .run-picker {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse at center, rgba(12, 8, 32, 0.7) 0%, rgba(12, 8, 32, 0.35) 70%, rgba(12, 8, 32, 0.15) 100%);
+  /* Over the dark wormhole: light text, a soft dark pool behind the cards */
+  color: #f4f0ff;
+  background: radial-gradient(ellipse at center, rgba(8, 6, 24, 0.45) 0%, rgba(8, 6, 24, 0.15) 60%, rgba(8, 6, 24, 0) 100%);
+  animation: run-picker-in 0.8s ease-out both;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -280,6 +283,21 @@
   margin-top: 0.6rem;
 }
 
+@keyframes run-picker-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.run-picker p {
+  color: rgba(244, 240, 255, 0.8);
+}
+
 .run-picker .card {
   position: relative;
   width: 14rem;
@@ -290,8 +308,10 @@
   gap: 0.4rem;
   padding: 1.1rem 1rem 1.6rem;
   border-radius: 16px;
-  background: rgba(20, 16, 40, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(24, 20, 52, 0.62);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 30px rgba(140, 170, 255, 0.12) inset;
   color: inherit;
   text-shadow: none;
   cursor: pointer;
@@ -320,7 +340,13 @@
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: var(--ink-70);
+  color: rgba(244, 240, 255, 0.6);
+}
+
+.run-picker .card kbd {
+  color: #f4f0ff;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
 .run-picker .card .text {

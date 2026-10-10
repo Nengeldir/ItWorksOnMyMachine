@@ -212,7 +212,47 @@ export function installDevtools() {
     return { wanted: kind, played: g.death.kind, crashed: crashedAt !== null, normal: spot.n.toArray().map((v: number) => +v.toFixed(2)) };
   };
 
-  Object.assign(window, { __shot: shot, __raceHashes: raceHashes, __run: run, __bench: bench, __crash: crash });
+  /**
+   * In a run: puts the pilot 30 m in front of the level's portal, aimed at it,
+   * streams the land there, then flies in and steps the loop for `after`
+   * seconds past the moment of crossing (the transition's stages: blur in,
+   * the wormhole, the upgrade pick). Returns the run's phase.
+   */
+  const portal = async (after = 0.3) => {
+    const g = (window as unknown as { __game: Game }).__game as unknown as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    cancelAnimationFrame(g.frame);
+    const r = g.run;
+    if (!r) return { error: "not a run" };
+    const p = r.portals[0];
+    g.freeze(false);
+    g.flight.reset(p.position.clone().addScaledVector(p.normal, -30), p.normal.clone(), 35);
+    g.glide.stop();
+    g.prevPosition.copy(g.flight.position);
+    g.prevQuaternion.copy(g.flight.quaternion);
+    g.rig.snap(g.flight.position, g.flight.forward, g.flight.up, 35);
+    const deadline = performance.now() + 15000;
+    while (!g.view.ready && performance.now() < deadline) {
+      g.rig.camera.updateMatrixWorld();
+      g.view.update(g.rig.camera, 0);
+      await settle();
+    }
+    const input = { pitch: 0, roll: 0 };
+    g.input.sample = () => input;
+    let t = performance.now();
+    let crossed: number | null = null;
+    for (let i = 0; i < 60 * 20; i++) {
+      t += 1000 / 60;
+      g.loop(t);
+      cancelAnimationFrame(g.frame);
+      if (crossed === null && r.phase === "portal") crossed = g.elapsed;
+      if (crossed !== null && g.elapsed - crossed >= after) break;
+      if (i % 6 === 0) await settle();
+    }
+    delete g.input.sample;
+    return { phase: r.phase, crossed: crossed !== null };
+  };
+
+  Object.assign(window, { __shot: shot, __raceHashes: raceHashes, __run: run, __bench: bench, __crash: crash, __portal: portal });
 }
 
 /**
