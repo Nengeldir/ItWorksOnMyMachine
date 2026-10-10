@@ -104,7 +104,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/world/crystals.ts` | Crystal gates: instanced crystals (bob, spin, pass flare and burst in the shader), veil discs with the pass shockwave, light pillars over the next gate and the finish |
 | `session/` | Solo, room, explore and run sessions wiring a `Game` to the network and UI. `ExploreSession`: free flight through any biome (`/?explore=verdant&seed=2`), nothing saved. `RunSession`: a roguelike run (`/?run=<seed>`), best score per run seed in localStorage |
 | `net/` | Server clock sync and the room connection (SSE down, POST up) |
-| `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, controls, and the run's HUD, title card and upgrade picker (`RunHud.tsx`). The menu's live course behind the glass is `MenuBackdrop` (a `Game` in `drift` attract mode); today's best folds into a flag (`TodaysBest`). `GameScreen`'s `Panel` folds to its heading and main buttons on narrow screens; its `TopBar` asks before leaving a run |
+| `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, controls, and the run's HUD, title card and upgrade picker (`RunHud.tsx`). The menu's live course behind the glass is `MenuBackdrop` (a `Game` in `drift` attract mode); today's best folds into a flag (`TodaysBest`). `GameScreen`'s `Panel` folds to its heading and main buttons on narrow screens |
 | `theme.ts` | The UI's colors per map: `useUiTheme(seed)` sets `--ink` (picked per palette name, else derived from the sky) and `--tint` (the horizon); every other shade comes from those two with `color-mix()` |
 | `media.ts` | `useMediaToggle(query)`: an open/closed toggle that starts open where a media query matches and follows the screen when it changes |
 
@@ -164,15 +164,14 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 ### 2026-10-10: UX fixes from playtesting (Claude)
 
 Asked for by the UX group: fix the problems found while playtesting, on
-`shiyu-ux` (seven commits), then `origin/main` merged in.
+`shiyu-ux`, then `origin/main` merged in. Six fixes stay; a seventh (Menu
+asking before it throws a run away) was reverted the same day, because the
+in-game UI isn't settled and misclicks should be judged on the new one.
 
 - **Landing page:** the `?backdrop=` switch is gone; the backdrop always
   drifts (`chase` stays in `Game` for a results screen). A page left open past
   UTC midnight now switches to the new daily course: the countdown tick also
   re-reads `dailySeed()` (`Menu.tsx`).
-- **Leaving a run:** Menu asks first ("Keep flying" / "Leave") while a time
-  trial is running or you're flying a room race; in warm-up, results and the
-  lobby it leaves at once. `TopBar` (`GameScreen.tsx`) takes a `leaveWarning`.
 - **Narrow screens:** below 700 px the course, results and lobby panels fold to
   their heading and main buttons; a chevron opens the rest (`Panel` in
   `GameScreen.tsx`). `useMediaToggle` (`media.ts`) is shared with the
@@ -199,11 +198,10 @@ Asked for by the UX group: fix the problems found while playtesting, on
   islands and v2 land.
 - Verified: `npm run build` and `npm run lint` pass. `__raceHashes()` matches
   `docs/dev-snippets.js` for seeds 1, 7 and 42 (trees, dist, rings). In
-  headless Chromium (software GL), after the merge: the Menu confirmation in a
-  time trial and in a room race, panels folded on a 390 px phone and open at
-  1440 px, the marker inside the screen with the ring off to every side, the
-  crash HUD, the midnight switch (fake clock) and the start-heading
-  simulation. Not checked: a real GPU window, touch input, and the run mode
+  headless Chromium (software GL), after the merge: panels folded on a 390 px
+  phone and open at 1440 px, the marker inside the screen with the ring off to
+  every side, the crash HUD, the midnight switch (fake clock) and the
+  start-heading simulation. Not checked: a real GPU window, touch input, and the run mode
   with these changes.
 
 ### 2026-10-10: Merged main's menu and UI redesign (Claude)
@@ -603,8 +601,12 @@ ported to the islands world:
   runs and explore keep the menu's colors. Theme by the level's palette.
 - Restyle the run HUD, upgrade picker and run summary for the glass look
   (only the tokens were mapped).
-- The run's screens don't use the folding `Panel` yet, and leaving a run has
-  no confirmation; the time trial and rooms have both (UX fixes above).
+- The run's screens don't use the folding `Panel` yet (the time trial and
+  rooms do, see the UX fixes above).
+- Misclicks that throw a run away, to judge once the in-game UI is settled
+  (a Menu confirmation was tried and reverted): Menu in any mode, the
+  browser's Back (mouse side button, touchpad swipe, Alt+←), and Backspace,
+  which abandons a running time trial and isn't in the controls list.
 - `theme.ts` has no picked ink for Sky Isles' **Starlight** mood, so it gets
   the one derived from its sky; pick one by eye.
 - Leaderboard times from before the 2026-10-10 start-heading change were flown
