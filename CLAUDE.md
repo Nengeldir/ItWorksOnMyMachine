@@ -4,6 +4,32 @@ This file is Claude's memory for Wingrace. Claude Code loads it automatically
 at the start of every session in this repository. Read all of it before
 touching code, and keep it true.
 
+## The most important point: Genshin Impact and Sky (光遇)
+
+**Wingrace is a Genshin Impact and Sky: Children of the Light (光遇) styled
+game.** Every model, animation, effect, screen and piece of UI goes in that
+direction. When in doubt, ask "would this fit in Genshin or in Sky?", and if
+not, change it.
+
+- **Models:** cel-shaded (`toonMaterial`, three light bands, rim light, ink
+  outlines), chibi-to-anime proportions, soft rounded silhouettes, readable
+  shapes, warm saturated colors with gold trims, capes, scarves and feathers.
+  No realistic or gritty assets, no photo textures.
+- **Animation:** floaty, graceful and expressive, like Sky's gliding and
+  Genshin's wind glider: springy leans, flowing cloth, wingbeats with
+  anticipation and follow-through, cute reactions (dizzy stars, squash and
+  stretch). Even failure (crashes) stays gentle and charming, and ends in
+  light, not gore.
+- **Aesthetics:** painted skies, light motes and glowing particles, bloom on
+  the things that matter, golden-hour and moonlit moods, vast and peaceful
+  spaces (Sky's Isle of Dawn, Genshin's Teyvat vistas). Light and color guide
+  the player.
+- **UI:** soft glass panels, rounded shapes, gentle motion; elegant, never
+  cluttered.
+
+Everything below (rules, performance, determinism) still applies; this
+decides how things should look and feel.
+
 ## Rules for working on this project
 
 1. **Read this file first.** Before planning or editing, read this file, then
@@ -161,6 +187,13 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Art direction made explicit (Claude)
+
+Asked for: state as the most important point that the game is Genshin
+Impact and Sky (光遇) oriented. New first section, "The most important
+point", with what that means for models, animation, aesthetics and UI. Docs
+only.
 
 ### 2026-10-10: Glide in while the land loads (Claude)
 
