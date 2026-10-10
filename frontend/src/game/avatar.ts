@@ -275,6 +275,10 @@ export class Avatar {
   private readonly right: Side;
   private readonly cape: Cloth;
   private readonly scarf: Cloth[];
+  // Conservative bounds of the animated legs, reused for cloth self-collision.
+  private readonly clothObstacles: { mesh: THREE.Mesh; local: THREE.Box3; bounds: THREE.Box3 }[] = [];
+  private readonly clothInverse = new THREE.Matrix4();
+  private readonly clothMatrix = new THREE.Matrix4();
   private readonly painted: Painted[] = [];
   private readonly outlines: THREE.Mesh[] = [];
   private readonly materials: THREE.Material[] = [];
@@ -376,6 +380,10 @@ export class Avatar {
         this.outlines.push(outline);
       }
       return mesh;
+    };
+    const clothObstacle = (mesh: THREE.Mesh) => {
+      mesh.geometry.computeBoundingBox();
+      this.clothObstacles.push({ mesh, local: mesh.geometry.boundingBox!.clone(), bounds: new THREE.Box3() });
     };
 
     // Pelvis: a flared tunic hem, belt and buckle
@@ -507,18 +515,18 @@ export class Avatar {
       const hip = new THREE.Object3D();
       hip.position.set(0.062 * s, -0.04, 0);
       this.pelvis.add(hip);
-      part(hip, new PartBuilder().add(capsule(0.05, 0.2), "white", [0, -0.14, 0]));
+      clothObstacle(part(hip, new PartBuilder().add(capsule(0.05, 0.2), "white", [0, -0.14, 0])));
       const knee = new THREE.Object3D();
       knee.position.set(0, -0.29, 0);
       hip.add(knee);
-      part(
+      clothObstacle(part(
         knee,
         new PartBuilder()
           .add(capsule(0.042, 0.18), "dark", [0, -0.13, 0])
           .add(new THREE.TorusGeometry(0.046, 0.013, 6, 12), "trim", [0, -0.03, 0], [Math.PI / 2, 0, 0])
           // Pointed toes, like a dancer's
           .add(capsule(0.034, 0.08), "dark", [0, -0.3, -0.012], [0.25, 0, 0]),
-      );
+      ));
 
       // Wings: an inner arm-wing and an outer hand-wing, each a fan of feathers
       const wing = new THREE.Object3D();
@@ -864,6 +872,15 @@ export class Avatar {
   private updateCloth(wave: number, leanX: number, pitch: number, spread = 1) {
     const A = ANIM;
     const ct = this.clothTime;
+    // Cloth is in chest space, whereas the legs follow the pelvis. Resolve
+    // their current pose before shaping it, including knees bent by climbing,
+    // braking, abilities or a crash. Never alter the limbs or flight hitbox.
+    this.body.updateWorldMatrix(true, true);
+    this.clothInverse.copy(this.chest.matrixWorld).invert();
+    for (const obstacle of this.clothObstacles) {
+      this.clothMatrix.multiplyMatrices(this.clothInverse, obstacle.mesh.matrixWorld);
+      obstacle.bounds.copy(obstacle.local).applyMatrix4(this.clothMatrix);
+    }
     this.capeShape = (u, v, out) => {
       const width = 0.11 + 0.2 * Math.pow(v, 0.8) * spread;
       const w =
@@ -874,6 +891,7 @@ export class Avatar {
         0.245 - v * 1.18,
         0.085 + 0.06 * v + 0.12 * v * v + 0.05 * (1 - u * u) * v + w - pitch * v * v,
       );
+      this.clearCloth(out);
     };
     this.cape.update(this.capeShape);
     this.scarf.forEach((cloth, i) => {
@@ -886,8 +904,21 @@ export class Avatar {
           0.27 - v * length,
           0.13 + 0.08 * v + 0.16 * v * v + wave * 1.4 * v * Math.sin(phase) - pitch * v,
         );
+        this.clearCloth(out);
       });
     });
+  }
+
+  /** Keep cloth behind the legs (+z in chest space), with a soft drape around them. */
+  private clearCloth(out: THREE.Vector3) {
+    for (const { bounds } of this.clothObstacles) {
+      // Cover half a cloth grid cell beyond the bounds so triangles between
+      // samples also clear the boots. The z gap includes their ink outlines.
+      const dx = Math.max(bounds.min.x - out.x, out.x - bounds.max.x, 0);
+      const dy = Math.max(bounds.min.y - out.y, out.y - bounds.max.y, 0);
+      const drape = 1 - smoothstep(0.06, 0.12, Math.max(dx, dy));
+      out.z += Math.max(0, bounds.max.z + 0.025 - out.z) * drape;
+    }
   }
 
   /** Starts the crash animation of this kind; `side` is the wing that hit (1 right, -1 left) */

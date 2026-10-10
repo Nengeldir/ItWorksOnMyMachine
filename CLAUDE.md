@@ -354,6 +354,30 @@ old times or ghosts had to be kept. A deliberate gameplay change (rule 6).
   second pilot), every map's race by hand, a run through a portal to its
   second map by hand (the test checks the order).
 
+### 2026-10-10: Keep the feet beneath the cape at low speed
+
+- Traced the glitch to geometry overlap: stronger low-speed cape ripples and
+  bent knees let the boots pass through cloth animated independently of the legs.
+- `frontend/src/game/avatar.ts`: reuse bounds of the animated thighs and boots
+  in chest space, and smoothly push overlapping cape and scarf vertices behind
+  them. Clearance includes ink outlines and spacing between cloth samples, so
+  the connecting triangles also cover the boots. Bounds and matrices are reused;
+  flight physics, gameplay collisions, timing and scoring are unchanged.
+- Added `frontend/tests/avatar.test.mjs`: eight regression scenarios covering
+  stationary/slow climbing, braking turns, hover, surf, fast boost, ghosts and
+  crashes. The regression file fails with the original avatar code and passes
+  with the fix.
+- Verified frontend production build and lint; the build retains its existing
+  bundle-size warning. Full test run: 12 test files pass, seven pre-existing
+  untracked test files fail (camera, debug, flight-realism, input, terrain-arches,
+  terrain-audit and terrain-minimum). Confirmed those same seven failures with
+  the original avatar code; some import missing modules. Backend untouched.
+- Headless Firefox: overlap in 399 of 600 low-speed frames before the fix,
+  none afterward across 604,800 sampled boot positions. Inspected the isolated
+  pilot from rear/side views, in day/night lighting and ability/crash poses;
+  no JavaScript errors. Manual gameplay and focused-window performance remain
+  unverified.
+
 ### 2026-10-10: Review PR #33 against current main
 
 - Resolved the change-log conflict with main, preserving the Adventure UX
