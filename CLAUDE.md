@@ -194,6 +194,37 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Rebase settings onto the latest UX changes
+
+- Rebased settings onto main `35aa2d2`, preserving the redesigned flight HUD,
+  ready cards, course selector, course snapshots and persistent menu backdrop.
+  Settings stays available from the menu and pause screen; the new HUD keeps
+  its uncluttered bars instead of restoring the removed boost-key line.
+- Verified production build, lint and all 24 frontend tests after rebase.
+  Browser smoke checks: menu Settings, course selector, pause Settings, and
+  closing the dialog leaves gameplay paused. Real-gamepad/audio checks remain
+  outstanding as listed below.
+
+### 2026-10-10: Shared settings menu and configurable controls
+
+- New `settings` branch from current main. Added a shared, scrollable native
+  settings dialog in the menu and pause HUD (solo, rooms, explore and runs).
+  Focus stays inside the modal; Escape cancels rebinding or closes it, and
+  closing returns to pause. Keyboard/gamepad actions are blocked while open.
+- `bindings.ts`, `input.ts`: primary/alternate keyboard bindings with conflict
+  detection and reserved navigation keys; independent mouse/gamepad/keyboard
+  pitch inversion; adjustable stick dead zone. HUD, control sheet and adventure
+  ability hints follow bindings. Default mouse sensitivity is 2 (previously 1).
+- `storage.ts`: validates saved data, migrates legacy shared inversion, preserves
+  existing sensitivity, and falls back safely when storage is unavailable.
+- Added music/effects/wind volumes and mute, automatic/fixed graphics quality,
+  and reduced camera shake/FOV effects. Preferences also update the menu backdrop.
+- Verified frontend build/lint and 24 tests, including storage migration,
+  rebinding, input isolation, inversion and reduced camera motion. Browser:
+  menu entry, narrow layout, conflict rejection, saved boost binding in a new
+  session, pause rebinding P→O, updated hints, close stays paused and O resumes.
+  Real-gamepad feel and listening checks remain outstanding.
+
 ### 2026-10-10: In-game UI simplified, map select (Claude)
 
 Asked for by the UX group, on `shiyu-ux`: take text off the game screen to
@@ -1082,6 +1113,9 @@ ported to the islands world:
   through islands and gates, no console errors.
 
 ## Next up
+
+- Playtest the settings dead zone with a real gamepad and listen to the separate
+  audio levels; check mouse sensitivity 2× across different devices.
 
 - Play through the integrated portal/finale and victory lap; check multiplayer
   and gamepad controls. Make the explore debug panel usable at narrow widths

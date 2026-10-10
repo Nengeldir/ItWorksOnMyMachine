@@ -14,6 +14,9 @@ export class GameAudio {
   private wingbeat: AudioBuffer | null = null;
   private biome: { id: BiomeId; night: number } | null = null;
   private master: GainNode | null = null;
+  private effects: GainNode | null = null;
+  private musicVolume = 1;
+  private effectsVolume = 1;
   private windGain: GainNode | null = null;
   private windFilter: BiquadFilterNode | null = null;
   private rushGain: GainNode | null = null;
@@ -36,6 +39,9 @@ export class GameAudio {
     this.master = ctx.createGain();
     this.master.gain.value = this.muted || this.paused ? 0 : 0.8;
     this.master.connect(ctx.destination);
+    this.effects = ctx.createGain();
+    this.effects.gain.value = this.effectsVolume;
+    this.effects.connect(this.master);
 
     const length = ctx.sampleRate * 2;
     this.noise = ctx.createBuffer(1, length, ctx.sampleRate);
@@ -52,7 +58,7 @@ export class GameAudio {
     this.windFilter.type = "lowpass";
     this.windGain = ctx.createGain();
     this.windGain.gain.value = 0;
-    this.loop().connect(this.windFilter).connect(this.windGain).connect(this.master);
+    this.loop().connect(this.windFilter).connect(this.windGain).connect(this.effects!);
 
     // Rush: a hiss when skimming the rock
     const rushFilter = ctx.createBiquadFilter();
@@ -67,10 +73,11 @@ export class GameAudio {
     for (let i = 0; i < length; i++) whiteData[i] = Math.random() * 2 - 1;
     rush.buffer = white;
     rush.loop = true;
-    rush.connect(rushFilter).connect(this.rushGain).connect(this.master);
+    rush.connect(rushFilter).connect(this.rushGain).connect(this.effects!);
     rush.start();
 
     this.music = new MusicPlayer(ctx, this.master);
+    this.music.volume = this.musicVolume;
     if (this.biome) this.music.setBiome(this.biome.id, this.biome.night);
     fetch(import.meta.env.BASE_URL + WINGBEAT)
       .then((res) => (res.ok ? res.arrayBuffer() : Promise.reject(new Error(res.statusText))))
@@ -102,7 +109,7 @@ export class GameAudio {
     source.playbackRate.value = 0.92 + Math.random() * 0.16;
     const gain = this.ctx.createGain();
     gain.gain.value = volume * AUDIO.sfx;
-    source.connect(gain).connect(this.master);
+    source.connect(gain).connect(this.effects!);
     source.start();
   }
 
@@ -112,6 +119,14 @@ export class GameAudio {
     source.loop = true;
     source.start();
     return source;
+  }
+
+  setPreferences(music: number, effects: number, muted?: boolean) {
+    this.musicVolume = music; this.effectsVolume = effects;
+    if (muted !== undefined) this.muted = muted;
+    if (this.music) { this.music.volume = music; this.music.update(); }
+    if (this.effects && this.ctx) this.effects.gain.setTargetAtTime(effects, this.ctx.currentTime, 0.05);
+    this.updateVolume();
   }
 
   toggleMute(): boolean {
@@ -153,7 +168,7 @@ export class GameAudio {
     gain.gain.setValueAtTime(0, start);
     gain.gain.linearRampToValueAtTime(volume, start + 0.01);
     gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-    osc.connect(gain).connect(this.master);
+    osc.connect(gain).connect(this.effects!);
     osc.start(start);
     osc.stop(start + duration + 0.05);
   }
@@ -186,7 +201,7 @@ export class GameAudio {
     gain.gain.setValueAtTime(0.0001, now);
     gain.gain.exponentialRampToValueAtTime(0.5, now + 0.05);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
-    source.connect(filter).connect(gain).connect(this.master);
+    source.connect(filter).connect(gain).connect(this.effects!);
     source.start(now);
     source.stop(now + 0.4);
   }
@@ -223,7 +238,7 @@ export class GameAudio {
     const gain = this.ctx.createGain();
     gain.gain.setValueAtTime(1.2, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
-    source.connect(filter).connect(gain).connect(this.master);
+    source.connect(filter).connect(gain).connect(this.effects!);
     source.start(now);
     source.stop(now + 1);
     this.tone(90, 0.5, "sine", 0.5);

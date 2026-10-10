@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { defaultSettings } from "../src/storage.ts";
 import { Input } from "../src/game/input.ts";
 
 test("held controls, repeat handling, focus loss and gamepad disconnect", () => {
@@ -36,6 +37,27 @@ test("held controls, repeat handling, focus loss and gamepad disconnect", () => 
     assert.equal(input.hovering, false);
     key("ShiftLeft"); focused = false; assert.equal(input.sample(1/60).boost, 0);
     focused = true; assert.equal(input.sample(1/60).boost, 0);
+
+    input.settings = defaultSettings();
+    input.settings.bindings.boost = ["KeyG"];
+    input.settings.bindings.pause = ["KeyO"];
+    input.reset(); key("ShiftLeft"); assert.equal(input.sample(0).boost, 0);
+    key("KeyG"); assert.equal(input.sample(0).boost, 1);
+    const pausedBefore=actions.filter(a=>a==="pause").length;
+    key("KeyP"); key("KeyO"); assert.equal(actions.filter(a=>a==="pause").length,pausedBefore+1);
+    input.reset(); input.settings.invertMouse=true;
+    key("KeyW"); assert.equal(input.sample(0).pitch,-1, "mouse inversion leaves keyboard alone");
+    input.reset(); input.locked=true;
+    const move=new Event("mousemove"); Object.defineProperties(move,{movementX:{value:0},movementY:{value:10}});
+    doc.dispatchEvent(move); assert.ok(Math.abs(input.sample(0).pitch + 0.09)<1e-9, "default mouse gain is doubled and inverted");
+    input.reset(); input.settings.invertGamepad=true;
+    pads=[{connected:true,axes:[0,0.5],buttons:[]}]; assert.ok(input.sample(0).pitch<0);
+    pads=[{connected:true,axes:[0.1,0.1],buttons:[]}]; assert.equal(input.sample(0).pitch,0);
+    doc.querySelector=()=>({open:true});
+    const before=actions.length; key("KeyO"); key("KeyG");
+    pads=[{connected:true,axes:[1,1],buttons:Array.from({length:8},()=>({pressed:true,value:1}))}];
+    assert.deepEqual(input.sample(0),{pitch:0,roll:0,boost:0,brake:0});
+    assert.equal(actions.length,before,"a settings dialog blocks keyboard and gamepad actions");
   } finally {
     input.dispose(); delete globalThis.window; delete globalThis.document;
     if (originalNavigator) Object.defineProperty(globalThis, "navigator", originalNavigator);

@@ -1,4 +1,5 @@
 import type { ControlSettings } from "./game/input";
+import { defaultBindings, bindingActions, bindable, type Bindings } from "./game/bindings";
 
 // Per-browser conveniences. Storage can be unavailable (private windows), so
 // every access is wrapped and falls back to defaults.
@@ -10,15 +11,48 @@ export interface Settings extends ControlSettings {
 const SETTINGS_KEY = "wingrace.settings";
 const CLIENT_KEY = "wingrace.client";
 
-const DEFAULTS: Settings = { nickname: "", invertPitch: false, mouseSensitivity: 1 };
+export function defaultSettings(): Settings {
+  return { nickname: "", invertPitch: false, invertMouse: false, invertGamepad: false,
+    mouseSensitivity: 2, bindings: defaultBindings(), deadZone: 0.12,
+    reducedMotion: false, quality: "auto", musicVolume: 1, effectsVolume: 1, muted: false };
+}
+
+export function normalizeSettings(value: unknown): Settings {
+  const defaults = defaultSettings();
+  if (!value || typeof value !== "object" || Array.isArray(value)) return defaults;
+  const saved = value as Record<string, unknown>;
+  const number = (key: string, min: number, max: number, fallback: number) =>
+    typeof saved[key] === "number" && Number.isFinite(saved[key]) ? Math.max(min, Math.min(max, saved[key])) : fallback;
+  const flag = (key: string, fallback = false) => typeof saved[key] === "boolean" ? saved[key] : fallback;
+  const bindings = defaultBindings();
+  if (saved.bindings && typeof saved.bindings === "object") {
+    const candidate = saved.bindings as Bindings;
+    const used = new Set<string>();
+    let valid = true;
+    for (const action of bindingActions) {
+      const codes = candidate[action];
+      if (!Array.isArray(codes) || codes.length < 1 || codes.length > 2) { valid = false; break; }
+      for (const code of codes) {
+        if (typeof code !== "string" || !bindable(code) || used.has(code)) valid = false;
+        used.add(code);
+      }
+    }
+    if (valid) for (const action of bindingActions) bindings[action] = [...candidate[action]];
+  }
+  return { ...defaults, bindings,
+    nickname: typeof saved.nickname === "string" ? saved.nickname.slice(0,24) : "",
+    invertPitch: flag("invertPitch"), invertMouse: flag("invertMouse", flag("invertPitch")),
+    invertGamepad: flag("invertGamepad", flag("invertPitch")),
+    mouseSensitivity: number("mouseSensitivity", 0.3, 6, 2),
+    deadZone: number("deadZone", 0, 0.4, 0.12), reducedMotion: flag("reducedMotion"), muted: flag("muted"),
+    musicVolume: number("musicVolume", 0, 1, 1), effectsVolume: number("effectsVolume", 0, 1, 1),
+    quality: ["auto","high","medium","low"].includes(String(saved.quality)) ? saved.quality as Settings["quality"] : "auto",
+  };
+}
 
 export function loadSettings(): Settings {
-  try {
-    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}");
-    return { ...DEFAULTS, ...saved };
-  } catch {
-    return { ...DEFAULTS };
-  }
+  try { return normalizeSettings(JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}")); }
+  catch { return defaultSettings(); }
 }
 
 export function saveSettings(settings: Settings) {

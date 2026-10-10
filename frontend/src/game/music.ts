@@ -41,6 +41,7 @@ interface Voice {
 }
 
 export class MusicPlayer {
+  volume = 1;
   private readonly bus: GainNode;
   private readonly tone: BiquadFilterNode;
   private readonly buffers = new Map<TrackId, Promise<AudioBuffer | null>>();
@@ -76,7 +77,7 @@ export class MusicPlayer {
   /** Per frame: follows the volume and night sliders */
   update() {
     const now = this.ctx.currentTime;
-    this.bus.gain.setTargetAtTime(AUDIO.music * (1 - AUDIO.nightDim * this.night), now, 0.3);
+    this.bus.gain.setTargetAtTime(this.volume * AUDIO.music * (1 - AUDIO.nightDim * this.night), now, 0.3);
     this.tone.frequency.setTargetAtTime(20000 * Math.pow(0.12, AUDIO.nightMuffle * this.night), now, 0.5);
   }
 
