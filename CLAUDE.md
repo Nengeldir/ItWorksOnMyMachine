@@ -154,7 +154,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `session/` | Solo, room, explore and run sessions wiring a `Game` to the network and UI. `ExploreSession`: free flight through any biome (`/?explore=verdant&seed=2`), nothing saved; `?test` reuses it with a RunController for real portals/upgrades and unsaved victory previews, showing only test shortcuts rather than biome/light controls. `RunSession`: a roguelike run (`/?run=<seed>`), best score per run seed in localStorage |
 | `net/` | Server clock sync and the room connection (SSE down, POST up) |
 | `staleBuild.ts` | After a redeploy, an open tab's lazy chunks (bloom, `?tune`) and mesher worker are 404s: `reloadForNewBuild` reloads the page once (at most every 30 s, production only) |
-| `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, controls, and the run's HUD, title card and upgrade picker (`RunHud.tsx`). The menu's live course behind the glass is `MenuBackdrop` (a `Game` in `drift` attract mode, which switches courses with `setSeed` and snapshots each one for card art); today's best folds into a flag (`TodaysBest`). `CourseSelect` is the map select (a carousel of course cards; featured art in `public/courses/`). Before a race, `GameScreen`'s `ReadyCard` sits where the timer will be; its `Panel` (results) folds to its heading and main buttons on narrow screens. `Help` is the "?" with its How to fly card and the newcomer's "First flight?" (`keys.ts`: the keys as the player bound them) |
+| `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, controls, and the run's HUD, title card and upgrade picker (`RunHud.tsx`). The menu's live course behind the glass is `MenuBackdrop` (a `Game` in `drift` attract mode, which switches courses with `setSeed` and snapshots each one for card art); today's best folds into a flag (`TodaysBest`). `CourseSelect` is the map select (a carousel of course cards; featured art in `public/courses/`). Before a race, `GameScreen`'s `ReadyCard` sits where the timer will be; its `Panel` (results) folds to its heading and main buttons on narrow screens. `Help` is the "?" with its How to fly card and the newcomer's "First flight?" (`keys.ts`: the keys as the player bound them). `Coach` is the tutorial: one control at a time, watched on keys, mouse and gamepad |
 | `theme.ts` | The UI's colors per map: `useUiTheme(seed)` sets `--ink` (picked per palette name, else derived from the sky) and `--tint` (the horizon); every other shade comes from those two with `color-mix()` |
 | `route.ts` | The URL ↔ screen mapping (`screenFromSearch`, `urlFor`, `Screen`), pure so it's tested; `test` is honored on every single-player URL |
 | `media.ts` | `useMediaToggle(query)`: an open/closed toggle that starts open where a media query matches and follows the screen when it changes |
@@ -219,6 +219,31 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: The interactive tutorial (Claude)
+
+Asked for by the UX group, on `shiyu-tutorial`: if a newcomer says yes to
+the tutorial, a short practice flight before the first level, a prompt for
+each main control, moving on once it's used; under 30 seconds, skippable.
+
+- **`Coach`** (`Coach.tsx`, `Coach.css`): a card where the start button
+  goes asks for one control at a time, with the player's own keys: Turn,
+  Dive, Climb, Boost, Brake, Dodge (Dive and Climb swap under "Invert
+  pitch"). Using it counts: the bound keys, the mouse while it steers (80 px
+  that way), the gamepad's left stick, RT, LT or the shoulders. The keys
+  press down into ink with a tick, the next step comes 0.65 s later, then
+  "You're ready!" for 1.4 s. Progress dots; Skip (or `Esc` with the mouse
+  free) any time. It only watches the controls: the game flies on.
+- **Where:** "Start with a tutorial" sets it going (`App.tsx`, the screens'
+  `tutorial` prop). Time trial: in the warm-up, with the start button (and
+  Enter) held back until it's over. Room: in the lobby; if the race starts
+  first, it ends. Adventure: no free flight before the start, so in the
+  first level's opening seconds, ending if the level does. Leaving the game
+  ends it. Replaces the stand-in (How to fly) behind "Start with a tutorial".
+- Verified: build and lint pass. In the app's browser on the Docker build,
+  a time trial through all six steps by script (about 7 s), the start button
+  after "You're ready!". Not tried: a room, an adventure, a real gamepad, a
+  person's timing (aim: under 30 s).
 
 ### 2026-10-10: Wind Rider, Cinzel and Philosopher, a quieter start (Claude)
 
@@ -1957,10 +1982,9 @@ finale and the finish screen. What's open:
   change (drift view at z = 400 or 900, see the change log); rendered on a real
   GPU with bloom they'd look better. Swipe on touch screens. More cards
   (yesterday's course, a friend's seed) if wanted.
-- **Interactive tutorial** (next, UX group): a first flight that teaches
-  steering, boost, brake and the mouse in the air; it replaces How to fly
-  behind "Start with a tutorial" (`App.tsx`). The room's pilot list and last
-  race, if missed, could go in the pause overlay.
+- **Tutorial follow-ups:** play it in a room and an adventure, with a gamepad,
+  and time a newcomer (aim: under 30 s). Maybe a chime per step. The room's
+  pilot list and last race, if missed, could go in the pause overlay.
 - Decide with the team: after a crash, wait for Enter before flying on?
   Playtesters can't react to the instant respawn; the cost is race time.
 - The gamepad can't press Enter (start a run, answer the overlays) or pause;
