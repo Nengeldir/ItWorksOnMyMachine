@@ -1,4 +1,4 @@
-import { PerspectiveCamera, Vector3 } from "three";
+import { PerspectiveCamera, Quaternion, Vector3 } from "three";
 import { clamp } from "./math";
 import { CAMERA } from "./tuning";
 
@@ -8,6 +8,10 @@ const blendedUp = new Vector3();
 const target = new Vector3();
 const pulled = new Vector3();
 const chase = new Vector3();
+const sight = new Vector3();
+const horizon = new Vector3();
+const cross = new Vector3();
+const transport = new Quaternion();
 
 /** Third-person chase camera: trails behind, banks with you, widens with speed */
 export class CameraRig {
@@ -18,6 +22,7 @@ export class CameraRig {
   private punch = 0; // extra degrees of FOV that decay: a kick when passing a gate
   private time = 0;
   private clearFraction = 1;
+  private readonly sight = new Vector3(0, 0, -1);
 
   constructor(aspect: number) {
     this.camera = new PerspectiveCamera(70, aspect, 0.5, 6000);
@@ -38,6 +43,7 @@ export class CameraRig {
     this.fov = CAMERA.fov + clamp((speed - 30) * CAMERA.fovPerSpeed, 0, CAMERA.fovMax);
     this.offset.copy(this.desiredOffset(forward, up, speed));
     this.up.copy(WORLD_UP);
+    this.sight.set(0, 0, -1);
     this.update(0, position, forward, up, speed, 0, null);
   }
 
@@ -89,21 +95,41 @@ export class CameraRig {
       : this.clearFraction + (fraction - this.clearFraction) * (1 - Math.exp(-dt * 4));
     this.camera.position.lerpVectors(position, this.camera.position, this.clearFraction);
 
-    // Roll the horizon with the pilot, but only partly
-    blendedUp.copy(WORLD_UP).lerp(up, CAMERA.rollFollow).normalize();
-    this.up.lerp(blendedUp, 1 - Math.exp(-dt * 5)).normalize();
-    this.camera.up.copy(this.up);
-    this.camera.lookAt(target.copy(position).addScaledVector(chase, CAMERA.lookAhead).addScaledVector(up, 1.2));
+    target.copy(position).addScaledVector(chase, CAMERA.lookAhead).addScaledVector(up, 1.2);
+    blendedUp.copy(WORLD_UP).lerp(up, CAMERA.rollFollow);
+    this.aim(target, blendedUp, dt);
 
     this.setFov(CAMERA.fov + clamp((speed - 30) * CAMERA.fovPerSpeed + boost * CAMERA.boostFov, 0, CAMERA.fovMax), dt);
   }
 
   /** After a crash: stay put and look at the wreck */
   watch(point: Vector3, dt: number) {
-    this.up.lerp(WORLD_UP, 1 - Math.exp(-dt * 3)).normalize();
+    this.aim(point, WORLD_UP, dt);
+    this.setFov(CAMERA.fov, dt);
+  }
+
+  /** Transport the previous camera frame, then gently recover the horizon.
+   * Unlike a world-up lookAt, this remains defined at both vertical poles. */
+  private aim(point: Vector3, preferredUp: Vector3, dt: number) {
+    sight.subVectors(point, this.camera.position);
+    if (sight.lengthSq() < 1e-10) return;
+    sight.normalize();
+    transport.setFromUnitVectors(this.sight, sight);
+    this.up.applyQuaternion(transport);
+    this.up.addScaledVector(sight, -this.up.dot(sight)).normalize();
+    horizon.copy(preferredUp).addScaledVector(sight, -preferredUp.dot(sight));
+    const horizontal = Math.hypot(sight.x, sight.z);
+    // Near vertical, the projected horizon changes sides: don't chase it.
+    const recovery = clamp((horizontal - 0.15) / 0.45, 0, 1);
+    if (horizon.lengthSq() > 1e-8 && recovery > 0) {
+      horizon.normalize();
+      const angle = Math.atan2(sight.dot(cross.crossVectors(this.up, horizon)), clamp(this.up.dot(horizon), -1, 1));
+      const maxCorrection = CAMERA.horizonRecovery * dt * recovery;
+      this.up.applyAxisAngle(sight, clamp(angle * (1 - Math.exp(-dt * 3)), -maxCorrection, maxCorrection));
+    }
+    this.sight.copy(sight);
     this.camera.up.copy(this.up);
     this.camera.lookAt(point);
-    this.setFov(CAMERA.fov, dt);
   }
 
   /** A quick widening of the view, e.g. when flying through a gate */

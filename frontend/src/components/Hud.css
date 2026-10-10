@@ -107,7 +107,10 @@
   flex-direction: column;
   align-items: center;
   gap: 0.3rem;
-  min-width: 15rem;
+  box-sizing: border-box;
+  width: 18rem;
+  height: 12.5rem;
+  max-width: calc(100vw - 2rem);
   padding: 0.5rem 1.25rem 0.6rem;
   border-radius: 24px;
   font-weight: 600;
@@ -197,9 +200,10 @@
 
 .hud-hint {
   position: absolute;
-  bottom: 10.25rem;
+  bottom: 14.5rem;
   left: 50%;
   transform: translateX(-50%);
+  width: max-content;
   max-width: calc(100% - 2rem);
   padding: 0.4rem 1rem;
   border-radius: 999px;
@@ -266,5 +270,7 @@
   font-weight: 600;
 }
 
-.hud-boost { display: grid; gap: 6px; font-size: 11px; margin-bottom: 10px; }
+.hud-boost { display: grid; grid-template-rows: 16px 6px 16px; gap: 6px; width: 100%; height: 50px; font-size: 11px; line-height: 16px; margin-bottom: 10px; text-align: center; }
+.hud-boost span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hud-boost-keys { opacity: 0.75; }
 .hud-boost progress { width: 100%; height: 6px; accent-color: #78dce8; }

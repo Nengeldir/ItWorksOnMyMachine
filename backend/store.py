@@ -41,7 +41,7 @@ class Store:
 
     def _best(self, seed: int, user_id: str) -> int | None:
         row = self.db.execute(
-            "SELECT MIN(time_ms) AS best FROM runs WHERE rules = 'speed-control-v1' AND seed = ? AND user_id = ?", (seed, user_id)
+            "SELECT MIN(time_ms) AS best FROM runs WHERE rules = 'speed-control-v2' AND seed = ? AND user_id = ?", (seed, user_id)
         ).fetchone()
         return row["best"]
 
@@ -54,9 +54,9 @@ class Store:
         previous_best = self._best(seed, user_id)
         is_best = previous_best is None or time_ms < previous_best
         if is_best:
-            self.db.execute("UPDATE runs SET ghost = NULL WHERE rules = 'speed-control-v1' AND seed = ? AND user_id = ?", (seed, user_id))
+            self.db.execute("UPDATE runs SET ghost = NULL WHERE rules = 'speed-control-v2' AND seed = ? AND user_id = ?", (seed, user_id))
         self.db.execute(
-            "INSERT INTO runs (seed, user_id, name, time_ms, created_at, ghost, rules) VALUES (?, ?, ?, ?, ?, ?, 'speed-control-v1')",
+            "INSERT INTO runs (seed, user_id, name, time_ms, created_at, ghost, rules) VALUES (?, ?, ?, ?, ?, ?, 'speed-control-v2')",
             (
                 seed,
                 user_id,
@@ -82,7 +82,7 @@ class Store:
         return self.db.execute(
             """
             SELECT user_id, name, MIN(time_ms) AS time_ms FROM runs
-            WHERE rules = 'speed-control-v1' AND seed = ? GROUP BY user_id ORDER BY time_ms LIMIT ?
+            WHERE rules = 'speed-control-v2' AND seed = ? GROUP BY user_id ORDER BY time_ms LIMIT ?
             """,
             (seed, limit),
         ).fetchall()
@@ -93,7 +93,7 @@ class Store:
             row = self.db.execute(
                 """
                 SELECT COUNT(*) AS faster FROM (
-                    SELECT MIN(time_ms) AS best FROM runs WHERE rules = 'speed-control-v1' AND seed = ? AND user_id != ? GROUP BY user_id
+                    SELECT MIN(time_ms) AS best FROM runs WHERE rules = 'speed-control-v2' AND seed = ? AND user_id != ? GROUP BY user_id
                 ) WHERE best < ?
                 """,
                 (seed, user_id, time_ms),
@@ -105,7 +105,7 @@ class Store:
             rows = self.db.execute(
                 """
                 SELECT name, time_ms, ghost FROM runs
-                WHERE rules = 'speed-control-v1' AND seed = ? AND ghost IS NOT NULL ORDER BY time_ms LIMIT ?
+                WHERE rules = 'speed-control-v2' AND seed = ? AND ghost IS NOT NULL ORDER BY time_ms LIMIT ?
                 """,
                 (seed, limit),
             ).fetchall()

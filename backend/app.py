@@ -59,7 +59,7 @@ async def require_flight_rules(request: Request, call_next):
     path = request.url.path
     gameplay = path.startswith("/api/rooms/") or path.startswith("/api/runs/")
     if request.method == "POST" and gameplay and not path.endswith("/leave"):
-        if request.headers.get("X-Flight-Rules") != "speed-control-v1":
+        if request.headers.get("X-Flight-Rules") != "speed-control-v2":
             return JSONResponse(status_code=409, content={"detail": "Flight controls have changed. Reload the game to continue."})
     return await call_next(request)
 
@@ -162,7 +162,7 @@ async def room_stream(found: Annotated[tuple[Room, Player], Depends(stream_playe
 @app.post("/api/rooms/{code}/state", status_code=status.HTTP_204_NO_CONTENT)
 async def post_state(code: str, body: StateRequest):
     room, player = room_player(code, body.token)
-    room.update_state(player, body.t, body.p, body.q, body.v, body.cp, boost=body.boost, brake=body.brake)
+    room.update_state(player, body.t, body.p, body.q, body.v, body.cp, boost=body.boost, brake=body.brake, dodge=body.dodge)
 
 
 @app.post("/api/rooms/{code}/start", status_code=status.HTTP_204_NO_CONTENT)
