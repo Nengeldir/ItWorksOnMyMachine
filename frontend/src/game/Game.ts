@@ -1,15 +1,26 @@
 import * as THREE from "three";
+import type { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import type { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { Ambient } from "./ambient";
 import { GameAudio } from "./audio";
+import { Avatar } from "./avatar";
 import { CameraRig } from "./camera";
 import { Debris } from "./effects";
 import { FLIGHT, Flight, type FlightInput } from "./flight";
 import { type GhostData, GhostRecorder, type GhostRun, ghostSamples } from "./ghost";
 import { type ControlSettings, Input } from "./input";
+import { FX_LIGHT, Kind, Particles, fx, fxTime } from "./particles";
+import { PilotFx } from "./pilotfx";
 import { INTERPOLATION_DELAY_MS, Pilot, type PilotSample } from "./pilots";
-import { Trail } from "./trail";
-import { WINGTIPS, createWingsuit } from "./wingsuit";
 import { clamp } from "./math";
-import { World } from "./world/World";
+import { SpeedLines } from "./speedlines";
+import { TOON_LIGHT } from "./toon";
+import { FX, RANGES, RINGS, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveTuning } from "./tuning";
+import { RunController, type RunEvents, type RunHost } from "./run/controller";
+import type { RunHud } from "./run/run";
+import { type Level, levelId, raceLevel } from "./world/biomes";
+import type { WaterKind } from "./world/terrain/river";
+import { type WaterHit, World } from "./world/World";
 import { WorldView } from "./world/WorldView";
 
 const STEP = 1 / 120; // physics runs at a fixed rate, rendering interpolates
@@ -19,6 +30,18 @@ const SCORE_RANGE = 10; // proximity counts within this many metres
 const RESPAWN_DELAY = 1.4; // seconds
 const START_SPEED = 32; // m/s
 const HUD_INTERVAL = 100; // ms
+const GOLD = new THREE.Color("#ffd23f");
+const WHITE = new THREE.Color("#ffffff");
+const SPRAY = new THREE.Color("#e8f7ff");
+const LAVA_SPARK = new THREE.Color("#ff9a3c");
+
+/** 2: bloom and full resolution, 1: no bloom, 0: lower resolution and fewer particles */
+type Quality = 0 | 1 | 2;
+const QUALITY = [
+  { pixelRatio: 1, particles: 0.4 },
+  { pixelRatio: 1.5, particles: 0.75 },
+  { pixelRatio: 2, particles: 1 },
+] as const;
 const DRIFT_SPEED = 14; // m/s along the course, for the menu's camera
 
 export type RaceState = "free" | "countdown" | "racing" | "finished";
@@ -40,6 +63,9 @@ export interface Standing extends Participant {
 
 export interface HudState {
   seed: number;
+  /** The roguelike run, in run mode */
+  run: RunHud | null;
+  biomeName: string;
   paletteName: string;
   speedKmh: number;
   clearance: number; // metres to the nearest rock or tree
@@ -70,7 +96,9 @@ export interface GameEvents {
 }
 
 export interface GameOptions {
+  /** A race or time trial on this seed (Sky Isles), unless `level` is given */
   seed: number;
+  level?: Level;
   /** Milliseconds; the server clock in rooms, so everyone starts together */
   clock: () => number;
   controls: ControlSettings;
@@ -91,21 +119,47 @@ export interface NetState {
 const tmp = new THREE.Vector3();
 const tmp2 = new THREE.Vector3();
 const projected = new THREE.Vector3();
+const at = new THREE.Vector3();
+const vel = new THREE.Vector3();
+const basisA = new THREE.Vector3();
+const basisB = new THREE.Vector3();
+const color = new THREE.Color();
+const normal = new THREE.Vector3();
+const surface = new THREE.Vector3();
+const waterHit: WaterHit = { distance: 0, level: 0, kind: "water" };
+const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
-export class Game {
+export class Game implements RunHost {
   private readonly container: HTMLElement;
   private readonly renderer: THREE.WebGLRenderer;
-  private readonly scene = new THREE.Scene();
+  readonly scene = new THREE.Scene();
   private readonly rig: CameraRig;
   private readonly input: Input;
   private readonly audio = new GameAudio();
-  private readonly flight = new Flight();
-  private readonly prevPosition = new THREE.Vector3();
+  readonly flight = new Flight();
+  readonly prevPosition = new THREE.Vector3();
   private readonly prevQuaternion = new THREE.Quaternion();
-  private readonly body: THREE.Mesh;
-  private readonly trails: Trail[];
+  private readonly avatar: Avatar;
+  private readonly fx: PilotFx;
+  readonly particles: Particles;
+  /** Particles that blend instead of glowing: snow, leaves, ash, mist */
+  private readonly softParticles: Particles;
+  private readonly ambient: Ambient;
+  private readonly speedLines: SpeedLines;
   private readonly debris: Debris;
   private readonly marker: HTMLDivElement;
+  private readonly vignette: HTMLDivElement;
+  private readonly crystalPoints: THREE.Vector3[] = [];
+  private composer: EffectComposer | null = null;
+  private bloomPass: UnrealBloomPass | null = null;
+  private composerLoading = false;
+  private quality: Quality = 2;
+  private slowFrames = 0;
+  private measured = 0;
+  private flash = 0;
+  private dustDebt = 0;
+  private moteDebt = 0;
+  private glintDebt = 0;
   private readonly recorder = new GhostRecorder();
   private readonly live = new Map<string, Pilot>();
   private ghosts: Pilot[] = [];
@@ -113,8 +167,11 @@ export class Game {
   private readonly events: GameEvents;
   private readonly attract: AttractMode | null;
   private driftZ = 0;
-  private world!: World;
-  private view!: WorldView;
+  world!: World;
+  view!: WorldView;
+  /** The roguelike run, when this game is one (never in races) */
+  private run: RunController | null = null;
+  private frozen = false;
   private selfId = "";
   private startSlot: number | null = null; // place on the start grid, null = alone
   private participants: Participant[] = [];
@@ -127,7 +184,7 @@ export class Game {
   private readonly crashPoint = new THREE.Vector3();
   private proximity = 0;
   private smoothProximity = 0;
-  private style = 0;
+  style = 0;
   private combo = 0;
   private comboIdle = 0;
   private lastBeep = 0;
@@ -145,10 +202,11 @@ export class Game {
     this.container = container;
     this.clock = options.clock;
     this.events = options.events;
+    loadTuning();
     this.attract = options.attract ?? null;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, QUALITY[this.quality].pixelRatio));
     this.renderer.domElement.className = "game-canvas";
     container.appendChild(this.renderer.domElement);
 
@@ -157,6 +215,8 @@ export class Game {
     this.input.onAction = (action) => {
       if (action === "respawn") this.respawnNow();
       if (action === "mute") this.audio.toggleMute();
+      if (action === "barrelLeft" || action === "barrelRight") this.barrelRoll(action === "barrelLeft" ? -1 : 1);
+      if ((action === "dash" || action === "flap") && this.crashedAt === null) this.run?.ability(action);
     };
     if (!this.attract) {
       this.renderer.domElement.addEventListener("click", this.engage);
@@ -165,16 +225,23 @@ export class Game {
       window.addEventListener("pointerdown", this.startAudio, { once: true });
     }
 
-    this.body = createWingsuit(options.color);
-    this.trails = WINGTIPS.map(() => new Trail("#ffffff", 0.12));
+    this.particles = new Particles();
+    this.softParticles = new Particles(3000, true);
+    this.ambient = new Ambient(this.particles, this.softParticles);
+    this.avatar = new Avatar(options.color);
+    this.fx = new PilotFx(this.avatar, options.color, this.particles);
+    this.speedLines = new SpeedLines();
     this.debris = new Debris(options.color);
-    this.scene.add(this.body, this.debris.mesh, ...this.trails.map((t) => t.mesh));
+    this.scene.add(this.avatar.group, this.debris.mesh, this.particles.points, this.softParticles.points, this.speedLines.mesh, ...this.fx.meshes);
 
+    this.vignette = document.createElement("div");
+    this.vignette.className = "speed-vignette";
+    container.appendChild(this.vignette);
     this.marker = document.createElement("div");
     this.marker.className = "ring-marker";
     container.appendChild(this.marker);
 
-    this.setSeed(options.seed);
+    this.setLevel(options.level ?? raceLevel(options.seed));
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
@@ -183,7 +250,10 @@ export class Game {
 
     if (new URLSearchParams(location.search).has("tune")) void this.openTuning();
     // Lets browser tests drive the game in development
-    if (import.meta.env.DEV) Object.assign(window, { __game: this });
+    if (import.meta.env.DEV) {
+      Object.assign(window, { __game: this, __fxTime: fxTime, __tuning: Object.fromEntries(TUNING_GROUPS) });
+      void import("./devtools").then(({ installDevtools }) => installDevtools());
+    }
   }
 
   // --- public API --------------------------------------------------------------
@@ -196,6 +266,63 @@ export class Game {
 
   private startAudio = () => this.audio.start();
 
+  // --- the roguelike run (RunHost) ---------------------------------------------------
+
+  /** Turns this game into a roguelike run: levels, upgrades, portals (never used for races) */
+  startRun(seed: number, events: RunEvents) {
+    this.run?.dispose();
+    this.run = new RunController(seed, this, events);
+    this.run.start();
+  }
+
+  /** Holds the pilot on the start line until the player takes off */
+  holdRun(hold: boolean) {
+    this.freeze(hold);
+    if (!hold) {
+      this.respawn(0);
+      this.run?.takeOff();
+    }
+  }
+
+  /** The upgrade chosen at a portal */
+  pickUpgrade(id: Parameters<RunController["pick"]>[0]) {
+    this.run?.pick(id);
+  }
+
+  get camera(): THREE.PerspectiveCamera {
+    return this.rig.camera;
+  }
+
+  get hovering(): boolean {
+    return this.input.hovering;
+  }
+
+  respawnAt(checkpoints: number) {
+    this.respawn(checkpoints);
+  }
+
+  freeze(on: boolean) {
+    this.frozen = on;
+    this.accumulator = 0;
+  }
+
+  wingbeat() {
+    this.avatar.beat();
+    this.audio.flap();
+    const amount = Math.round(24 * this.particles.budget);
+    for (let k = 0; k < amount; k++) {
+      this.particles.emit(
+        at.copy(this.flight.position).addScaledVector(this.flight.right, rand(-1.6, 1.6)),
+        vel.copy(this.flight.up).multiplyScalar(-rand(2, 6)).add(tmp2.set(rand(-1, 1), rand(-1, 1), rand(-1, 1))),
+        fx(rand(0.5, 0.9), rand(0.3, 0.6), WHITE, Kind.Glow, 1, 2, 1.6),
+      );
+    }
+  }
+
+  stinger(kind: "portal" | "upgrade" | "dash") {
+    this.audio.stinger(kind);
+  }
+
   /** Keeps the camera out of the rock */
   private clearance = (x: number, y: number, z: number) => this.world.rock.distance(x, y, z);
 
@@ -203,16 +330,43 @@ export class Game {
     return this.world.seed;
   }
 
-  /** Builds the world for a seed and puts you at the start, flying freely */
+  get level(): Level {
+    return this.world.level;
+  }
+
+  /** A race or time trial on `seed`: Sky Isles, the race map */
   setSeed(seed: number) {
-    if (this.world?.seed === seed) return;
+    if (this.world?.seed === seed && !this.world.level.run) return;
+    this.setLevel(raceLevel(seed));
+  }
+
+  /** Builds the world for a level and puts you at the start, flying freely */
+  setLevel(level: Level) {
+    // Already built (a run's first level, handed to the constructor): just start over
+    if (this.world && levelId(this.world.level.key) === levelId(level.key) && this.world.level.run?.index === level.run?.index) {
+      this.style = 0;
+      this.freeFlight(true);
+      return;
+    }
     if (this.view) {
       this.scene.remove(this.view.group);
       this.view.dispose();
     }
-    this.world = new World(seed);
+    this.world = new World(level);
     this.view = new WorldView(this.world, this.scene);
+    this.view.prepare(this.renderer);
     this.scene.add(this.view.group);
+    // Compile the level's shaders now (behind the loading wait or the tunnel), not mid-flight
+    this.renderer.compile(this.scene, this.rig.camera);
+    this.particles.clear();
+    this.softParticles.clear();
+    this.ambient.setWorld(this.world);
+    this.speedLines.setColor(this.world.palette.horizon);
+    // How effects react to this biome's light: glows pop at night, and get a push in bright daylight
+    const palette = this.world.palette;
+    FX_LIGHT.boost.value = palette.glow;
+    TOON_LIGHT.rimColor.value.set(palette.sun).lerp(WHITE, 0.35);
+    TOON_LIGHT.glow.value = 0.15 + palette.night * 1.3;
     this.setGhosts([]);
     this.style = 0;
     this.freeFlight(true);
@@ -220,7 +374,8 @@ export class Game {
 
   setSelf(id: string, color: string) {
     this.selfId = id;
-    (this.body.material as THREE.MeshLambertMaterial).color.set(color);
+    this.avatar.setColor(color);
+    this.fx.setColor(color);
     this.debris.setColor(color);
   }
 
@@ -259,7 +414,7 @@ export class Game {
       if (player.id === this.selfId) continue;
       keep.add(player.id);
       if (!this.live.has(player.id)) {
-        const pilot = new Pilot(player.id, player.name, player.color, false);
+        const pilot = new Pilot(player.id, player.name, player.color, false, this.particles);
         this.live.set(player.id, pilot);
         this.scene.add(pilot.group, ...pilot.trailMeshes);
       }
@@ -281,7 +436,7 @@ export class Game {
   setGhosts(runs: GhostRun[]) {
     this.ghosts.forEach((g) => this.removePilot(g));
     this.ghosts = runs.map((run, i) => {
-      const pilot = new Pilot(`ghost${i}`, run.name, "#ffffff", true);
+      const pilot = new Pilot(`ghost${i}`, run.name, "#ffffff", true, this.particles);
       pilot.setSamples(ghostSamples(run.ghost));
       this.scene.add(pilot.group, ...pilot.trailMeshes);
       return pilot;
@@ -306,15 +461,21 @@ export class Game {
     this.input.dispose();
     this.audio.dispose();
     this.gui?.destroy();
+    this.run?.dispose();
     this.view.dispose();
     this.live.forEach((p) => this.removePilot(p));
     this.ghosts.forEach((p) => this.removePilot(p));
-    this.trails.forEach((t) => t.dispose());
+    this.fx.dispose();
+    this.avatar.dispose();
+    this.particles.dispose();
+    this.softParticles.dispose();
+    this.speedLines.dispose();
     this.debris.dispose();
-    (this.body.material as THREE.Material).dispose();
+    this.composer?.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
     this.marker.remove();
+    this.vignette.remove();
   }
 
   // --- flying ------------------------------------------------------------------
@@ -341,30 +502,38 @@ export class Game {
     this.crashedAt = null;
     this.proximity = 0;
     this.combo = 0;
-    this.body.visible = true;
-    this.trails.forEach((t) => t.reset());
+    this.avatar.visible = true;
+    this.fx.reset();
+    this.speedLines.reset();
     this.rig.snap(this.flight.position, this.flight.forward, this.flight.up, this.flight.speed);
   }
 
   private respawnNow() {
     if (this.raceState === "countdown") return;
+    if (this.run) {
+      if (this.run.frozen) return;
+      this.respawn(this.run.checkpoint);
+      return;
+    }
     this.respawn(this.raceState === "free" ? 0 : this.checkpoints);
   }
 
   private crash() {
     this.crashedAt = this.elapsed;
     this.crashPoint.copy(this.flight.position);
-    this.body.visible = false;
-    this.trails.forEach((t) => (t.opacity = 0));
+    this.avatar.visible = false;
+    this.fx.hide();
     this.debris.burst(this.flight.position, this.flight.velocity);
+    this.crashBurst();
     this.audio.crash();
     this.combo = 0;
+    this.run?.crashed();
   }
 
   private step(input: FlightInput) {
     this.prevPosition.copy(this.flight.position);
     this.prevQuaternion.copy(this.flight.quaternion);
-    this.flight.step(STEP, input, this.proximity * this.proximity);
+    this.flight.step(STEP, input, this.proximity * this.proximity, FLIGHT, this.run ? this.run.flightMods : null);
 
     const { x, y, z } = this.flight.position;
     const distance = this.world.distance(x, y, z);
@@ -386,7 +555,25 @@ export class Game {
     if (this.raceState === "racing") {
       this.recorder.record(this.clock() - this.startAt, this.flight.position, this.flight.quaternion);
       this.checkRing();
+    } else if (this.run) {
+      this.run.step(STEP);
+    } else if (this.raceState === "free") {
+      // No race, but flying through a gate still makes it shine
+      const rings = this.world.course.rings;
+      for (let i = 0; i < rings.length; i++) {
+        if (!this.view.gates.passing(i) && this.crossed(i)) this.gateBurst(i);
+      }
     }
+  }
+
+  /** Did the last physics step fly through ring `index`? */
+  private crossed(index: number): boolean {
+    const ring = this.world.course.rings[index];
+    const before = tmp.subVectors(this.prevPosition, ring.position).dot(ring.normal);
+    const after = tmp.subVectors(this.flight.position, ring.position).dot(ring.normal);
+    if (before >= 0 || after < 0) return false;
+    const hit = tmp.lerpVectors(this.prevPosition, this.flight.position, before / (before - after));
+    return hit.distanceTo(ring.position) <= ring.radius + 1;
   }
 
   /** Steers along the racing line, like a player who never misses */
@@ -411,22 +598,19 @@ export class Game {
       camera.fov = 55;
       camera.updateProjectionMatrix();
     }
-    this.body.visible = false;
+    this.avatar.visible = false;
+    this.fx.hide();
   }
 
   private get multiplier(): number {
-    return 1 + Math.min(4, Math.floor(this.combo / 1.5));
+    return 1 + Math.min(this.run ? this.run.multiplierCap : 4, Math.floor(this.combo / 1.5));
   }
 
   /** Did the last step pass through the next ring? */
   private checkRing() {
-    const ring = this.world.course.rings[this.checkpoints];
-    if (!ring) return;
-    const before = tmp.subVectors(this.prevPosition, ring.position).dot(ring.normal);
-    const after = tmp.subVectors(this.flight.position, ring.position).dot(ring.normal);
-    if (before >= 0 || after < 0) return;
-    const hit = tmp.lerpVectors(this.prevPosition, this.flight.position, before / (before - after));
-    if (hit.distanceTo(ring.position) > ring.radius + 1) return;
+    const index = this.checkpoints;
+    const ring = this.world.course.rings[index];
+    if (!ring || !this.crossed(index)) return;
 
     this.checkpoints++;
     if (ring.finish) {
@@ -434,12 +618,181 @@ export class Game {
       this.raceState = "finished";
       this.finishMs = timeMs;
       this.view.setRings("hidden", 0);
+      this.gateBurst(index);
       this.audio.finish();
       const ghost = this.recorder.finish(timeMs, this.flight.position, this.flight.quaternion);
       this.events.finished?.({ timeMs, ghost });
     } else {
       this.audio.ring();
       this.view.setRings("race", this.checkpoints);
+      this.gateBurst(index);
+    }
+  }
+
+  // --- effects -------------------------------------------------------------------
+
+  private barrelRoll(dir: 1 | -1) {
+    if (this.crashedAt !== null || this.raceState === "countdown") return;
+    this.avatar.barrelRoll(dir);
+  }
+
+  /** A gate was passed: it flares (WorldView), and shards, stars and light burst out of it */
+  gateBurst(index: number) {
+    const ring = this.world.course.rings[index];
+    this.view.passRing(index);
+    this.rig.kick();
+    this.flash = 1;
+    const amount = this.particles.budget * RINGS.shatter;
+    if (amount <= 0) return;
+    const tint = ring.finish ? GOLD : color.set(this.world.palette.accent);
+    const forward = ring.normal;
+    const crystals = this.view.gates.crystalPositions(index, this.crystalPoints);
+    for (const p of crystals) {
+      const outward = tmp.subVectors(p, ring.position).normalize();
+      for (let k = 0; k < Math.round(3 * amount); k++) {
+        this.particles.emit(
+          at.copy(p).addScaledVector(outward, rand(-0.6, 0.6)),
+          vel
+            .copy(outward)
+            .multiplyScalar(rand(5, 15))
+            .addScaledVector(forward, rand(2, 6) + this.flight.speed * 0.15)
+            .add(tmp2.set(rand(-2, 2), rand(-2, 2), rand(-2, 2))),
+          fx(rand(1, 1.9), rand(0.45, 0.95), k % 2 ? WHITE : tint, Kind.Shard, 4, 1.1, 2.8),
+        );
+      }
+    }
+    // Stars around the rim and a puff of light around the pilot
+    for (let k = 0; k < Math.round(70 * amount); k++) {
+      const p = crystals[k % crystals.length];
+      at.lerpVectors(ring.position, p, rand(0.85, 1.05));
+      tmp.subVectors(at, ring.position).normalize();
+      this.particles.emit(at, vel.copy(tmp).multiplyScalar(rand(1, 5)).addScaledVector(forward, rand(-2, 4)), fx(rand(1.2, 2.2), rand(0.6, 1.2), tint, Kind.Star, -0.5, 1.5, 3));
+    }
+    for (let k = 0; k < Math.round(30 * amount); k++) {
+      this.particles.emit(
+        this.flight.position,
+        vel.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize().multiplyScalar(rand(4, 10)).addScaledVector(this.flight.velocity, 0.6),
+        fx(rand(0.5, 0.9), rand(0.5, 1.1), WHITE, Kind.Glow, 0, 3, 2),
+      );
+    }
+  }
+
+  private crashBurst() {
+    const amount = this.particles.budget;
+    color.set(this.world.palette.accent);
+    for (let k = 0; k < Math.round(90 * amount); k++) {
+      this.particles.emit(
+        this.flight.position,
+        vel.set(rand(-1, 1), rand(-0.3, 1), rand(-1, 1)).normalize().multiplyScalar(rand(4, 18)).addScaledVector(this.flight.velocity, -0.1),
+        k % 3
+          ? fx(rand(0.6, 1.4), rand(0.4, 0.9), WHITE, Kind.Star, 6, 2, 2.4)
+          : fx(rand(0.8, 1.4), rand(1.5, 3), color, Kind.Wisp, -1, 2.5, 0.8),
+      );
+    }
+  }
+
+  /** Spray off the rock while skimming it, and sparks when really close */
+  private skimSpray(dt: number) {
+    if (this.smoothProximity < 0.2 || FX.skimDust <= 0) return;
+    const { x, y, z } = this.flight.position;
+    const rock = this.world.rock;
+    const gap = rock.distance(x, y, z);
+    const water = this.world.waterNear(x, y, z, waterHit);
+    if (water && water.distance < 9 && water.distance < gap) {
+      this.waterSpray(dt, water.distance, water.level, water.kind);
+      return;
+    }
+    if (gap > 9) return;
+    // The rock's surface normal from the distance field's gradient; the nearest surface point is along it
+    const e = 0.5;
+    normal.set(
+      rock.distance(x + e, y, z) - rock.distance(x - e, y, z),
+      rock.distance(x, y + e, z) - rock.distance(x, y - e, z),
+      rock.distance(x, y, z + e) - rock.distance(x, y, z - e),
+    );
+    if (normal.lengthSq() < 1e-8) return;
+    normal.normalize();
+    surface.copy(this.flight.position).addScaledVector(normal, -gap);
+    this.dustDebt += this.smoothProximity * 110 * FX.skimDust * this.particles.budget * dt;
+    const close = clamp((5 - gap) / 4, 0, 1);
+    color.set(this.world.palette.cloud).lerp(WHITE, 0.4);
+    for (; this.dustDebt >= 1; this.dustDebt--) {
+      at.copy(surface)
+        .add(tmp.set(rand(-2.5, 2.5), rand(-2.5, 2.5), rand(-2.5, 2.5)))
+        .addScaledVector(normal, rand(0.2, 0.8));
+      const spark = Math.random() < close * 0.35;
+      this.particles.emit(
+        at,
+        vel
+          .copy(this.flight.velocity)
+          .multiplyScalar(spark ? 0.5 : 0.25)
+          .addScaledVector(normal, rand(2, 7))
+          .add(tmp.set(rand(-3, 3), rand(-3, 3), rand(-3, 3))),
+        spark
+          ? fx(rand(0.3, 0.6), rand(0.25, 0.45), GOLD, Kind.Star, 12, 1, 2.5)
+          : fx(rand(0.6, 1.1), rand(1, 2.2), color, Kind.Wisp, 3, 2.2, 0.55),
+      );
+    }
+  }
+
+  /** Skimming water: a wake of droplets and mist (or sparks off lava) */
+  private waterSpray(dt: number, gap: number, level: number, kind: WaterKind) {
+    const close = clamp((7 - gap) / 6, 0, 1);
+    this.dustDebt += (0.3 + close) * 140 * WATER.spray * this.particles.budget * dt;
+    const lava = kind === "lava";
+    for (; this.dustDebt >= 1; this.dustDebt--) {
+      at.set(this.flight.position.x + rand(-1.5, 1.5), level + 0.2, this.flight.position.z + rand(-1.5, 1.5));
+      const droplet = Math.random() < 0.6;
+      vel.copy(this.flight.velocity).multiplyScalar(droplet ? 0.35 : 0.15).add(tmp.set(rand(-3, 3), rand(3, 9) * (0.4 + close), rand(-3, 3)));
+      if (lava) {
+        this.particles.emit(at, vel, fx(rand(0.5, 1), rand(0.25, 0.45), LAVA_SPARK, Kind.Star, 9, 0.8, 2.6));
+      } else if (droplet) {
+        this.particles.emit(at, vel, fx(rand(0.5, 1), rand(0.18, 0.35), SPRAY, Kind.Glow, 12, 0.6, 1.5));
+      } else {
+        this.softParticles.emit(at, vel, fx(rand(0.8, 1.4), rand(1.5, 3), WHITE, Kind.Glow, -0.5, 2, 0.85));
+      }
+    }
+  }
+
+  /** Crystals catch the light: brief star glints on the gates near you */
+  private gateGlints(dt: number) {
+    const rings = this.world.course.rings;
+    const camera = this.rig.camera.position;
+    this.glintDebt += 10 * this.particles.budget * dt;
+    if (this.glintDebt < 1) return;
+    // Start at a random gate, so nearby gates share the glints
+    const first = Math.floor(Math.random() * rings.length);
+    for (let n = 0; n < rings.length && this.glintDebt >= 1; n++) {
+      const i = (first + n) % rings.length;
+      const d = rings[i].position.distanceToSquared(camera);
+      if (d > 350 * 350 || !this.view.gates.shown(i)) continue;
+      const crystals = this.view.gates.crystalPositions(i, this.crystalPoints);
+      const p = crystals[Math.floor(Math.random() * crystals.length)];
+      if (!p) continue;
+      this.glintDebt--;
+      this.particles.emit(at.copy(p).add(tmp.set(rand(-0.8, 0.8), rand(-0.8, 0.8), rand(-0.8, 0.8))), vel.set(0, 0, 0), fx(rand(0.35, 0.6), rand(1.2, 2.2), WHITE, Kind.Star, 0, 0, 2.6));
+    }
+    this.glintDebt = Math.min(this.glintDebt, 2);
+  }
+
+  /** Glitter drifting around the next gate, so it sparkles from afar */
+  private gateMotes(dt: number) {
+    if (this.raceState !== "racing" && this.raceState !== "countdown") return;
+    const ring = this.world.course.rings[this.checkpoints];
+    if (!ring || ring.position.distanceToSquared(this.flight.position) > 600 * 600) return;
+    this.moteDebt += 30 * this.particles.budget * dt;
+    const n = ring.normal;
+    if (Math.abs(n.y) < 0.95) basisA.crossVectors(n, THREE.Object3D.DEFAULT_UP).normalize();
+    else basisA.set(1, 0, 0);
+    basisB.crossVectors(n, basisA);
+    const tint = ring.finish ? GOLD : color.set(this.world.palette.accent);
+    for (; this.moteDebt >= 1; this.moteDebt--) {
+      const angle = Math.random() * Math.PI * 2;
+      const r = ring.radius * rand(0.9, 1.25);
+      at.copy(ring.position)
+        .addScaledVector(basisA, Math.cos(angle) * r)
+        .addScaledVector(basisB, Math.sin(angle) * r);
+      this.particles.emit(at, vel.copy(n).multiplyScalar(rand(-1.5, 1.5)), fx(rand(1.5, 2.6), rand(0.5, 1), tint, Kind.Star, -0.4, 0.8, 2.2));
     }
   }
 
@@ -450,6 +803,8 @@ export class Game {
     const dt = this.lastFrame ? Math.min(0.1, (now - this.lastFrame) / 1000) : 0;
     this.lastFrame = now;
     this.elapsed += dt;
+    fxTime.value = this.elapsed;
+    this.adaptQuality(dt);
     const t = this.clock();
 
     if (this.raceState === "countdown") {
@@ -466,7 +821,8 @@ export class Game {
 
     this.input0 = this.attract === "chase" ? this.autopilot() : this.input.sample(dt);
     // Before a race, wait for the islands around you to show up: no flying into invisible rock
-    const waiting = !this.view.ready && this.raceState === "free";
+    // In a run, also while held in the tunnel between biomes
+    const waiting = (!this.view.ready && this.raceState === "free") || this.frozen;
     if (this.crashedAt !== null) {
       if (this.elapsed - this.crashedAt > RESPAWN_DELAY) this.respawnNow();
     } else if (this.raceState !== "countdown" && !waiting && this.attract !== "drift") {
@@ -483,22 +839,23 @@ export class Game {
 
     // Draw between the last two physics states
     const alpha = clamp(this.accumulator / STEP, 0, 1);
-    this.body.position.lerpVectors(this.prevPosition, this.flight.position, alpha);
-    this.body.quaternion.slerpQuaternions(this.prevQuaternion, this.flight.quaternion, alpha);
+    const body = this.avatar.group;
+    body.position.lerpVectors(this.prevPosition, this.flight.position, alpha);
+    body.quaternion.slerpQuaternions(this.prevQuaternion, this.flight.quaternion, alpha);
     this.smoothProximity += (this.proximity - this.smoothProximity) * (1 - Math.exp(-dt * 8));
 
     const crashed = this.crashedAt !== null;
     if (this.attract === "drift") {
       this.drift(dt);
     } else if (!crashed) {
-      tmp2.set(0, 1, 0).applyQuaternion(this.body.quaternion);
-      this.trails.forEach((trail, i) => {
-        trail.push(tmp.copy(WINGTIPS[i]).applyQuaternion(this.body.quaternion).add(this.body.position), tmp2);
-        trail.opacity = clamp((this.flight.speed - 40) / 40 + this.smoothProximity, 0, 0.7);
-      });
+      this.avatar.update(dt, this.flight.speed, this.smoothProximity);
+      // Frozen on the start line or while islands load: no motes, or they pile up into a glowing ball
+      const moving = this.raceState !== "countdown" && !waiting;
+      this.fx.update(dt, this.flight.speed, this.flight.velocity, this.smoothProximity, moving);
+      this.skimSpray(dt);
       this.rig.update(
         dt,
-        this.body.position,
+        body.position,
         this.flight.forward,
         this.flight.up,
         this.flight.speed,
@@ -511,16 +868,26 @@ export class Game {
     this.debris.update(dt);
 
     const camera = this.rig.camera;
-    this.view.update(camera, this.elapsed);
+    camera.updateMatrixWorld();
+    this.view.update(camera, dt);
+    this.run?.frame(dt);
+    this.gateMotes(dt);
+    this.gateGlints(dt);
+    const flying = !crashed && this.raceState !== "countdown" && !waiting && this.attract !== "drift";
+    this.speedLines.update(dt, body.position, flying ? this.flight.velocity : tmp.set(0, 0, 0), camera, this.particles.budget);
+    this.ambient.update(dt, camera.position, flying ? this.flight.velocity : tmp.set(0, 0, 0), this.particles.budget);
 
     const liveTime = t - INTERPOLATION_DELAY_MS;
-    this.live.forEach((pilot) => pilot.update(liveTime));
+    this.live.forEach((pilot) => pilot.update(liveTime, dt, camera.position));
     const racing = this.raceState !== "free";
-    this.ghosts.forEach((ghost) => ghost.update(racing ? t - this.startAt : -Infinity));
+    this.ghosts.forEach((ghost) => ghost.update(racing ? t - this.startAt : -Infinity, dt, camera.position));
+    this.particles.update();
+    this.softParticles.update();
 
-    this.audio.update(this.flight.speed, this.smoothProximity, !crashed && this.raceState !== "countdown");
+    this.audio.update(this.flight.speed, this.smoothProximity, flying);
     this.updateMarker();
-    this.renderer.render(this.scene, camera);
+    this.updateVignette(dt, flying);
+    this.render();
 
     if (now - this.lastHud > HUD_INTERVAL) {
       this.lastHud = now;
@@ -529,7 +896,7 @@ export class Game {
   };
 
   private hud(t: number): HudState {
-    const { x, y, z } = this.body.position;
+    const { x, y, z } = this.avatar.group.position;
     const raceTimeMs =
       this.raceState === "racing"
         ? t - this.startAt
@@ -538,6 +905,8 @@ export class Game {
           : null;
     return {
       seed: this.world.seed,
+      run: this.run ? this.run.hud() : null,
+      biomeName: this.world.biome.name,
       paletteName: this.world.palette.name,
       speedKmh: Math.round(this.flight.speed * 3.6),
       clearance: Math.max(0, Math.round(this.world.distance(x, y, z))),
@@ -614,17 +983,163 @@ export class Game {
     if (this.marker.textContent !== text) this.marker.textContent = text;
   }
 
+  private updateVignette(dt: number, flying: boolean) {
+    this.flash *= Math.exp(-dt * 3);
+    const rush = flying ? clamp((this.flight.speed - 55) / 50, 0, 1) * 0.55 + this.smoothProximity * 0.25 : 0;
+    const opacity = clamp((rush + this.flash * 0.6) * FX.vignette, 0, 1);
+    const text = opacity.toFixed(2);
+    if (this.vignette.style.opacity !== text) this.vignette.style.opacity = text;
+  }
+
+  // --- rendering -------------------------------------------------------------------
+
+  private get bloomOn(): boolean {
+    return this.quality === 2 && FX.bloom > 0;
+  }
+
+  private render() {
+    const camera = this.rig.camera;
+    // Particle sizes are in metres: keep the conversion in step with the zooming FOV
+    this.particles.setViewport(this.renderer.domElement.height, camera.fov);
+    this.softParticles.setViewport(this.renderer.domElement.height, camera.fov);
+    if (this.bloomOn && !this.composer) void this.createComposer();
+    if (this.bloomOn && this.composer && this.bloomPass) {
+      this.bloomPass.strength = FX.bloom * (1 + this.world.palette.night * 0.6);
+      this.bloomPass.radius = FX.bloomRadius;
+      this.bloomPass.threshold = FX.bloomThreshold;
+      this.composer.render();
+    } else {
+      this.renderer.render(this.scene, camera);
+    }
+  }
+
+  /** Bloom post-processing: loaded on first use, so the low-quality path never downloads it */
+  private async createComposer() {
+    if (this.composerLoading) return;
+    this.composerLoading = true;
+    const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }] = await Promise.all([
+      import("three/examples/jsm/postprocessing/EffectComposer.js"),
+      import("three/examples/jsm/postprocessing/RenderPass.js"),
+      import("three/examples/jsm/postprocessing/UnrealBloomPass.js"),
+      import("three/examples/jsm/postprocessing/OutputPass.js"),
+    ]);
+    this.composerLoading = false;
+    if (!this.bloomOn || this.composer) return;
+    const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+    // Half floats keep colors above 1, so only really bright things bloom; 4× MSAA keeps edges clean
+    // Half floats keep colors above 1 for the bloom; FX.bloomMsaa sets the antialiasing samples
+    const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: FX.bloomMsaa });
+    const composer = new EffectComposer(this.renderer, target);
+    composer.setPixelRatio(Math.min(this.renderer.getPixelRatio(), FX.bloomResolution));
+    composer.setSize(this.container.clientWidth || 1, this.container.clientHeight || 1);
+    composer.addPass(new RenderPass(this.scene, this.rig.camera));
+    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), FX.bloom, FX.bloomRadius, FX.bloomThreshold);
+    composer.addPass(this.bloomPass);
+    composer.addPass(new OutputPass());
+    this.composer = composer;
+  }
+
+  /** Drops the bloom composer so it is rebuilt with the current FX settings */
+  rebuildBloom() {
+    this.composer?.dispose();
+    this.bloomPass?.dispose();
+    this.composer = null;
+    this.bloomPass = null;
+  }
+
+  private setQuality(quality: Quality) {
+    this.quality = quality;
+    if (!this.bloomOn && this.composer) {
+      this.composer.dispose();
+      this.bloomPass?.dispose();
+      this.composer = null;
+      this.bloomPass = null;
+    }
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, QUALITY[quality].pixelRatio));
+    this.particles.budget = QUALITY[quality].particles;
+    this.resize();
+  }
+
+  /** Steps the quality down if frames keep taking too long (never back up, so it can't flicker) */
+  private adaptQuality(dt: number) {
+    this.measured += dt;
+    if (!FX.autoQuality || this.quality === 0 || this.measured < 5 || dt >= 0.1) return;
+    this.slowFrames = dt > 1 / 40 ? this.slowFrames + dt : Math.max(0, this.slowFrames - dt * 0.5);
+    if (this.slowFrames > 2.5) {
+      this.slowFrames = 0;
+      this.measured = 0;
+      this.setQuality((this.quality - 1) as Quality);
+      if (import.meta.env.DEV) console.info(`[wingrace] frame rate low, quality now ${this.quality}`);
+    }
+  }
+
   private resize() {
     const width = this.container.clientWidth || 1;
     const height = this.container.clientHeight || 1;
     this.renderer.setSize(width, height, false);
+    this.composer?.setPixelRatio(Math.min(this.renderer.getPixelRatio(), FX.bloomResolution));
+    this.composer?.setSize(width, height);
     this.rig.resize(width / height);
+    this.particles.setViewport(height * this.renderer.getPixelRatio(), this.rig.camera.fov);
+    this.softParticles.setViewport(height * this.renderer.getPixelRatio(), this.rig.camera.fov);
   }
 
   private async openTuning() {
     const { default: GUI } = await import("lil-gui");
-    const gui = new GUI({ title: "Flight tuning (?tune)" });
-    for (const key of Object.keys(FLIGHT) as (keyof typeof FLIGHT)[]) gui.add(FLIGHT, key);
-    this.gui = gui;
+    const gui = new GUI({ title: "Tuning (?tune)", width: 300 });
+    const save = () => saveTuning();
+
+    const view = gui.addFolder("Quality");
+    const settings = { quality: this.quality };
+    view
+      .add(settings, "quality", { High: 2, Medium: 1, Low: 0 })
+      .name("quality")
+      .onChange((q: Quality) => this.setQuality(q))
+      .listen();
+    view.add(FX, "autoQuality").name("auto quality").onChange(save);
+    const syncQuality = setInterval(() => (settings.quality = this.quality), 500);
+
+    // Physics isn't saved: a forgotten tweak shouldn't follow you into races
+    const flight = gui.addFolder("Flight physics (not saved)");
+    for (const key of Object.keys(FLIGHT) as (keyof typeof FLIGHT)[]) flight.add(FLIGHT, key);
+    flight.close();
+
+    for (const [title, group] of TUNING_GROUPS) {
+      const folder = gui.addFolder(title);
+      for (const key of Object.keys(group)) {
+        if (key === "autoQuality") continue;
+        const range = RANGES[key];
+        const controller =
+          typeof group[key] === "boolean" || !range
+            ? folder.add(group, key)
+            : folder.add(group, key, range[0], range[1], range[2] ?? (range[1] - range[0]) / 200);
+        controller.onChange(() => {
+          save();
+          // The bloom's render targets are built with these: rebuild them
+          if (key === "bloomResolution" || key === "bloomMsaa") this.rebuildBloom();
+        });
+      }
+      folder.close();
+    }
+
+    const actions = {
+      barrelLeft: () => this.barrelRoll(-1),
+      barrelRight: () => this.barrelRoll(1),
+      copy: () => void navigator.clipboard?.writeText(JSON.stringify({ FLIGHT, ...Object.fromEntries(TUNING_GROUPS) }, null, 2)),
+      reset: () => {
+        resetTuning();
+        gui.controllersRecursive().forEach((c) => c.updateDisplay());
+      },
+    };
+    gui.add(actions, "barrelLeft").name("Barrel roll left (Q)");
+    gui.add(actions, "barrelRight").name("Barrel roll right (E)");
+    gui.add(actions, "copy").name("Copy settings as JSON");
+    gui.add(actions, "reset").name("Reset looks to defaults");
+    this.gui = {
+      destroy: () => {
+        clearInterval(syncQuality);
+        gui.destroy();
+      },
+    };
   }
 }

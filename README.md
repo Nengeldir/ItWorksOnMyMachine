@@ -11,6 +11,13 @@ the last ring.
   at the same time and sees each other live.
 - **Time trial:** race the clock on today's course, a random one or any seed,
   against the ghosts of the fastest runs. Leaderboards per seed.
+- **Adventure:** a roguelike run through eight biomes linked by portals:
+  Sky Isles, Verdant Highlands, Glacier Peaks, Sky Archipelago, Coral Lagoon,
+  Twilight Forest, Ember Wastes and the Aurora Summit. Chain gates, skim for
+  style, and pick an upgrade at every portal (dash, wingbeats, hover, glide lock and more).
+
+Races and time trials always fly Sky Isles, so recorded ghosts and
+leaderboards stay valid; the other biomes are for the adventure.
 
 Built on the VIScon hackathon template: React + Three.js in the browser,
 FastAPI behind Caddy on the team VM.
@@ -51,9 +58,14 @@ docker compose up -d --build
 | Mouse (click the view)    | Pitch and roll. The mouse acts like a stick.       |
 | `W` `S` / `↑` `↓`         | Dive / pull up (flight-stick style)                |
 | `A` `D` / `←` `→`         | Roll left / right. Banking turns you.              |
+| `Q` `E`, double-tap `A` `D` | Barrel roll (just for show; gamepad: `LB` `RB`)  |
 | Gamepad left stick        | Pitch and roll. `Y` respawns.                      |
 | `R`                       | Respawn at the last ring                           |
 | `M`                       | Mute                                               |
+| `Shift` / gamepad `X`     | Dash (adventure, with the upgrade)                 |
+| `Space` / gamepad `A`     | Wingbeat (adventure, with the upgrade)             |
+| Hold `F` / gamepad `B`    | Hover (adventure, with the upgrade)                |
+| `1` to `4`                | Choose an upgrade at a portal                      |
 | `Enter`                   | Start the run / the race, fly again                |
 | `N`                       | New map (in a room's lobby)                        |
 | `Esc`                     | Free the mouse                                     |
@@ -64,6 +76,11 @@ the proximity bar: you get style points with a growing multiplier and extra
 acceleration, so risky lines are faster. Crash, or drop into the sea of clouds
 below the islands, and you respawn at your last ring, with the clock still
 running.
+
+In an adventure there is no clock. Gates score more in a chain without a
+crash, and skimming earns style points. The arrow at the top of the screen
+points to the portal. A crash puts you back at the last gate and breaks your
+gate chain.
 
 ## How It Works
 
@@ -118,11 +135,45 @@ undersides, snow on the highest islands), which gives the low-poly look. Pines
 grow on flat grass, picked from the mesh itself. Each seed also picks a palette:
 Alpine, Misty pines, Autumn, Dusk or Winter.
 
+**Biomes** ([`frontend/src/game/world/biomes/`](frontend/src/game/world/biomes)):
+every biome is data: lighting moods (a day and a night one), a terrain
+recipe, surfaces, plants, water, mist and clouds, particles and
+portals. Sky Isles is the islands above; every other biome comes from the
+second terrain generator ([`world/terrain/`](frontend/src/game/world/terrain)):
+a heightfield valley that follows the racing line and steps down in pools
+and waterfalls, hills, domain-warped ridged mountains, terraces, crevasses,
+carved river channels and overhangs, melted together with rock shapes
+(arches, pillars, sea stacks, mesas, giant trees and mushrooms, a volcano).
+It is meshed in workers at three levels of detail, painted by a terrain
+shader that blends grass, rock, sand and snow by slope and height, and
+dressed with procedural trees (instanced, swaying, impostors far away),
+grass and flowers near you, stylized water (rivers, falls, seas, lava, ice,
+glowing ponds), soft clouds, valley mist, auroras and ambient particles
+(fireflies, snow, embers, spores). Fly any biome freely at
+`/?explore=<id>&seed=<n>` (ids: `verdant`, `glacier`, `archipelago`,
+`lagoon`, `twilight`, `ember`, `aurora`).
+
 **Flight model** ([`frontend/src/game/flight.ts`](frontend/src/game/flight.ts)):
 an arcade, energy-based wingsuit. The nose points where you go, gravity along
 the flight path speeds you up or slows you down, drag caps the speed, and
 banking turns you. Physics runs at a fixed 120 Hz. Open the game with `?tune`
-(e.g. `http://localhost:5173/?seed=42&tune`) to tune every constant live.
+(e.g. `http://localhost:5173/?seed=42&tune`) to tune every constant live:
+flight physics, the pilot's animation, trails and particles, the crystal gates,
+the camera and the render quality. Look tweaks are remembered in the browser;
+physics tweaks aren't, so they can't follow you into a race.
+
+**Looks** ([`frontend/src/game/avatar.ts`](frontend/src/game/avatar.ts) and
+friends): the pilot is a cel-shaded little flyer with outlines, a cape, a scarf
+and feathered wings, all built from primitives at runtime. Its animation sits on
+top of the flight model and never changes it: the body leans into turns ahead
+of the physics, the wings flap harder when climbing, turning or slow and fold
+back in a dive, the cloth ripples with speed, and hard turns throw a barrel
+roll. Gates are cohorts of floating crystals that flare and burst when you fly
+through. One GPU particle system draws every mote, star and shard, and bright
+things bloom (High quality). Each palette is a lighting mood as well: sun
+position, valley mist, painted clouds, stars at night, and how brightly trims
+and effects glow. The game steps its quality down by itself if the frame rate
+can't keep up.
 
 **Leaderboards and ghosts:** a finished run is uploaded with a 15 Hz recording
 of the flight. Each player's best run per seed keeps its ghost; the top three
@@ -143,6 +194,8 @@ doesn't fly the course itself.
 | `frontend/src/game/Game.ts`            | The game: loop, physics steps, race state, HUD data      |
 | `frontend/src/game/world/`             | Racing line, rock field, meshing workers, palettes, view |
 | `frontend/src/game/flight.ts`          | Flight model                                             |
+| `frontend/src/game/avatar.ts`          | The pilot's model and animation                          |
+| `frontend/src/game/tuning.ts`          | Every look-and-feel constant, for the `?tune` panel      |
 | `frontend/src/game/pilots.ts`          | Remote players and ghosts, with interpolation            |
 | `frontend/src/net/`                    | Server clock and the room connection (SSE + POST)        |
 | `frontend/src/session/`                | Solo and room sessions: wire a Game to the network and UI |

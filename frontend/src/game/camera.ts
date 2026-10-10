@@ -1,5 +1,6 @@
 import { PerspectiveCamera, Vector3 } from "three";
 import { clamp } from "./math";
+import { CAMERA } from "./tuning";
 
 const WORLD_UP = new Vector3(0, 1, 0);
 const desired = new Vector3();
@@ -12,7 +13,9 @@ export class CameraRig {
   readonly camera: PerspectiveCamera;
   private readonly offset = new Vector3(0, 3, 10);
   private readonly up = new Vector3(0, 1, 0);
-  private fov = 70;
+  private fov = CAMERA.fov;
+  private punch = 0; // extra degrees of FOV that decay: a kick when passing a gate
+  private time = 0;
 
   constructor(aspect: number) {
     this.camera = new PerspectiveCamera(70, aspect, 0.5, 6000);
@@ -22,8 +25,8 @@ export class CameraRig {
     blendedUp.copy(WORLD_UP).lerp(up, 0.3).normalize();
     return desired
       .copy(forward)
-      .multiplyScalar(-(8.5 + speed * 0.035))
-      .addScaledVector(blendedUp, 2.6);
+      .multiplyScalar(-(CAMERA.distance + speed * CAMERA.distancePerSpeed))
+      .addScaledVector(blendedUp, CAMERA.height);
   }
 
   /** Jumps straight behind the pilot (after a respawn) */
@@ -42,16 +45,20 @@ export class CameraRig {
     proximity: number,
     clearance: ((x: number, y: number, z: number) => number) | null,
   ) {
-    const k = 1 - Math.exp(-dt * 7);
+    this.time += dt;
+    const k = 1 - Math.exp(-dt * CAMERA.stiffness);
     this.offset.lerp(this.desiredOffset(forward, up, speed), k);
     this.camera.position.copy(position).add(this.offset);
 
     // Shake when skimming the ground at speed
-    const shake = proximity * clamp(speed / 70, 0, 1.5) * 0.12;
+    const shake = proximity * clamp(speed / 70, 0, 1.5) * CAMERA.shake;
     if (shake > 0) {
       this.camera.position.x += (Math.random() - 0.5) * shake;
       this.camera.position.y += (Math.random() - 0.5) * shake;
     }
+    // A slow drift when gliding slowly, so the view breathes like in Sky
+    const calm = clamp((45 - speed) / 25, 0, 1);
+    this.camera.position.y += Math.sin(this.time * 0.9) * 0.15 * calm;
 
     // Behind rock? Pull in towards the pilot until the view is clear
     if (clearance && clearance(this.camera.position.x, this.camera.position.y, this.camera.position.z) < 1.5) {
@@ -67,12 +74,12 @@ export class CameraRig {
     }
 
     // Roll the horizon with the pilot, but only partly
-    blendedUp.copy(WORLD_UP).lerp(up, 0.55).normalize();
+    blendedUp.copy(WORLD_UP).lerp(up, CAMERA.rollFollow).normalize();
     this.up.lerp(blendedUp, 1 - Math.exp(-dt * 5)).normalize();
     this.camera.up.copy(this.up);
-    this.camera.lookAt(target.copy(position).addScaledVector(forward, 14).addScaledVector(up, 1.2));
+    this.camera.lookAt(target.copy(position).addScaledVector(forward, CAMERA.lookAhead).addScaledVector(up, 1.2));
 
-    this.setFov(70 + clamp((speed - 30) * 0.42, 0, 30), dt);
+    this.setFov(CAMERA.fov + clamp((speed - 30) * CAMERA.fovPerSpeed, 0, CAMERA.fovMax), dt);
   }
 
   /** After a crash: stay put and look at the wreck */
@@ -80,13 +87,20 @@ export class CameraRig {
     this.up.lerp(WORLD_UP, 1 - Math.exp(-dt * 3)).normalize();
     this.camera.up.copy(this.up);
     this.camera.lookAt(point);
-    this.setFov(70, dt);
+    this.setFov(CAMERA.fov, dt);
+  }
+
+  /** A quick widening of the view, e.g. when flying through a gate */
+  kick(degrees = CAMERA.ringPunch) {
+    this.punch = Math.max(this.punch, degrees);
   }
 
   private setFov(fov: number, dt: number) {
     this.fov += (fov - this.fov) * (1 - Math.exp(-dt * 3));
-    if (Math.abs(this.camera.fov - this.fov) > 0.01) {
-      this.camera.fov = this.fov;
+    this.punch *= Math.exp(-dt * 4);
+    const total = this.fov + this.punch;
+    if (Math.abs(this.camera.fov - total) > 0.01) {
+      this.camera.fov = total;
       this.camera.updateProjectionMatrix();
     }
   }

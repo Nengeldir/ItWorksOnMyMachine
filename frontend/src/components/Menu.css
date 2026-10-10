@@ -65,7 +65,7 @@ body:has(.menu-backdrop:empty) {
 
 .menu-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   padding: 4px;
   border-radius: 16px;
   background: var(--ink-06);

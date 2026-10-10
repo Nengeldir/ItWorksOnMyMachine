@@ -2,6 +2,14 @@ import { IconArrowLeft, IconCheck, IconCopy } from "@tabler/icons-react";
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from "react";
 import type { Screen } from "../App";
 import { formatTime, ordinal } from "../format";
+import { webglAvailable } from "../game/webgl";
+import type { BiomeId } from "../game/world/biomes";
+import { RUN } from "../game/tuning";
+import { UPGRADES } from "../game/run/upgrades";
+import { BIOMES } from "../game/world/biomes";
+import { ExploreSession } from "../session/ExploreSession";
+import { RunSession } from "../session/RunSession";
+import { RunHud, TitleCard, UpgradePicker } from "./RunHud";
 import { RoomSession } from "../session/RoomSession";
 import { SoloSession } from "../session/SoloSession";
 import { type Settings, clientId } from "../storage";
@@ -257,7 +265,144 @@ const RoomScreen = ({ code, settings, onExit }: ScreenProps & { code: string }) 
   );
 };
 
-const GameScreen = ({ screen, ...props }: ScreenProps & { screen: Exclude<Screen, { kind: "menu" }> }) =>
-  screen.kind === "solo" ? <SoloScreen seed={screen.seed} {...props} /> : <RoomScreen code={screen.code} {...props} />;
+// --- Explore ---------------------------------------------------------------------
+
+const ExploreScreen = ({ biome, seed, settings, onExit }: ScreenProps & { biome: BiomeId; seed: number }) => {
+  const [session] = useState(() => new ExploreSession(biome, seed, settings));
+  const ref = useMountedSession(session, settings);
+  const { hud, error } = useSyncExternalStore(session.store.subscribe, session.store.get);
+  return (
+    <div className="game">
+      <div ref={ref} className="game-view" />
+      {hud && <Hud hud={hud} />}
+      <TopBar title={`Explore · ${hud ? `${hud.biomeName} · ${hud.paletteName}` : ""} · #${seed}`} onExit={onExit} />
+      {error && <div className="banner">{error}</div>}
+    </div>
+  );
+};
+
+// --- Roguelike run ------------------------------------------------------------------
+
+const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps & { seed: number; onNewRun: () => void }) => {
+  const [session] = useState(() => new RunSession(seed, settings));
+  const ref = useMountedSession(session, settings);
+  const { hud, stage, offers, next, arrived, summary, best, error } = useSyncExternalStore(session.store.subscribe, session.store.get);
+  const run = hud?.run ?? null;
+
+  useHotkeys({
+    Enter: () => {
+      if (stage === "intro") session.begin();
+      else if (stage === "summary") session.again();
+    },
+    KeyN: () => stage === "summary" && onNewRun(),
+  });
+
+  // The title card shows for the run's "arrive" phase, its first seconds in a biome
+  const showTitle = arrived && run?.phase === "arrive" && stage === "flying";
+
+  return (
+    <div className="game">
+      <div ref={ref} className="game-view" />
+      {hud && stage !== "pick" && <Hud hud={hud} />}
+      {run && stage !== "intro" && stage !== "summary" && stage !== "pick" && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
+      {showTitle && arrived && <TitleCard level={arrived.level} length={run!.length} biome={arrived.biome} />}
+      <TopBar
+        title={`Run #${seed}${run ? ` · level ${run.level}/${run.length} · ${run.biome} · ${run.mood}` : ""}`}
+        onExit={onExit}
+      />
+      {error && <div className="banner">{error}</div>}
+
+      {stage === "intro" && !error && (
+        <aside className="panel glass">
+          <h2>Run #{seed}</h2>
+          <p>
+            Fly through eight biomes, from Sky Isles to the Aurora Summit. Every level ends at a portal: fly into it
+            and choose an upgrade. Gates score more in a chain, and skimming the land earns style.
+          </p>
+          <p className="hint">
+            A crash puts you back at the last gate and breaks your gate chain. Abilities you pick up: <kbd>Shift</kbd> dash, <kbd>Space</kbd>{" "}
+            wingbeat, hold <kbd>F</kbd> to hover. The arrow at the top points to the portal.
+          </p>
+          {best !== null && <p>Your best on this run: {best.toLocaleString()}</p>}
+          <button className="primary" onClick={() => session.begin()}>
+            Take off <kbd>Enter</kbd>
+          </button>
+          <details>
+            <summary>Controls</summary>
+            <Controls settings={settings} onSettings={onSettings} />
+          </details>
+        </aside>
+      )}
+
+      {stage === "pick" && <UpgradePicker offers={offers} next={next} onPick={(id) => session.pick(id)} />}
+
+      {stage === "summary" && summary && (
+        <aside className="panel glass results">
+          <h2>The summit!</h2>
+          <p>
+            <strong>{summary.score.toLocaleString()}</strong> points
+            {best === null || summary.score > best ? " · a new best on this run!" : ` · your best is ${best.toLocaleString()}`}
+          </p>
+          <p>
+            {summary.levels} of 8 biomes: {summary.path.map((b) => BIOMES[b].name).join(" → ")}
+          </p>
+          <p>
+            {summary.upgrades.length > 0 && <>Upgrades: {summary.upgrades.map((id) => UPGRADES.find((u) => u.id === id)?.icon).join(" ")}</>}
+          </p>
+          <div className="row">
+            <button className="primary" onClick={() => session.again()}>
+              Fly it again <kbd>Enter</kbd>
+            </button>
+            <button onClick={onNewRun}>
+              New run <kbd>N</kbd>
+            </button>
+          </div>
+        </aside>
+      )}
+    </div>
+  );
+};
+
+/** Shown instead of the game when the browser can't create a WebGL context */
+const NoWebGL = ({ onExit }: { onExit: () => void }) => (
+  <div className="game">
+    <TopBar title="Wingrace" onExit={onExit} />
+    <aside className="panel glass no-webgl">
+      <h2>Your browser has 3D graphics turned off</h2>
+      <p>
+        Wingrace needs WebGL 2, and this browser won't create a WebGL context. That's a browser setting, not a
+        problem with the server. Usually one of these fixes it:
+      </p>
+      <ol>
+        <li>
+          Turn on hardware acceleration. In Chrome or Edge it's under Settings → System → "Use graphics
+          acceleration when available". Then relaunch the browser.
+        </li>
+        <li>
+          Restart the browser completely. After its GPU process crashes a few times, Chrome turns WebGL off until
+          the next restart.
+        </li>
+        <li>
+          Open <code>chrome://gpu</code> and check that WebGL says "Hardware accelerated". If your GPU is
+          blocklisted, try enabling <code>chrome://flags/#ignore-gpu-blocklist</code>, or use another browser.
+        </li>
+      </ol>
+      <button className="primary" onClick={() => location.reload()}>
+        Try again
+      </button>
+    </aside>
+  </div>
+);
+
+const GameScreen = ({ screen, onNewRun, ...props }: ScreenProps & { screen: Exclude<Screen, { kind: "menu" }>; onNewRun: () => void }) => {
+  if (!webglAvailable()) return <NoWebGL onExit={props.onExit} />;
+  if (screen.kind === "explore") return <ExploreScreen biome={screen.biome} seed={screen.seed} {...props} />;
+  if (screen.kind === "run") return <RunScreen seed={screen.seed} onNewRun={onNewRun} {...props} />;
+  return screen.kind === "solo" ? (
+    <SoloScreen seed={screen.seed} {...props} />
+  ) : (
+    <RoomScreen code={screen.code} {...props} />
+  );
+};
 
 export default GameScreen;
