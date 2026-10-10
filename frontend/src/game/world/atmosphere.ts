@@ -7,7 +7,10 @@ import { fxTime } from "../particles";
 // - haze that turns the sun's color when you look towards it, matching the sky,
 // - mist that thickens below you, down towards the sea of clouds,
 // - rims that light up on edges seen against the sun (backlight),
-// - rock strata: soft horizontal bands on cliffs.
+// - rock strata: soft horizontal bands on cliffs,
+// - under the sea: ripples of light from the surface running over everything.
+// The sky is a dome with the same light; under the sea it shows the water's
+// surface from below instead.
 
 export const ATMOSPHERE = {
   sunDirection: { value: new THREE.Vector3(0, 1, 0) },
@@ -24,6 +27,12 @@ export const ATMOSPHERE = {
   night: { value: 0 },
   aurora: { value: 0 },
   underglow: { value: new THREE.Color("#000000") },
+  // Under the sea (0 or 1): the height of the water's surface, how bright the
+  // ripples of light on the land are, and how bright the surface is from below
+  underwater: { value: 0 },
+  surface: { value: 0 },
+  caustics: { value: 1 },
+  surfaceGlow: { value: 1 },
   time: fxTime,
 };
 
@@ -37,6 +46,27 @@ export const MIST = /* glsl */ `
     float level = mix(cameraPosition.y - 40.0, atmoMistHeight, atmoMistMode);
     float above = world.y - level;
     return atmoMistDensity * (1.0 - exp(-max(-above, 0.0) / max(atmoMistThickness, 1.0))) * (1.0 - exp(-dist / 280.0));
+  }
+`;
+
+/**
+ * Light through a rippling surface: bright threads where two drifting fields of
+ * ripples cross. 0 to about 1.6. (No pow() of anything negative, nothing divided.)
+ */
+const CAUSTICS = /* glsl */ `
+  float atmoHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float atmoNoise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(atmoHash(i), atmoHash(i + vec2(1.0, 0.0)), u.x), mix(atmoHash(i + vec2(0.0, 1.0)), atmoHash(i + vec2(1.0, 1.0)), u.x), u.y);
+  }
+  float atmoCaustic(vec2 p, float t) {
+    float a = atmoNoise(p + vec2(t * 0.31, t * 0.17));
+    float b = atmoNoise(p * 1.31 + vec2(11.7 - t * 0.23, t * 0.29));
+    float c = atmoNoise(p * 2.37 + vec2(3.1 + t * 0.19, 5.3 - t * 0.27));
+    float fine = clamp(1.0 - abs(a - b) * 6.0, 0.0, 1.0);
+    float finer = clamp(1.0 - abs(b - c) * 5.0, 0.0, 1.0);
+    return fine * fine * fine + finer * finer * finer * 0.6;
   }
 `;
 
@@ -57,9 +87,13 @@ const PARS = /* glsl */ `
   uniform float atmoMistHeight;
   uniform float atmoMistThickness;
   uniform float atmoStrata;
+  uniform float atmoUnderwater;
+  uniform float atmoCaustics;
+  uniform float atmoTime;
   varying vec3 vAtmoWorld;
   ${SUN_GLOW}
   ${MIST}
+  ${CAUSTICS}
 `;
 
 /** Adds the haze, mist, backlight and strata to a Lambert material (terrain, rocks) */
@@ -74,6 +108,9 @@ export function atmospheric<T extends THREE.MeshLambertMaterial>(material: T, st
     shader.uniforms.atmoMistHeight = ATMOSPHERE.mistHeight;
     shader.uniforms.atmoMistThickness = ATMOSPHERE.mistThickness;
     shader.uniforms.atmoStrata = strataUniform;
+    shader.uniforms.atmoUnderwater = ATMOSPHERE.underwater;
+    shader.uniforms.atmoCaustics = ATMOSPHERE.caustics;
+    shader.uniforms.atmoTime = ATMOSPHERE.time;
     shader.vertexShader = shader.vertexShader
       .replace("void main() {", "varying vec3 vAtmoWorld;\nvoid main() {")
       .replace(
@@ -108,6 +145,14 @@ export function atmospheric<T extends THREE.MeshLambertMaterial>(material: T, st
           vec3 worldNormal = inverseTransformDirection(normal, viewMatrix);
           float rim = pow(1.0 - clamp(dot(worldNormal, -viewDir), 0.0, 1.0), 3.0);
           gl_FragColor.rgb += atmoSunColor * rim * pow(towardsSun, 3.0) * 0.45;
+          if (atmoUnderwater > 0.0) {
+            // Under the sea: ripples of light from the surface, cast along the sun's rays,
+            // brightest on what faces up, fading into the haze
+            vec2 shone = vAtmoWorld.xz - atmoSunDirection.xz * (vAtmoWorld.y / max(atmoSunDirection.y, 0.25));
+            float facing = clamp(worldNormal.y * 0.75 + 0.35, 0.0, 1.0);
+            float ripples = atmoCaustic(shone * 0.1, atmoTime) * facing * exp(-dist / 240.0) * atmoCaustics * atmoUnderwater;
+            gl_FragColor.rgb += (gl_FragColor.rgb * 0.85 + 0.05) * atmoSunColor * ripples;
+          }
           #ifdef USE_FOG
             float fogFactor = smoothstep(fogNear, fogFar, vFogDepth);
             float mist = atmoMist(vAtmoWorld, dist);
@@ -138,9 +183,13 @@ const skyFragment = /* glsl */ `
   uniform float night;
   uniform float aurora;
   uniform vec3 underglow;
+  uniform float underwater;
+  uniform float surface;
+  uniform float surfaceGlow;
   uniform float time;
   varying vec3 vDirection;
   ${SUN_GLOW}
+  ${CAUSTICS}
 
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float noise(vec2 p) {
@@ -156,6 +205,29 @@ const skyFragment = /* glsl */ `
 
   void main() {
     vec3 dir = normalize(vDirection);
+    if (underwater > 0.0) {
+      // Under the sea there is no sky: the haze all around (the horizon color, as the
+      // fog), darker in the deep below, and the water's surface far overhead
+      vec3 color = mix(horizon, horizon * 0.55, clamp(-dir.y * 1.4 - 0.2, 0.0, 1.0)) + sunGlow(dir);
+      if (dir.y > 0.02) {
+        float reach = max(surface - cameraPosition.y, 6.0) / dir.y;
+        vec2 hit = cameraPosition.xz + dir.xz * reach;
+        float ripples = atmoCaustic(hit * 0.03, time);
+        float swell = atmoNoise(hit * 0.009 + vec2(time * 0.05, time * 0.03));
+        // Snell's window: the world above squeezed into a bright disc overhead, its edge
+        // wobbling with the swell; outside it the surface mirrors the deep
+        float window = smoothstep(0.56, 0.8, dir.y + (swell - 0.5) * 0.16);
+        float d = max(dot(dir, atmoSunDirection), 0.0);
+        vec3 above = mix(horizon, zenith, 0.72) * (0.78 + swell * 0.3) + atmoSunColor * ripples * 0.4;
+        // The sun, a blaze broken up by the ripples
+        above += atmoSunColor * (pow(d, 40.0) * 0.3 + pow(d, 400.0) * (0.9 + ripples * 1.2));
+        vec3 mirror = mix(horizon, zenith, 0.22) * (0.9 + swell * 0.2) + zenith * ripples * 0.22;
+        float seen = exp(-reach / 430.0) * surfaceGlow;
+        color = mix(color, mix(mirror, above, window), clamp(seen, 0.0, 1.0));
+      }
+      gl_FragColor = vec4(color, 1.0);
+      return;
+    }
     float up = max(dir.y, 0.0);
     vec3 color = mix(horizon, zenith, pow(up, 0.6));
     color += sunGlow(dir);
@@ -200,7 +272,7 @@ const skyFragment = /* glsl */ `
   }
 `;
 
-/** A sky dome: gradient, sun disc and halo, clouds, and stars at night */
+/** A sky dome: gradient, sun disc and halo, clouds, and stars at night; under the sea, the water's surface from below */
 export function skyMaterial(): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms: {
@@ -212,6 +284,9 @@ export function skyMaterial(): THREE.ShaderMaterial {
       night: ATMOSPHERE.night,
       aurora: ATMOSPHERE.aurora,
       underglow: ATMOSPHERE.underglow,
+      underwater: ATMOSPHERE.underwater,
+      surface: ATMOSPHERE.surface,
+      surfaceGlow: ATMOSPHERE.surfaceGlow,
       time: ATMOSPHERE.time,
     },
     vertexShader: skyVertex,

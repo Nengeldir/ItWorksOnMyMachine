@@ -30,7 +30,7 @@ export function installDevtools() {
     // The live game (React's strict mode builds and drops one first in development)
     const g = (window as unknown as { __game: Game }).__game as unknown as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
     cancelAnimationFrame(g.frame);
-    document.querySelectorAll<HTMLElement>(".panel,.topbar,.hud,.ring-marker,.speed-vignette,.banner,.ghost-note").forEach((e) => (e.style.visibility = "hidden"));
+    document.querySelectorAll<HTMLElement>(".panel,.topbar,.hud,.ring-marker,.speed-vignette,.banner,.ghost-note,.debug-panel").forEach((e) => (e.style.visibility = "hidden"));
     if (g.quality !== 2) g.setQuality(2);
     g.render();
     g.respawn(0);
@@ -87,7 +87,7 @@ export function installDevtools() {
    */
   const run = async (seconds = 2) => {
     const g = (window as unknown as { __game: Game }).__game as unknown as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
-    document.querySelectorAll<HTMLElement>(".panel,.topbar,.hud,.ring-marker,.speed-vignette,.banner,.ghost-note").forEach((e) => (e.style.visibility = "hidden"));
+    document.querySelectorAll<HTMLElement>(".panel,.topbar,.hud,.ring-marker,.speed-vignette,.banner,.ghost-note,.debug-panel").forEach((e) => (e.style.visibility = "hidden"));
     let t = performance.now();
     for (let i = 0; i < seconds * 60; i++) {
       t += 1000 / 60;

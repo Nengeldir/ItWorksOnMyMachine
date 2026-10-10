@@ -7,7 +7,8 @@ import { forestAt } from "./world/flora/placement";
 import type { World } from "./world/World";
 
 // The air of a biome: particles drifting around the camera (fireflies in the
-// shade of the forest, pollen, snow, leaves, embers, spores, ash, glitter),
+// shade of the forest, pollen, snow, leaves, embers, spores, ash, glitter,
+// bubbles under the sea),
 // and the mist and spray at the foot of every waterfall. Spawned ahead of you,
 // so you fly into them. Looks only: nothing here touches the flight.
 
@@ -143,6 +144,15 @@ export class Ambient {
         look(s, rand(0.7, 1.3), rand(1.4, 2.4), Kind.Star, 0, 0, 3);
         const a = rand(0, Math.PI * 2);
         this.glow.emit(at, vel.set(Math.cos(a) * 55, rand(-35, -20), Math.sin(a) * 55), s);
+        break;
+      }
+      case "bubbles": {
+        // Rising in strings from the seabed, or out of the blue around you
+        at.set(cx + rand(-45, 45), cy + rand(-28, 8), cz + rand(-45, 45));
+        const g = this.groundAt(at.x, at.z);
+        if (!Number.isNaN(g) && (at.y < g + 0.5 || Math.random() < 0.4)) at.y = g + rand(0.3, 2.5);
+        look(s, rand(3.5, 6.5), rand(0.14, 0.4), Kind.Bubble, -1.4, 0.5, 1);
+        this.soft.emit(at, vel.set(rand(-0.3, 0.3), rand(0.8, 2.2), rand(-0.3, 0.3)), s);
         break;
       }
       case "leaves":

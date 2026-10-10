@@ -116,6 +116,14 @@ export const WATER = {
   spray: 1, // spray when skimming the water, mist at the foot of falls
 };
 
+/** Levels under the sea (Sunken Reef). Looks only */
+export const DEEP = {
+  caustics: 1, // ripples of light running over the seabed
+  shafts: 1, // shafts of light slanting down from the surface
+  surface: 1, // how bright the water's surface is from below
+  life: 1, // how brightly fish and jellyfish glow
+};
+
 /** The roguelike run's looks (its rules live in run/run.ts and run/upgrades.ts) */
 export const RUN = {
   tunnelFade: 1.4, // seconds to fade out of the tunnel into the next biome
@@ -132,7 +140,7 @@ export const AUDIO = {
   nightMuffle: 0.55, // how much the highs are rolled off at night
 };
 
-const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, STRUCTURES, WATER, RUN, AUDIO } as const;
+const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, STRUCTURES, WATER, DEEP, RUN, AUDIO } as const;
 const DEFAULTS = JSON.parse(JSON.stringify(GROUPS)) as typeof GROUPS;
 const STORAGE_KEY = "wingrace.tuning.speed-control-v1";
 
@@ -248,6 +256,10 @@ export const RANGES: Record<string, [number, number, number?]> = {
   sails: [0, 4],
   glitter: [0, 4],
   spray: [0, 4],
+  caustics: [0, 3],
+  shafts: [0, 3],
+  surface: [0, 2],
+  life: [0, 3],
   tunnelFade: [0.3, 4],
   compass: [0.5, 2],
   grassDistance: [40, 300, 5],
@@ -267,6 +279,7 @@ export const TUNING_GROUPS: [string, Group][] = [
   ["Plants", FLORA],
   ["Structures", STRUCTURES],
   ["Water", WATER],
+  ["Underwater", DEEP],
   ["Run", RUN],
   ["Audio", AUDIO],
 ];

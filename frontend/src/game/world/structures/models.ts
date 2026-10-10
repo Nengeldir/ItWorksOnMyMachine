@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { StructureSpec } from "../biomes/types";
-import { type Paint, limb, part, reseed, v } from "../flora/meshes";
-import type { StructureId } from "./kinds";
+import { type Paint, leaves, limb, part, reseed, v } from "../flora/meshes";
+import { type StructureId, WRECK_PITCH } from "./kinds";
 
 // Structure meshes built from primitives like the plants (flora/meshes.ts):
 // 1 m tall, in true proportions, the door facing +z, the plinth reaching below
@@ -513,6 +513,79 @@ function einsteinBust(c: Colors): THREE.BufferGeometry[] {
   return parts;
 }
 
+/**
+ * A sunken galleon, bow (+x) up on a mound of reef: planks crusted with coral
+ * (`wood`, `stone2`), the deck (`roof`), a stern castle with windows still lit,
+ * the main mast standing with the rags of a sail, the fore mast snapped, and
+ * a spilled chest of gold beside it. `stone` is the mound it rests on.
+ */
+function shipwreck(c: Colors): THREE.BufferGeometry[] {
+  const planks: Paint = { color: c.wood, color2: c.stone2, share2: 0.16, shade: [0.85, 1.1] };
+  const timber: Paint = { color: c.wood, shade: [0.8, 1.05] };
+  const lit: Paint = { color: c.light, shade: [1, 1], glow: LIT };
+  const gold: Paint = { color: c.trim, shade: [1, 1], glow: 0.8 };
+  // The hull: ribs of a U-shaped section from stern to bow, skinned inside and out
+  const stations = [-0.78, -0.6, -0.3, 0, 0.3, 0.55, 0.72, 0.84];
+  const section = (x: number) => {
+    const bow = Math.max(0, (x - 0.25) / 0.59);
+    const stern = Math.max(0, (-x - 0.45) / 0.33);
+    const w = 0.19 * (1 - bow * bow) * (1 - stern * 0.3) + 0.004;
+    const top = 0.17 + 0.09 * bow * bow + 0.1 * stern;
+    return [v(x, top, -w), v(x, 0.02, -w * 0.82), v(x + bow * 0.03, -0.1, 0), v(x, 0.02, w * 0.82), v(x, top, w)];
+  };
+  const skin: THREE.Vector3[][] = [];
+  for (let i = 0; i + 1 < stations.length; i++) {
+    const a = section(stations[i]);
+    const b = section(stations[i + 1]);
+    for (let k = 0; k < 4; k++) skin.push([a[k], b[k], b[k + 1]], [a[k], b[k + 1], a[k + 1]]);
+  }
+  const stern = section(stations[0]);
+  skin.push([stern[0], stern[1], stern[2]], [stern[0], stern[2], stern[4]], [stern[2], stern[3], stern[4]]);
+  const ship: [THREE.BufferGeometry, Paint][] = [
+    [leaves(skin), planks],
+    [new THREE.BoxGeometry(1.18, 0.012, 0.3).translate(-0.06, 0.15, 0), { color: c.roof, color2: c.stone2, share2: 0.2, shade: [0.9, 1.05] }],
+    // The stern castle, its windows and lantern still alight
+    [new THREE.BoxGeometry(0.3, 0.13, 0.31).translate(-0.6, 0.235, 0), planks],
+    [new THREE.BoxGeometry(0.34, 0.014, 0.35).translate(-0.6, 0.305, 0), { color: c.roof, shade: [0.9, 1.05] }],
+    [new THREE.BoxGeometry(0.012, 0.05, 0.05).translate(-0.752, 0.24, 0), lit],
+    [new THREE.BoxGeometry(0.012, 0.05, 0.05).translate(-0.752, 0.24, 0.09), lit],
+    [new THREE.BoxGeometry(0.012, 0.05, 0.05).translate(-0.752, 0.24, -0.09), lit],
+    [limb(v(-0.74, 0.31, 0), v(-0.8, 0.42, 0), 0.008, 0.006, 4), timber],
+    [new THREE.BoxGeometry(0.04, 0.05, 0.04).translate(-0.8, 0.44, 0), { color: c.light, shade: [1, 1], glow: LIT * 0.8 }],
+    // Bowsprit and figurehead
+    [limb(v(0.74, 0.25, 0), v(1.04, 0.34, 0), 0.016, 0.008, 5), timber],
+    [new THREE.IcosahedronGeometry(0.03, 0).translate(0.86, 0.24, 0), gold],
+    // The main mast, its crow's nest, a yard hanging askew and what is left of the sail
+    [limb(v(0.04, 0.1, 0), v(0.04, 1, 0), 0.024, 0.012, 6), timber],
+    [new THREE.CylinderGeometry(0.045, 0.035, 0.04, 6).translate(0.04, 0.86, 0), timber],
+    [limb(v(0.04, 0.68, -0.27), v(0.04, 0.76, 0.27), 0.011, 0.011, 4), timber],
+    [new THREE.IcosahedronGeometry(0.016, 0).translate(0.04, 1, 0), gold],
+    // The fore mast snapped, its top fallen across the rail
+    [limb(v(0.46, 0.12, 0), v(0.47, 0.4, 0.01), 0.02, 0.017, 5), timber],
+    [limb(v(0.47, 0.38, 0.01), v(0.34, 0.16, 0.42), 0.016, 0.009, 5), timber],
+  ];
+  for (const [z, drop] of [
+    [-0.17, 0.3],
+    [0, 0.18],
+    [0.16, 0.36],
+  ]) {
+    const y = 0.72 + z * 0.15;
+    ship.push([new THREE.BoxGeometry(0.006, drop, 0.15).translate(0.04, y - drop / 2, z), { color: c.cloth, shade: [0.8, 1.05], sway: [1, 0.05] }]);
+  }
+  const parts = ship.map(([geometry, paint]) => piece(geometry.rotateZ(WRECK_PITCH), paint));
+  // The reef it came to rest on, and a chest that broke open
+  parts.push(piece(new THREE.IcosahedronGeometry(1, 1).scale(0.72, 0.2, 0.3).translate(-0.04, -0.14, 0), { color: c.stone, color2: c.stone2, share2: 0.3, shade: [0.7, 1.05] }));
+  parts.push(piece(new THREE.BoxGeometry(0.07, 0.045, 0.05).rotateY(0.5).translate(0.14, 0.02, 0.36), timber));
+  for (const [x, y, z, r] of [
+    [0.19, 0.012, 0.4, 0.02],
+    [0.1, 0.01, 0.41, 0.016],
+    [0.16, 0.045, 0.37, 0.018],
+  ]) {
+    parts.push(piece(new THREE.IcosahedronGeometry(r, 0).translate(x, y, z), gold));
+  }
+  return parts;
+}
+
 /** Builds a structure's mesh in a biome's colors */
 export function structureGeometry(spec: StructureSpec, spinY: number): THREE.BufferGeometry {
   reseed(spec.id.length * 104729 + 31);
@@ -548,6 +621,7 @@ export function structureGeometry(spec: StructureSpec, spinY: number): THREE.Buf
     starAltar: () => starAltar(colors),
     ethMainBuilding: () => ethMainBuilding(colors),
     einsteinBust: () => einsteinBust(colors),
+    shipwreck: () => shipwreck(colors),
   };
   const parts = builders[spec.id]();
   const merged = mergeGeometries(parts)!;
