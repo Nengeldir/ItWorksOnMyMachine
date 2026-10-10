@@ -117,6 +117,7 @@ export class WorldView {
   private readonly sky: THREE.Mesh;
   private readonly lastStream = new THREE.Vector3(Infinity, 0, 0);
   private disposed = false;
+  private streamDirty = true;
 
   constructor(world: World, scene: THREE.Scene) {
     this.world = world;
@@ -331,7 +332,9 @@ export class WorldView {
   private stream(at: THREE.Vector3) {
     // Re-plan only after moving a bit; the queues keep the workers fed meanwhile
     const moved = this.lastStream.distanceToSquared(at) > 15 * 15;
+    if (!moved && !this.streamDirty) return;
     if (moved) this.lastStream.copy(at);
+    this.streamDirty = false;
 
     let missingNearby = false;
     const wanted: { chunk: RockChunk; d: number }[] = [];
@@ -351,6 +354,7 @@ export class WorldView {
   }
 
   private receive(result: ChunkMesh & { key: number }) {
+    this.streamDirty = true;
     const chunk = this.byKey.get(result.key);
     if (!chunk) return;
     chunk.state = "loaded";
@@ -441,7 +445,7 @@ export class WorldView {
   }
 
   /** Per frame: stream rock around the camera, the sky follows it, the gates animate */
-  update(camera: THREE.Camera, dt: number) {
+  update(camera: THREE.Camera, dt: number, velocity?: THREE.Vector3) {
     const mist = this.world.biome.sky.mist;
     if (mist.mode === "valley") ATMOSPHERE.mistHeight.value = this.world.valleyFloor(camera.position.z) + mist.above;
     const underwater = this.world.biome.sky.underwater;
@@ -455,7 +459,7 @@ export class WorldView {
       this.seaLife!.update(DEEP.life);
     }
     if (this.land) {
-      this.land.update(camera.position, this.dispatch);
+      this.land.update(camera.position, this.dispatch, velocity);
       this.ready = this.land.ready;
       applyTerrainTuning(this.terrainUniforms!, (this.world.biome.terrain as { layers: Layers }).layers);
       this.flora?.update(camera);

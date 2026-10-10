@@ -1422,7 +1422,7 @@ export class Game implements RunHost {
 
     const camera = this.rig.camera;
     camera.updateMatrixWorld();
-    this.view.update(camera, dt);
+    this.view.update(camera, dt, crashed ? undefined : this.flight.velocity);
     this.run?.frame(dt);
     if (!this.inWormhole) {
       this.gateMotes(dt);

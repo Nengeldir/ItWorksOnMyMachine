@@ -87,7 +87,7 @@ export const AURORA: Biome = {
       // 0: snow over dark rock
       { rock: "#5a6070", rock2: "#7a8090", under: "#30343e", top: "#f2f5ff", top2: "#dfe5f5", snow: true },
       // 1: ancient crystal, glowing
-      { rock: "#9a7aff", rock2: "#c8b0ff", under: "#5a40c0", top: "#e0d0ff", snow: false, glow: 0.35, bare: true },
+      { rock: "#9a7aff", rock2: "#c8b0ff", under: "#5a40c0", top: "#e0d0ff", snow: false, glow: 0.35, crystal: true, bare: true },
       // 2: dark stone
       { rock: "#3a3a4a", rock2: "#4a4a5c", under: "#22222c", top: "#e8eef8", snow: true },
     ],

@@ -65,9 +65,10 @@ export class TerrainField {
     let rough = 0;
     let grain: Grain = Grain.Lumpy;
     if (this.ground) {
-      d = this.ground.distance(x, y, z);
+      const ground = this.ground.sample(x, y, z);
+      d = ground.distance;
       nearest = d;
-      rough = this.groundRough;
+      rough = this.groundRough * ground.detailScale;
     }
     const list = this.cells.get(cellKey(Math.floor(x / CELL), Math.floor(y / CELL), Math.floor(z / CELL)));
     if (list) {
@@ -167,7 +168,7 @@ export class TerrainField {
             const c = i + n * k;
             d = ground.shape(x, y, z, h[c], gx[c], gz[c]);
             nearest = d;
-            rough = this.groundRough;
+            rough = this.groundRough / Math.sqrt(1 + gx[c] * gx[c] + gz[c] * gz[c]);
           }
           for (const shape of shapes) {
             if (!near(shape, x, y, z)) continue;

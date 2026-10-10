@@ -23,7 +23,8 @@ export interface Surface {
   top: string; // what covers flat ground: grass, moss, sand, ash, a mushroom cap…
   top2?: string; // drier or lusher patches of it
   snow: boolean; // snow settles on it above the snow line
-  glow?: number; // self-lit cracks (lava) or spots, as a share of faces
+  glow?: number; // 0..1 strength of restrained facet emission
+  crystal?: boolean; // opaque rendering with tinted-core/edge-light translucency cues
   bare?: boolean; // nothing grows on it
 }
 

@@ -247,6 +247,29 @@ Test mode is included in the normal production build. Use the existing
 `?test` to your deployed URL). No Dockerfile changes, build arguments,
 `VITE_ENABLE_DEBUG` flag, or debug Compose override are required.
 
+Terrain meshing preserves shared chunk edges, removes small closed slivers,
+and shortens narrow attached tips without deleting faces. Compact floating
+stones gain a single rounder subdivision at full detail; broad terrain keeps
+its low-poly silhouette. Border-crossing fragments remain intact to protect
+seams. Mountain surface noise uses the same slope scale as the ground distance,
+preventing floating sheets above steep peaks at every detail level. Glowing
+terrain uses restrained facet emission without painted stripes or random bright
+triangles. Aurora crystals fake translucency with a tinted core, pale edges
+and view-dependent highlights while remaining opaque. Selected rock patches
+vary facet spacing and diagonal direction; bounded mountain relief stays
+attached to the heightfield. Terrain sampling progresses through 24/12/6/3 metres: these are
+cell sizes, not activation distances. The closest tier is requested within
+140 metres of chunk bounds in all directions, plus two seconds of velocity
+look-ahead (capped at 240 metres). The 6/12-metre tiers begin at 300/700 metres.
+The existing mesh stays visible while finer replacements load. `MESH_CLEANUP` in `tuning.ts` controls thickness, size and tip thresholds
+(worker settings: edit and reload, not live sliders). Recently hidden terrain is
+cached, and detail-level changes use separate split/merge distances to avoid
+repeated rebuilding. In the developer `?tune` panel, `Terrain` exposes
+`cacheMiB` (48 by default), `lodHysteresis` (48 metres), `lodDetail`,
+`lodLookAheadSeconds` and `lodLookAheadMax`. The cache is bounded
+by estimated buffer memory and 256 hidden nodes. Mixed-detail terrain still
+uses overlapping border cells; it is not a fully stitched adaptive mesh.
+
 **Flight model** ([`frontend/src/game/flight.ts`](frontend/src/game/flight.ts)):
 an arcade, energy-based wingsuit. The nose points where you go, gravity along
 the flight path speeds you up or slows you down, drag caps the speed, and
@@ -297,7 +320,7 @@ doesn't fly the course itself.
 | `frontend/src/game/Game.ts`            | The game: loop, physics steps, race state, HUD data      |
 | `frontend/src/game/input.ts`           | Input, actions and shared keyboard bindings (including pause) |
 | `frontend/src/game/world/`             | Racing line, rock field, meshing workers, palettes, view |
-| `frontend/src/game/world/snap.ts`      | Snaps meshed land onto the distance field                |
+| `frontend/src/game/world/meshCleanup.ts` | Preserves compact stones, removes closed slivers and trims narrow tips; protects chunk borders |
 | `frontend/src/game/world/landCollider.ts` | Collisions with the land exactly as drawn             |
 | `frontend/src/game/world/structures/`  | Towers, lanterns, windmills and a shipwreck in the adventure's biomes |
 | `frontend/src/game/world/deep.ts`      | Under the sea: light shafts, schools of fish, jellyfish  |
@@ -386,3 +409,5 @@ browser console, handy for teleporting around or poking at the race state.
 - AI race commentary or course names through the hackathon's LLM proxy
 - Spectator camera that follows the race leader
 - Daily challenge history and per-ring split times
+
+Terrain detail replacements keep normal flight active while existing terrain covers the area. The loading glide remains only for genuinely missing nearby terrain, including initial loading.

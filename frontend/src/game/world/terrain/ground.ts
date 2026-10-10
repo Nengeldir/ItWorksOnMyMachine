@@ -1,3 +1,4 @@
+import { TERRAIN_DETAIL } from "../../tuning";
 import { smoothstep } from "../../math";
 import type { Rng } from "../../rng";
 import type { Course } from "../course";
@@ -81,7 +82,14 @@ export class Ground {
     if (s.mountains && a > this.mountainReach) {
       const m = s.mountains;
       const mask = smoothstep(m.from, m.from + m.ramp, a + 90 * n(x * 0.0021 + 3.1, z * 0.0021));
-      if (mask > 0) h += m.amp * mask * warpedRidged(n, x / m.scale, z / m.scale, m.warp, 5, m.sharpness);
+      if (mask > 0) {
+        h += m.amp * mask * warpedRidged(n, x / m.scale, z / m.scale, m.warp, 5, m.sharpness);
+        // Medium-scale relief lives in the heightfield, so it stays attached
+        // instead of creating disconnected 3D-noise sheets above steep slopes.
+        // All LODs sample this same bounded field; finer cells reveal its facets.
+        h += s.roughness * TERRAIN_DETAIL.mountainRelief * mask *
+          (0.7 * n(x * 0.045, z * 0.045) + 0.3 * n(x * 0.11, z * 0.11));
+      }
     }
     if (s.terraces) {
       const t = s.terraces;
@@ -111,24 +119,32 @@ export class Ground {
 
   /** Signed distance to the ground, with overhangs carved into steep slopes */
   distance(x: number, y: number, z: number): number {
+    return this.sample(x, y, z).distance;
+  }
+
+  /** Reuse the slope correction for detail as well as the base distance. */
+  sample(x: number, y: number, z: number): { distance: number; detailScale: number } {
     const lineX = this.course.x(z);
     const lineY = this.course.y(z);
     const h = this.heightAt(x, z, lineX, lineY);
     const gx = this.heightAt(x + 1, z, lineX, lineY) - h;
     const gz = this.height(x, z + 1) - h;
-    return this.shape(x, y, z, h, gx, gz);
+    return { distance: this.shape(x, y, z, h, gx, gz), detailScale: 1 / Math.sqrt(1 + gx * gx + gz * gz) };
   }
 
   /** Distance from height and slope, shared with the mesher's column cache */
   shape(x: number, y: number, z: number, h: number, gx: number, gz: number): number {
     const slope2 = gx * gx + gz * gz;
-    let d = (y - h) / Math.sqrt(1 + slope2);
+    const detailScale = 1 / Math.sqrt(1 + slope2);
+    let d = (y - h) * detailScale;
     const o = this.spec.overhang;
     if (o > 0 && d < o * 2 && d > -o * 2) {
       const steep = smoothstep(0.6, 2.2, Math.sqrt(slope2));
       if (steep > 0) {
         const n = this.noise.n3;
-        d += o * steep * (n(x / 22, y / 14, z / 22) * 0.75 + n(x / 9, y / 9, z / 9) * 0.25);
+        // Adding unscaled noise to a slope-normalized distance amplified it
+        // vertically by the gradient, creating sheets far above sharp peaks.
+        d += o * steep * detailScale * (n(x / 22, y / 14, z / 22) * 0.75 + n(x / 9, y / 9, z / 9) * 0.25);
       }
     }
     return d;

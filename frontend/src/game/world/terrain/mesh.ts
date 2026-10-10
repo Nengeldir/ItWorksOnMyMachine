@@ -1,12 +1,13 @@
 import { Color } from "three";
 import { clamp, smoothstep } from "../../math";
+import { TERRAIN_DETAIL } from "../../tuning";
 import { hash3 } from "../../rng";
 import type { Surface } from "../biomes/types";
-import { SurfaceCutter, snapToSurface } from "../snap";
+import { cleanMesh, remapFaces } from "../meshCleanup";
 import type { World } from "../World";
 
 // Surface nets for generator-v2 land, at any level of detail. A node of LOD n
-// is 96·2ⁿ metres wide with 16 cells a side (6·2ⁿ m voxels), so far land is
+// is 48·2ⁿ metres wide with 16 cells a side (3·2ⁿ m voxels), so far land is
 // coarse and every node costs about the same. Coarse nodes also own the edges
 // one cell past their borders: they overlap their neighbours a little, which
 // hides the cracks where two levels of detail meet.
@@ -16,7 +17,7 @@ import type { World } from "../World";
 // is, how much it glows and how high it is for snow. The terrain shader blends
 // those by slope; see terrainMaterial.ts.
 
-export const VOXEL = 6;
+export const VOXEL = 3;
 export const NODE_CELLS = 16;
 export const NODE_SIZE = VOXEL * NODE_CELLS;
 
@@ -24,6 +25,7 @@ export interface TerrainMesh {
   positions: Float32Array; // flat triangles, world coordinates
   rock: Uint8Array; // rgba per vertex: rock color, glow
   cover: Uint8Array; // rgba per vertex: cover color, wetness
+  crystal: Uint8Array; // 0/255 per vertex: crystal-only optical shading
   snow: Float32Array; // per vertex: metres above the racing line for snow (very negative: never)
 }
 
@@ -85,7 +87,7 @@ export function nodeKey(lod: number, ix: number, iy: number, iz: number): number
   return ((lod * 2048 + ix + 1024) * 2048 + iy + 1024) * 2048 + iz + 1024;
 }
 
-const EMPTY: TerrainMesh = { positions: new Float32Array(0), rock: new Uint8Array(0), cover: new Uint8Array(0), snow: new Float32Array(0) };
+const EMPTY: TerrainMesh = { positions: new Float32Array(0), rock: new Uint8Array(0), cover: new Uint8Array(0), snow: new Float32Array(0), crystal: new Uint8Array(0) };
 
 export function meshNode(world: World, lod: number, ix: number, iy: number, iz: number): TerrainMesh {
   const field = world.land!;
@@ -110,7 +112,6 @@ export function meshNode(world: World, lod: number, ix: number, iy: number, iz: 
 
   // One vertex per crossed cell, at the average of where its edges cross the surface
   const vertices = new Float32Array(C * C * C * 3);
-  const used: number[] = [];
   const values = new Float32Array(8);
   for (let k = 0; k < C; k++) {
     for (let j = 0; j < C; j++) {
@@ -139,25 +140,45 @@ export function meshNode(world: World, lod: number, ix: number, iy: number, iz: 
           count++;
         }
         const v = (i + C * (j + C * k)) * 3;
-        vertices[v] = ox + (i + sx / count) * S;
-        vertices[v + 1] = oy + (j + sy / count) * S;
-        vertices[v + 2] = oz + (k + sz / count) * S;
-        used.push(v);
+        const px = sx / count, py = sy / count, pz = sz / count;
+        const wx = ox + (i + 0.5) * S, wy = oy + (j + 0.5) * S, wz = oz + (k + 0.5) * S;
+        // Selected coherent patches, not a uniform noise blanket. Tangential
+        // offsets vary facet sizes while retaining the broad surface shape.
+        // Global cell coordinates give shared vertices exactly the same offset.
+        const patch = smoothstep(0.15, 0.6, field.noise.n2(wx * 0.013, wz * 0.013 + wy * 0.003));
+        const scatter = Math.min(0.8 / S, TERRAIN_DETAIL.facetScatter) * patch;
+        let dx = 0, dy = 0, dz = 0;
+        if (scatter > 0) {
+          const gx = (values[1] + values[3] + values[5] + values[7]) - (values[0] + values[2] + values[4] + values[6]);
+          const gy = (values[2] + values[3] + values[6] + values[7]) - (values[0] + values[1] + values[4] + values[5]);
+          const gz = (values[4] + values[5] + values[6] + values[7]) - (values[0] + values[1] + values[2] + values[3]);
+          const ix = Math.round(ox / S) + i, iy = Math.round(oy / S) + j, iz = Math.round(oz / S) + k;
+          dx = (hash3(ix, iy, iz) * 2 - 1) * scatter;
+          dy = (hash3(ix + 371, iy - 127, iz) * 2 - 1) * scatter;
+          dz = (hash3(ix, iy + 229, iz - 173) * 2 - 1) * scatter;
+          const along = (dx * gx + dy * gy + dz * gz) / Math.max(gx * gx + gy * gy + gz * gz, 1e-12);
+          dx -= gx * along; dy -= gy * along; dz -= gz * along;
+          // Scale the vector together, preserving its tangential direction and
+          // keeping the vertex inside its own cell (no crossing neighbours).
+          let limit = Math.min(1, 0.8 / (S * Math.max(Math.hypot(dx, dy, dz), 1e-12)));
+          for (const [p, d] of [[px, dx], [py, dy], [pz, dz]]) {
+            if (d > 0) limit = Math.min(limit, (1 - p) * 0.8 / d);
+            else if (d < 0) limit = Math.min(limit, -p * 0.8 / d);
+          }
+          dx *= limit; dy *= limit; dz *= limit;
+        }
+        vertices[v] = ox + (i + px + dx) * S;
+        vertices[v + 1] = oy + (j + py + dy) * S;
+        vertices[v + 2] = oz + (k + pz + dz) * S;
       }
     }
   }
-  // Full detail (the land you can touch): vertices onto the surface collisions use
-  // and faces cut where they still stray from it (ridges, lips, creases)
-  const distance = (x: number, y: number, z: number) => field.distance(x, y, z);
-  // The grid's own vertices: each face keeps the way it faced there (see SurfaceCutter.triangle)
-  const grid = lod === 0 ? vertices.slice() : vertices;
-  if (lod === 0) snapToSurface(vertices, used, distance, { ox, oy, oz, size: S, cells: C });
-  const cutter = lod === 0 ? new SurfaceCutter(distance) : null;
-
   const positions: number[] = [];
   const rockOut: number[] = [];
   const coverOut: number[] = [];
   const snowOut: number[] = [];
+  const crystalOut: number[] = [];
+  let crystal = 0;
   const surfaces = terrain.surfaces;
   // Only ask which surface a face belongs to when shapes are nearby; otherwise it's the ground
   const shapesNear = field.shapes.some(
@@ -178,13 +199,13 @@ export function meshNode(world: World, lod: number, ix: number, iy: number, iz: 
     rockOut.push(rgba[0], rgba[1], rgba[2], rgba[3]);
     coverOut.push(rgba[4], rgba[5], rgba[6], rgba[7]);
     snowOut.push(snowHeight);
+    crystalOut.push(crystal);
   };
   const emit = (ax: number, ay: number, az: number, bx: number, by: number, bz: number, cx: number, cy: number, cz: number) => {
     corner(ax, ay, az);
     corner(bx, by, bz);
     corner(cx, cy, cz);
   };
-  if (cutter) cutter.emit = emit;
 
   const triangle = (a: number, b: number, c: number) => {
     const ax = vertices[a];
@@ -209,6 +230,7 @@ export function meshNode(world: World, lod: number, ix: number, iy: number, iz: 
     const id = shapesNear ? field.surfaceAt(mx, my, mz) : field.groundSurface;
     const paint = paintFor(surfaces[id] ?? surfaces[0]);
     const s = paint.surface;
+    crystal = s.crystal ? 255 : 0;
     const above = my - world.course.y(mz);
 
     // Rock: strata bands wavering around the hill, dark streaks running down, darker undersides
@@ -240,9 +262,8 @@ export function meshNode(world: World, lod: number, ix: number, iy: number, iz: 
       if (my > sea - 8) wet = Math.max(wet, 1 - smoothstep(1, 4.5, my - sea));
     }
 
-    // Glowing cracks
-    let glow = 0;
-    if (s.glow) glow = smoothstep(1 - s.glow, 1, 0.5 + 0.5 * noise(mx * 0.11, mz * 0.11 + my * 0.07)) * (0.6 + 0.4 * jitter);
+    // Subtle facet variation, bounded by the surface's emission strength.
+    const glow = (s.glow ?? 0) * (0.65 + 0.35 * jitter);
 
     snowHeight = s.snow ? above + (jitter - 0.5) * 24 : -1e4;
     rgba[0] = byte(rock.r);
@@ -259,21 +280,38 @@ export function meshNode(world: World, lod: number, ix: number, iy: number, iz: 
     const cx = vertices[c];
     const cy = vertices[c + 1];
     const cz = vertices[c + 2];
-    if (cutter) {
-      const ux = grid[b] - grid[a];
-      const uy = grid[b + 1] - grid[a + 1];
-      const uz = grid[b + 2] - grid[a + 2];
-      const vx = grid[c] - grid[a];
-      const vy = grid[c + 1] - grid[a + 1];
-      const vz = grid[c + 2] - grid[a + 2];
-      cutter.triangle(ax, ay, az, bx, by, bz, cx, cy, cz, uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx);
-    }
-    else emit(ax, ay, az, bx, by, bz, cx, cy, cz);
+    emit(ax, ay, az, bx, by, bz, cx, cy, cz);
   };
 
+  let qnx = 0, qny = 0, qnz = 0;
+  const quality = (a: number, b: number, c: number) => {
+    const ux = vertices[b] - vertices[a], uy = vertices[b + 1] - vertices[a + 1], uz = vertices[b + 2] - vertices[a + 2];
+    const vx = vertices[c] - vertices[a], vy = vertices[c + 1] - vertices[a + 1], vz = vertices[c + 2] - vertices[a + 2];
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    if (nx * qnx + ny * qny + nz * qnz <= 0) return -1;
+    const area = Math.hypot(nx, ny, nz);
+    const longest2 = Math.max(ux * ux + uy * uy + uz * uz, vx * vx + vy * vy + vz * vz, (ux - vx) ** 2 + (uy - vy) ** 2 + (uz - vz) ** 2);
+    return area / Math.max(longest2, 1e-12);
+  };
   const quad = (a: number, b: number, c: number, d: number) => {
-    triangle(a, b, c);
-    triangle(a, c, d);
+    const ux = vertices[c] - vertices[a], uy = vertices[c + 1] - vertices[a + 1], uz = vertices[c + 2] - vertices[a + 2];
+    const vx = vertices[d] - vertices[b], vy = vertices[d + 1] - vertices[b + 1], vz = vertices[d + 2] - vertices[b + 2];
+    qnx = uy * vz - uz * vy;
+    qny = uz * vx - ux * vz;
+    qnz = ux * vy - uy * vx;
+    // Avoid a needle triangle when the other diagonal gives two broad faces.
+    // Only the interior diagonal changes; shared chunk edges remain identical.
+    const ac = Math.min(quality(a, b, c), quality(a, c, d));
+    const bd = Math.min(quality(a, b, d), quality(b, c, d));
+    const comparable = ac > 0.1 && bd > 0.1 && Math.min(ac, bd) > Math.max(ac, bd) * 0.88;
+    const alternate = hash3(Math.round(vertices[a] + vertices[c]), Math.round(vertices[a + 1] + vertices[c + 1]), Math.round(vertices[a + 2] + vertices[c + 2])) > 0.5;
+    if (comparable ? alternate : bd > ac) {
+      triangle(a, b, d);
+      triangle(b, c, d);
+    } else {
+      triangle(a, b, c);
+      triangle(a, c, d);
+    }
   };
 
   // A quad for every grid edge the surface crosses, from the four cells around it.
@@ -303,10 +341,15 @@ export function meshNode(world: World, lod: number, ix: number, iy: number, iz: 
     }
   }
 
+  // Distant nodes never used centre refinement. Keep their coarse geometry
+  // and worker cost unchanged; cleanup is for the full-detail flight surface.
+  if (lod > 0) return { positions: new Float32Array(positions), rock: new Uint8Array(rockOut), cover: new Uint8Array(coverOut), snow: new Float32Array(snowOut), crystal: new Uint8Array(crystalOut) };
+  const cleaned = cleanMesh(new Float32Array(positions), [ix * size, iy * size, iz * size], size, S);
   return {
-    positions: new Float32Array(positions),
-    rock: new Uint8Array(rockOut),
-    cover: new Uint8Array(coverOut),
-    snow: new Float32Array(snowOut),
+    positions: cleaned.positions,
+    rock: remapFaces(new Uint8Array(rockOut), cleaned.sources, 12),
+    cover: remapFaces(new Uint8Array(coverOut), cleaned.sources, 12),
+    crystal: remapFaces(new Uint8Array(crystalOut), cleaned.sources, 3),
+    snow: remapFaces(new Float32Array(snowOut), cleaned.sources, 3),
   };
 }
