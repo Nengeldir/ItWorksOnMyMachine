@@ -84,3 +84,49 @@ test("the test sandbox never runs out of lives", () => {
   assert.equal(run.hud().lives, Infinity);
   assert.equal(summaries.length, 0);
 });
+
+/** Through the portal and the upgrade pick, to the moment the way out hands control back (the blur still clearing) */
+const leavePortal = (run) => {
+  run.enterPortal();
+  run.frame(0.55);
+  run.frame(0.55);
+  assert.equal(run.phase, "pick");
+  run.pick("dash");
+  run.frame(0.1);
+  run.frame(0.41);
+  assert.equal(run.phase, "portal");
+};
+
+test("a crash on the way out of a portal, once control is back, costs a life", () => {
+  const { run } = makeRun();
+  leavePortal(run);
+  run.crashed();
+  assert.equal(run.hud().lives, 2);
+  // The transition still ends in the new level
+  run.frame(2);
+  assert.equal(run.phase, "arrive");
+  run.testWin();
+});
+
+test("the last life's crash on the way out of a portal ends the run and clears the blur", () => {
+  const { run, host, summaries } = makeRun(1);
+  let veil = 1;
+  host.veil = (k) => { veil = k; };
+  leavePortal(run);
+  assert.ok(veil > 0);
+  run.crashed();
+  assert.equal(run.phase, "lost");
+  assert.equal(veil, 0);
+  for (let i = 0; i < 20; i++) run.frame(0.1);
+  assert.equal(summaries.length, 1);
+  assert.equal(summaries[0].completed, false);
+  assert.equal(summaries[0].crashes, 1);
+});
+
+test("inside the wormhole nothing counts as a crash", () => {
+  const { run } = makeRun();
+  run.enterPortal();
+  run.frame(0.55);
+  run.crashed();
+  assert.equal(run.hud().lives, 3);
+});
