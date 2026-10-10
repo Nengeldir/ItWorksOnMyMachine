@@ -214,6 +214,27 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Test mode brought onto `Pengyue` (Claude)
+
+Asked for: move every test-mode function and the test panel from
+`claudia-debug` onto `Pengyue`, so it stays while `Pengyue` moves on.
+- Cherry-picked `4acb722` (test mode) and `2819fc0` (its fixes: `route.ts`,
+  `&test` on any single-player URL, run HUD and panel layout, docs, tests).
+  Not merged: `claudia-debug`'s merges of `main` stay out.
+- Conflicts with the abilities work: `input.ts` keeps the new actions
+  (hover, plunge, burst) and adds `TestAction`; `Game.loop` keeps the
+  non-negative frame clamp and scales it by the test playback rate
+  (adaptive quality reads the unscaled time). Docs: both sides kept.
+- Verified: build and lint pass; 45 frontend tests (Node 22.14 with a
+  `module.register` resolver). In Chrome: `?explore=verdant&seed=2&test`
+  opens Verdant as `?seed=2&test=verdant`, the panel and run HUD show,
+  Shift+P puts the portal 40 m ahead, Shift+S halves the rate and relabels
+  the panel, `__game.grant` still works in a test run, a portal opens the
+  picker and leads to level 2, Shift+O shows "Test #2 · complete"; no
+  console errors. Keys sent as script events, not typed.
+- The `?debug` variant on `origin/claudia-test_mode` (buttons, portal
+  distance setting) is a different implementation and was not brought over.
+
 ### 2026-10-10: The design list's first ten abilities (Claude)
 
 Asked for: write the items and abilities list into this file (the new
