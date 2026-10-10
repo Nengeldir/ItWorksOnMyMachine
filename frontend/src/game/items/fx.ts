@@ -60,6 +60,7 @@ const lookAlong = (out: THREE.Quaternion, direction: THREE.Vector3) =>
 /** How each item is taken out and used up in the hand (the firework and the boots are worn instead) */
 const USE_STYLE: Partial<Record<RunItemId, "eat" | "raise" | "toss">> = {
   spiritLantern: "raise",
+  echoConch: "raise",
   anemoCatcher: "raise",
   starflakeShield: "raise",
   gliderWax: "raise",

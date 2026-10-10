@@ -17,7 +17,11 @@ export class RelicFx {
   readonly group = new THREE.Group();
   private readonly markers = new RingQuads(64, false);
   private debt = 0;
-  constructor(private readonly avatar: Avatar, private readonly equipment: Equipment, private readonly particles: Particles) {
+  private readonly avatar: Avatar;
+  private readonly equipment: Equipment;
+  private readonly particles: Particles;
+  constructor(avatar: Avatar, equipment: Equipment, particles: Particles) {
+    this.avatar = avatar; this.equipment = equipment; this.particles = particles;
     this.group.add(this.markers.mesh);
   }
   used(id: RunItemId) { void id; }
@@ -27,6 +31,17 @@ export class RelicFx {
     if (lantern) for (const gate of items.ghostGates) {
       if (!gate.collected && gate.position.distanceToSquared(flight.position) < 500 * 500) {
         this.markers.add(gate.position, gate.normal, gate.radius, 0.75 * ITEMS_FX.relics, 0.08, 0, GOLD);
+      }
+    }
+    const sonar = items.time("echoConch");
+    if (sonar >= 0) {
+      for (const point of items.path) this.markers.add(point, null, 9, 0.65 * ITEMS_FX.relics, 0.025, 4, GOLD);
+      for (let j=0;j<3;j++) this.markers.add(this.avatar.group.position, null, 2 + ((sonar * 45 + j * 20) % 90), 0.18 * ITEMS_FX.relics, 0.015, 3, GOLD);
+      // Breadcrumbs follow the carved racing tube, rather than cutting corners between gates.
+      const end = items.path[items.path.length-1]?.z ?? flight.position.z;
+      for(let z=flight.position.z+8;z<end;z+=12){
+        items.world?.course.pointAt(z, at);
+        this.markers.add(at, null, 0.45, 0.6 * ITEMS_FX.relics, 0.1, 3, GOLD);
       }
     }
     if (lantern && this.equipment.wearing("hand") !== "spiritLantern") this.equipment.equip("spiritLantern");
