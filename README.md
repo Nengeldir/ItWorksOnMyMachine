@@ -212,6 +212,18 @@ The gallery (`/?gallery`) folds its controls on small screens.
 Item rules appear under **Run items**, placement under **Island pickups** (takes
 effect next level), and looks under **Item looks** in `?tune`.
 
+## Cosmetics
+
+The appearance catalog in `frontend/src/game/cosmetics/` extends the pilot's
+original cape and boots with Dawn sail, Leafwhisper, Aurora veil, Phoenix mantle
+and Cloud court capes; Stargazer hat, Lotus crown, Grove antlers and Sky courier
+hats (plus the existing Aviator cap and Winged helm); and Cloud slippers, Petal
+steps, Frost walkers and Ember greaves. All use the pilot's toon shading,
+night-sensitive trims and animated joints. Appearance preferences are validated
+and saved separately from controls and scores; they never affect flight physics.
+Wings and companion pets use the same saved appearance; the journal and the
+test fitting room select them.
+
 ## How It Works
 
 ```
