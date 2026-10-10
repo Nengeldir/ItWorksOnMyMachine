@@ -111,13 +111,8 @@ const Panel = ({ head, intro, actions, className = "", children }: PanelProps) =
   );
 };
 
-/** Before a race, where the race timer will be: one line and the button that starts it */
-const ReadyCard = ({ note, children }: { note: ReactNode; children: ReactNode }) => (
-  <div className="ready-card glass">
-    <span>{note}</span>
-    {children}
-  </div>
-);
+/** Before a race, where the race timer will be: just the button that starts it (`start-cta` draws the eye) */
+const ReadyCard = ({ children }: { children: ReactNode }) => <div className="ready-card glass">{children}</div>;
 
 // --- Time trial ------------------------------------------------------------------
 
@@ -143,8 +138,8 @@ const SoloScreen = ({ seed, settings, onSettings, onExit }: ScreenProps & { seed
       {error && <div className="banner glass">{error}</div>}
 
       {stage === "ready" && !error && (
-        <ReadyCard note={hud ? `${hud.totalCheckpoints} gates · warm up as long as you like` : "Warm up as long as you like"}>
-          <button className="primary" onClick={() => session.start()}>
+        <ReadyCard>
+          <button className="primary start-cta" onClick={() => session.start()}>
             Start the run <kbd>Enter</kbd>
           </button>
         </ReadyCard>
@@ -228,9 +223,9 @@ const RoomScreen = ({ code, settings, onSettings, onExit }: ScreenProps & { code
       )}
 
       {room && lobby && (
-        <ReadyCard note={`Race room · ${room.players.length} ${room.players.length === 1 ? "pilot" : "pilots"}`}>
+        <ReadyCard>
           <div className="row">
-            <button className="primary" onClick={() => session.start()}>
+            <button className="primary start-cta" onClick={() => session.start()}>
               Start race <kbd>Enter</kbd>
             </button>
             <button onClick={() => session.newMap()}>

@@ -16,6 +16,7 @@
 }
 
 .hud-timer {
+  font-family: var(--font-numbers);
   font-size: 2.3rem;
   font-weight: 800;
   letter-spacing: -0.02em;
@@ -29,8 +30,9 @@
 }
 
 .hud-big {
+  font-family: var(--font-numbers);
   position: absolute;
-  top: 34%;
+  top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   min-width: 8.5rem;
@@ -46,7 +48,7 @@
 }
 
 .hud-big.go {
-  color: var(--good);
+  color: var(--ink);
 }
 
 .hud-pause {
@@ -73,7 +75,7 @@
 
 .hud-crash {
   position: absolute;
-  top: 34%;
+  top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   padding: 0.5rem 1.6rem 0.6rem;
@@ -82,7 +84,7 @@
   font-weight: 800;
   line-height: 1.15;
   text-align: center;
-  color: var(--bad);
+  color: var(--ink);
   animation: pop 0.9s ease-out both;
 }
 
@@ -111,7 +113,7 @@
   }
 }
 
-/* The flight panel with the mouse hint stacked on top of it */
+/* Holds the flight panel at the bottom centre */
 .hud-bottom {
   position: absolute;
   bottom: 1.25rem;
@@ -140,6 +142,7 @@
 }
 
 .hud-speed strong {
+  font-family: var(--font-numbers);
   font-size: 2.4rem;
   font-weight: 800;
   color: var(--ink);
@@ -231,17 +234,8 @@
 }
 
 .hud-standings .progress {
+  font-family: var(--font-numbers);
   color: var(--ink-70);
-}
-
-.hud-hint {
-  max-width: calc(100vw - 2rem);
-  padding: 0.4rem 1rem;
-  border-radius: 999px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--ink-70);
-  text-align: center;
 }
 
 /* Brightens the screen edges at speed and flashes when you pass a gate */
@@ -261,6 +255,7 @@
 
 /* Over the world: white with an ink shadow reads on every sky */
 .ring-marker {
+  font-family: var(--font-numbers);
   position: absolute;
   left: 0;
   top: 0;
