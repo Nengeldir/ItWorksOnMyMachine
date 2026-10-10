@@ -325,7 +325,10 @@ export class RunController {
     if (!this.items.frozenCombo) this.levelTime += dt;
     this.abilities.worldRate=this.items.worldRate;
     this.abilities.step(dt, input, proximity, flight, m);
+    const pickups = this.items.cue.pickup, full = this.items.cue.full;
     this.items.step(dt, input, proximity, flight, m);
+    if(this.items.cue.pickup !== pickups && this.items.picked) this.notify(runItem(this.items.picked).name,0);
+    else if(this.items.cue.full !== full) this.notify("Your bag is full · use an item with Y",0);
     if (this.items.points > 0) {
       this.score += Math.round(this.items.points);
       this.items.points = 0;

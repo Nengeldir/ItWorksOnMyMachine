@@ -1,3 +1,4 @@
+import { clearOfItems } from "../itemClearance";
 import { smoothstep } from "../../math";
 import { hash3 } from "../../rng";
 import type { FloraSpecies } from "../biomes/types";
@@ -218,6 +219,7 @@ export function placeFlora(world: World, box: Box, withTufts: boolean): { plants
     // Keep the racing line and the start clear
     if (world.course.distance(x, y + height / 2, z) < TUBE_RADIUS + height / 2 + 3) return null;
     if (Math.hypot(x - start.x, y - start.y, z - start.z) < 40 + height) return null;
+    if (!clearOfItems(world,x,y,z,height,foot)) return null;
     return [x, y, z, height];
   };
   for (let index = 0; index < structures.length; index++) {
@@ -321,6 +323,7 @@ export function placeFlora(world: World, box: Box, withTufts: boolean): { plants
       const radius = height * (info.aspect[0] + (info.aspect[1] - info.aspect[0]) * hash3(gi, gk, salt + 6));
       // Keep the racing line clear
       if (world.course.distance(x, y + height / 2, z) < TUBE_RADIUS + height / 2 + 3) continue;
+      if (!clearOfItems(world,x,y,z,height,radius)) continue;
       plants.push(pick, x, y - 0.25, z, height, radius, hash3(gi, gk, salt + 7) * Math.PI * 2, hash3(gi, gk, salt + 8));
     }
   }

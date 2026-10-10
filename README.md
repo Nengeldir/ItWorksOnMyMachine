@@ -199,7 +199,13 @@ Adventure items use a bag of three: **Y** (or right mouse button while flying)
 uses the selected item; **U** (or the mouse wheel) cycles it. Gamepad d-pad right
 uses and left cycles. Boots have three charges; the Phoenix feather works
 by itself when carried. `Shift+I` in test mode gives the next design-list item.
-Item rules appear under **Run items**, their looks under **Item looks** in `?tune`.
+The full set of 20 items spawns over clear terrain along adventure routes.
+Common, uncommon, rare and legendary pickups float 8, 13, 20 and 29 metres above
+the island. Spinning, bobbing models have a small rarity-colored spotlight beneath
+them. Fly within 3.2 metres to collect one; a full bag leaves it available.
+The gallery (`/?gallery`) folds its controls on small screens.
+Item rules appear under **Run items**, placement under **Island pickups** (takes
+effect next level), and looks under **Item looks** in `?tune`.
 
 ## How It Works
 
@@ -382,7 +388,10 @@ doesn't fly the course itself.
 | `frontend/src/game/avatar.ts`          | The pilot's model and animation                          |
 | `frontend/src/game/death.ts`           | Crash animations: how a crash plays out (looks only)     |
 | `frontend/src/game/items/`             | Toon models, equipment and adventure item effects; `/?gallery` shows them all |
-| `frontend/src/game/run/items.ts`       | Adventure bag, item rules, bonus gates and loose collectibles |
+| `frontend/src/game/run/items.ts`       | Three-slot adventure bag, all 20 item rules, bonus gates and loose collectibles |
+| `frontend/src/game/run/pickups.ts`     | Seeded terrain pickups, rarity heights and approach clearance |
+| `frontend/src/game/items/pickups.ts`   | Nearby floating models and instanced ground spotlights/shafts |
+| `frontend/src/game/world/itemClearance.ts` | Adventure-only groves that keep pickup approaches clear of vegetation |
 | `frontend/src/game/run/abilities.ts`   | The adventure abilities' rules (run mode only)           |
 | `frontend/src/game/abilities/`         | The abilities' models and animations (looks only)        |
 | `frontend/src/game/tuning.ts`          | Every look-and-feel constant, for the `?tune` panel      |
