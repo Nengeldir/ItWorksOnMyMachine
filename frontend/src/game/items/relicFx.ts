@@ -7,6 +7,7 @@ import { Kind, fx } from "../particles";
 import type { Items, RunItemId } from "../run/items";
 import { ITEMS_FX } from "../tuning";
 import { Trail } from "../trail";
+import { buildItem, disposeItem } from "./models";
 import type { Equipment } from "./equip";
 
 const GOLD = new THREE.Color("#ffe5a0");
@@ -16,6 +17,8 @@ const UP = new THREE.Vector3(0, 1, 0);
 /** Relic effects only read run state; collision, scoring and collection live in run/. */
 export class RelicFx {
   readonly group = new THREE.Group();
+  private readonly kite = buildItem("stormKite");
+  private readonly cord = new THREE.Line(new THREE.BufferGeometry().setAttribute("position",new THREE.Float32BufferAttribute(new Float32Array(6),3)),new THREE.LineBasicMaterial({color:"#f5df9e",transparent:true,opacity:0.75}));
   private readonly lights = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.3), new THREE.MeshBasicMaterial({color:"#ffe5a0"}),128);
   private readonly lightMatrix = new THREE.Matrix4();
   private readonly lightScale = new THREE.Vector3(1,1,1);
@@ -30,7 +33,7 @@ export class RelicFx {
   private readonly particles: Particles;
   constructor(avatar: Avatar, equipment: Equipment, particles: Particles) {
     this.avatar = avatar; this.equipment = equipment; this.particles = particles;
-    this.group.add(this.markers.mesh, this.ribbon.mesh, this.lights);
+    this.group.add(this.markers.mesh, this.ribbon.mesh, this.lights, this.kite, this.cord);
   }
   used(id: RunItemId) {
     if(id === "aeroBoots"){
@@ -68,6 +71,16 @@ export class RelicFx {
       }
     }
     if(items.invulnerable) this.markers.add(this.avatar.group.position,null,2.5,0.7 * ITEMS_FX.relics,0.09,2,GOLD);
+    const kiteTime=items.time("stormKite");
+    this.kite.visible=this.cord.visible=kiteTime>=0;
+    if(kiteTime>=0){
+      this.kite.position.copy(this.avatar.group.position).addScaledVector(UP,7).addScaledVector(flight.forward,3);
+      this.kite.rotation.set(0.3,Math.sin(kiteTime*2)*0.2,Math.sin(kiteTime*4)*0.18);
+      this.kite.scale.setScalar(9);
+      const cord=this.cord.geometry.getAttribute("position");
+      this.avatar.slots.hand.getWorldPosition(at);cord.setXYZ(0,at.x,at.y,at.z);
+      cord.setXYZ(1,this.kite.position.x,this.kite.position.y,this.kite.position.z);cord.needsUpdate=true;this.cord.frustumCulled=false;
+    }
     const boots = items.bag.some(c=>c.id === "aeroBoots") || items.time("aeroBoots")>=0;
     if(boots && this.equipment.wearing("feet")!=="aeroBoots") this.equipment.equip("aeroBoots");
     if(!boots && this.equipment.wearing("feet")==="aeroBoots") this.equipment.unequip("feet");
@@ -105,5 +118,5 @@ export class RelicFx {
     this.markers.end();
   }
   hide() { this.group.visible = false; }
-  dispose() { this.lights.geometry.dispose(); this.lights.material.dispose(); this.ribbon.dispose(); this.markers.dispose(); this.group.removeFromParent(); }
+  dispose() { disposeItem(this.kite); this.cord.geometry.dispose(); this.cord.material.dispose(); this.lights.geometry.dispose(); this.lights.material.dispose(); this.ribbon.dispose(); this.markers.dispose(); this.group.removeFromParent(); }
 }
