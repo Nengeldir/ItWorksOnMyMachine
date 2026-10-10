@@ -67,6 +67,7 @@ const USE_STYLE: Partial<Record<RunItemId, "eat" | "raise" | "toss">> = {
   glacialPrism: "raise",
   sunNectar: "eat",
   windTether: "raise",
+  mothCape: "raise",
   anemoCatcher: "raise",
   starflakeShield: "raise",
   gliderWax: "raise",
@@ -148,6 +149,7 @@ export class ItemFx {
     this.group.visible = false;
     this.equipment.lift = 0;
     this.equipment.setThrust(0);
+    this.relics.hide();
     for (const trail of this.waxTrails) trail.opacity = 0;
   }
 

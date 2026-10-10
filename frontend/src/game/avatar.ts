@@ -1104,6 +1104,18 @@ export class Avatar {
     this.updateCloth(A.clothWave * 0.16, wave(3, 0) * 0.35, -0.3 + wave(4, 1) * 0.3);
   }
 
+  /** Run-only spirit cape: translucent toon body and ink; normal opacity is restored on exit. */
+  spectral(amount: number) {
+    if(this.ghost)return;
+    for(const material of this.materials){
+      if(material===this.aura.material)continue;
+      const transparent=amount>0;
+      if(material.transparent!==transparent){material.transparent=transparent;material.needsUpdate=true;}
+      material.opacity=1-amount*0.65;
+      material.depthWrite=!transparent;
+    }
+  }
+
   /** A ghost's opacity, 0..1 (Wind-Shear Dash's afterimages fade out); solid pilots ignore it */
   fade(opacity: number) {
     if (!this.ghost) return;

@@ -987,7 +987,10 @@ export class Game implements RunHost {
     // The hitbox: a ball for the body, a rectangle for each wing (flight.ts). The land collides as
     // drawn once it is on screen (before that, as the distance field), trees and water by their fields.
     // In a run, Acrobatic Recovery can turn a clipped wingtip into a roll away from the rock
-    const part = this.run?.items.invulnerable ? null : this.hitTest(other, distance);
+    let part: HitPart | null;
+    if(this.run?.items.invulnerable) part=null;
+    else if(this.run?.items.phasing){this.hitLand=false;part=touching(this.others,this.flight.position,this.flight.quaternion,other,hitLocal);}
+    else part=this.hitTest(other,distance);
     if ((part || this.world.lost(y,z)) && this.run?.items.revive(this.flight)) {
       this.prevPosition.copy(this.flight.position);
       this.prevQuaternion.copy(this.flight.quaternion);

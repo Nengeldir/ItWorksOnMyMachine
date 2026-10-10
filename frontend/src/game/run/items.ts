@@ -35,6 +35,7 @@ export const ITEM = {
   tetherTime: 1.5,
   tetherRange: 110,
   tetherPull: 85,
+  phaseTime: 3,
   bag: 3, // items carried at once
   // Anemo Catcher: a bottled updraft
   updraftTime: 1.6, // seconds
@@ -58,7 +59,7 @@ export const ITEM = {
   fireWobble: 0.45, // how hard it yanks the controls about
 };
 
-export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether";
+export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether" | "mothCape";
 
 /** How an item saved the pilot from a hit */
 export type ItemSave = "starflake";
@@ -101,12 +102,14 @@ export const RUN_ITEMS: readonly RunItemInfo[] = [
   { id: "glacialPrism", model: "glacialPrism", name: "Glacial Prism", icon: "🧊", rarity: 2, charges: 1, description: "Freeze the adventure level timer and the decay of your skim combo for five seconds." },
   { id: "sunNectar", model: "sunNectar", name: "Sun-Kissed Nectar", icon: "🌼", rarity: 0, charges: 1, description: "Drink golden nectar to refill your boost reserve and wingbeat stamina immediately." },
   { id: "windTether", model: "windTether", name: "Tether of the Wind Spirit", icon: "🪝", rarity: 2, charges: 1, description: "A hook of light pulls you into a sharp swing around a nearby gate. Find an anchor within 110 metres." },
+  { id: "mothCape", model: "mothCape", name: "Illusory Moth Cape", icon: "🦋", rarity: 3, charges: 1, description: "Become a spirit for three seconds and pass through rock. Trees, water and the abyss still matter." },
 ];
 
 export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.id === id)!;
 
 /** How long each item's effect lasts once used (seconds) */
 const DURATION: Record<RunItemId, () => number> = {
+  mothCape: () => ITEM.phaseTime,
   windTether: () => ITEM.tetherTime,
   sunNectar: () => 0.8,
   glacialPrism: () => ITEM.prismTime,
@@ -304,6 +307,8 @@ export class Items {
     this.cue.phoenix++;
     return true;
   }
+
+  get phasing(): boolean { return this.active.has("mothCape"); }
 
   get frozenCombo(): boolean { return this.active.has("glacialPrism"); }
 
