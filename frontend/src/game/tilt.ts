@@ -10,7 +10,7 @@ const DEG = Math.PI / 180;
 export interface TiltAngles {
   /** How far the screen's right edge has dropped below its left, radians (turning a wheel clockwise is positive) */
   roll: number;
-  /** How far the screen leans from lying flat, face up: 0 flat, π/2 upright, radians */
+  /** Signed lean about the screen's horizontal axis: 0 face up, positive top towards you, radians */
   lean: number;
 }
 
@@ -28,7 +28,7 @@ export function tiltAngles(beta: number, gamma: number, screenAngle: number, out
   const sx = gx * Math.cos(a) - gy * Math.sin(a);
   const sy = gx * Math.sin(a) + gy * Math.cos(a);
   out.roll = Math.asin(clamp(sx, -1, 1));
-  out.lean = Math.atan2(Math.hypot(sx, sy), -gz);
+  out.lean = Math.atan2(-sy, -gz);
   return out;
 }
 
@@ -41,7 +41,8 @@ class Tilt {
   roll = 0;
   pitch = 0;
   private listening = false;
-  private neutral: number | null = null;
+  private neutral: TiltAngles | null = null;
+  private screenAngle: number | null = null;
   private readonly angles: TiltAngles = { roll: 0, lean: 0 };
   private remembered: boolean | null = null;
 
@@ -116,7 +117,7 @@ class Tilt {
   /** The way the phone is held now becomes level flight */
   recenter() {
     this.neutral = null;
-    this.pitch = 0;
+    this.roll = this.pitch = 0;
   }
 
   private listen() {
@@ -131,13 +132,16 @@ class Tilt {
     if (event.beta === null || event.gamma === null) return;
     const turned = screen.orientation?.angle ?? (window as { orientation?: number }).orientation ?? 0;
     const { roll, lean } = tiltAngles(event.beta, event.gamma, turned, this.angles);
+    if (this.screenAngle !== turned) this.recenter();
+    this.screenAngle = turned;
     if (this.neutral === null || !this.active) {
-      this.neutral = lean;
-      this.roll = roll;
-      this.pitch = 0;
+      this.neutral = { roll, lean };
+      this.roll = this.pitch = 0;
     } else {
-      this.roll += (roll - this.roll) * SMOOTHING;
-      this.pitch += (lean - this.neutral - this.pitch) * SMOOTHING;
+      // Wrap differences across face-down (±π), rather than jumping a whole turn.
+      const pitch = Math.atan2(Math.sin(lean - this.neutral.lean), Math.cos(lean - this.neutral.lean));
+      this.roll += (roll - this.neutral.roll - this.roll) * SMOOTHING;
+      this.pitch += (pitch - this.pitch) * SMOOTHING;
     }
     this.active = true;
   };

@@ -27,6 +27,11 @@ export type TestAction = "portal" | "win" | "speed";
 /** One-off presses. Wingbeat, hover-stall, plunge and Gale Force need their adventure upgrades. */
 export type InputAction = "pause" | "respawn" | "mute" | "barrelLeft" | "barrelRight" | "flap" | "hover" | "plunge" | "burst";
 
+export interface InputObserver {
+  sample?: (input: FlightInput) => void;
+  action?: (action: InputAction) => void;
+}
+
 export function controlsBlocked(): boolean {
   return !!document.querySelector?.("dialog[open]");
 }
@@ -65,6 +70,7 @@ export class Input {
   locked = false;
   private readonly element: HTMLElement;
   private readonly keys = new Set<string>();
+  private readonly observers = new Set<InputObserver>();
   // The mouse moves a virtual stick that drifts back to center
   private stickX = 0;
   private stickY = 0;
@@ -86,12 +92,25 @@ export class Input {
   }
 
   dispose() {
+    this.observers.clear();
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
     window.removeEventListener("blur", this.onBlur);
     document.removeEventListener("mousemove", this.onMouseMove);
     document.removeEventListener("pointerlockchange", this.onLockChange);
     if (document.pointerLockElement === this.element) document.exitPointerLock();
+  }
+
+  /** Watch what the pilot actually receives (used by the tutorial). */
+  observe(observer: InputObserver): () => void {
+    this.observers.add(observer);
+    return () => { this.observers.delete(observer); };
+  }
+
+  dispatchAction(action: InputAction) {
+    if (controlsBlocked() || !document.hasFocus()) return;
+    for (const observer of this.observers) observer.action?.(action);
+    this.onAction?.(action);
   }
 
   /** Call from a click handler: browsers only lock the pointer on a user gesture */
@@ -128,7 +147,7 @@ export class Input {
     for (const action of ACTIONS) {
       if (this.binding(action).includes(event.code)) {
         if (atGame || action === "pause") event.preventDefault();
-        this.onAction?.(action);
+        this.dispatchAction(action);
         break;
       }
     }
@@ -202,15 +221,15 @@ export class Input {
       pitch += deadZone(pad.axes[1] ?? 0, this.settings.deadZone) * ((this.settings.invertGamepad ?? this.settings.invertPitch) ? -1 : 1);
       // Y / triangle respawns, the shoulder buttons barrel roll
       const pressed = pad.buttons.map((b) => b.pressed);
-      if (pressed[3] && !this.padButtons[3]) this.onAction?.("respawn");
-      if (pressed[4] && !this.padButtons[4]) this.onAction?.("barrelLeft");
-      if (pressed[5] && !this.padButtons[5]) this.onAction?.("barrelRight");
+      if (pressed[3] && !this.padButtons[3]) this.dispatchAction("respawn");
+      if (pressed[4] && !this.padButtons[4]) this.dispatchAction("barrelLeft");
+      if (pressed[5] && !this.padButtons[5]) this.dispatchAction("barrelRight");
       // In adventure: A flaps, B hover-stalls, X plunges, the right stick's click is Gale Force.
       // Triggers control speed in every mode.
-      if (pressed[0] && !this.padButtons[0]) this.onAction?.("flap");
-      if (pressed[1] && !this.padButtons[1]) this.onAction?.("hover");
-      if (pressed[2] && !this.padButtons[2]) this.onAction?.("plunge");
-      if (pressed[11] && !this.padButtons[11]) this.onAction?.("burst");
+      if (pressed[0] && !this.padButtons[0]) this.dispatchAction("flap");
+      if (pressed[1] && !this.padButtons[1]) this.dispatchAction("hover");
+      if (pressed[2] && !this.padButtons[2]) this.dispatchAction("plunge");
+      if (pressed[11] && !this.padButtons[11]) this.dispatchAction("burst");
       boost = Math.max(boost, deadZone(pad.buttons[7]?.value ?? 0));
       brake = Math.max(brake, deadZone(pad.buttons[6]?.value ?? 0));
       this.padButtons = pressed;
@@ -218,6 +237,8 @@ export class Input {
       this.padButtons = [];
     }
 
-    return { pitch: clamp(pitch, -1, 1), roll: clamp(roll, -1, 1), boost, brake };
+    const sample = { pitch: clamp(pitch, -1, 1), roll: clamp(roll, -1, 1), boost, brake };
+    for (const observer of this.observers) observer.sample?.(sample);
+    return sample;
   }
 }

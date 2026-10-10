@@ -100,10 +100,13 @@ on Android the first tap goes full screen and turns the screen for you.
 | **Tilt**                  | Steer by tilting the device instead: turn it like a wheel to bank, lean it away to dive. Level is how you hold it when you turn Tilt on or resume from pause. Needs an https page; iOS asks for permission |
 | Hold **Boost** / **Brake** | Boost / air brake                                 |
 | `‹` `›`                   | 5 m sideways dodge                                 |
-| **Flap** / **Hover** | Adventure abilities, once you have the upgrade     |
+| **Flap** / **Hover** / **Plunge** / **Gale** | Tap to use the adventure ability once you have its upgrade |
 | **Respawn**, **Pause**    | As `R` and `P`                                     |
 
 Tilt sensitivity and "Invert touch and tilt up / down" are in Settings.
+The tutorial follows touch and tilt as well as keys and gamepad. Tilt works
+on either side of a flat hold; enabling it or resuming calibrates both axes.
+In test mode, touch buttons open a portal, preview victory and change speed.
 
 Pitch can be inverted in the menu. Diving turns height into speed, climbing
 turns speed back into height. Flying within a few metres of rock or trees fills

@@ -44,6 +44,8 @@ export class TouchControls {
   private readonly tiltButton = button("touch-pill", "Tilt", "Steer by tilting the device");
   private readonly flap = button("touch-button", "Flap", "Wingbeat");
   private readonly hover = button("touch-button", "Hover", "Hover");
+  private readonly plunge = button("touch-button", "Plunge", "Plunging Attack");
+  private readonly gale = button("touch-button", "Gale", "Gale Force");
   private readonly canvas: HTMLElement;
   private readonly input: Input;
   private stickPointer = -1;
@@ -76,9 +78,9 @@ export class TouchControls {
     const right = button("touch-button small", "›", "Dodge right");
     const brake = button("touch-button", "Brake", "Brake");
     const boost = button("touch-button big", "Boost", "Boost");
-    this.flap.hidden = this.hover.hidden = true;
+    this.flap.hidden = this.hover.hidden = this.plunge.hidden = this.gale.hidden = true;
     // Laid out from the bottom right corner, leftwards and then up
-    pad.append(boost, brake, right, left, this.hover, this.flap);
+    pad.append(boost, brake, right, left, this.hover, this.flap, this.plunge, this.gale);
     this.root.append(this.stick, top, pad, this.note);
     container.appendChild(this.root);
 
@@ -88,9 +90,11 @@ export class TouchControls {
     this.press(right, "barrelRight");
     this.press(this.flap, "flap");
     this.press(this.hover, "hover");
+    this.press(this.plunge, "plunge");
+    this.press(this.gale, "burst");
     this.press(respawn, "respawn");
     // Clicks, not presses: asking for the sensor needs a finished tap
-    this.pause.addEventListener("click", () => input.onAction?.("pause"));
+    this.pause.addEventListener("click", () => input.dispatchAction("pause"));
     this.tiltButton.addEventListener("click", this.toggleTilt);
 
     canvas.addEventListener("pointerdown", this.onStickDown);
@@ -118,7 +122,7 @@ export class TouchControls {
   }
 
   /** From the game, a few times a second: what to show */
-  sync(paused: boolean, flying: boolean, flap: boolean, hover: boolean) {
+  sync(paused: boolean, flying: boolean, flap: boolean, hover: boolean, plunge: boolean, gale: boolean) {
     if (paused !== this.paused) {
       this.paused = paused;
       this.root.classList.toggle("paused", paused);
@@ -131,6 +135,8 @@ export class TouchControls {
     this.root.classList.toggle("idle", !flying);
     this.flap.hidden = !flap;
     this.hover.hidden = !hover;
+    this.plunge.hidden = !plunge;
+    this.gale.hidden = !gale;
     this.tiltButton.classList.toggle("on", tilt.active);
   }
 
@@ -162,7 +168,7 @@ export class TouchControls {
   private press(element: HTMLElement, action: InputAction) {
     element.addEventListener("pointerdown", (event) => {
       event.preventDefault();
-      this.input.onAction?.(action);
+      this.input.dispatchAction(action);
     });
   }
 
