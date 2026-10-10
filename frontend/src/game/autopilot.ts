@@ -38,6 +38,15 @@ export class Autopilot {
     this.z = Number.NaN;
   }
 
+  /** A visual companion leads the pilot along the same safe rail, with its own Flight. */
+  guide(dt: number, flight: Flight, course: Course, pilotZ: number, lead: number, speed: number) {
+    course.tangentAt(pilotZ, tangent);
+    this.z = Math.min(course.endZ + 15, pilotZ + Math.max(1, lead) * tangent.z);
+    this.speed = speed;
+    this.offset.set(0, 0, 0);
+    this.step(dt, flight, course);
+  }
+
   /** One fixed step along the line: moves `flight` and points it down the line */
   step(dt: number, flight: Flight, course: Course) {
     if (Number.isNaN(this.z)) {

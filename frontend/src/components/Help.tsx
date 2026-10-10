@@ -115,7 +115,6 @@ export const HowToFly = ({ onClose }: { onClose: () => void }) => (
     <KeyGuide />
     <div className="touch-guide touch-only">
       <p>Drag anywhere on the view to steer. Drag up to dive and down to climb; Settings can invert this.</p>
-      <p>Turn on Tilt to steer like a wheel. Lean the top away to dive, or towards you to climb.</p>
       <p>Hold Boost or Brake. Tap ‹ or › to dodge, Respawn to restart at your last gate, and Pause to rest.</p>
       <p>Adventure upgrades add Flap, Hover, Plunge and Gale buttons.</p>
     </div>

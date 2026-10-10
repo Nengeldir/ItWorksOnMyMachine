@@ -44,7 +44,7 @@ export default function SettingsPanel({ settings, onSettings, onClose }: Props) 
   const toggle = (key: "invertPitch" | "invertMouse" | "invertGamepad" | "invertTouch" | "reducedMotion" | "muted", label: string) => (
     <label className="check"><input type="checkbox" checked={!!settings[key]} onChange={e => update({ [key]: e.target.checked })} />{label}</label>
   );
-  const slider = (key: "mouseSensitivity" | "tiltSensitivity" | "deadZone" | "musicVolume" | "effectsVolume", label: string, min: number, max: number, step: number, fallback: number) => (
+  const slider = (key: "mouseSensitivity" | "deadZone" | "musicVolume" | "effectsVolume", label: string, min: number, max: number, step: number, fallback: number) => (
     <label className="field"><span>{label} <output>{(settings[key] ?? fallback).toFixed(2)}</output></span>
       <input type="range" aria-label={label} min={min} max={max} step={step} value={settings[key] ?? fallback} onChange={e => update({ [key]: Number(e.target.value) })} />
     </label>
@@ -58,10 +58,9 @@ export default function SettingsPanel({ settings, onSettings, onClose }: Props) 
       {toggle("invertGamepad", "Invert gamepad up / down")}
       {toggle("invertPitch", "Invert keyboard pitch")}
       {slider("deadZone", "Gamepad stick dead zone", 0, 0.4, 0.01, 0.12)}
-      <h3>Touch and tilt</h3>
-      <p className="settings-help">On a phone or tablet, drag anywhere on the view to steer and use the on-screen buttons. The Tilt button in the game steers by tilting the device instead; level is how you hold it when you turn it on or resume.</p>
-      {slider("tiltSensitivity", "Tilt sensitivity", 0.4, 2.5, 0.1, 1)}
-      {toggle("invertTouch", "Invert touch and tilt up / down")}
+      <h3>Touch</h3>
+      <p className="settings-help">On a phone or tablet, drag anywhere on the view to steer and use the on-screen buttons.</p>
+      {toggle("invertTouch", "Invert touch up / down")}
       <h3>Keyboard bindings</h3>
       <p className="settings-help">Select a key, then press its replacement. Escape cancels. Gamepad buttons keep their standard layout.</p>
       <p className="binding-message" role="status">{waiting ? `Press a key for ${ACTION_LABELS[waiting.action]}. ${message}` : message || "You can set a primary and an alternate key."}</p>
@@ -74,7 +73,7 @@ export default function SettingsPanel({ settings, onSettings, onClose }: Props) 
         </button>)}
         {bindings[action][1] && <button className="binding-remove" aria-label={`Remove ${ACTION_LABELS[action]} alternate key`} onClick={() => update({bindings:{...bindings,[action]:[bindings[action][0]]}})}>×</button>}
       </div>)}</div>
-      <button onClick={() => { const defaults = defaultSettings(); update({bindings:defaultBindings(),mouseSensitivity:2,invertPitch:false,invertMouse:false,invertGamepad:false,invertTouch:false,tiltSensitivity:1,deadZone:defaults.deadZone}); setWaiting(null); setMessage("Flight controls reset."); }}>Reset controls</button>
+      <button onClick={() => { const defaults = defaultSettings(); update({bindings:defaultBindings(),mouseSensitivity:2,invertPitch:false,invertMouse:false,invertGamepad:false,invertTouch:false,deadZone:defaults.deadZone}); setWaiting(null); setMessage("Flight controls reset."); }}>Reset controls</button>
     </section>
     <section><h3>Sound</h3>
       {toggle("muted", "Mute all audio")}

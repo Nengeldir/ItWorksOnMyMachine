@@ -1,13 +1,11 @@
 import type { Input, InputAction } from "./input";
-import { tilt } from "./tilt";
 
 // Phones and tablets: a stick that appears under your thumb anywhere on the
-// view, buttons for everything the keyboard does in flight, and the switch for
-// tilt steering. Shown only in touch mode (`html.touch`, see `watchTouchMode`);
-// styled in components/Touch.css. It feeds `Input`, nothing else.
+// view, and buttons for everything the keyboard does in flight. Shown only in
+// touch mode (`html.touch`, see `watchTouchMode`); styled in
+// components/Touch.css. It feeds `Input`, nothing else.
 
 const STICK_RADIUS = 56; // px of thumb travel for full deflection
-const NOTE_MS = 3200;
 
 type OrientationLock = { lock?: (orientation: string) => Promise<void> };
 type WakeLock = { release(): Promise<void> };
@@ -35,23 +33,28 @@ function button(className: string, label: string, title: string): HTMLButtonElem
   return element;
 }
 
+/** A button held down: the finger on it, or -1 */
+interface Held {
+  element: HTMLElement;
+  pointer: number;
+}
+
 export class TouchControls {
   private readonly root = document.createElement("div");
   private readonly stick = document.createElement("div");
   private readonly knob = document.createElement("div");
-  private readonly note = document.createElement("div");
   private readonly pause = button("touch-pill", "Pause", "Pause");
-  private readonly tiltButton = button("touch-pill", "Tilt", "Steer by tilting the device");
   private readonly flap = button("touch-button", "Flap", "Wingbeat");
   private readonly hover = button("touch-button", "Hover", "Hover");
   private readonly plunge = button("touch-button", "Plunge", "Plunging Attack");
   private readonly gale = button("touch-button", "Gale", "Gale Force");
+  private readonly boost: Held;
+  private readonly brake: Held;
   private readonly canvas: HTMLElement;
   private readonly input: Input;
   private stickPointer = -1;
   private stickX = 0;
   private stickY = 0;
-  private noteTimer = 0;
   private wentFullscreen = false;
   private askedFullscreen = false;
   private wakeLock: WakeLock | null = null;
@@ -65,12 +68,11 @@ export class TouchControls {
     this.stick.className = "touch-stick";
     this.knob.className = "touch-knob";
     this.stick.appendChild(this.knob);
-    this.note.className = "touch-note glass";
 
     const top = document.createElement("div");
     top.className = "touch-top";
     const respawn = button("touch-pill", "Respawn", "Respawn");
-    top.append(this.tiltButton, respawn, this.pause);
+    top.append(respawn, this.pause);
 
     const pad = document.createElement("div");
     pad.className = "touch-pad";
@@ -81,11 +83,11 @@ export class TouchControls {
     this.flap.hidden = this.hover.hidden = this.plunge.hidden = this.gale.hidden = true;
     // Laid out from the bottom right corner, leftwards and then up
     pad.append(boost, brake, right, left, this.hover, this.flap, this.plunge, this.gale);
-    this.root.append(this.stick, top, pad, this.note);
+    this.root.append(this.stick, top, pad);
     container.appendChild(this.root);
 
-    this.hold(boost, (on) => (input.touchBoost = on));
-    this.hold(brake, (on) => (input.touchBrake = on));
+    this.boost = this.hold(boost);
+    this.brake = this.hold(brake);
     this.press(left, "barrelLeft");
     this.press(right, "barrelRight");
     this.press(this.flap, "flap");
@@ -93,18 +95,18 @@ export class TouchControls {
     this.press(this.plunge, "plunge");
     this.press(this.gale, "burst");
     this.press(respawn, "respawn");
-    // Clicks, not presses: asking for the sensor needs a finished tap
-    this.pause.addEventListener("click", () => input.dispatchAction("pause"));
-    this.tiltButton.addEventListener("click", this.toggleTilt);
+    this.pause.addEventListener("click", () => input.dispatchAction("pause", true));
+    // A long press must stay a held button, never a menu that takes the finger away
+    this.root.addEventListener("contextmenu", this.noMenu);
 
     canvas.addEventListener("pointerdown", this.onStickDown);
     canvas.addEventListener("pointermove", this.onStickMove);
     canvas.addEventListener("pointerup", this.onStickUp);
     canvas.addEventListener("pointercancel", this.onStickUp);
+    window.addEventListener("pointerup", this.onRelease, true);
+    window.addEventListener("pointercancel", this.onRelease, true);
     window.addEventListener("pointerup", this.onGesture, true);
     document.addEventListener("visibilitychange", this.onVisibility);
-    // Where no tap is needed for the sensor, tilt steering comes back by itself
-    if (document.documentElement.classList.contains("touch")) tilt.resume(false);
   }
 
   dispose() {
@@ -112,9 +114,11 @@ export class TouchControls {
     this.canvas.removeEventListener("pointermove", this.onStickMove);
     this.canvas.removeEventListener("pointerup", this.onStickUp);
     this.canvas.removeEventListener("pointercancel", this.onStickUp);
+    window.removeEventListener("pointerup", this.onRelease, true);
+    window.removeEventListener("pointercancel", this.onRelease, true);
     window.removeEventListener("pointerup", this.onGesture, true);
     document.removeEventListener("visibilitychange", this.onVisibility);
-    clearTimeout(this.noteTimer);
+    this.input.touchBoost = this.input.touchBrake = false;
     void this.wakeLock?.release().catch(() => {});
     this.wakeLock = null;
     if (this.wentFullscreen && document.fullscreenElement) void document.exitFullscreen().catch(() => {});
@@ -128,71 +132,71 @@ export class TouchControls {
       this.root.classList.toggle("paused", paused);
       this.pause.textContent = paused ? "Resume" : "Pause";
       this.pause.setAttribute("aria-label", paused ? "Resume" : "Pause");
-      if (paused) this.releaseStick();
-      // Level flight is however the phone is held when you come back
-      else tilt.recenter();
+      if (paused) {
+        this.releaseStick();
+        this.let(this.boost);
+        this.let(this.brake);
+      }
+    }
+    if (!flying) {
+      this.let(this.boost);
+      this.let(this.brake);
     }
     this.root.classList.toggle("idle", !flying);
     this.flap.hidden = !flap;
     this.hover.hidden = !hover;
     this.plunge.hidden = !plunge;
     this.gale.hidden = !gale;
-    this.tiltButton.classList.toggle("on", tilt.active);
   }
 
-  private say(text: string) {
-    this.note.textContent = text;
-    this.note.classList.add("on");
-    clearTimeout(this.noteTimer);
-    this.noteTimer = window.setTimeout(() => this.note.classList.remove("on"), NOTE_MS);
+  /**
+   * Every frame, before the input is read: a finger still on Boost or Brake
+   * keeps it on, whatever let go of the other held controls meanwhile (a
+   * respawn, the window losing focus for a moment)
+   */
+  update() {
+    this.input.touchBoost = this.boost.pointer !== -1;
+    this.input.touchBrake = this.brake.pointer !== -1;
   }
 
-  /** A button that acts for as long as a finger is on it */
-  private hold(element: HTMLElement, set: (on: boolean) => void) {
-    const release = () => {
-      set(false);
-      element.classList.remove("held");
-    };
+  /**
+   * A button that acts for as long as a finger is on it. Only that finger
+   * lifting (or the browser taking it away) lets go, wherever on the page the
+   * event lands: no reliance on pointer capture, which some browsers drop
+   * mid-hold
+   */
+  private hold(element: HTMLElement): Held {
+    const held: Held = { element, pointer: -1 };
     element.addEventListener("pointerdown", (event) => {
       event.preventDefault();
-      element.setPointerCapture?.(event.pointerId);
-      set(true);
+      if (held.pointer !== -1) return;
+      held.pointer = event.pointerId;
       element.classList.add("held");
+      this.update();
     });
-    element.addEventListener("pointerup", release);
-    element.addEventListener("pointercancel", release);
-    element.addEventListener("lostpointercapture", release);
+    return held;
   }
+
+  private let(held: Held) {
+    held.pointer = -1;
+    held.element.classList.remove("held");
+  }
+
+  private onRelease = (event: PointerEvent) => {
+    if (event.pointerId === this.boost.pointer) this.let(this.boost);
+    if (event.pointerId === this.brake.pointer) this.let(this.brake);
+    this.update();
+  };
 
   /** A button that acts the moment it is touched */
   private press(element: HTMLElement, action: InputAction) {
     element.addEventListener("pointerdown", (event) => {
       event.preventDefault();
-      this.input.dispatchAction(action);
+      this.input.dispatchAction(action, true);
     });
   }
 
-  private toggleTilt = () => {
-    if (tilt.active || (tilt.wanted && !tilt.needsGesture)) {
-      tilt.disable();
-      this.tiltButton.classList.remove("on");
-      this.say("Tilt steering off");
-      return;
-    }
-    void tilt.enable().then((allowed) => {
-      if (!allowed) {
-        this.say(tilt.supported ? "This browser didn't allow the tilt sensor" : "Tilt steering needs a secure (https) page and a tilt sensor");
-        return;
-      }
-      this.say("Tilt steering on: level is how you hold it now");
-      window.setTimeout(() => {
-        if (tilt.wanted && !tilt.active) {
-          tilt.disable();
-          this.say("No tilt sensor answered on this device");
-        }
-      }, 1500);
-    });
-  };
+  private noMenu = (event: Event) => event.preventDefault();
 
   // --- the stick ---------------------------------------------------------------
 
@@ -237,7 +241,6 @@ export class TouchControls {
   /** A finished tap anywhere: the only moment a browser lets a page ask for these */
   private onGesture = (event: PointerEvent) => {
     if (event.pointerType !== "touch") return;
-    tilt.resume(true);
     void this.keepAwake();
     if (this.askedFullscreen) return;
     this.askedFullscreen = true;
@@ -253,7 +256,7 @@ export class TouchControls {
   };
 
   private async keepAwake() {
-    // Steering by tilt, nothing touches the screen: it would dim and lock
+    // A long glide with a thumb resting on the stick: the screen would dim and lock
     const locks = (navigator as { wakeLock?: { request(type: "screen"): Promise<WakeLock> } }).wakeLock;
     if (this.wakeLock || this.waking || !locks) return;
     this.waking = true;

@@ -78,11 +78,6 @@ html.touch .touch-controls.idle:not(.paused) {
   font-size: 0.85rem;
 }
 
-.touch-pill.on {
-  background: var(--ink);
-  color: #fff;
-}
-
 /* While paused only the way back is left */
 .touch-controls.paused .touch-pill:not(:last-child),
 .touch-controls.paused .touch-pad {
@@ -171,27 +166,10 @@ html.touch .touch-controls.idle:not(.paused) {
   box-shadow: 0 4px 14px color-mix(in srgb, var(--ink) 25%, transparent);
 }
 
-.touch-note {
-  position: absolute;
-  top: 4.25rem;
-  right: max(1rem, env(safe-area-inset-right));
-  max-width: min(20rem, calc(100% - 2rem));
-  padding: 0.45rem 1rem;
-  border-radius: 16px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  opacity: 0;
-  transition: opacity 0.25s;
-}
-
-.touch-note.on {
-  opacity: 1;
-}
-
 /* Room for the pills beside the top bar, and for a notch beside everything */
 html.touch .topbar {
   left: max(1rem, env(safe-area-inset-left));
-  right: calc(max(1rem, env(safe-area-inset-right)) + 16rem);
+  right: calc(max(1rem, env(safe-area-inset-right)) + 11.5rem);
 }
 
 .topbar-title {
@@ -286,10 +264,6 @@ html.touch .finale-skip {
   .touch-pill {
     height: 2.4rem;
     font-size: 0.85rem;
-  }
-
-  .touch-note {
-    top: 3.3rem;
   }
 
   .hud-race,

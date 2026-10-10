@@ -7,6 +7,8 @@ import { trackFile } from "../game/music";
 import { BIOMES, type BiomeId, makeLevel, runLevel } from "../game/world/biomes";
 import type { Settings } from "../storage";
 import { Store } from "./store";
+import type { Appearance } from "../game/cosmetics/storage";
+import type { ItemId } from "../game/items/models";
 
 const COLOR = "#ff5d73";
 const ORDER = Object.keys(BIOMES) as BiomeId[];
@@ -36,6 +38,8 @@ export class ExploreSession {
   private settings: Settings;
   private game: Game | null = null;
   private timer = 0;
+  private resumeAfterPreview = false;
+  previewLook: Appearance | null = null;
   readonly testMode: boolean;
 
   constructor(biome: BiomeId, seed: number, settings: Settings, testMode = false) {
@@ -148,6 +152,29 @@ export class ExploreSession {
 
   skip() {
     this.game?.skipFinale();
+  }
+
+  beginCollectionPreview() {
+    if (!this.testMode || !this.game) return;
+    this.resumeAfterPreview = !this.store.get().hud?.paused;
+    if (this.resumeAfterPreview) this.game.togglePause();
+  }
+
+  endCollectionPreview() {
+    if (this.testMode && this.resumeAfterPreview && this.store.get().hud?.paused) this.game?.togglePause();
+    this.resumeAfterPreview = false;
+  }
+
+  previewAppearance(look: Appearance | null) {
+    if (!this.testMode) return;
+    this.previewLook = look; this.game?.testAppearance(look);
+  }
+  previewItem(id: ItemId) { if (this.testMode) this.game?.equip(id); }
+  previewUseItem() { if (this.testMode) this.game?.useItem(); }
+  previewThrust(on: boolean) { if (this.testMode) this.game?.thrust(on ? 1 : 0); }
+  clearPreviewItems() {
+    if (!this.testMode) return;
+    for (const slot of ["hand", "head", "back"] as const) this.game?.unequip(slot);
   }
 
   /** The next (or, with -1, previous) world in the list */

@@ -11,6 +11,7 @@ import { type Settings, clientId } from "../storage";
 import { usePaletteTheme } from "../theme";
 import SettingsPanel from "./SettingsPanel";
 import MapSelect, { type MapSelectMode } from "./MapSelect";
+import ProfilePanel from "./ProfilePanel";
 import { HelpButton } from "./Help";
 import MenuBackdrop from "./MenuBackdrop";
 import TodaysBest from "./TodaysBest";
@@ -25,6 +26,7 @@ interface MenuProps {
 }
 
 const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
+  const [inventoryOpen, setInventoryOpen] = useState(false);
   const [daily, setDaily] = useState(() => dailySeed());
   // Today's run has a seed of its own, so it starts on another map than today's course
   const [dailyRun, setDailyRun] = useState(() => dailyRunSeed());
@@ -105,6 +107,8 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
 
   return (
     <main className="menu">
+      <button className="menu-inventory glass" onClick={() => setInventoryOpen(true)}>Profile & inventory</button>
+      {inventoryOpen && <ProfilePanel onClose={() => setInventoryOpen(false)} />}
       <MenuBackdrop seed={shown} mode="drift" onSnapshot={keepArt} onShown={setLive} settings={settings} />
 
       <HelpButton className="menu-help" />
