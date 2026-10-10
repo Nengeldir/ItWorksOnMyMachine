@@ -45,6 +45,11 @@ export const ITEM = {
   padSpeed: 48,
   hourglassTime: 4,
   worldSlow: 0.25,
+  electroTime: 12,
+  electroGap: 1.5,
+  electroNear: 0.55,
+  electroBonus: 120,
+  electroRange: 35,
   bag: 3, // items carried at once
   // Anemo Catcher: a bottled updraft
   updraftTime: 1.6, // seconds
@@ -68,7 +73,7 @@ export const ITEM = {
   fireWobble: 0.45, // how hard it yanks the controls about
 };
 
-export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether" | "mothCape" | "resonantChimes" | "crystalUpdraft" | "duskHourglass";
+export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether" | "mothCape" | "resonantChimes" | "crystalUpdraft" | "duskHourglass" | "electroPrism";
 
 /** How an item saved the pilot from a hit */
 export type ItemSave = "starflake";
@@ -115,12 +120,14 @@ export const RUN_ITEMS: readonly RunItemInfo[] = [
   { id: "resonantChimes", model: "resonantChimes", name: "Resonant Chimes", icon: "🎐", rarity: 1, charges: 1, description: "For twelve seconds, each gate sends a shockwave that widens the next gate." },
   { id: "crystalUpdraft", model: "crystalUpdraft", name: "Crystallized Updraft", icon: "🌪️", rarity: 1, charges: 1, description: "Drop a wind trampoline on the surface below. Dip toward it to bounce high into the sky." },
   { id: "duskHourglass", model: "duskHourglass", name: "Dusk-Weaver's Hourglass", icon: "⌛", rarity: 3, charges: 1, description: "For four seconds, scenery and the spirit manta move at a quarter pace while your flight stays normal." },
+  { id: "electroPrism", model: "electroPrism", name: "Electro-Charged Prism", icon: "⚡", rarity: 2, charges: 1, description: "Near misses release chain lightning and score bonus points for twelve seconds." },
 ];
 
 export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.id === id)!;
 
 /** How long each item's effect lasts once used (seconds) */
 const DURATION: Record<RunItemId, () => number> = {
+  electroPrism: () => ITEM.electroTime,
   duskHourglass: () => ITEM.hourglassTime,
   crystalUpdraft: () => ITEM.padTime,
   resonantChimes: () => ITEM.chimeTime,
@@ -174,7 +181,7 @@ export class Items {
   /** Seconds since each item's effect began (absent: not under way) */
   readonly active = new Map<RunItemId, number>();
   /** One-off moments, counted so the looks can tell a new one happened */
-  readonly cue = { pickup: 0, use: 0, full: 0, auto: 0, shatter: 0, phoenix: 0, chime: 0, bounce: 0 };
+  readonly cue = { pickup: 0, use: 0, full: 0, auto: 0, shatter: 0, phoenix: 0, chime: 0, bounce: 0, lightning: 0 };
   /** The item last picked up, and last used */
   picked: RunItemId | null = null;
   used: RunItemId | null = null;
@@ -191,6 +198,8 @@ export class Items {
   readonly ghostGates: { position: THREE.Vector3; normal: THREE.Vector3; radius: number; collected: boolean }[] = [];
   readonly path: THREE.Vector3[] = [];
   chimeTarget = -1;
+  readonly boltTargets: THREE.Vector3[] = [];
+  private electroWait = 0;
   readonly pad = new THREE.Vector3();
   private readonly up = new THREE.Vector3(0,1,0);
   readonly anchor = new THREE.Vector3();
@@ -418,6 +427,18 @@ export class Items {
     if(this.active.has("windTether")) {
       if(flight.position.distanceToSquared(this.anchor)<9) this.active.delete("windTether");
       else flight.pullToward(this.anchor,dt,ITEM.tetherPull);
+    }
+    this.electroWait=Math.max(0,this.electroWait-dt);
+    if(this.active.has("electroPrism") && proximity>ITEM.electroNear && flight.speed>20 && this.electroWait===0){
+      this.electroWait=ITEM.electroGap;this.cue.lightning++;this.points+=ITEM.electroBonus;
+      this.boltTargets.length=0;
+      for(const light of this.lights){
+        if(!light.collected && light.position.distanceToSquared(flight.position)<ITEM.electroRange**2 && this.boltTargets.length<3){
+          this.boltTargets.push(light.position.clone());light.collected=true;
+          if(light.energy)flight.refillBoost(ITEM.lightEnergy);else this.points+=ITEM.lightBonus;
+        }
+      }
+      if(!this.boltTargets.length)this.boltTargets.push(flight.position.clone().add(new THREE.Vector3(0,-Math.max(3,(1-proximity)*12),0)));
     }
     // ITEM RULES
     // Anemo Catcher: the bottled updraft lifts the path and holds the speed while it lasts
