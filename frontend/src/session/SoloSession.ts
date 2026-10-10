@@ -1,5 +1,6 @@
 import { type LeaderboardEntry, finishRun, getGhosts, getLeaderboard, startRun } from "../api";
 import { type FinishResult, Game, type HudState } from "../game/Game";
+import { debugModeRequested } from "../game/debugMode";
 import type { Settings } from "../storage";
 import { Store } from "./store";
 
@@ -39,6 +40,7 @@ export class SoloSession {
   private game: Game | null = null;
   private runToken: Promise<string | null> | null = null;
   private attempt = 0;
+  private readonly playtest = debugModeRequested();
 
   constructor(seed: number, clientId: string, settings: Settings) {
     this.seed = seed;
@@ -66,6 +68,7 @@ export class SoloSession {
       events: {
         hud: (hud) => this.store.set({ hud }),
         raceStarted: () => {
+          if (this.playtest) return;
           // The server times the run too and checks the finish time against its own clock
           this.runToken = startRun(this.seed)
             .then((r) => r.run_token)
@@ -123,6 +126,10 @@ export class SoloSession {
   }
 
   private async finished({ timeMs, ghost }: FinishResult) {
+    if (this.playtest) {
+      this.store.set({ stage: "results", result: { timeMs, saving: false, error: "Debug playtest: time not saved" } });
+      return;
+    }
     const attempt = this.attempt;
     this.store.set({ stage: "results", result: { timeMs, saving: true } });
     const token = await this.runToken;

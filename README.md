@@ -206,6 +206,10 @@ doesn't fly the course itself.
 | `frontend/src/game/flight.ts`          | Flight model                                             |
 | `frontend/src/game/avatar.ts`          | The pilot's model and animation                          |
 | `frontend/src/game/tuning.ts`          | Every look-and-feel constant, for the `?tune` panel      |
+| `frontend/src/game/debugMode.ts`       | Development-build and URL gate for local playtesting     |
+| `frontend/src/game/debug/`            | Lazy-loaded playtest panel and fixed-step flight telemetry |
+| `frontend/src/game/run/controller.ts`  | Adventure progression, upgrades and portals (including dev overrides) |
+| `frontend/tests/debug.test.mjs`        | Playtest gating, telemetry and portal transition checks  |
 | `frontend/src/game/pilots.ts`          | Remote players and ghosts, with interpolation            |
 | `frontend/src/net/`                    | Server clock and the room connection (SSE + POST)        |
 | `frontend/src/session/`                | Solo and room sessions: wire a Game to the network and UI |
@@ -267,6 +271,48 @@ them up. Deployed, HTTP/2 lifts the limit.
 
 In development, the running game is available as `window.__game` in the
 browser console, handy for teleporting around or poking at the race state.
+
+### Debug playtesting
+
+Run `npm run dev` in `frontend/`, then open
+`http://localhost:5173/?run=42&debug` for an adventure, or add `&debug` to a
+time trial (`/?seed=42&debug`) or explore URL. The opt-in survives navigation
+through the menu. Remove `debug` from the URL and reload to leave test mode.
+The panel is collapsible; press `Esc` to free the mouse before editing it.
+It starts collapsed on narrow screens.
+
+| Readout / control | Meaning |
+| :--- | :--- |
+| Altitude (m) | The physics position's world Y coordinate; it can be negative. Surface clearance is a separate measurement. |
+| Speed (m/s) | Magnitude of the actual flight velocity. |
+| Climb rate (m/s) | Vertical velocity; positive means climbing. |
+| Acceleration (m/s²) | Magnitude of the velocity change divided by the fixed physics timestep; turning also counts. |
+| Speed change (m/s²) | Signed change in speed; negative means slowing down. |
+| Show flight telemetry | Show or hide the readouts. They refresh at the existing 10 Hz HUD cadence. |
+| Portal every N gates | Adventure only: `0` keeps the normal exit; `1` adds a portal after every gate; `3` adds one after every third gate. Updates immediately and applies to subsequent levels. Entering any portal uses the usual upgrade picker and biome transition. |
+
+Acceleration, speed-change and climb-rate readings reset during pause,
+loading, countdown, respawn and portal transitions, so teleports and waiting
+do not appear as acceleration spikes.
+Portal controls have no effect in time trials or explore mode. All settings
+belong to the current game and reset on restart; they are never saved in
+localStorage. Test adventures do not update best scores, and test time trials
+do not start the server clock or submit times or ghosts.
+
+The mode is disabled in multiplayer rooms and menu backdrops. Vite's
+`import.meta.env.DEV` excludes the panel, telemetry and portal overrides from
+`npm run build`, including Docker deployments; adding `?debug` to the public
+site cannot enable them. Use the local dev server or an SSH-forwarded dev
+server for playtests. This does not add an administrator mode to production.
+
+To extend it, add defaults and a control descriptor in
+[`tuning.ts`](frontend/src/game/tuning.ts), a typed setting in
+[`debugMode.ts`](frontend/src/game/debugMode.ts), and the corresponding
+`DEV`-guarded consumer. Add flight measurements to `FlightTelemetry` and
+the `METRICS` registry in the panel. The same control descriptors appear in
+`?debug&tune`, without mixing gameplay overrides into persisted visual tuning.
+Run `npm run test:debug` for the targeted checks (Node 22.15+).
+See [the implementation and verification record](docs/debug-mode.md).
 
 ## Ideas for Next Steps
 

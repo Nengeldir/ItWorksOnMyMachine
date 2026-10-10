@@ -1,3 +1,5 @@
+import type { DebugSettings } from "./debugMode";
+
 // Every look-and-feel constant that isn't physics lives here, grouped so the
 // ?tune panel can show one folder per group. None of these change how fast you
 // fly or what you hit: the flight model (FLIGHT in flight.ts) does that.
@@ -116,6 +118,13 @@ export const AUDIO = {
   nightDim: 0.25, // how much quieter the music gets at night
   nightMuffle: 0.55, // how much the highs are rolled off at night
 };
+
+/** Dev-only playtesting. Kept out of GROUPS so gameplay overrides are never persisted. */
+export const DEBUG_DEFAULTS = { showFlight: true, portalEveryGates: 0 } satisfies DebugSettings;
+export const DEBUG_CONTROLS = [
+  { key: "showFlight", label: "Show flight telemetry" },
+  { key: "portalEveryGates", label: "Portal every N gates", range: [0, 20, 1] },
+] as const;
 
 const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, WATER, RUN, AUDIO } as const;
 const DEFAULTS = JSON.parse(JSON.stringify(GROUPS)) as typeof GROUPS;

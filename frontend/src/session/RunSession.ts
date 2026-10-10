@@ -1,4 +1,5 @@
 import { Game, type HudState } from "../game/Game";
+import { debugModeRequested } from "../game/debugMode";
 import { runOrder, type RunSummary } from "../game/run/run";
 import type { Upgrade, UpgradeId } from "../game/run/upgrades";
 import { type BiomeId, runLevel } from "../game/world/biomes";
@@ -40,6 +41,7 @@ export class RunSession {
   private settings: Settings;
   private container: HTMLElement | null = null;
   private game: Game | null = null;
+  private readonly playtest = debugModeRequested();
 
   constructor(seed: number, settings: Settings) {
     this.seed = seed;
@@ -51,7 +53,7 @@ export class RunSession {
       next: null,
       arrived: null,
       summary: null,
-      best: bestRun(seed),
+      best: this.playtest ? null : bestRun(seed),
       error: null,
     });
   }
@@ -118,11 +120,15 @@ export class RunSession {
   again() {
     this.game?.dispose();
     this.game = null;
-    this.store.set({ stage: "flying", summary: null, offers: [], arrived: null, best: bestRun(this.seed) });
+    this.store.set({ stage: "flying", summary: null, offers: [], arrived: null, best: this.playtest ? null : bestRun(this.seed) });
     this.create();
   }
 
   private ended(summary: RunSummary) {
+    if (this.playtest) {
+      this.store.set({ stage: "summary", summary, best: null });
+      return;
+    }
     const bests = loadBests();
     const previous = bests[summary.seed] ?? null;
     if (previous === null || summary.score > previous) {

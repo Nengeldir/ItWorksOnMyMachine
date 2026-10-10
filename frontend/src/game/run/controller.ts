@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { DebugSettings } from "../debugMode";
 import type { Flight, FlightMods } from "../flight";
 import { plainMods } from "../flight";
 import { clamp } from "../math";
@@ -39,6 +40,7 @@ export interface RunHost {
   readonly world: World;
   readonly view: WorldView;
   readonly hovering: boolean;
+  readonly debugSettings?: DebugSettings | null;
   /** Style points flown in this level so far */
   readonly style: number;
   setLevel(level: Level): void;
@@ -179,20 +181,13 @@ export class RunController {
     this.disposeLevel();
     this.path.push(biome);
     this.host.setLevel(runLevel(this.seed, this.level, biome));
-    const world = this.host.world;
     this.passed.clear();
     this.lastGate = 0;
     this.chain = 0;
     this.levelTime = 0;
     this.styleBanked = false;
     this.host.view.setRings("race", 0);
-    // The portal stands at the last gate
-    const { course } = world;
-    const finish = course.rings[course.rings.length - 1];
-    const last = this.level >= RUN_LENGTH;
-    const color = last ? "#ffe9a0" : BIOMES[destination(this.seed, this.level, this.path)].portals.color;
-    this.portals = [new Portal(finish.position.clone().addScaledVector(finish.normal, 3), finish.normal, 15, color)];
-    for (const portal of this.portals) this.group.add(portal.group);
+    this.refreshPortals();
     // Abilities start charged
     this.stamina = 2 + this.stats.flap;
     this.hoverFuel = this.hoverMax;
@@ -205,6 +200,26 @@ export class RunController {
   private disposeLevel() {
     this.portals.forEach((p) => p.dispose());
     this.portals = [];
+  }
+
+  /** The normal exit stays put; local dev playtests can also exit at earlier gates. */
+  refreshPortals() {
+    this.disposeLevel();
+    const rings = this.host.world.course.rings;
+    const color = this.level >= RUN_LENGTH ? "#ffe9a0" : BIOMES[destination(this.seed, this.level, this.path)].portals.color;
+    const add = (index: number) => {
+      const gate = rings[index];
+      const portal = new Portal(gate.position.clone().addScaledVector(gate.normal, 3), gate.normal, 15, color);
+      this.portals.push(portal);
+      this.group.add(portal.group);
+    };
+    if (import.meta.env.DEV) {
+      const interval = this.host.debugSettings?.portalEveryGates ?? 0;
+      if (Number.isInteger(interval) && interval > 0) {
+        for (let i = interval - 1; i < rings.length - 1; i += interval) add(i);
+      }
+    }
+    add(rings.length - 1);
   }
 
   private get hoverMax(): number {
