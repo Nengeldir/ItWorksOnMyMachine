@@ -125,9 +125,5 @@ export const VERDANT: Biome = {
       { kind: "petals", rate: 3, colors: ["#ffffff", "#ffd6e8"] },
     ],
   },
-  sidequests: [
-    { kind: "chase", title: "Chase the spirit birds", thing: "spirit bird", count: 3, reward: 1800 },
-    { kind: "collect", title: "Gather the glowing seeds", thing: "seed", count: 8, reward: 1200 },
-  ],
-  portals: { color: "#7dff9e", secret: true },
+  portals: { color: "#7dff9e" },
 };

@@ -144,9 +144,5 @@ export const SKY_ISLES: Biome = {
   vegetation: { kind: "legacyPines" },
   sky: { cloudSea: { depth: 260 }, puffs: 70, puffsBelow: true, puffLift: 0, mist: { mode: "camera" } },
   particles: { ambient: [] },
-  sidequests: [
-    { kind: "beacons", title: "Light the three cairns", thing: "cairn", count: 3, reward: 1500 },
-    { kind: "thread", title: "Thread the needle tunnels", thing: "needle tunnel", count: 4, reward: 1200 },
-  ],
-  portals: { color: "#8fe3ff", secret: true },
+  portals: { color: "#8fe3ff" },
 };

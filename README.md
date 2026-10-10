@@ -14,8 +14,7 @@ the last ring.
 - **Adventure:** a roguelike run through eight biomes linked by portals:
   Sky Isles, Verdant Highlands, Glacier Peaks, Sky Archipelago, Coral Lagoon,
   Twilight Forest, Ember Wastes and the Aurora Summit. Chain gates, skim for
-  style, do two sidequests per biome, find the secret portals, and pick an
-  upgrade at every portal (dash, wingbeats, hover, glide lock and more).
+  style, and pick an upgrade at every portal (dash, wingbeats, hover, glide lock and more).
 
 Races and time trials always fly Sky Isles, so recorded ghosts and
 leaderboards stay valid; the other biomes are for the adventure.
@@ -79,12 +78,9 @@ below the islands, and you respawn at your last ring, with the clock still
 running.
 
 In an adventure there is no clock. Gates score more in a chain without a
-crash, skimming earns style points, and each biome's two sidequests (light
-the cairns, chase the spirit birds, skim the lagoon, ride the thermals…) pay
-out big. The arrow at the top of the screen points to the portal. You have
-three feathers: each crash costs one, and when they're gone the run ends.
-Finishing a sidequest opens a secret portal to another biome with rarer
-upgrades.
+crash, and skimming earns style points. The arrow at the top of the screen
+points to the portal. A crash puts you back at the last gate and breaks your
+gate chain.
 
 ## How It Works
 
@@ -141,7 +137,7 @@ Alpine, Misty pines, Autumn, Dusk or Winter.
 
 **Biomes** ([`frontend/src/game/world/biomes/`](frontend/src/game/world/biomes)):
 every biome is data: lighting moods (a day and a night one), a terrain
-recipe, surfaces, plants, water, mist and clouds, particles, sidequests and
+recipe, surfaces, plants, water, mist and clouds, particles and
 portals. Sky Isles is the islands above; every other biome comes from the
 second terrain generator ([`world/terrain/`](frontend/src/game/world/terrain)):
 a heightfield valley that follows the racing line and steps down in pools

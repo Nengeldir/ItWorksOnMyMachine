@@ -122,9 +122,5 @@ export const LAGOON: Biome = {
       { kind: "fireflies", rate: 2, colors: ["#d8ff7a"], night: 6 },
     ],
   },
-  sidequests: [
-    { kind: "skim", title: "Skim the lagoon", thing: "second", count: 10, reward: 1500 },
-    { kind: "chase", title: "Race the manta through the arches", thing: "manta", count: 1, reward: 2000 },
-  ],
-  portals: { color: "#4ff0e0", secret: true },
+  portals: { color: "#4ff0e0" },
 };

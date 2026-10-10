@@ -86,9 +86,9 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/pilots.ts` | Remote players and ghosts: interpolated samples driving an `Avatar` and `PilotFx` |
 | `game/ghost.ts` | Recording and decoding ghost runs (15 Hz) |
 | `game/effects.ts` | Crash debris (instanced tetrahedra) |
-| `game/audio.ts` | Synthesized wind and event sounds, run stingers (portal, upgrade, sidequest, item, dash) and the wingbeat whoosh |
+| `game/audio.ts` | Synthesized wind and event sounds, run stingers (portal, upgrade, dash; sidequest and item are unused for now) and the wingbeat whoosh |
 | `game/webgl.ts` | WebGL 2 availability check; `GameScreen` shows help if it's missing |
-| `game/run/` | The roguelike run. `run.ts`: run length, biome order from the run seed, portal destinations, scoring constants, `RunHud`. `upgrades.ts`: ten data-defined upgrades and the 3-of-N offer. `controller.ts`: `RunController` (levels, gates and chains, lives, abilities as `FlightMods`, sidequests, portals, upgrade pick, tunnel and palette cross-fade, HUD data). `quests.ts`: the sidequest framework (beacons, collect, chase, thread, rush, skim, thermals, rescue). `portal.ts`: portal (ring, swirling veil, beam) and the tunnel |
+| `game/run/` | The roguelike run. `run.ts`: run length, biome order from the run seed, portal destinations, scoring constants, `RunHud`. `upgrades.ts`: nine data-defined upgrades and the 3-of-N offer. `controller.ts`: `RunController` (levels, gates and chains, abilities as `FlightMods`, the portal, upgrade pick, tunnel and palette cross-fade, HUD data). `portal.ts`: portal (ring, swirling veil, beam) and the tunnel |
 | `game/devtools.ts` | Dev builds only: `__shot(view)` (freeze, stream the land around a fixed camera, render once) and `__raceHashes()` (the race map's determinism check) on `window` |
 | `game/math.ts` | `clamp`, `smoothstep`, `smin` (smooth minimum for distance fields) |
 | `game/world/terrain/` | Generator v2 (every biome but Sky Isles). `noise.ts`: seeded fbm, ridged multifractal, domain-warped ridges, terraces. `shapes.ts`: distance-field primitives with boxes, surface ids and grain (Island, NoiseIsland from 3D noise with tunnels, Mesa with ledges, Spire between two points, Slab, RockRing, Cap). `ground.ts`: the heightfield following the line (valley, hills, warped ridged mountains, terraces, crevasses, carved river channel, overhang noise on cliffs). `river.ts`: `Steps`, a valley floor stepping down in pools and falls, and the river in it (water distance for collisions). `field.ts`: `TerrainField`, ground + shapes as one field, `fill()` for whole blocks (same arithmetic as `distance()`). `recipes.ts`: gates and scenery from a biome's `LandRecipe`. `mesh.ts`: surface nets per LOD node, faces painted for the shader. `streamer.ts`: `LandStreamer`, the LOD octree (384/192/96 m nodes, 16 cells each). `material.ts`: the terrain shader |
@@ -158,6 +158,27 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Feathers and sidequests peeled off for later (Claude)
+
+Asked for: take the feathers (run lives) and sidequests out of `Pengyue` and
+keep them on a separate branch for later, then merge `main` in for the PR.
+
+- **`Pengyue-feathers-sidequests`** is `Pengyue` as it was (`febf426`), with
+  both features. Nothing else differs.
+- **Removed here:** `run/quests.ts` (all eight sidequest kinds, including the
+  thermals' lift), the secret portal they opened, lives (`START_LIVES`, the
+  Spare feather upgrade, the HUD feathers, "Out of feathers"), the sidequest
+  timer and the biome data for both (`SidequestSpec`, `sidequests`,
+  `portals.secret`). `destinations()` became `destination()`; `offer()` lost
+  its `secret` argument (always three cards).
+- **Behavior now:** a run can't be lost. A crash respawns you at the last gate
+  and breaks the gate chain (a "Gate chain lost" toast if there was one), and
+  the run ends at the summit. Portals, upgrades, abilities, the tunnel and
+  scoring are unchanged. Races and time trials are untouched.
+- The roadmap and biome plan still describe sidequests, which are parked, not
+  dropped.
+- Verified: `npm run build` and `npm run lint` pass. Not played in a browser.
 
 ### 2026-10-10: Milestone 5, polish and performance (Claude)
 
@@ -511,8 +532,12 @@ ported to the islands world:
   (noisy); if a focused window agrees, replace the composer's full-resolution
   scene pass (render the scene to the screen and bloom a half-resolution
   copy of only the bright parts).
-- Play a run by hand with a mouse: the chase pace, the secret portal's spot,
-  every sidequest reachable in every biome, the title card animation.
+- Play a run by hand with a mouse: the title card animation, the portal's
+  spot in every biome.
+- **Feathers and sidequests are parked on `Pengyue-feathers-sidequests`**
+  (see the change log). To bring them back, merge that branch's
+  `run/quests.ts`, the biome `sidequests` and `portals.secret` data, lives in
+  `RunController`, the Spare feather upgrade and their HUD and screens.
 - Runs keep scores in this browser only (`RunSession`, localStorage); a
   daily-run leaderboard needs backend endpoints (not changed, by request).
 - Giant mushrooms, trunks and rings are rock: they collide, as they should,

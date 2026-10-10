@@ -6,7 +6,7 @@ import "./RunHud.css";
 
 const icon = (id: UpgradeId) => UPGRADES.find((u) => u.id === id)?.icon ?? "•";
 
-/** The run on top of the flight HUD: score, feathers, objectives, the portal compass, abilities */
+/** The run on top of the flight HUD: score, objectives, the portal compass, abilities */
 export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compassScale: number; toasts: boolean }) => (
   <div className="run-hud">
     <div className="run-score">
@@ -14,20 +14,13 @@ export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compas
       {run.chain > 1 && <span className="run-chain">gate chain ×{run.chain}</span>}
     </div>
 
-    <div className="run-lives" title="Feathers: crashes left">
-      {Array.from({ length: Math.max(run.lives, 0) }, (_, i) => (
-        <span key={i}>🪶</span>
-      ))}
-      {run.lives === 0 && <span className="last">last feather</span>}
-    </div>
-
     {run.compass && run.phase !== "pick" && run.phase !== "portal" && (
-      <div className={`run-compass ${run.compass.secret ? "secret" : ""}`} style={{ transform: `translateX(-50%) scale(${compassScale})` }}>
+      <div className="run-compass" style={{ transform: `translateX(-50%) scale(${compassScale})` }}>
         <div className="arrow" style={{ transform: `rotate(${run.compass.angle}rad)` }}>
           ▲
         </div>
         <div className="label">
-          {run.compass.secret ? "secret portal" : "portal"} · {run.compass.distance} m{run.compass.ahead ? "" : " · behind you"}
+          portal · {run.compass.distance} m{run.compass.ahead ? "" : " · behind you"}
         </div>
       </div>
     )}
@@ -46,8 +39,6 @@ export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compas
         </li>
       ))}
     </ul>
-
-    {run.timer !== null && <div className="run-timer">{Math.ceil(run.timer)}</div>}
 
     {run.abilities.length > 0 && (
       <div className="run-abilities">
@@ -93,12 +84,10 @@ export const TitleCard = ({ level, length, biome }: { level: number; length: num
 /** The upgrade picker, shown in the tunnel between biomes */
 export const UpgradePicker = ({
   offers,
-  secret,
   next,
   onPick,
 }: {
   offers: Upgrade[];
-  secret: boolean;
   next: BiomeId | null;
   onPick: (id: UpgradeId) => void;
 }) => {
@@ -112,7 +101,7 @@ export const UpgradePicker = ({
   }, [offers, onPick]);
   return (
     <div className="run-picker">
-      <h2>{secret ? "A secret way: choose a rare gift" : "Choose an upgrade"}</h2>
+      <h2>Choose an upgrade</h2>
       {next && (
         <p>
           The portal leads to <strong>{BIOMES[next].name}</strong>

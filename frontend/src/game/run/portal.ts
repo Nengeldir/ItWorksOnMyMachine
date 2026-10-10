@@ -3,8 +3,8 @@ import { clamp } from "../math";
 import { Kind, type Particles, fx, fxTime } from "../particles";
 
 // Portals end every level of a run: a ring of light around a swirling veil,
-// with a beam rising from it so you can find it from anywhere. A secret portal
-// stays dark until a sidequest opens it. Flying in starts the tunnel: streaks
+// with a beam rising from it so you can find it from anywhere. Flying in
+// starts the tunnel: streaks
 // of light rushing past while the next biome is built behind them.
 
 const veilVertex = /* glsl */ `
@@ -73,7 +73,6 @@ export class Portal {
   readonly position: THREE.Vector3;
   readonly normal: THREE.Vector3;
   readonly radius: number;
-  readonly secret: boolean;
   open: boolean;
   private openness: number;
   private readonly color: THREE.Color;
@@ -83,12 +82,11 @@ export class Portal {
   private readonly beam: THREE.Mesh<THREE.CylinderGeometry, THREE.ShaderMaterial>;
   private moteDebt = 0;
 
-  constructor(position: THREE.Vector3, normal: THREE.Vector3, radius: number, color: string, secret: boolean) {
+  constructor(position: THREE.Vector3, normal: THREE.Vector3, radius: number, color: string) {
     this.position = position.clone();
     this.normal = normal.clone().normalize();
     this.radius = radius;
-    this.secret = secret;
-    this.open = !secret;
+    this.open = true;
     this.openness = this.open ? 1 : 0;
     this.color = new THREE.Color(color);
 
@@ -138,7 +136,7 @@ export class Portal {
     const o = this.openness;
     this.veil.material.uniforms.open.value = o;
     this.beam.material.uniforms.open.value = 0.25 + 0.75 * o;
-    // A closed secret portal is a dull stone-grey ring
+    // A closed portal is a dull stone-grey ring
     this.ringMaterial.color.copy(this.color).multiplyScalar(0.35 + 1.9 * o);
   }
 

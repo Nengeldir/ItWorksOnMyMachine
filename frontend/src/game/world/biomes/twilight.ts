@@ -130,9 +130,5 @@ export const TWILIGHT: Biome = {
       { kind: "spores", rate: 22, colors: ["#7af0ff", "#d080ff"] },
     ],
   },
-  sidequests: [
-    { kind: "beacons", title: "Relight the lanterns", thing: "lantern", count: 4, reward: 1600 },
-    { kind: "chase", title: "Follow the spirit fox", thing: "spirit fox", count: 1, reward: 2000 },
-  ],
-  portals: { color: "#c88aff", secret: true },
+  portals: { color: "#c88aff" },
 };

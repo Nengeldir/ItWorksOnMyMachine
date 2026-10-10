@@ -105,7 +105,7 @@ export const WATER = {
 export const RUN = {
   tunnelFade: 1.4, // seconds to fade out of the tunnel into the next biome
   compass: 1, // size of the portal compass
-  toasts: true, // pop-ups for points and sidequest progress
+  toasts: true, // pop-ups for points and run events
 };
 
 const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, WATER, RUN } as const;

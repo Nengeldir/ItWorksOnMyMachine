@@ -128,9 +128,5 @@ export const EMBER: Biome = {
       { kind: "ash", rate: 30, colors: ["#4a4444", "#6a6060"] },
     ],
   },
-  sidequests: [
-    { kind: "thermals", title: "Ride the thermals to the caldera", thing: "thermal", count: 4, reward: 1600 },
-    { kind: "rush", title: "Outrun the eruption", thing: "marker", count: 5, reward: 1800 },
-  ],
-  portals: { color: "#ff8a3a", secret: true },
+  portals: { color: "#ff8a3a" },
 };

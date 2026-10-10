@@ -97,9 +97,5 @@ export const ARCHIPELAGO: Biome = {
       { kind: "fireflies", rate: 4, colors: ["#fff2a0"], night: 4 },
     ],
   },
-  sidequests: [
-    { kind: "collect", title: "Gather the scattered stars", thing: "star", count: 8, reward: 1500 },
-    { kind: "thread", title: "Ride the wind walls", thing: "wind wall", count: 5, reward: 1400 },
-  ],
-  portals: { color: "#ffd27a", secret: true },
+  portals: { color: "#ffd27a" },
 };

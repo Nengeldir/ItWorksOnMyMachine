@@ -12,7 +12,6 @@ export interface RunState {
   hud: HudState | null;
   stage: "intro" | "flying" | "pick" | "summary";
   offers: Upgrade[];
-  secret: boolean;
   next: BiomeId | null;
   /** A new biome just began: its title card */
   arrived: { level: number; biome: BiomeId; at: number } | null;
@@ -49,7 +48,6 @@ export class RunSession {
       hud: null,
       stage: "intro",
       offers: [],
-      secret: false,
       next: null,
       arrived: null,
       summary: null,
@@ -75,7 +73,7 @@ export class RunSession {
         events: { hud: (hud) => this.store.set({ hud }) },
       });
       this.game.startRun(this.seed, {
-        offer: (offers, secret, next) => this.store.set({ stage: "pick", offers, secret, next }),
+        offer: (offers, next) => this.store.set({ stage: "pick", offers, next }),
         arrived: (level, biome) => this.store.set({ arrived: { level, biome, at: performance.now() } }),
         ended: (summary) => this.ended(summary),
       });

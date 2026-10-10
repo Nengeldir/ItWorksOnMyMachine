@@ -97,8 +97,8 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
       <section className="menu-card adventure">
         <h2>Adventure</h2>
         <p className="hint">
-          A roguelike run through eight biomes linked by portals. Pick an upgrade at every portal, do sidequests for
-          points, find the secret ways.
+          A roguelike run through eight biomes linked by portals. Pick an upgrade at every portal and chain gates
+          for points.
         </p>
         <button className="primary" onClick={() => go({ kind: "run", seed: daily })}>
           Today's run <small>#{daily}</small>

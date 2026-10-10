@@ -308,7 +308,7 @@ export class Game implements RunHost {
     }
   }
 
-  stinger(kind: "portal" | "upgrade" | "quest" | "item" | "dash") {
+  stinger(kind: "portal" | "upgrade" | "dash") {
     this.audio.stinger(kind);
   }
 
@@ -516,8 +516,7 @@ export class Game implements RunHost {
     this.crashBurst();
     this.audio.crash();
     this.combo = 0;
-    // In a run, a crash costs a feather; with none left the run is over and you stay down
-    if (this.run && !this.run.crashed()) this.crashedAt = Infinity;
+    this.run?.crashed();
   }
 
   private step(input: FlightInput) {
@@ -546,7 +545,7 @@ export class Game implements RunHost {
       this.recorder.record(this.clock() - this.startAt, this.flight.position, this.flight.quaternion);
       this.checkRing();
     } else if (this.run) {
-      this.run.step(STEP, this.proximity);
+      this.run.step(STEP);
     } else if (this.raceState === "free") {
       // No race, but flying through a gate still makes it shine
       const rings = this.world.course.rings;

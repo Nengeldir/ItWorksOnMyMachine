@@ -9,24 +9,22 @@ import { BIOMES, type BiomeId, type Level, runLevel } from "../world/biomes";
 import type { World } from "../world/World";
 import type { WorldView } from "../world/WorldView";
 import { Portal, Tunnel } from "./portal";
-import { type Quest, Rescue, createQuests } from "./quests";
 import {
   CHAIN_MAX,
   GATE_POINTS,
   LEVEL_BONUS,
   PAR_POINTS,
   RUN_LENGTH,
-  START_LIVES,
   type RunHud,
   type RunPhase,
   type RunSummary,
-  destinations,
+  destination,
   runOrder,
 } from "./run";
-import { type RunStats, type Upgrade, type UpgradeId, UPGRADES, baseStats, offer, statsFor } from "./upgrades";
+import { type RunStats, type Upgrade, type UpgradeId, baseStats, offer, statsFor } from "./upgrades";
 
 // One roguelike run, from the first level to the last portal: it loads each
-// biome, scores gates, style and sidequests, keeps the lives, runs the
+// biome, scores gates and style, runs the
 // abilities (handing the flight model its FlightMods), and plays the portal,
 // the upgrade pick and the tunnel to the next biome. Game calls it only in
 // run mode, so races never see any of it.
@@ -50,12 +48,12 @@ export interface RunHost {
   freeze(on: boolean): void;
   gateBurst(index: number): void;
   wingbeat(): void;
-  stinger(kind: "portal" | "upgrade" | "quest" | "item" | "dash"): void;
+  stinger(kind: "portal" | "upgrade" | "dash"): void;
 }
 
 export interface RunEvents {
   /** The portal was entered: choose one of these */
-  offer?(upgrades: Upgrade[], secret: boolean, next: BiomeId | null): void;
+  offer?(upgrades: Upgrade[], next: BiomeId | null): void;
   /** A new biome begins */
   arrived?(level: number, biome: BiomeId): void;
   ended?(summary: RunSummary): void;
@@ -116,14 +114,10 @@ export class RunController {
   private readonly picked: UpgradeId[] = [];
   private stats: RunStats = baseStats();
   private score = 0;
-  private lives = START_LIVES;
   private chain = 0;
-  private sidequestsDone = 0;
   private readonly passed = new Set<number>();
   private lastGate = 0; // checkpoints: how many gates to respawn after
-  private quests: Quest[] = [];
   private portals: Portal[] = [];
-  private secretOpened = false;
   private levelTime = 0;
   private phaseTime = 0;
   private dashTime = 0;
@@ -133,7 +127,7 @@ export class RunController {
   private toast: RunHud["toast"] = null;
   private toastTime = 0;
   private toastId = 0;
-  private through: { secret: boolean; next: BiomeId | null } | null = null;
+  private through: { next: BiomeId | null } | null = null;
   private skyFrom: Sky | null = null;
   private skyTo: Sky | null = null;
   private readonly skyNow: Sky;
@@ -165,7 +159,7 @@ export class RunController {
   }
 
   get frozen(): boolean {
-    return this.phase === "portal" || this.phase === "pick" || this.phase === "over" || this.phase === "won";
+    return this.phase === "portal" || this.phase === "pick" || this.phase === "won";
   }
 
   start() {
@@ -190,33 +184,14 @@ export class RunController {
     this.lastGate = 0;
     this.chain = 0;
     this.levelTime = 0;
-    this.secretOpened = false;
     this.styleBanked = false;
     this.host.view.setRings("race", 0);
-    const accent = new THREE.Color(world.palette.accent);
-    this.quests = createQuests(world.biome.sidequests, {
-      world,
-      group: this.group,
-      particles: this.host.particles,
-      stats: this.stats,
-      accent,
-      notify: (text, points) => this.notify(text, points),
-      chime: (big) => this.host.stinger(big ? "quest" : "item"),
-    });
-    // The main portal stands at the last gate; a secret one off the line, opened by a sidequest
-    const { course, biome: spec } = world;
+    // The portal stands at the last gate
+    const { course } = world;
     const finish = course.rings[course.rings.length - 1];
-    const dest = destinations(this.seed, this.level, this.path);
     const last = this.level >= RUN_LENGTH;
-    this.portals = [new Portal(finish.position.clone().addScaledVector(finish.normal, 3), finish.normal, 15, last ? "#ffe9a0" : BIOMES[dest.main].portals.color, false)];
-    if (spec.portals.secret && !last) {
-      const z = course.start.z + (course.endZ - course.start.z) * 0.72;
-      const side = course.tangentAt(z, new THREE.Vector3()).cross(THREE.Object3D.DEFAULT_UP).normalize();
-      const at = course.pointAt(z, new THREE.Vector3()).addScaledVector(side, 70).add(tmp.set(0, -18, 0));
-      // Make sure it hangs in clear air
-      for (let i = 0; i < 12 && world.distance(at.x, at.y, at.z) < 20; i++) at.addScaledVector(side, -5).y += 2;
-      this.portals.push(new Portal(at, course.tangentAt(z, new THREE.Vector3()), 12, BIOMES[dest.secret].portals.color, true));
-    }
+    const color = last ? "#ffe9a0" : BIOMES[destination(this.seed, this.level, this.path)].portals.color;
+    this.portals = [new Portal(finish.position.clone().addScaledVector(finish.normal, 3), finish.normal, 15, color)];
     for (const portal of this.portals) this.group.add(portal.group);
     // Abilities start charged
     this.stamina = 2 + this.stats.flap;
@@ -228,8 +203,6 @@ export class RunController {
   }
 
   private disposeLevel() {
-    this.quests.forEach((q) => q.dispose());
-    this.quests = [];
     this.portals.forEach((p) => p.dispose());
     this.portals = [];
   }
@@ -254,8 +227,8 @@ export class RunController {
     }
   }
 
-  /** Per physics step, after the flight moved: gates, sidequests, portals */
-  step(dt: number, proximity: number) {
+  /** Per physics step, after the flight moved: gates and portals */
+  step(dt: number) {
     const { flight, prevPosition } = this.host;
     // This step's flight changes, for the next one
     const m = this.mods;
@@ -271,8 +244,6 @@ export class RunController {
       this.hoverFuel = Math.max(0, this.hoverFuel - dt);
     }
     m.lift = 0;
-    for (const q of this.quests) m.lift = Math.max(m.lift, q.lift(flight.position));
-    if (m.lift > 0) m.boost += 6;
     if (this.phase !== "explore" && this.phase !== "arrive") return;
     this.levelTime += dt;
 
@@ -298,41 +269,19 @@ export class RunController {
       this.host.gateBurst(i);
     }
 
-    for (const q of this.quests) {
-      const wasDone = q.done;
-      q.step(prevPosition, flight.position, flight.speed, proximity, dt);
-      if (q.done && !wasDone) {
-        this.sidequestsDone++;
-        if (!this.secretOpened && this.portals[1]) {
-          this.secretOpened = true;
-          this.portals[1].open = true;
-          this.notify("A secret portal has opened!", 0);
-        }
-      }
-    }
-
     for (const portal of this.portals) {
       if (portal.crossed(prevPosition, flight.position, this.stats.magnet)) {
-        this.enterPortal(portal.secret);
+        this.enterPortal();
         break;
       }
     }
   }
 
-  /** A crash: one feather less. Returns false when the run is over */
-  crashed(): boolean {
+  /** A crash: the gate chain and any dash are lost */
+  crashed() {
+    if (this.chain > 1) this.notify("Gate chain lost", 0);
     this.chain = 0;
-    this.lives--;
     this.dashTime = 0;
-    if (this.lives < 0) {
-      this.lives = 0;
-      this.score += Math.round(this.host.style);
-      this.styleBanked = true;
-      this.finish(false);
-      return false;
-    }
-    this.notify(this.lives === 0 ? "Last feather!" : `${this.lives} feather${this.lives > 1 ? "s" : ""} left`, 0);
-    return true;
   }
 
   private notify(text: string, points: number) {
@@ -343,18 +292,17 @@ export class RunController {
 
   // --- portals, the upgrade pick and the tunnel -----------------------------------------
 
-  private enterPortal(secret: boolean) {
+  private enterPortal() {
     // Clearing the level: a bonus, more for a fast one
     const par = (this.host.world.course.endZ - this.host.world.course.start.z) / 42;
     this.score += LEVEL_BONUS + Math.round(Math.max(0, par - this.levelTime) * PAR_POINTS) + Math.round(this.host.style);
     this.styleBanked = true;
     this.host.stinger("portal");
     if (this.level >= RUN_LENGTH) {
-      this.finish(true);
+      this.finish();
       return;
     }
-    const dest = destinations(this.seed, this.level, this.path);
-    this.through = { secret, next: secret ? dest.secret : dest.main };
+    this.through = { next: destination(this.seed, this.level, this.path) };
     this.phase = "portal";
     this.phaseTime = 0;
     this.host.freeze(true);
@@ -367,8 +315,6 @@ export class RunController {
     if (this.phase !== "pick" || !this.through) return;
     this.picked.push(id);
     this.stats = statsFor(this.picked);
-    const extra = UPGRADES.find((u) => u.id === id)?.effect.lives ?? 0;
-    this.lives += extra;
     this.host.stinger("upgrade");
     this.level++;
     // Build the next biome while the tunnel hides everything
@@ -381,10 +327,10 @@ export class RunController {
     this.through = null;
   }
 
-  private finish(won: boolean) {
+  private finish() {
     if (this.ended) return;
     this.ended = true;
-    this.phase = won ? "won" : "over";
+    this.phase = "won";
     this.host.freeze(true);
     this.events.ended?.({
       seed: this.seed,
@@ -392,8 +338,6 @@ export class RunController {
       levels: this.level,
       path: [...this.path],
       upgrades: [...this.picked],
-      sidequests: this.sidequestsDone,
-      won,
     });
   }
 
@@ -409,8 +353,6 @@ export class RunController {
     if (this.stats.flap > 0) this.stamina = Math.min(2 + this.stats.flap, this.stamina + dt / 9);
     if (this.phase === "arrive" && this.phaseTime > 3) this.phase = "explore";
 
-    for (const q of this.quests) q.update(dt, camera.position, this.host.flight.position);
-    for (const q of this.quests) if (q instanceof Rescue) q.follow(this.host.flight.position, this.host.flight.quaternion, dt, this.host.flight.speed);
     for (const p of this.portals) p.update(dt, particles, camera.position);
 
     // A dash trails light
@@ -427,8 +369,7 @@ export class RunController {
       this.tunnel.place(camera.position, forward, t, 0);
       if (t >= 1 && this.phase === "portal") {
         this.phase = "pick";
-        const secret = this.through.secret;
-        this.events.offer?.(offer(this.seed, this.level, this.picked, secret), secret, this.through.next);
+        this.events.offer?.(offer(this.seed, this.level, this.picked), this.through.next);
       }
     } else if (this.phase === "pick") {
       this.tunnel.place(camera.position, forward, 1, 0.2 + 0.1 * Math.sin(this.phaseTime));
@@ -483,7 +424,7 @@ export class RunController {
   hud(): RunHud {
     const world = this.host.world;
     const camera = this.host.camera;
-    // The compass points at the open secret portal if it's nearer, else the main one
+    // The compass points at the nearest open portal
     let target: Portal | null = null;
     let best = Infinity;
     for (const p of this.portals) {
@@ -501,16 +442,13 @@ export class RunController {
       const ahead = toTarget.z < 0;
       // Ahead: the direction on screen; behind: turned downwards, so the arrow says "turn around"
       const angle = ahead ? Math.atan2(toTarget.x, toTarget.y) : Math.atan2(toTarget.x, -Math.abs(toTarget.y) - Math.abs(toTarget.z) * 0.5);
-      compass = { angle, distance: Math.round(best), ahead, secret: target.secret };
+      compass = { angle, distance: Math.round(best), ahead };
     }
     const abilities: RunHud["abilities"] = [];
     if (this.stats.dash > 0) abilities.push({ id: "dash", name: "Dash", key: "Shift", charge: 1 - this.dashCooldown / Math.max(1.6, 5 - this.stats.dash * 1.1), ready: this.dashCooldown <= 0 });
     if (this.stats.flap > 0) abilities.push({ id: "flap", name: "Wingbeat", key: "Space", charge: this.stamina / (2 + this.stats.flap), ready: this.stamina >= 1, count: Math.floor(this.stamina) });
     if (this.stats.hover > 0) abilities.push({ id: "hover", name: "Hover", key: "F", charge: this.hoverFuel / Math.max(0.01, this.hoverMax), ready: this.hoverFuel > 0.05 });
-    const objectives = this.quests.map((q) => q.objective());
-    objectives.push({ title: this.secretOpened ? "Fly into a portal" : "Reach the portal", progress: compass ? `${compass.distance} m` : "", fraction: 0, done: false, failed: false });
-    let timer: number | null = null;
-    for (const q of this.quests) timer = q.timer() ?? timer;
+    const objectives = [{ title: "Reach the portal", progress: compass ? `${compass.distance} m` : "", fraction: 0, done: false, failed: false }];
     return {
       seed: this.seed,
       level: this.level,
@@ -519,14 +457,11 @@ export class RunController {
       mood: world.palette.name,
       phase: this.phase,
       score: this.score + (this.styleBanked ? 0 : Math.round(this.host.style)),
-      lives: this.lives,
       chain: this.chain,
       objectives,
       compass,
-      secretOpen: this.secretOpened,
       abilities,
       upgrades: [...this.picked],
-      timer,
       toast: this.toast,
     };
   }

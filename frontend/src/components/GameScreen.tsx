@@ -257,7 +257,7 @@ const ExploreScreen = ({ biome, seed, settings, onExit }: ScreenProps & { biome:
 const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps & { seed: number; onNewRun: () => void }) => {
   const [session] = useState(() => new RunSession(seed, settings));
   const ref = useMountedSession(session, settings);
-  const { hud, stage, offers, secret, next, arrived, summary, best, error } = useSyncExternalStore(session.store.subscribe, session.store.get);
+  const { hud, stage, offers, next, arrived, summary, best, error } = useSyncExternalStore(session.store.subscribe, session.store.get);
   const run = hud?.run ?? null;
 
   useHotkeys({
@@ -288,11 +288,10 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
           <h2>Run #{seed}</h2>
           <p>
             Fly through eight biomes, from Sky Isles to the Aurora Summit. Every level ends at a portal: fly into it
-            and choose an upgrade. Gates score more in a chain, skimming the land earns style, and each biome has two
-            sidequests. Finish one and a secret portal opens to another biome, with rarer gifts.
+            and choose an upgrade. Gates score more in a chain, and skimming the land earns style.
           </p>
           <p className="hint">
-            You have {3} feathers: each crash costs one. Abilities you pick up: <kbd>Shift</kbd> dash, <kbd>Space</kbd>{" "}
+            A crash puts you back at the last gate and breaks your gate chain. Abilities you pick up: <kbd>Shift</kbd> dash, <kbd>Space</kbd>{" "}
             wingbeat, hold <kbd>F</kbd> to hover. The arrow at the top points to the portal.
           </p>
           {best !== null && <p>Your best on this run: {best.toLocaleString()}</p>}
@@ -306,11 +305,11 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
         </aside>
       )}
 
-      {stage === "pick" && <UpgradePicker offers={offers} secret={secret} next={next} onPick={(id) => session.pick(id)} />}
+      {stage === "pick" && <UpgradePicker offers={offers} next={next} onPick={(id) => session.pick(id)} />}
 
       {stage === "summary" && summary && (
         <aside className="panel results">
-          <h2>{summary.won ? "The summit!" : "Out of feathers"}</h2>
+          <h2>The summit!</h2>
           <p>
             <strong>{summary.score.toLocaleString()}</strong> points
             {best === null || summary.score > best ? " · a new best on this run!" : ` · your best is ${best.toLocaleString()}`}
@@ -319,8 +318,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
             {summary.levels} of 8 biomes: {summary.path.map((b) => BIOMES[b].name).join(" → ")}
           </p>
           <p>
-            {summary.sidequests} sidequest{summary.sidequests === 1 ? "" : "s"} done
-            {summary.upgrades.length > 0 && <> · {summary.upgrades.map((id) => UPGRADES.find((u) => u.id === id)?.icon).join(" ")}</>}
+            {summary.upgrades.length > 0 && <>Upgrades: {summary.upgrades.map((id) => UPGRADES.find((u) => u.id === id)?.icon).join(" ")}</>}
           </p>
           <div className="row">
             <button className="primary" onClick={() => session.again()}>

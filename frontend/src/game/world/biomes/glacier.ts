@@ -125,9 +125,5 @@ export const GLACIER: Biome = {
       { kind: "glitter", rate: 14, colors: ["#ffffff", "#bfeaff"] },
     ],
   },
-  sidequests: [
-    { kind: "beacons", title: "Ring the ice bells", thing: "ice bell", count: 4, reward: 1600 },
-    { kind: "rescue", title: "Rescue the stranded glider", thing: "glider", count: 1, reward: 2000 },
-  ],
-  portals: { color: "#a8f0ff", secret: true },
+  portals: { color: "#a8f0ff" },
 };

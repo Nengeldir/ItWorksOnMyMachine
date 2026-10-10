@@ -126,9 +126,5 @@ export const AURORA: Biome = {
       { kind: "starfall", rate: 1.2, colors: ["#ffffff", "#c8f0ff"], night: 1 },
     ],
   },
-  sidequests: [
-    { kind: "collect", title: "Catch the falling stars", thing: "fallen star", count: 8, reward: 1800 },
-    { kind: "beacons", title: "Light the ancient pillars", thing: "pillar", count: 4, reward: 2000 },
-  ],
-  portals: { color: "#d8b0ff", secret: false },
+  portals: { color: "#d8b0ff" },
 };

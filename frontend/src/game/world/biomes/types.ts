@@ -182,21 +182,9 @@ export interface ParticleStyle {
   ambient: Ambient[];
 }
 
-export type SidequestKind = "beacons" | "thread" | "collect" | "chase" | "skim" | "thermals" | "rescue" | "rush";
-
-/** A sidequest as data; the framework places it from the level's seed */
-export interface SidequestSpec {
-  kind: SidequestKind;
-  title: string; // shown in the objectives
-  thing: string; // what one target is called ("cairn", "ice bell")
-  count: number;
-  reward: number; // points for finishing it
-}
-
 /** The way out of a level */
 export interface PortalSpec {
   color: string; // the veil, beam and tunnel; also hints at this biome when seen from the level before
-  secret: boolean; // a second portal, opened by finishing a sidequest
 }
 
 export interface Biome {
@@ -209,7 +197,6 @@ export interface Biome {
   readonly vegetation: VegetationSpec;
   readonly sky: SkySpec;
   readonly particles: ParticleStyle;
-  readonly sidequests: readonly SidequestSpec[];
   readonly portals: PortalSpec;
 }
 
