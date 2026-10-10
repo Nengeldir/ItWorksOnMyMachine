@@ -23,9 +23,13 @@ export const ITEM = {
   shieldTime: 30, // seconds it lasts unused
   shieldPush: 1, // metres out of the rock
   shieldKeep: 0.72, // share of the speed kept
+  // Luminescent Glider Wax: no drag and no sink for a while
+  waxTime: 8, // seconds
+  waxDrag: 0, // multiplies the drag…
+  waxSink: 0, // …and the sink (0: none at all)
 };
 
-export type RunItemId = "anemoCatcher" | "starflakeShield";
+export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax";
 
 /** How an item saved the pilot from a hit */
 export type ItemSave = "starflake";
@@ -56,6 +60,7 @@ export interface RunItemInfo {
 export const RUN_ITEMS: readonly RunItemInfo[] = [
   { id: "anemoCatcher", model: "anemoCatcher", name: "Anemo Catcher", icon: "🍶", rarity: 0, charges: 1, description: "Uncork a bottle of wind: an updraft lifts you straight up, for the gate you were about to miss." },
   { id: "starflakeShield", model: "starflakeShield", name: "Starflake Shield", icon: "❄️", rarity: 2, charges: 1, description: "A shimmering, fragile aura of ice: it shatters on the first thing you hit, and you glance off instead of crashing." },
+  { id: "gliderWax", model: "gliderWax", name: "Luminescent Glider Wax", icon: "🍯", rarity: 1, charges: 1, description: "Wax your wings with sunlight: for eight seconds there is no drag and no sink. Hold your top speed without losing height." },
 ];
 
 export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.id === id)!;
@@ -64,6 +69,7 @@ export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.i
 const DURATION: Record<RunItemId, () => number> = {
   anemoCatcher: () => ITEM.updraftTime,
   starflakeShield: () => ITEM.shieldTime,
+  gliderWax: () => ITEM.waxTime,
 };
 
 /** Effects that move the pilot: they end on a crash or a respawn */
@@ -215,6 +221,12 @@ export class Items {
       mods.lift += ITEM.updraftLift * k;
       mods.hover = Math.max(mods.hover, ITEM.updraftHover * k);
       mods.thrust += ITEM.updraftThrust * k;
+    }
+
+    // Luminescent Glider Wax: the air lets go of the wings (dives still gain speed, climbs still spend it)
+    if (this.active.has("gliderWax")) {
+      mods.drag *= ITEM.waxDrag;
+      mods.sink *= ITEM.waxSink;
     }
   }
 

@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { Builder, GOLD, blend, cyl, lathe, leaf, star } from "./builder";
+import { Builder, GOLD, GOLD_DEEP, blend, cyl, lathe, leaf, sphere, star } from "./builder";
 
 // Models of the design list's items (CLAUDE.md, "Items and abilities"), in
 // the same painted-primitive style as models.ts: toon-shaded, inked, gold
@@ -7,7 +7,7 @@ import { Builder, GOLD, blend, cyl, lathe, leaf, star } from "./builder";
 // is a hand's length or two); `y` is up, `-z` the front. The giant firework
 // (the Comet Tail Firework) is in models.ts.
 
-export type RelicId = "anemoCatcher" | "starflakeShield";
+export type RelicId = "anemoCatcher" | "starflakeShield" | "gliderWax";
 
 const ANEMO = "#5fe6c6";
 const ANEMO_LIGHT = "#c8fff1";
@@ -52,7 +52,33 @@ function starflakeShield(): THREE.BufferGeometry {
   return b.build();
 }
 
+/** Luminescent Glider Wax: a little round tin of glowing golden wax, its lid tipped open, a feather to spread it */
+function gliderWax(): THREE.BufferGeometry {
+  const b = new Builder();
+  // The tin: brass with an engraved band of waves
+  b.add(cyl(0.075, 0.07, 0.05, 28, 3), (p, out) => {
+    const a = Math.atan2(p.z, p.x);
+    const band = Math.abs(p.y) < 0.012 && Math.sin(a * 12 + p.y * 200) > 0;
+    out.set(band ? "#fff0b8" : p.y < -0.02 ? GOLD_DEEP : GOLD);
+  }, 0.15);
+  b.add(new THREE.TorusGeometry(0.075, 0.006, 6, 30), GOLD_DEEP, 0.1, [0, 0.025, 0], [Math.PI / 2, 0, 0]);
+  // The wax inside, glowing like honey in sunlight, with a swirl where it was scooped
+  b.add(cyl(0.068, 0.068, 0.008, 28), (p, out) => {
+    const r = Math.hypot(p.x, p.z);
+    const swirl = Math.sin(Math.atan2(p.z, p.x) * 2 + r * 90);
+    blend("#fff6c9", "#ffcf5a", r * 12 + swirl * 0.25, out);
+  }, 1, [0, 0.022, 0]);
+  // The lid, tipped up against the back, with a sun on it
+  b.add(cyl(0.078, 0.078, 0.012, 28), GOLD, 0.15, [0, 0.06, 0.07], [1.25, 0, 0]);
+  b.add(star(0.03, 0.014, 0.008, 8), "#fff3c4", 0.8, [0, 0.07, 0.065], [1.25 - Math.PI / 2, 0, 0]);
+  // A small white feather, its tip dipped gold
+  b.add(leaf(0.15, 0.03, 0.006), (p, out) => blend("#ffffff", "#ffd36e", (p.y - 0.09) * 18, out), 0.5, [0.03, 0.03, -0.02], [0.4, 0.3, -0.5]);
+  b.add(sphere(0.006, 6, 5), GOLD_DEEP, 0.2, [0.03, 0.03, -0.02]);
+  return b.build();
+}
+
 export const RELIC_BUILDERS: Record<RelicId, () => THREE.BufferGeometry> = {
   anemoCatcher,
   starflakeShield,
+  gliderWax,
 };
