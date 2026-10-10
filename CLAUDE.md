@@ -86,7 +86,8 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/pilots.ts` | Remote players and ghosts: interpolated samples driving an `Avatar` and `PilotFx` |
 | `game/ghost.ts` | Recording and decoding ghost runs (15 Hz) |
 | `game/effects.ts` | Crash debris (instanced tetrahedra) |
-| `game/audio.ts` | Synthesized wind and event sounds, run stingers (portal, upgrade, dash; sidequest and item are unused for now) and the wingbeat whoosh |
+| `game/audio.ts` | Synthesized wind and event sounds, run stingers (portal, upgrade, dash; sidequest and item are unused for now), the wingbeat sample (`public/audio/sfx/wingbeat.mp3`, pitch-randomized, played on each of your downstrokes and on the Wingbeat ability) and the `MusicPlayer` |
+| `game/music.ts` | `MusicPlayer`: one looping track per biome from `public/audio/music/<biome>_<title>.mp3`, crossfaded on biome change (`TRACK_OF` maps biomes to tracks; similar biomes share one). Night dims and muffles the same track. Loaded lazily, decoded with Web Audio, no music if a file fails |
 | `game/webgl.ts` | WebGL 2 availability check; `GameScreen` shows help if it's missing |
 | `game/run/` | The roguelike run. `run.ts`: run length, biome order from the run seed, portal destinations, scoring constants, `RunHud`. `upgrades.ts`: nine data-defined upgrades and the 3-of-N offer. `controller.ts`: `RunController` (levels, gates and chains, abilities as `FlightMods`, the portal, upgrade pick, tunnel and palette cross-fade, HUD data). `portal.ts`: portal (ring, swirling veil, beam) and the tunnel |
 | `game/devtools.ts` | Dev builds only: `__shot(view)` (freeze, stream the land around a fixed camera, render once) and `__raceHashes()` (the race map's determinism check) on `window` |
@@ -158,6 +159,45 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Biome music and the wingbeat sample (Claude)
+
+Asked for: an audio controller for the generated ElevenLabs tracks, files moved
+out of the repo root into a sensible place.
+
+- **Files** moved to `frontend/public/audio/`: `music/sky-isles_soaring-above-the-clouds.mp3`,
+  `music/glacier_blue-shadows-over-cold-peaks.mp3`, `music/verdant_dewdrop-stream.mp3`,
+  `music/twilight_blue-hour-fireflies.mp3`, `music/ember_red-orange-embers.mp3`,
+  `sfx/wingbeat.mp3`.
+- **`music.ts`** (new): `MusicPlayer` crossfades between tracks when the biome
+  changes. Mapping: Sky Isles and Archipelago share the Sky Isles track;
+  Glacier and Aurora Summit share the Glacier track (until the finale gets
+  its own); Verdant and Lagoon share Dewdrop Stream; Twilight and Ember have
+  their own. A biome change that keeps the track doesn't restart it. Night
+  (`palette.night`) lowers the volume and rolls off the highs of the same track.
+- **`audio.ts`**: owns the player, remembers the biome until the first user
+  gesture starts audio, plays the wingbeat sample (random pitch ±8%) on your
+  downstrokes (quiet, scaled by effort) and for the Wingbeat ability (loud).
+  Falls back to the synthesized whoosh if the sample hasn't loaded.
+- **`Game.ts`**: `setLevel` calls `audio.setBiome`; your avatar's
+  `onDownstroke` also plays the flap (not for the menu backdrop, which has
+  no audio).
+- **`tuning.ts`**: new `AUDIO` group in `?tune`: `music`, `sfx`, `crossfade`,
+  `nightDim`, `nightMuffle`.
+- **Explore debug mode** (`ExploreSession.ts`, `GameScreen.tsx`, `App.tsx`,
+  `Menu.tsx`): open `/?explore` (or `/?explore=ember&seed=7`; in dev builds
+  also "Debug: explore worlds" on the Adventure tab). A panel lists every
+  world and its lighting moods; click, or press **N** next world, **B**
+  previous, **V** next light. Switching rebuilds the level in place (no
+  reload) and the URL follows. The panel shows the music file the world should
+  play and the one actually playing, so a mismatch is visible at a glance.
+  `/?explore` with no or an unknown biome starts in Sky Isles.
+- Looks and sounds only: no gameplay code touched.
+- Verified: `npm run build` and `npm run lint` pass. **Not run in a
+  browser**: the debug panel, level switching, crossfades, loop points and mix
+  levels against the wind are unchecked. A reported "world and music don't
+  match" was not reproduced or diagnosed yet; the panel is there to find it.
+- Branch `audio-music`, cut from `main`.
 
 ### 2026-10-10: Merged main's menu and UI redesign (Claude)
 
@@ -544,6 +584,12 @@ ported to the islands world:
 ## Next up
 
 **Resume here:** the five roguelike milestones are done. What's open:
+
+- **Music follow-ups**: listen in a browser and set the mix (music vs wind,
+  `AUDIO` in `?tune`); check the loop points; the menu backdrop is silent (no
+  menu music yet); Aurora Summit needs its own finale track; the portal tunnel
+  and results screen could use stingers; the music doesn't duck under fast wind.
+  The tracks are ~2.9 MB each, so consider lowering the bitrate if load time matters.
 
 - **Measure in a focused window**: `__bench(2/1/0)` after `__shot(0)` in a
   dev build. Bloom at High was 30 to 70 ms of GPU on an M2 in a hidden tab

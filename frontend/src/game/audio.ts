@@ -1,8 +1,18 @@
-// All sound is synthesized: filtered noise for wind, short tones for events.
+// Wind and event sounds are synthesized (filtered noise, short tones); the
+// music (music.ts) and the wingbeat are recorded samples from public/audio.
 // Browsers only start audio after a user gesture, so call start() from a click.
+
+import { MusicPlayer } from "./music";
+import { AUDIO } from "./tuning";
+import type { BiomeId } from "./world/biomes/types";
+
+const WINGBEAT = "audio/sfx/wingbeat.mp3";
 
 export class GameAudio {
   private ctx: AudioContext | null = null;
+  private music: MusicPlayer | null = null;
+  private wingbeat: AudioBuffer | null = null;
+  private biome: { id: BiomeId; night: number } | null = null;
   private master: GainNode | null = null;
   private windGain: GainNode | null = null;
   private windFilter: BiquadFilterNode | null = null;
@@ -57,6 +67,41 @@ export class GameAudio {
     rush.loop = true;
     rush.connect(rushFilter).connect(this.rushGain).connect(this.master);
     rush.start();
+
+    this.music = new MusicPlayer(ctx, this.master);
+    if (this.biome) this.music.setBiome(this.biome.id, this.biome.night);
+    fetch(import.meta.env.BASE_URL + WINGBEAT)
+      .then((res) => (res.ok ? res.arrayBuffer() : Promise.reject(new Error(res.statusText))))
+      .then((data) => ctx.decodeAudioData(data))
+      .then((buffer) => (this.wingbeat = buffer))
+      .catch(() => {}); // the synthesized whoosh stays
+  }
+
+  /** The music file playing right now (null before audio starts or while it loads) */
+  get track(): string | null {
+    return this.music?.playing ?? null;
+  }
+
+  /** The level's biome and how dark it is: picks the music (call as often as you like) */
+  setBiome(id: BiomeId, night: number) {
+    this.biome = { id, night };
+    this.music?.setBiome(id, night);
+  }
+
+  /** One wing downstroke of the pilot, `strength` 0..1: a soft feathery flap, never the same twice */
+  wing(strength: number) {
+    this.sample(this.wingbeat, 0.12 + 0.3 * strength);
+  }
+
+  private sample(buffer: AudioBuffer | null, volume: number) {
+    if (!this.ctx || !this.master || !buffer) return;
+    const source = this.ctx.createBufferSource();
+    source.buffer = buffer;
+    source.playbackRate.value = 0.92 + Math.random() * 0.16;
+    const gain = this.ctx.createGain();
+    gain.gain.value = volume * AUDIO.sfx;
+    source.connect(gain).connect(this.master);
+    source.start();
   }
 
   private loop(): AudioBufferSourceNode {
@@ -81,6 +126,7 @@ export class GameAudio {
     this.windGain.gain.setTargetAtTime(flying ? 0.08 + 0.5 * s * s : 0.03, now, 0.1);
     this.windFilter.frequency.setTargetAtTime(250 + 2200 * s, now, 0.1);
     this.rushGain.gain.setTargetAtTime(flying ? 0.25 * proximity * proximity * (0.3 + s) : 0, now, 0.05);
+    this.music?.update();
   }
 
   private tone(frequency: number, duration: number, type: OscillatorType, volume: number, delay = 0) {
@@ -111,8 +157,9 @@ export class GameAudio {
     this.tone(final ? 1046 : 523, final ? 0.6 : 0.18, "square", 0.08);
   }
 
-  /** A whoosh of wind for a wingbeat */
+  /** The Wingbeat ability: a strong flap (the synthesized whoosh if the sample hasn't loaded) */
   flap() {
+    if (this.wingbeat) return this.sample(this.wingbeat, 0.8);
     if (!this.ctx || !this.master || !this.noise) return;
     const now = this.ctx.currentTime;
     const source = this.ctx.createBufferSource();
@@ -171,5 +218,6 @@ export class GameAudio {
   dispose() {
     void this.ctx?.close();
     this.ctx = null;
+    this.music = null;
   }
 }
