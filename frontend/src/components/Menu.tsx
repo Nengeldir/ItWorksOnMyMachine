@@ -4,8 +4,9 @@ import { type LeaderboardEntry, type User, getLeaderboard } from "../api";
 import type { Screen } from "../App";
 import { randomRoomCode } from "../format";
 import { dailySeed, randomSeed } from "../game/rng";
+import { raceLevel } from "../game/world/biomes";
 import { Course } from "../game/world/course";
-import { paletteFor } from "../game/world/palette";
+import { bestRun } from "../session/RunSession";
 import { type Settings, clientId } from "../storage";
 import { useUiTheme } from "../theme";
 import Controls from "./Controls";
@@ -32,8 +33,11 @@ function untilTomorrow(): string {
 
 const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
   const [daily, setDaily] = useState(() => dailySeed());
-  const course = useMemo(() => ({ palette: paletteFor(daily).name, gates: new Course(daily).rings.length }), [daily]);
-  const [tab, setTab] = useState<"solo" | "friends">(joinCode ? "friends" : "solo");
+  const course = useMemo(
+    () => ({ palette: raceLevel(daily).palette.name, gates: new Course(daily).rings.length }),
+    [daily],
+  );
+  const [tab, setTab] = useState<"solo" | "friends" | "adventure">(joinCode ? "friends" : "solo");
   const [code, setCode] = useState(joinCode ?? "");
   const [seedText, setSeedText] = useState("");
   const [board, setBoard] = useState<LeaderboardEntry[]>([]);
@@ -115,6 +119,9 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
           <button role="tab" aria-selected={tab === "friends"} onClick={() => setTab("friends")}>
             With friends
           </button>
+          <button role="tab" aria-selected={tab === "adventure"} onClick={() => setTab("adventure")}>
+            Adventure
+          </button>
         </div>
 
         {tab === "solo" ? (
@@ -146,6 +153,22 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
                   Fly
                 </button>
               </form>
+            </div>
+          </>
+        ) : tab === "adventure" ? (
+          <>
+            <p className="menu-hint">
+              A roguelike run through eight biomes linked by portals. Pick an upgrade at every portal and chain gates
+              for points.
+            </p>
+            <button className="primary" onClick={() => go({ kind: "run", seed: daily })}>
+              Today's run · #{daily}
+            </button>
+            <div className="menu-more">
+              <button className="menu-link" onClick={() => go({ kind: "run", seed: randomSeed() })}>
+                New random run
+              </button>
+              {bestRun(daily) !== null && <span className="menu-hint">Your best today: {bestRun(daily)!.toLocaleString()}</span>}
             </div>
           </>
         ) : (

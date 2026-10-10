@@ -19,6 +19,29 @@ export const FLIGHT = {
   maxSpeed: 120,
 };
 
+/**
+ * Changes to the flight model from roguelike upgrades. Only runs pass these
+ * (Game hands them over in run mode); races and time trials always fly the
+ * plain model, so their times stay comparable.
+ */
+export interface FlightMods {
+  drag: number; // multiplies FLIGHT.drag
+  sink: number; // multiplies the sink
+  stall: number; // multiplies the stall speed
+  proximityBoost: number; // multiplies FLIGHT.proximityBoost
+  boost: number; // extra m/s² right now (a dash, a thermal)
+  lift: number; // m/s of climb right now (a thermal's updraft)
+  hover: number; // 0..1: cancels the sink and gravity along the path
+  glideLock: boolean; // let go of pitch and the nose holds a shallow glide
+}
+
+export function plainMods(): FlightMods {
+  return { drag: 1, sink: 1, stall: 1, proximityBoost: 1, boost: 0, lift: 0, hover: 0, glideLock: false };
+}
+
+/** The shallow dive the glide lock holds (radians below the horizon) */
+const GLIDE_ANGLE = 0.09;
+
 export interface FlightInput {
   pitch: number; // -1..1, positive = nose up
   roll: number; // -1..1, positive = roll right
@@ -32,6 +55,7 @@ const turn = new Quaternion();
 const axis = new Vector3();
 const lookMatrix = new Matrix4();
 const ORIGIN = new Vector3();
+const locked: FlightInput = { pitch: 0, roll: 0 };
 
 export class Flight {
   readonly position = new Vector3();
@@ -58,13 +82,28 @@ export class Flight {
     this.right.set(1, 0, 0).applyQuaternion(this.quaternion);
   }
 
+  /** A wingbeat (run mode): a burst of speed and the nose lifted a little */
+  flap(speed: number, pitch: number) {
+    this.speed = Math.min(FLIGHT.maxSpeed, this.speed + speed);
+    turn.setFromAxisAngle(LOCAL_RIGHT, pitch);
+    this.quaternion.multiply(turn).normalize();
+    this.updateAxes();
+  }
+
   /** Bank angle in radians, positive with the right wing down */
   get bank(): number {
     return Math.asin(clamp(-this.right.y, -1, 1));
   }
 
-  step(dt: number, input: FlightInput, proximity: number, p = FLIGHT) {
+  step(dt: number, input: FlightInput, proximity: number, p = FLIGHT, mods: FlightMods | null = null) {
     this.updateAxes();
+    // Glide lock: with pitch let go, ease the nose towards a shallow, efficient glide
+    if (mods?.glideLock && Math.abs(input.pitch) < 0.05) {
+      const angle = Math.asin(clamp(this.forward.y, -1, 1));
+      locked.pitch = clamp((-GLIDE_ANGLE - angle) * 2.5, -0.6, 0.6);
+      locked.roll = input.roll;
+      input = locked;
+    }
 
     // Pitch and roll in the pilot's own frame
     turn.setFromAxisAngle(LOCAL_RIGHT, input.pitch * p.pitchRate * dt);
@@ -83,7 +122,8 @@ export class Flight {
     this.quaternion.premultiply(turn);
 
     // Too slow: the nose drops towards the ground
-    const stall = clamp((p.stallSpeed - this.speed) / p.stallSpeed, 0, 1);
+    const stallSpeed = p.stallSpeed * (mods ? mods.stall : 1);
+    const stall = clamp((stallSpeed - this.speed) / stallSpeed, 0, 1);
     if (stall > 0) {
       axis.crossVectors(this.forward, WORLD_DOWN);
       const length = axis.length();
@@ -97,9 +137,15 @@ export class Flight {
     this.updateAxes();
 
     // Energy: gravity along the flight path, drag, and a boost for flying close
-    const accel = -p.gravity * this.forward.y - p.drag * this.speed * this.speed + p.proximityBoost * proximity;
+    let accel = -p.gravity * this.forward.y - p.drag * this.speed * this.speed + p.proximityBoost * proximity;
+    if (mods) {
+      // The same terms, changed by upgrades (run mode only)
+      const gravity = -p.gravity * this.forward.y * (1 - mods.hover);
+      accel = gravity - p.drag * mods.drag * this.speed * this.speed + p.proximityBoost * mods.proximityBoost * proximity + mods.boost;
+    }
     this.speed = clamp(this.speed + accel * dt, p.minSpeed, p.maxSpeed);
-    const sink = Math.min(30, p.sink * (p.sinkSpeed / Math.max(this.speed, 6)) ** 2);
+    let sink = Math.min(30, p.sink * (p.sinkSpeed / Math.max(this.speed, 6)) ** 2);
+    if (mods) sink = sink * mods.sink * (1 - mods.hover) - mods.lift;
     this.velocity.copy(this.forward).multiplyScalar(this.speed);
     this.velocity.y -= sink;
     this.position.addScaledVector(this.velocity, dt);

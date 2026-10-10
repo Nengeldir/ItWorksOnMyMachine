@@ -202,6 +202,21 @@
   text-align: center;
 }
 
+/* Brightens the screen edges at speed and flashes when you pass a gate */
+.speed-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  mix-blend-mode: screen;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 52%,
+    rgba(255, 250, 235, 0.16) 74%,
+    rgba(255, 250, 235, 0.42) 100%
+  );
+}
+
 /* Over the world: white with an ink shadow reads on every sky */
 .ring-marker {
   position: absolute;

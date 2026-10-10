@@ -111,6 +111,45 @@ export class GameAudio {
     this.tone(final ? 1046 : 523, final ? 0.6 : 0.18, "square", 0.08);
   }
 
+  /** A whoosh of wind for a wingbeat */
+  flap() {
+    if (!this.ctx || !this.master || !this.noise) return;
+    const now = this.ctx.currentTime;
+    const source = this.ctx.createBufferSource();
+    source.buffer = this.noise;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.setValueAtTime(400, now);
+    filter.frequency.exponentialRampToValueAtTime(1400, now + 0.25);
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.5, now + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+    source.connect(filter).connect(gain).connect(this.master);
+    source.start(now);
+    source.stop(now + 0.4);
+  }
+
+  /** Short musical cues for the roguelike run */
+  stinger(kind: "portal" | "upgrade" | "quest" | "item" | "dash") {
+    if (kind === "item") {
+      this.tone(1175, 0.18, "triangle", 0.16);
+      this.tone(1568, 0.22, "triangle", 0.12, 0.05);
+    } else if (kind === "quest") {
+      // A rising major arpeggio
+      [523, 659, 784, 1047, 1319].forEach((f, i) => this.tone(f, 0.45, "triangle", 0.18, i * 0.08));
+    } else if (kind === "portal") {
+      // A shimmering chord swelling up
+      [392, 494, 587, 740].forEach((f, i) => this.tone(f, 1.4, "sine", 0.14, i * 0.04));
+      [1568, 1976].forEach((f, i) => this.tone(f, 0.8, "triangle", 0.07, 0.3 + i * 0.1));
+    } else if (kind === "upgrade") {
+      [659, 988, 1319].forEach((f, i) => this.tone(f, 0.5, "triangle", 0.18, i * 0.06));
+    } else {
+      this.tone(220, 0.25, "sawtooth", 0.06);
+      this.tone(440, 0.3, "triangle", 0.1, 0.03);
+    }
+  }
+
   crash() {
     if (!this.ctx || !this.master || !this.noise) return;
     const now = this.ctx.currentTime;
