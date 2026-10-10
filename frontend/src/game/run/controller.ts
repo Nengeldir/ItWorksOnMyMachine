@@ -193,6 +193,11 @@ export class RunController {
     return this.lastGate;
   }
 
+  /** Has gate `index` been flown through on this level? */
+  passedGate(index: number): boolean {
+    return this.passed.has(index);
+  }
+
   get frozen(): boolean {
     return this.phase === "portal" || this.phase === "pick" || this.phase === "finale" || this.phase === "won";
   }

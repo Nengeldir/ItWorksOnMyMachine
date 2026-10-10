@@ -123,6 +123,13 @@ export const RUN = {
   toasts: true, // pop-ups for points and run events
 };
 
+/** How the run's abilities look (their rules: ABILITY in run/abilities.ts) */
+export const ABILITIES_FX = {
+  thrill: 1, // Skim-Booster's wingtip flares, ribbons and sparks
+  thermal: 1, // Thermal Vision's rings over the gates and its rising warm air
+  gale: 1, // the Gale Force tunnel and the rings round the gates it widens
+};
+
 /** Music and sound levels */
 export const AUDIO = {
   music: 0.45, // volume of the background music
@@ -132,7 +139,7 @@ export const AUDIO = {
   nightMuffle: 0.55, // how much the highs are rolled off at night
 };
 
-const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, STRUCTURES, WATER, RUN, AUDIO } as const;
+const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, STRUCTURES, WATER, RUN, ABILITIES_FX, AUDIO } as const;
 const DEFAULTS = JSON.parse(JSON.stringify(GROUPS)) as typeof GROUPS;
 const STORAGE_KEY = "wingrace.tuning.speed-control-v1";
 
@@ -250,6 +257,9 @@ export const RANGES: Record<string, [number, number, number?]> = {
   spray: [0, 4],
   tunnelFade: [0.3, 4],
   compass: [0.5, 2],
+  thrill: [0, 2],
+  thermal: [0, 2],
+  gale: [0, 2],
   grassDistance: [40, 300, 5],
   music: [0, 1],
   sfx: [0, 2],
@@ -268,5 +278,6 @@ export const TUNING_GROUPS: [string, Group][] = [
   ["Structures", STRUCTURES],
   ["Water", WATER],
   ["Run", RUN],
+  ["Ability looks", ABILITIES_FX],
   ["Audio", AUDIO],
 ];

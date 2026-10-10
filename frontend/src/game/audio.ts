@@ -226,6 +226,84 @@ export class GameAudio {
     }
   }
 
+  /** A filtered rush of noise: `from` → `to` Hz over `duration`, peaking at `volume` */
+  private whoosh(from: number, to: number, duration: number, volume: number, type: BiquadFilterType = "bandpass") {
+    if (!this.ctx || !this.effects || !this.noise) return;
+    const now = this.ctx.currentTime;
+    const source = this.ctx.createBufferSource();
+    source.buffer = this.noise;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = type;
+    filter.frequency.setValueAtTime(from, now);
+    filter.frequency.exponentialRampToValueAtTime(to, now + duration);
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(volume, now + Math.min(0.06, duration * 0.3));
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    source.connect(filter).connect(gain).connect(this.effects);
+    source.start(now);
+    source.stop(now + duration + 0.05);
+  }
+
+  /** A tone gliding from one pitch to another */
+  private glide(from: number, to: number, duration: number, type: OscillatorType, volume: number, delay = 0) {
+    if (!this.ctx || !this.effects) return;
+    const start = this.ctx.currentTime + delay;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(from, start);
+    osc.frequency.exponentialRampToValueAtTime(to, start + duration);
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(volume, start + 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+    osc.connect(gain).connect(this.effects);
+    osc.start(start);
+    osc.stop(start + duration + 0.05);
+  }
+
+  /** The run's abilities (game/abilities/fx.ts) */
+  ability(kind: "plunge" | "strike" | "shear" | "burst" | "recover" | "hang" | "launch" | "manta") {
+    switch (kind) {
+      case "plunge":
+        // A falling star's whistle
+        this.glide(1500, 380, 0.7, "sine", 0.1);
+        this.whoosh(600, 2400, 0.6, 0.35);
+        break;
+      case "strike":
+        // A deep thump, a ringing chime over it
+        this.glide(140, 45, 0.6, "sine", 0.45);
+        this.whoosh(2400, 200, 0.7, 0.6, "lowpass");
+        [1568, 2093, 2637].forEach((f, i) => this.tone(f, 0.7, "triangle", 0.1, 0.03 + i * 0.05));
+        break;
+      case "shear":
+        this.whoosh(900, 4200, 0.2, 0.55, "highpass");
+        this.tone(1760, 0.12, "triangle", 0.05);
+        break;
+      case "burst":
+        // Wind swelling up under a bright open chord
+        this.whoosh(200, 1800, 1.3, 0.7);
+        [523, 784, 1047, 1319].forEach((f, i) => this.tone(f, 1.2, "triangle", 0.11, i * 0.07));
+        break;
+      case "recover":
+        this.whoosh(700, 2600, 0.3, 0.4);
+        [1760, 2349].forEach((f, i) => this.tone(f, 0.3, "triangle", 0.1, i * 0.07));
+        break;
+      case "hang":
+        [784, 988, 1175].forEach((f, i) => this.tone(f, 0.9, "sine", 0.08, i * 0.06));
+        break;
+      case "launch":
+        this.flap();
+        this.whoosh(400, 1600, 0.45, 0.45);
+        break;
+      case "manta":
+        // A soft call from far off, like Sky's mantas
+        this.glide(330, 494, 1.1, "sine", 0.07);
+        this.glide(220, 330, 1.3, "sine", 0.05, 0.15);
+        break;
+    }
+  }
+
   crash() {
     if (!this.ctx || !this.master || !this.noise) return;
     const now = this.ctx.currentTime;

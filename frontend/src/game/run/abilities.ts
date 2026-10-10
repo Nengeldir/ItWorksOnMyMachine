@@ -406,8 +406,9 @@ export class Abilities {
     m.time += dt;
     const gap = m.z - pz;
     const pace = Math.max(26, flight.velocity.z);
-    const target = Math.min(ABILITY.slipTopSpeed, pace * (1 - 0.35 * smoothstep(30, 80, gap)) + 6 * (1 - smoothstep(10, 26, gap)));
-    m.speed += (target - m.speed) * (1 - Math.exp(-dt * 1.5));
+    // Close in and it surges ahead, so you can sit in its wake but never fly into it
+    const target = Math.min(ABILITY.slipTopSpeed + 10, pace * (1 - 0.35 * smoothstep(30, 80, gap)) + 16 * (1 - smoothstep(8, 24, gap)));
+    m.speed += (target - m.speed) * (1 - Math.exp(-dt * (gap < 12 ? 6 : 2)));
     course.tangentAt(m.z, m.tangent);
     m.z = Math.min(m.z + m.speed * m.tangent.z * dt, this.endZ - 150);
     // A slow weave around the line, a little above it: always inside the racing tube

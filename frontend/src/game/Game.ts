@@ -2,6 +2,7 @@ import { bindingLabel } from "./bindings";
 import * as THREE from "three";
 import type { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import type { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { AbilityFx } from "./abilities/fx";
 import { Ambient } from "./ambient";
 import { GameAudio } from "./audio";
 import { Avatar } from "./avatar";
@@ -23,7 +24,9 @@ import { clamp } from "./math";
 import { SpeedLines } from "./speedlines";
 import { TOON_LIGHT } from "./toon";
 import { FX, RANGES, RINGS, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveTuning } from "./tuning";
+import { ABILITY } from "./run/abilities";
 import { RunController, type RunEvents, type RunHost } from "./run/controller";
+import type { UpgradeId } from "./run/upgrades";
 import type { RunHud } from "./run/run";
 import { type Level, levelId, raceLevel } from "./world/biomes";
 import type { WaterKind } from "./world/terrain/river";
@@ -171,6 +174,8 @@ export class Game implements RunHost {
   private readonly fx: PilotFx;
   /** What the pilot carries (models and animations only, for now) */
   private readonly equipment: Equipment;
+  /** What the run's abilities look like (game/abilities/) */
+  private readonly abilityFx: AbilityFx;
   readonly particles: Particles;
   /** Particles that blend instead of glowing: snow, leaves, ash, mist */
   private readonly softParticles: Particles;
@@ -238,7 +243,10 @@ export class Game implements RunHost {
   private comboIdle = 0;
   private lastBeep = 0;
   private input0: FlightInput = { pitch: 0, roll: 0 };
-
+  /** Did the last hit test touch the land as drawn (`landHit`), rather than a distance field (`hitLocal`)? */
+  private hitLand = false;
+  /** Acrobatic Recovery's roll away from the rock */
+  private readonly recoverRoll = { ...FLIGHT };
   private accumulator = 0;
   private lastFrame = 0;
   private elapsed = 0;
@@ -273,7 +281,7 @@ export class Game implements RunHost {
       if (this.autopiloting) return;
       if (action === "respawn") this.respawnNow();
       if (action === "barrelLeft" || action === "barrelRight") this.barrelRoll(action === "barrelLeft" ? -1 : 1);
-      if (action === "flap" && this.crashedAt === null && !this.glide.active) this.run?.ability(action);
+      if ((action === "flap" || action === "hover" || action === "plunge" || action === "burst") && this.crashedAt === null && !this.glide.active) this.run?.ability(action);
     };
     if (!this.attract) {
       this.renderer.domElement.addEventListener("click", this.engage);
@@ -296,6 +304,10 @@ export class Game implements RunHost {
       };
     }
     this.equipment = new Equipment(this.avatar, this.particles);
+    this.abilityFx = new AbilityFx(this.scene, this.avatar, this.particles, this.softParticles, {
+      kick: (degrees) => this.rig.kick(degrees),
+      sound: (kind) => this.audio.ability(kind),
+    });
     this.speedLines = new SpeedLines();
     this.debris = new Debris(options.color);
     this.scene.add(this.avatar.group, this.debris.mesh, this.particles.points, this.softParticles.points, this.speedLines.mesh, ...this.fx.meshes);
@@ -388,6 +400,11 @@ export class Game implements RunHost {
     }
   }
 
+  /** Dev tools: give the running run an upgrade now, e.g. `__game.grant("slipstream")` */
+  grant(id: UpgradeId) {
+    this.run?.grant(id);
+  }
+
   /** The upgrade chosen at a portal */
   pickUpgrade(id: Parameters<RunController["pick"]>[0]) {
     if (this.paused) return;
@@ -417,10 +434,6 @@ export class Game implements RunHost {
 
   get camera(): THREE.PerspectiveCamera {
     return this.rig.camera;
-  }
-
-  get hovering(): boolean {
-    return this.input.hovering;
   }
 
   respawnAt(checkpoints: number) {
@@ -472,6 +485,7 @@ export class Game implements RunHost {
     if (this.inWormhole === on) return;
     this.inWormhole = on;
     this.view.group.visible = !on;
+    this.abilityFx.group.visible = !on;
     this.softParticles.points.visible = !on;
     this.speedLines.mesh.visible = !on;
     if (on) this.debris.mesh.visible = false;
@@ -480,6 +494,9 @@ export class Game implements RunHost {
   get pixelHeight(): number {
     return this.renderer.domElement.height;
   }
+
+  /** Gates the run has passed (Thermal Vision marks the rest) */
+  private passedGate = (index: number) => this.run?.passedGate(index) ?? false;
 
   /** Keeps the camera out of the rock */
   private clearance = (x: number, y: number, z: number) => this.world.rock.distance(x, y, z);
@@ -723,6 +740,7 @@ export class Game implements RunHost {
     this.live.forEach((p) => this.removePilot(p));
     this.ghosts.forEach((p) => this.removePilot(p));
     this.fx.dispose();
+    this.abilityFx.dispose();
     this.equipment.dispose();
     this.avatar.dispose();
     this.particles.dispose();
@@ -766,6 +784,7 @@ export class Game implements RunHost {
     this.crashedAt = null;
     this.proximity = 0;
     this.combo = 0;
+    this.run?.abilities.reset();
     this.avatar.revive();
     this.avatar.visible = true;
     this.fx.reset();
@@ -828,12 +847,13 @@ export class Game implements RunHost {
     const other = this.world.otherDistance(x, y, z);
     const distance = Math.min(rock, other);
     // The hitbox: a ball for the body, a rectangle for each wing (flight.ts). The land collides as
-    // drawn once it is on screen (before that, as the distance field), trees and water by their fields
-    const shown = this.landShown();
-    const land = shown ? this.landTouched() : null;
-    const part = land ?? touching(shown ? this.others : this.field, this.flight.position, this.flight.quaternion, shown ? other : distance, hitLocal);
-    if (part || this.world.lost(y, z)) {
-      this.crash(part, land !== null);
+    // drawn once it is on screen (before that, as the distance field), trees and water by their fields.
+    // In a run, Acrobatic Recovery can turn a clipped wingtip into a roll away from the rock
+    const part = this.hitTest(other, distance);
+    if (part && this.run?.abilities.canRecover(part) && this.recover()) {
+      // Rolled away
+    } else if (part || this.world.lost(y, z)) {
+      this.crash(part, this.hitLand);
       return;
     }
     this.proximity = clamp((SCORE_RANGE - distance) / (SCORE_RANGE - 1.5), 0, 1);
@@ -851,7 +871,7 @@ export class Game implements RunHost {
       this.recorder.record(this.clock() - this.startAt, this.flight.position, this.flight.quaternion, this.flight.boost, this.flight.brake, this.flight.dodgePhase);
       this.checkRing();
     } else if (this.run) {
-      this.run.step(STEP);
+      this.run.step(STEP, this.proximity, input);
     } else if (this.raceState === "free") {
       // No race, but flying through a gate still makes it shine
       const rings = this.world.course.rings;
@@ -859,6 +879,45 @@ export class Game implements RunHost {
         if (!this.view.gates.passing(i) && this.crossed(i)) this.gateBurst(i);
       }
     }
+  }
+
+  /** The hitbox against everything solid where the pilot is now; `hitLand` says what was hit */
+  private hitTest(other: number, distance: number): HitPart | null {
+    const shown = this.landShown();
+    const land = shown ? this.landTouched() : null;
+    this.hitLand = land !== null;
+    return land ?? touching(shown ? this.others : this.field, this.flight.position, this.flight.quaternion, shown ? other : distance, hitLocal);
+  }
+
+  /**
+   * Acrobatic Recovery (run mode): a wingtip clipped the rock. Glance off it,
+   * out of the rock, and barrel roll away from it. False if the pilot can't
+   * be got clear (then it's a crash after all)
+   */
+  private recover(): boolean {
+    const f = this.flight;
+    if (this.hitLand) {
+      hitPoint.copy(landHit.point);
+      normal.copy(landHit.normal);
+    } else {
+      hitPoint.copy(hitLocal).applyQuaternion(f.quaternion).add(f.position);
+      fieldNormal(this.field, hitPoint, normal);
+    }
+    f.deflect(normal, ABILITY.recoverPush, ABILITY.recoverKeep);
+    // Teleported out: no sweep from where we were, and a few more nudges if anything still touches
+    for (let i = 0; ; i++) {
+      this.prevPosition.copy(f.position);
+      this.prevQuaternion.copy(f.quaternion);
+      const { x, y, z } = f.position;
+      const other = this.world.otherDistance(x, y, z);
+      if (!this.hitTest(other, Math.min(this.world.rock.distance(x, y, z), other))) break;
+      if (i === 4) return false;
+      f.position.addScaledVector(normal, 0.5);
+    }
+    Object.assign(this.recoverRoll, FLIGHT, { dodgeDistance: 3, dodgeDuration: 0.55 });
+    f.dodge(normal.dot(f.right) >= 0 ? 1 : -1, this.recoverRoll, true);
+    this.run!.abilities.recovered(hitPoint, normal);
+    return true;
   }
 
   /** Did the last physics step fly through ring `index`? */
@@ -951,7 +1010,10 @@ export class Game implements RunHost {
 
   private barrelRoll(dir: 1 | -1) {
     if (this.crashedAt !== null || this.raceState === "countdown" || this.frozen || !this.view.ready) return;
-    this.flight.dodge(dir);
+    // In a run, Wind-Shear Dash turns the dodge into a blink; never while hover-stalling
+    const abilities = this.run?.abilities;
+    if (abilities && abilities.hang >= 0) return;
+    if (this.flight.dodge(dir, abilities ? abilities.dodgeParams() : FLIGHT)) abilities?.dodged(dir, this.flight);
   }
 
   /** A gate was passed: it flares (WorldView), and shards, stars and light burst out of it */
@@ -1168,7 +1230,8 @@ export class Game implements RunHost {
 
   private loop = (now: number) => {
     this.frame = requestAnimationFrame(this.loop);
-    const dt = this.lastFrame ? Math.min(0.1, (now - this.lastFrame) / 1000) : 0;
+    // Never negative: hand-stepped frames (dev tools) can interleave with the browser's own
+    const dt = this.lastFrame ? clamp((now - this.lastFrame) / 1000, 0, 0.1) : 0;
     this.lastFrame = now;
     const t = this.clock();
 
@@ -1245,6 +1308,7 @@ export class Game implements RunHost {
     if (this.attract === "drift") {
       this.drift(dt);
     } else if (!crashed) {
+      this.abilityFx.pose(dt, this.run && !waiting ? this.run.abilities : null);
       this.avatar.setDodge(this.flight.dodgePhase);
       this.avatar.setSpeedControls(this.flight.boost, this.flight.brake);
       this.avatar.update(dt, this.flight.speed, this.smoothProximity);
@@ -1253,6 +1317,8 @@ export class Game implements RunHost {
       const moving = this.raceState !== "countdown" && !waiting;
       this.fx.update(dt, this.flight.speed, this.flight.velocity, this.smoothProximity, moving);
       this.skimSpray(dt);
+      if (this.run) this.abilityFx.update(dt, this.run.abilities, this.world, this.flight, this.rig.camera, this.passedGate, moving);
+      else this.abilityFx.hide();
       this.rig.update(
         dt,
         body.position,
@@ -1273,6 +1339,7 @@ export class Game implements RunHost {
       this.avatar.foldWings(this.death.wedged[0], this.death.wedged[1], dt);
       body.position.copy(this.death.position);
       body.quaternion.copy(this.death.quaternion);
+      this.abilityFx.hide();
       this.equipment.update(dt);
       this.deathEffects(dt);
       this.rig.fall(body.position, dt, this.field);
@@ -1320,7 +1387,12 @@ export class Game implements RunHost {
           : null;
     const runHud = this.run?.hud() ?? null;
     if (runHud) for (const ability of runHud.abilities) {
-      if (ability.id === "flap" || ability.id === "hover") ability.key = bindingLabel(this.input.settings.bindings, ability.id);
+      const bindings = this.input.settings.bindings;
+      if (ability.id === "flap") ability.key = bindingLabel(bindings, "flap");
+      else if (ability.id === "hoverStall") ability.key = bindingLabel(bindings, "hover");
+      else if (ability.id === "plunge") ability.key = bindingLabel(bindings, "plunge");
+      else if (ability.id === "galeForce") ability.key = bindingLabel(bindings, "burst");
+      else if (ability.id === "windShear") ability.key = `${bindingLabel(bindings, "barrelLeft")} / ${bindingLabel(bindings, "barrelRight")}`;
     }
     return {
       seed: this.world.seed,
@@ -1555,6 +1627,9 @@ export class Game implements RunHost {
     const flight = gui.addFolder("Flight physics (not saved)");
     for (const key of Object.keys(FLIGHT) as (keyof typeof FLIGHT)[]) flight.add(FLIGHT, key);
     flight.close();
+    const abilities = gui.addFolder("Run abilities (not saved)");
+    for (const key of Object.keys(ABILITY) as (keyof typeof ABILITY)[]) abilities.add(ABILITY, key);
+    abilities.close();
 
     for (const [title, group] of TUNING_GROUPS) {
       const folder = gui.addFolder(title);
@@ -1577,7 +1652,7 @@ export class Game implements RunHost {
     const actions = {
       barrelLeft: () => this.barrelRoll(-1),
       barrelRight: () => this.barrelRoll(1),
-      copy: () => void navigator.clipboard?.writeText(JSON.stringify({ FLIGHT, ...Object.fromEntries(TUNING_GROUPS) }, null, 2)),
+      copy: () => void navigator.clipboard?.writeText(JSON.stringify({ FLIGHT, ABILITY, ...Object.fromEntries(TUNING_GROUPS) }, null, 2)),
       reset: () => {
         resetTuning();
         gui.controllersRecursive().forEach((c) => c.updateDisplay());

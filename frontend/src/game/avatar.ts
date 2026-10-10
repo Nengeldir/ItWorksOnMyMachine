@@ -972,6 +972,13 @@ export class Avatar {
     this.updateCloth(A.clothWave * 0.16, wave(3, 0) * 0.35, -0.3 + wave(4, 1) * 0.3);
   }
 
+  /** A ghost's opacity, 0..1 (Wind-Shear Dash's afterimages fade out); solid pilots ignore it */
+  fade(opacity: number) {
+    if (!this.ghost) return;
+    for (const material of this.materials) if (material !== this.aura.material) material.opacity = opacity;
+    (this.aura.material as THREE.SpriteMaterial).opacity = opacity * 0.3;
+  }
+
   /** Hides the pilot (e.g. after a crash) */
   set visible(visible: boolean) {
     this.group.visible = visible;

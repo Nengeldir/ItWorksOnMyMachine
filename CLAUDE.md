@@ -100,7 +100,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | Path | What it does |
 | :--- | :--- |
 | `game/Game.ts` | The game: frame loop, fixed 120 Hz physics steps, race state, ring checks, HUD data, effects wiring (gate bursts, skim spray, gate motes), rendering with optional bloom, adaptive quality, the `?tune` panel |
-| `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only. `touching()` is the pilot's hitbox (`FLIGHT.hit*`): a ball for the body and a rectangle per wing, tilted up at a dihedral, fixed in the flight frame (never the animated pose), sampled against the distance field with early-outs; `hitboxWorld()` is the same hitbox in world space, which `Game.step` tests against the land drawn (`LandCollider`). `FlightMods` (run upgrades: drag, sink, stall, proximity boost, dash boost, thermal lift, hover, glide lock) are only ever passed in run mode; `flap()` is a run ability |
+| `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only. `touching()` is the pilot's hitbox (`FLIGHT.hit*`): a ball for the body and a rectangle per wing, tilted up at a dihedral, fixed in the flight frame (never the animated pose), sampled against the distance field with early-outs; `hitboxWorld()` is the same hitbox in world space, which `Game.step` tests against the land drawn (`LandCollider`). `FlightMods` (run upgrades: drag, sink, stall, proximity boost, dash boost, thermal lift, hover, glide lock, `thrust`, a plunge's `dive`, Hover-Stall's `hang`) are only ever passed in run mode; `flap()`, `launch()`, `deflect()` and a forced `dodge()` are run abilities |
 | `game/avatar.ts` | The pilot: a cel-shaded chibi flyer built from primitives (merged per body part, vertex-colored), a procedural cape and scarf (`Cloth`), two-segment feathered wings, and all its animation: bank lead spring, barrel rolls, flapping driven by effort, bobbing, cloth ripples, limb reactions. Also `createLabel` and `glowTexture` |
 | `game/toon.ts` | Toon material (3-band gradient, rim light tinted by the biome's sun, self-lit `glow` vertex attribute for trims and wingtips) and the inverted-hull ink outline. `TOON_LIGHT` is set per biome |
 | `game/pilotfx.ts` | Per-pilot effects: wingtip and cape ribbons, light motes, downstroke puffs, barrel-roll star spiral. Shared by you, other players and ghosts |
@@ -114,12 +114,13 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/ghost.ts` | Recording and decoding ghost runs (15 Hz) |
 | `game/glidein.ts` | `GlideIn`: while the land near you is loading (free flight, runs, explore; never races), the pilot glides in on rails instead of hanging frozen: no input, no physics step, no scoring; at most 70 m and never within 30 m of the next gate, slowing before rock; control comes back at `START_SPEED` when the land is ready, and a run's level clock keeps running meanwhile |
 | `game/items/` | Items, models and animations only (what they do comes later). `models.ts`: `ITEMS` (id, name, kind, slot) and `buildItem(id)`: the giant firework (worn on the back like a jetpack, with `fireworkFlame`), three candies, the golden feather, two helmets, five fruits, all primitives painted per vertex with the toon material and ink. `equip.ts`: `Equipment` (pull an item out with a sparkle; the firework from the hand over the shoulder onto the back, helmets drop onto the head, hand items are held up; `use()` eats; `setThrust()` lights the firework) and `ItemDisplay` (a floating pickup). `gallery.ts`: the `/?gallery` scene. `Game.equip/unequip/useItem/thrust` drive it on your pilot; `Avatar.slots` and `Avatar.armPose` are the hooks |
+| `game/abilities/` | The run abilities' looks (rules: `run/abilities.ts`; looks only). `models.ts`: down feathers, the spirit manta (`buildManta`: toon primitives, flapping two-part wings, a whip of a tail), `RingQuads` (instanced rings of light: gate markers through rock, wind halos, shockwaves), wind blades, the Gale Force tunnel, the Hover-Stall sigil and chevrons, the recovery helix. `lanes.ts`: `CloudLanes`, the cloud rivers drawn as soft puffs fitted clear of the rock. `fx.ts`: `AbilityFx`, which reads `Abilities` every frame and animates all of it, sets `Avatar.stance` (tuck, hover, cast, surf) and plays `GameAudio.ability` sounds. Additive light is kept for small things: big shapes (sigil, tunnel, blades) are painted with normal blending, or they white out a bright day sky under bloom |
 | `game/death.ts` | Crash animations, looks only: `classifyCrash` picks headfirst (into a wall: bounce and tumble), slide (glancing ground: roll down the slope), wing (a wing clipped: spin down) or fall (below the islands); `DeathFall` is a small rigid-body tumble (impulses at contact points: balls for head, hips and feet, five points per wing from the live pose via `Avatar.wingPoints`; a few position passes per step) kept out of the land drawn by `Game.contact`; a wing still wedged (`wedged`) is folded in by `Avatar.foldWings`. The avatar plays `die(kind)`, the camera arcs up overhead (`startFall`, `fall`), the body dissolves into light at `DISSOLVE_AT`, all inside `RESPAWN_DELAY` |
 | `game/effects.ts` | Crash debris: feathers knocked loose that flutter down (instanced) |
 | `game/audio.ts` | Synthesized wind and event sounds, run stingers (portal, upgrade, dash; sidequest and item are unused for now), the wingbeat sample (`public/audio/sfx/wingbeat.mp3`, pitch-randomized, played on each of your downstrokes and on the Wingbeat ability) and the `MusicPlayer` |
 | `game/music.ts` | `MusicPlayer`: one looping track per biome from `public/audio/music/<biome>_<title>.mp3`, crossfaded on biome change (`TRACK_OF` maps biomes to tracks; similar biomes share one). Night dims and muffles the same track. Loaded lazily, decoded with Web Audio, no music if a file fails |
 | `game/webgl.ts` | WebGL 2 availability check; `GameScreen` shows help if it's missing |
-| `game/run/` | The roguelike run. `run.ts`: run length, biome order from the run seed, portal destinations, scoring constants, `RunHud`. `upgrades.ts`: nine data-defined upgrades and the 3-of-N offer. `controller.ts`: `RunController` (levels, gates and chains, abilities as `FlightMods`, the portal transition: blur in, the next level built under the blur (`buildNext`), wormhole and upgrade pick while it streams, blur out with the palette cross-fade; HUD data). `finale.ts`: `Finale`, the last portal's cutscene (space under a world-fixed Milky Way with dust lanes and its core overhead, the camera's scripted pan beneath the pilot and back, then white light; Enter skips). `portal.ts`: the portal (ring, a flat disk like a window onto night, beam), the `Wormhole` (a camera-centred shell mapping the view onto an endless twisting tube of lensed stars and nebula with the exit glowing ahead, spirit motes, its own lights) and `screenSparkle`. Game's `veil(k)` (the `.portal-veil` DOM blur and sparkles) and `insideWormhole(on)` (hides the level: land, sky, soft particles, speed lines, ambient, gate effects) serve it |
+| `game/run/` | The roguelike run. `run.ts`: run length, biome order from the run seed, portal destinations, scoring constants, `RunHud`. `upgrades.ts`: seventeen data-defined upgrades (seven of the original, the design list's first ten abilities) and the 3-of-N offer. `abilities.ts`: `Abilities`, the ten abilities' rules (`ABILITY` constants, in `?tune` as "Run abilities", not saved): cooldowns, Gale Force's energy and tunnel, cloud lanes (`laneAt`), the spirit manta's path, the slipstream, Wind-Shear's dodge params; it answers each step with `FlightMods` and boost refills, and counts one-off moments (`cue`) for the looks. `controller.ts`: `RunController` (levels, gates and chains, abilities as `FlightMods`, the portal transition: blur in, the next level built under the blur (`buildNext`), wormhole and upgrade pick while it streams, blur out with the palette cross-fade; HUD data). `finale.ts`: `Finale`, the last portal's cutscene (space under a world-fixed Milky Way with dust lanes and its core overhead, the camera's scripted pan beneath the pilot and back, then white light; Enter skips). `portal.ts`: the portal (ring, a flat disk like a window onto night, beam), the `Wormhole` (a camera-centred shell mapping the view onto an endless twisting tube of lensed stars and nebula with the exit glowing ahead, spirit motes, its own lights) and `screenSparkle`. Game's `veil(k)` (the `.portal-veil` DOM blur and sparkles) and `insideWormhole(on)` (hides the level: land, sky, soft particles, speed lines, ambient, gate effects) serve it |
 | `game/devtools.ts` | Dev builds only: `__shot(view)` (freeze, stream the land around a fixed camera, render once), `__raceHashes()` (the race map's determinism check), `__run(s)`, `__bench(q)` and `__crash(kind, after)` (flies into rock near the start and stops `after` s into the crash animation) on `window` |
 | `game/math.ts` | `clamp`, `smoothstep`, `smin` (smooth minimum for distance fields) |
 | `game/world/terrain/` | Generator v2 (every biome but Sky Isles). `noise.ts`: seeded fbm, ridged multifractal, domain-warped ridges, terraces. `shapes.ts`: distance-field primitives (spires and rock rings never thinner than `MIN_RADIUS`, 4.5 m, what the 6 m meshing grid always holds) with boxes, surface ids and grain (Island, NoiseIsland from 3D noise with tunnels, Mesa with ledges, Spire between two points, Slab, RockRing, Cap, Bridge: a humped stone bridge with one arch). `ground.ts`: the heightfield following the line (valley, hills, warped ridged mountains, terraces, crevasses, carved river channel, overhang noise on cliffs). `river.ts`: `Steps`, a valley floor stepping down in pools and falls, and the river in it (water distance for collisions). `field.ts`: `TerrainField`, ground + shapes as one field, `fill()` for whole blocks (same arithmetic as `distance()`). `recipes.ts`: gates and scenery from a biome's `LandRecipe`. `mesh.ts`: surface nets per LOD node, faces painted for the shader. `streamer.ts`: `LandStreamer`, the LOD octree (384/192/96 m nodes, 16 cells each). `material.ts`: the terrain shader |
@@ -204,6 +205,70 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: The design list's first ten abilities (Claude)
+
+Asked for: write the items and abilities list into this file (the new
+section "Items and abilities"), then build only the first ten abilities,
+with models and animations in the game's style, adapting descriptions that
+don't fit the game. A deliberate gameplay change in **runs only** (rule 6):
+everything reaches the flight through `FlightMods` and the run controller;
+races, time trials and ghosts fly the plain model (tested: default mods
+change nothing).
+- **As upgrades** (`run/upgrades.ts`): ten new cards offered at portals.
+  Featherfalling replaces Featherweight (same idea, stronger: sink ×0.55,
+  stall ×0.8, drag ×0.92 per stack) and Hover-Stall replaces the old hold-F
+  Featherfall hover; saved run summaries with those ids just show a dot.
+  The offers per run seed changed.
+- **Rules** (`run/abilities.ts`, `ABILITY` in `?tune`): Skim-Booster refills
+  the boost with proximity ("thrill"). Cloud-Surfing: no cloud in the game is
+  reachable from the line (puffs float 160 m up, the cloud sea is below the
+  abyss), so the ability gathers three or four rivers of cloud along the line,
+  5 m under it; surfing up to 7 m over one pushes you (to 62 m/s), refills boost
+  and wingbeats and doubles cooldowns. Plunging Attack (X): the nose is hauled to
+  62° down with a push; a gate passed mid-plunge is a strike (300 × chain,
+  half the cooldown back); pulling up ends it. Wind-Shear Dash: Q/E become a
+  9 m blink in 0.16 s, every 0.8 s. Thermal Vision is information only: warm
+  rings over every gate ahead and the portal, through fog and rock, rising warm
+  air along the line, the manta and lanes glowing from afar (there are no
+  updrafts or boost rings yet; gates stand in). Slipstream Rider: there are no
+  moving things in runs, so the ability brings one: a spirit manta that glides
+  the racing line ahead of you (inside the tube), waits when you fall behind,
+  surges when you close in, comes back ahead if lost; within 34 m behind it
+  you're pushed (to 74 m/s). Gale Force (Z): energy from gates, skimming and
+  time; a 320 m tunnel ahead for 4 s, pushing you inside it, gates inside get
+  6 m more radius. Acrobatic Recovery: a wing (never the body) touching rock
+  glances off (`Flight.deflect`, 92% speed kept) and barrel rolls away, every 4 s;
+  if it can't be got clear, it's a crash after all. Hover-Stall (F): 2 s with the
+  flight model off (`Flight.hangStep`): the speed bleeds away, steering turns
+  you on the spot, then (or on F again) you launch at 80% of the speed you came
+  in with (at least 28 m/s); 7 s cooldown.
+- **Looks** (`game/abilities/`, see the architecture map; `ABILITIES_FX` in
+  `?tune`): halo of down feathers, thrill flares and ribbons, cloud rivers with a
+  surf wake, a comet tail and a strike shockwave, afterimage and wind blades,
+  warm gate markers, the spirit manta (with ribbons and a wake), the Gale Force
+  tunnel and wind halos, a recovery spiral, the hover sigil with its timer and
+  chevrons. Poses (`Avatar.stance`): tuck, hover, cast, surf. Sounds:
+  `GameAudio.ability`.
+- **Controls**: X plunge, Z Gale Force (gamepad X, right stick click), F
+  hover-stall is now a press (gamepad B). Settings saved before these
+  actions existed keep their keys and get the defaults for the new ones
+  (`storage.ts`). Controls list and README updated.
+- Also: `Game.loop` never takes a negative frame time (hand-stepped dev frames
+  could interleave with the browser's and run the easing backwards).
+- Dev: `__game.grant(id)` gives the running run an upgrade.
+- Verified: build and lint pass; 43 frontend tests (Node 24 in Docker; 12 new
+  for the abilities and saved bindings). In Chrome (run 7, Sky Isles by day,
+  hand-stepped): the manta in flight, the plunge's tuck, the hover pose and
+  sigil, Gale Force's tunnel, the blink's leaves and afterimage, a cloud lane
+  with the surfing pose, thrill flares, the recovery spiral, a strike's
+  shockwave, Thermal Vision's rings. Several were too bright under bloom on a
+  white day sky at first (the sigil, tunnel and blades now use normal blending,
+  the comet and lanes were dimmed). Not checked: any night biome, a real
+  strike or recovery in play (both were triggered by hand), the sounds (not
+  listened to), frame time, gamepad. The work was done in a worktree
+  (`../ItWorksOnMyMachine-abilities`, on `Pengyue`): the checkout switched
+  branches mid-task.
 
 ### 2026-10-10: `docker compose up --build` looked stuck at `npm ci` (Claude)
 
@@ -1380,6 +1445,17 @@ ported to the islands world:
 
 ## Next up
 
+- **The ten abilities** (see the change log): look at them at night (the
+  manta's spots and the sigil were tuned on a bright day), listen to the
+  sounds, play a real plunge strike and an Acrobatic Recovery with a mouse,
+  and balance the numbers in `?tune` ("Run abilities"). The Wind-Shear blink
+  plays the full 360° roll in 0.16 s (a blur): maybe a shorter roll. Thermal
+  Vision should also show updrafts and boost rings once they exist. Cloud lanes
+  are built on the main thread when first needed (about 1500 puffs, each
+  checked against the distance field).
+- **The rest of the design list** (items 1 to 20, abilities 11 to 20) is
+  planned, not started.
+
 - Playtest the settings dead zone with a real gamepad and listen to the separate
   audio levels; check mouse sensitivity 2× across different devices.
 
@@ -1673,16 +1749,16 @@ Status: **done** = mechanics, models and animations in the game.
 
 | # | Ability | What it does | Status |
 | :- | :- | :- | :- |
-| 1 | Featherfalling (passive) | Much less pull from gravity: slower descent, less drag | in progress |
-| 2 | Skim-Booster (passive) | Near misses with the ground, walls or obstacles make "thrill energy": you can boost as long as you stay dangerously close | in progress |
-| 3 | Cloud-Surfing (passive) | Flying right over cloud layers restores stamina and gives a slight speed buff | in progress |
-| 4 | Plunging Attack (active) | A rapid, steep dive; hitting a hoop in it sends out a shockwave for bonus points | in progress |
-| 5 | Wind-Shear Dash (active) | A short, instant sideways blink to dodge a cliff face or snap into a misaligned hoop | in progress |
-| 6 | Thermal Vision (passive) | Updrafts, wind currents and boost rings glow brightly from much further away | in progress |
-| 7 | Slipstream Rider (passive) | Flying right behind moving things (giant flying manta rays, other players) makes you much faster | in progress |
-| 8 | Elemental Burst: Gale Force (active) | Stored energy unleashed as a huge wind tunnel ahead: faster, and every hoop in it gets a wider hitbox | in progress |
-| 9 | Acrobatic Recovery (passive) | Clip a wall without crashing outright and you barrel roll away, keeping your momentum | in progress |
-| 10 | Hover-Stall (active) | Stop dead and hover for 2 s, to turn and pick a new direction | in progress |
+| 1 | Featherfalling (passive) | Much less pull from gravity: slower descent, less drag | done |
+| 2 | Skim-Booster (passive) | Near misses with the ground, walls or obstacles make "thrill energy": you can boost as long as you stay dangerously close | done |
+| 3 | Cloud-Surfing (passive) | Flying right over cloud layers restores stamina and gives a slight speed buff | done |
+| 4 | Plunging Attack (active) | A rapid, steep dive; hitting a hoop in it sends out a shockwave for bonus points | done |
+| 5 | Wind-Shear Dash (active) | A short, instant sideways blink to dodge a cliff face or snap into a misaligned hoop | done |
+| 6 | Thermal Vision (passive) | Updrafts, wind currents and boost rings glow brightly from much further away | done |
+| 7 | Slipstream Rider (passive) | Flying right behind moving things (giant flying manta rays, other players) makes you much faster | done |
+| 8 | Elemental Burst: Gale Force (active) | Stored energy unleashed as a huge wind tunnel ahead: faster, and every hoop in it gets a wider hitbox | done |
+| 9 | Acrobatic Recovery (passive) | Clip a wall without crashing outright and you barrel roll away, keeping your momentum | done |
+| 10 | Hover-Stall (active) | Stop dead and hover for 2 s, to turn and pick a new direction | done |
 | 11 | Moth's Attraction (passive) | The closer to a hoop's centre you pass, the more speed you come out with | planned |
 | 12 | Zenith Climber (passive) | Upward momentum lasts 20% longer when flying vertically, to scale big cliffs | planned |
 | 13 | Resonance (active) | Sing or "honk" a wave of energy: a hoop it hits turns to face you | planned |
