@@ -372,6 +372,11 @@ designer). UI only: runs play as before.
   the colors of whatever its backdrop shows.
 - **Crash note in runs:** "Back to gate N" (the run's last gate,
   `RunHud.checkpoint`) instead of "Back to the start".
+- **Settings in game:** a gear at the top right, after the "?", as on the
+  landing page (`SettingsButton` in `GameScreen.tsx`, the `TopBar`'s
+  `controls`): it opens the settings with the game held paused
+  (`holdGame`). The pause box lost its Settings button and sits in the
+  middle of the screen.
 - Biome card art rendered in headless Chromium (software GL, so no bloom)
   from the backdrop's drift view at z = 400 or 900.
 - Verified: build, lint and the frontend tests pass. In the app's browser

@@ -1,10 +1,8 @@
-import { useState } from "react";
 import { formatTime } from "../format";
 import type { HudState } from "../game/Game";
 import { FLIGHT } from "../game/flight";
 import { bindingLabel } from "../game/bindings";
 import type { Settings } from "../storage";
-import SettingsPanel from "./SettingsPanel";
 import "./Hud.css";
 
 // Skimming rock, from Game.step and flight.ts: style points per second are proximity² × speed (m/s) ×
@@ -42,13 +40,11 @@ const Bar = ({ kind, label, value }: { kind: "boost" | "skim"; label: string; va
 );
 
 /** Speed, timer, rings and standings over the game view; style points only where they score (runs) */
-const Hud = ({ hud, settings, onSettings, showStyle = false }: { hud: HudState; settings: Settings; onSettings: (settings: Settings) => void; showStyle?: boolean }) => {
-  const [showSettings, setShowSettings] = useState(false);
+const Hud = ({ hud, settings, showStyle = false }: { hud: HudState; settings: Settings; showStyle?: boolean }) => {
   const racing = hud.raceState === "racing" || hud.raceState === "countdown";
   const go = hud.raceState === "racing" && hud.raceTimeMs !== null && hud.raceTimeMs < 1000;
   return (
     <div className="hud">
-      {hud.paused && showSettings && <SettingsPanel settings={{...settings, muted: hud.muted}} onSettings={onSettings} onClose={() => setShowSettings(false)} />}
       {hud.raceState !== "free" && (
         <div className="hud-race glass">
           <div className="hud-timer">{formatTime(hud.raceTimeMs ?? 0)}</div>
@@ -78,7 +74,6 @@ const Hud = ({ hud, settings, onSettings, showStyle = false }: { hud: HudState; 
         <div className="hud-pause glass" role="status">
           <strong>Paused</strong>
           <span>Press <kbd>{bindingLabel(settings.bindings, "pause")}</kbd> to resume</span>
-          <button onClick={() => setShowSettings(true)}>Settings</button>
           {racing && <small>The race clock keeps running</small>}
         </div>
       )}
