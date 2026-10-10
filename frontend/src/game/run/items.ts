@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { Flight, FlightInput, FlightMods, HitPart } from "../flight";
 import type { ItemId } from "../items/models";
-import { smoothstep } from "../math";
+import { clamp, smoothstep } from "../math";
 import type { Course } from "../world/course";
 
 // The design list's items (CLAUDE.md, "Items and abilities"), for runs only:
@@ -27,9 +27,16 @@ export const ITEM = {
   waxTime: 8, // seconds
   waxDrag: 0, // multiplies the drag…
   waxSink: 0, // …and the sink (0: none at all)
+  // Comet Tail Firework: a terrifying, barely steerable burst forward
+  fireTime: 3.2, // seconds of burn (after a short fuse)
+  fireFuse: 0.35, // seconds from strapping it on to the flame
+  fireThrust: 46, // m/s²…
+  fireTop: 150, // …fading out by this speed
+  fireTurn: 0.35, // multiplies how hard you can steer
+  fireWobble: 0.45, // how hard it yanks the controls about
 };
 
-export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax";
+export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework";
 
 /** How an item saved the pilot from a hit */
 export type ItemSave = "starflake";
@@ -61,6 +68,7 @@ export const RUN_ITEMS: readonly RunItemInfo[] = [
   { id: "anemoCatcher", model: "anemoCatcher", name: "Anemo Catcher", icon: "🍶", rarity: 0, charges: 1, description: "Uncork a bottle of wind: an updraft lifts you straight up, for the gate you were about to miss." },
   { id: "starflakeShield", model: "starflakeShield", name: "Starflake Shield", icon: "❄️", rarity: 2, charges: 1, description: "A shimmering, fragile aura of ice: it shatters on the first thing you hit, and you glance off instead of crashing." },
   { id: "gliderWax", model: "gliderWax", name: "Luminescent Glider Wax", icon: "🍯", rarity: 1, charges: 1, description: "Wax your wings with sunlight: for eight seconds there is no drag and no sink. Hold your top speed without losing height." },
+  { id: "cometFirework", model: "firework", name: "Comet Tail Firework", icon: "🎆", rarity: 2, charges: 1, description: "A giant rocket strapped to your back: a terrifying, barely steerable burst of speed and a tail of sparks." },
 ];
 
 export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.id === id)!;
@@ -70,10 +78,14 @@ const DURATION: Record<RunItemId, () => number> = {
   anemoCatcher: () => ITEM.updraftTime,
   starflakeShield: () => ITEM.shieldTime,
   gliderWax: () => ITEM.waxTime,
+  cometFirework: () => ITEM.fireFuse + ITEM.fireTime,
 };
 
 /** Effects that move the pilot: they end on a crash or a respawn */
-const FLIGHT_EFFECTS: RunItemId[] = ["anemoCatcher"];
+const FLIGHT_EFFECTS: RunItemId[] = ["anemoCatcher", "cometFirework"];
+
+/** A push along the path, fading out as the speed nears its own top speed */
+const push = (amount: number, top: number, speed: number) => amount * clamp((top - speed) / 15, 0, 1);
 
 export interface Carried {
   id: RunItemId;
@@ -113,6 +125,7 @@ export class Items {
   /** Where the last save happened, and the surface's normal there */
   readonly savePoint = new THREE.Vector3();
   readonly saveNormal = new THREE.Vector3(0, 1, 0);
+  private readonly steered: FlightInput = { pitch: 0, roll: 0 };
   /** The level the items are in */
   world: ItemWorld | null = null;
 
@@ -228,11 +241,36 @@ export class Items {
       mods.drag *= ITEM.waxDrag;
       mods.sink *= ITEM.waxSink;
     }
+
+    // Comet Tail Firework: after the fuse, a roaring push along the path; steering goes stiff
+    const fire = this.burn;
+    if (fire > 0) {
+      mods.thrust += push(ITEM.fireThrust * fire, ITEM.fireTop, flight.speed);
+      mods.turn *= 1 - (1 - ITEM.fireTurn) * fire;
+    }
+  }
+
+  /** The firework's burn, 0..1 (0 before the fuse has burnt down and after it's spent) */
+  get burn(): number {
+    const t = this.time("cometFirework") - ITEM.fireFuse;
+    if (t < 0) return 0;
+    return smoothstep(0, 0.2, t) * (1 - smoothstep(ITEM.fireTime - 0.4, ITEM.fireTime, t));
   }
 
   /** The input actually flown this step (some items take the controls a little) */
   steer(input: FlightInput): FlightInput {
-    return input;
+    const fire = this.burn;
+    if (fire <= 0) return input;
+    // The firework bucks and yaws under you
+    const t = this.time("cometFirework") * 7;
+    const wobble = ITEM.fireWobble * fire;
+    const out = this.steered;
+    out.pitch = clamp(input.pitch + wobble * (Math.sin(t * 1.3) * 0.6 + Math.sin(t * 3.1 + 1) * 0.4), -1, 1);
+    out.roll = clamp(input.roll + wobble * (Math.sin(t * 0.9 + 2) * 0.7 + Math.sin(t * 2.3) * 0.3), -1, 1);
+    out.boost = input.boost;
+    out.brake = input.brake;
+    out.use = input.use;
+    return out;
   }
 
   hud(): ItemsHud {

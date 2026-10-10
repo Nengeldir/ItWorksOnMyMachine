@@ -134,6 +134,7 @@ export class ItemFx {
     this.active = false;
     this.group.visible = false;
     this.equipment.lift = 0;
+    this.equipment.setThrust(0);
     for (const trail of this.waxTrails) trail.opacity = 0;
   }
 
@@ -152,6 +153,8 @@ export class ItemFx {
     this.anemoCatcher(dt, items, budget);
     this.starflake(dt, items, budget);
     this.gliderWax(dt, items, flight, budget);
+    this.equipment.setThrust(items.burn);
+    if (items.time("cometFirework") < 0 && this.equipment.wearing("back") === "firework") this.equipment.unequip("back");
     this.updateWaves(dt);
     this.rings.end();
   }
@@ -213,6 +216,10 @@ export class ItemFx {
       this.host.kick(4);
     } else if (id === "starflakeShield") {
       this.shieldT = 0;
+    } else if (id === "cometFirework") {
+      this.equipment.equip("firework", true);
+      this.host.sound("uncork");
+      this.host.kick(9);
     } else if (id === "gliderWax") {
       this.waxShown = 0;
       for (const trail of this.waxTrails) trail.reset();

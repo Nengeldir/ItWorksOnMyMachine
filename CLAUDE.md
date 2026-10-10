@@ -229,6 +229,10 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Adventure items (continued)
+
+Resumed the existing item commits (1–3) and completed item 4, Comet Tail Firework: quick back equip, fuse, roaring flame and sparks, stiff bucking steering. Rules stay in run/items.ts; ItemFx only reads them. TypeScript checked; build/lint and complete milestone tests follow. Remaining: items 5–20, deterministic island pickups, two PRs, browser and balance checks.
+
 ### 2026-10-10: Crashes on the way out of a portal count; lives rebased onto main (Claude)
 
 From the review of the lives PR (PengyueW, P2), then a rebase onto main
@@ -2923,10 +2927,10 @@ Status: **done** = mechanics, models and animations in the game.
 
 | # | Item | What it does | Status |
 | :- | :- | :- | :- |
-| 1 | Anemo Catcher (Bottle of Wind) | Releases a localized updraft, propelling you straight upward if you miss a high hoop | planned |
-| 2 | Starflake Shield | A shimmering, fragile aura that shatters on impact: protects you from one collision with terrain | planned |
-| 3 | Luminescent Glider Wax | For a while, no drag: hold top speed without losing altitude | planned |
-| 4 | Comet Tail Firework | A massive rocket strapped to your back: a terrifying, uncontrollable burst of forward speed and a trail of sparks (the giant firework model exists) | planned |
+| 1 | Anemo Catcher (Bottle of Wind) | Releases a localized updraft, propelling you straight upward if you miss a high hoop | done |
+| 2 | Starflake Shield | A shimmering, fragile aura that shatters on impact: protects you from one collision with terrain | done |
+| 3 | Luminescent Glider Wax | For a while, no drag: hold top speed without losing altitude | done |
+| 4 | Comet Tail Firework | A massive rocket strapped to your back: a terrifying, uncontrollable burst of forward speed and a trail of sparks (the giant firework model exists) | done |
 | 5 | Spirit Lantern | Shows hidden, high-value "ghost hoops" that are invisible in dark or foggy areas | planned |
 | 6 | Echoing Conch | A sonar pulse that highlights the best path through the next three hoops | planned |
 | 7 | Feather of the Great Phoenix | A single-use revive: on a crash you burst into flames and respawn in mid-air, briefly invulnerable | planned |
