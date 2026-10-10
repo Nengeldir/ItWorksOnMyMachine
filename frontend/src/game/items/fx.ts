@@ -64,6 +64,7 @@ const USE_STYLE: Partial<Record<RunItemId, "eat" | "raise" | "toss">> = {
   silkRibbon: "raise",
   vortexGeode: "raise",
   stormKite: "raise",
+  glacialPrism: "raise",
   anemoCatcher: "raise",
   starflakeShield: "raise",
   gliderWax: "raise",

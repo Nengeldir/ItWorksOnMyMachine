@@ -30,6 +30,7 @@ export const ITEM = {
   bootLift: 32,
   kiteTime: 5,
   kiteLift: 18,
+  prismTime: 5,
   bag: 3, // items carried at once
   // Anemo Catcher: a bottled updraft
   updraftTime: 1.6, // seconds
@@ -53,7 +54,7 @@ export const ITEM = {
   fireWobble: 0.45, // how hard it yanks the controls about
 };
 
-export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite";
+export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism";
 
 /** How an item saved the pilot from a hit */
 export type ItemSave = "starflake";
@@ -93,12 +94,14 @@ export const RUN_ITEMS: readonly RunItemInfo[] = [
   { id: "vortexGeode", model: "vortexGeode", name: "Vortex Geode", icon: "💎", rarity: 1, charges: 1, description: "For six seconds, a gentle vortex draws nearby loose light and energy into you." },
   { id: "aeroBoots", model: "aeroBoots", name: "Aero-Boots of the Adepti", icon: "🥾", rarity: 2, charges: 3, description: "Three steps on the air. Each press gives a quick upward correction." },
   { id: "stormKite", model: "stormKite", name: "Stormcaller's Kite", icon: "🪁", rarity: 1, charges: 1, description: "An enchanted kite catches the high wind and tows you upward for five seconds." },
+  { id: "glacialPrism", model: "glacialPrism", name: "Glacial Prism", icon: "🧊", rarity: 2, charges: 1, description: "Freeze the adventure level timer and the decay of your skim combo for five seconds." },
 ];
 
 export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.id === id)!;
 
 /** How long each item's effect lasts once used (seconds) */
 const DURATION: Record<RunItemId, () => number> = {
+  glacialPrism: () => ITEM.prismTime,
   stormKite: () => ITEM.kiteTime,
   aeroBoots: () => ITEM.bootTime,
   vortexGeode: () => ITEM.vortexTime,
@@ -278,6 +281,8 @@ export class Items {
     this.cue.phoenix++;
     return true;
   }
+
+  get frozenCombo(): boolean { return this.active.has("glacialPrism"); }
 
   get invulnerable(): boolean { return this.active.has("phoenixFeather"); }
 

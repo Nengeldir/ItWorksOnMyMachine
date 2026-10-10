@@ -10,6 +10,7 @@ import { Trail } from "../trail";
 import { buildItem, disposeItem } from "./models";
 import type { Equipment } from "./equip";
 
+const ICE = new THREE.Color("#afdeff");
 const GOLD = new THREE.Color("#ffe5a0");
 const at = new THREE.Vector3();
 const vel = new THREE.Vector3();
@@ -71,6 +72,10 @@ export class RelicFx {
       }
     }
     if(items.invulnerable) this.markers.add(this.avatar.group.position,null,2.5,0.7 * ITEMS_FX.relics,0.09,2,GOLD);
+    if(items.frozenCombo) {
+      this.markers.add(this.avatar.group.position,null,2.8,0.65 * ITEMS_FX.relics,0.04,4,ICE);
+      this.markers.add(this.avatar.group.position,UP,2.1,0.35 * ITEMS_FX.relics,0.06,3,ICE);
+    }
     const kiteTime=items.time("stormKite");
     this.kite.visible=this.cord.visible=kiteTime>=0;
     if(kiteTime>=0){

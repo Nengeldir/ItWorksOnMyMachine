@@ -2946,7 +2946,7 @@ Status: **done** = mechanics, models and animations in the game.
 | 9 | Vortex Geode | Pulls nearby loose collectibles (points, energy) towards you for a short time | done |
 | 10 | Aero-Boots of the Adepti | Three "mid-air jumps" (stepping on the air) to correct your altitude quickly | done |
 | 11 | Stormcaller's Kite | A kite that catches high winds and tows you upward for 5 s | done |
-| 12 | Glacial Prism | Freezes the timer or the combo's decay for a few seconds | planned |
+| 12 | Glacial Prism | Freezes the timer or the combo's decay for a few seconds | done |
 | 13 | Sun-Kissed Nectar | Fills the boost reserve (and stamina) at once | planned |
 | 14 | Tether of the Wind Spirit | A grappling hook of light to a nearby hoop or cliff, swinging you round it for a sharp turn | planned |
 | 15 | Illusory Moth Cape | Intangible for 3 s: fly straight through rock | planned |
