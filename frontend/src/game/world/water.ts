@@ -3,8 +3,8 @@ import { FX_LIGHT, fxTime } from "../particles";
 import { TOON_LIGHT } from "../toon";
 import { WATER } from "../tuning";
 import { ATMOSPHERE, MIST } from "./atmosphere";
-import type { RiverSpec, WaterKind } from "./terrain/river";
-import type { World } from "./World";
+import type { WaterKind } from "./terrain/river";
+import type { IslandFall, World } from "./World";
 
 // Stylized water for every biome: river pools stepping down the valley, the
 // falls between them, and seas. One shader, four kinds:
@@ -38,6 +38,8 @@ const COMMON = /* glsl */ `
   uniform float glitter;
   uniform float glow;
   uniform float night;
+  uniform float flowing; // 1 for rivers, 0 for still seas
+  uniform float fade; // falls into the void fade out on the way down
   uniform vec3 horizon;
   uniform vec3 zenith;
   uniform vec3 atmoSunDirection;
@@ -132,7 +134,7 @@ const poolFragment = /* glsl */ `
       // Foam at the shore, below falls, and streaks carried by the current
       float shore = 1.0 - smoothstep(0.0, 0.5 + 0.7 * waterNoise(vWorld.xz * 0.45 + t * 0.2), vDepth);
       // flow = (across 0..1, metres downstream): streaks stretched along the current
-      float streak = smoothstep(0.62, 0.86, waterFbm(vec2(vFlow.x * 9.0, vFlow.y * 0.06 - t * 0.9)));
+      float streak = smoothstep(0.62, 0.86, waterFbm(vec2(vFlow.x * 9.0, vFlow.y * 0.06 - t * 0.9))) * flowing;
       float churn = vFoam * (0.55 + 0.45 * waterFbm(vWorld.xz * 0.35 - vec2(0.0, t * 1.2)));
       float foamW = clamp(shore * 0.85 + churn + streak * 0.35 * (0.3 + vFoam), 0.0, 1.0);
       color = mix(color, foamColor * (0.75 + 0.35 * sunUp), foamW);
@@ -141,7 +143,7 @@ const poolFragment = /* glsl */ `
         // Bioluminescence: specks drifting in the water, brightest at night
         float speck = smoothstep(0.82, 0.97, waterNoise(vWorld.xz * 1.3 + vec2(sin(t * 0.3), t * 0.15)));
         float edge = 1.0 - smoothstep(0.0, 2.5, vDepth);
-        color += foamColor * (speck * 2.2 + edge * 0.6) * glow;
+        color += foamColor * (speck * 1.4 + edge * 0.45) * glow;
       }
     } else if (kind < 1.5) {
       // Lava: crust plates over a glowing melt, cracks pulsing, bright at the edges
@@ -162,8 +164,10 @@ const poolFragment = /* glsl */ `
       vec3 body = mix(shallow, deep, depthW * 0.6) * sunUp;
       color = mix(body, sky, clamp(fresnel * 0.6 + 0.15, 0.0, 1.0));
       color = mix(color, deep * 0.55, crack * 0.6);
-      float spec = pow(clamp(dot(r, atmoSunDirection), 0.0, 1.0), 120.0);
-      color += atmoSunColor * spec * 1.6 * glitter;
+      // A soft sheen, glinting in specks rather than one blinding spot
+      float spec = pow(clamp(dot(r, atmoSunDirection), 0.0, 1.0), 260.0);
+      float specks = smoothstep(0.7, 0.95, waterNoise(vWorld.xz * 2.3));
+      color += atmoSunColor * spec * (0.25 + 1.6 * specks) * glitter * (1.0 - night * 0.5);
       color = mix(color, foamColor, (1.0 - smoothstep(0.0, 0.6, vDepth)) * 0.7);
     }
     gl_FragColor = vec4(waterAir(color, vWorld, vFogDepth), alpha);
@@ -199,7 +203,7 @@ const fallFragment = /* glsl */ `
     float streak = waterFbm(vec2(u * 22.0, v * 2.0 - time * speed * (0.6 + v)));
     float sheet = waterFbm(vec2(u * 7.0 + 3.0, v * 0.8 - time * speed * 0.5));
     float sides = 1.0 - pow(abs(u * 2.0 - 1.0), 3.0);
-    float lip = smoothstep(0.0, 0.04, v);
+    float lip = smoothstep(0.0, 0.04, v) * (1.0 - fade * smoothstep(0.3, 1.0, v));
     float spray = smoothstep(0.75, 1.0, v);
     vec3 color;
     float alpha;
@@ -230,11 +234,17 @@ export class WaterView {
   private readonly geometries: THREE.BufferGeometry[] = [];
 
   constructor(world: World) {
+    const terrain = world.biome.terrain;
+    if (terrain.kind !== "v2") return;
+    if (world.seaLevel !== null && terrain.sea) this.buildSea(world, this.uniforms("water", terrain.sea.colors, world.palette.night, 0, 0));
+    if (world.islandFalls.length && terrain.islandFalls) {
+      this.buildIslandFalls(world.islandFalls, this.uniforms("water", terrain.islandFalls.colors, world.palette.night, 1, 1));
+    }
     const steps = world.steps;
     const river = steps?.river;
     if (!steps || !river || !world.land?.ground) return;
     const ground = world.land.ground;
-    const uniforms = this.uniforms(river, world.palette.night);
+    const uniforms = this.uniforms(river.kind, river.colors, world.palette.night, 1, 0);
 
     // Pools: ribbons across the river, from one fall to the next
     const positions: number[] = [];
@@ -333,16 +343,120 @@ export class WaterView {
     }
   }
 
-  private uniforms(spec: RiverSpec, night: number): Record<string, THREE.IUniform> {
+  /** A sea: a grid over the whole level, with the depth over the ground (and the rock standing in it) per vertex */
+  private buildSea(world: World, uniforms: Record<string, THREE.IUniform>) {
+    const sea = world.seaLevel!;
+    const field = world.land!;
+    const ground = field.ground;
+    const { course } = world;
+    let xMin = Infinity;
+    let xMax = -Infinity;
+    for (let z = course.start.z - 600; z <= course.endZ + 900; z += 50) {
+      xMin = Math.min(xMin, course.x(z));
+      xMax = Math.max(xMax, course.x(z));
+    }
+    const step = 22;
+    const x0 = xMin - 1500;
+    const z0 = course.start.z - 1400;
+    const columns = Math.ceil((xMax + 1500 - x0) / step);
+    const rows = Math.ceil((course.endZ + 1600 - z0) / step);
+    // Rock standing in the water (stacks, islets): foam rings around them
+    const standing = field.shapes.filter((s) => s.min.y < sea + 2 && s.max.y > sea - 2);
+    const positions = new Float32Array((columns + 1) * (rows + 1) * 3);
+    const depth = new Float32Array((columns + 1) * (rows + 1));
+    for (let r = 0; r <= rows; r++) {
+      for (let c = 0; c <= columns; c++) {
+        const i = r * (columns + 1) + c;
+        const x = x0 + c * step;
+        const z = z0 + r * step;
+        positions[i * 3] = x;
+        positions[i * 3 + 1] = sea;
+        positions[i * 3 + 2] = z;
+        let d = ground ? sea - ground.height(x, z) : 40;
+        for (const s of standing) {
+          if (x > s.min.x - 30 && x < s.max.x + 30 && z > s.min.z - 30 && z < s.max.z + 30) {
+            d = Math.min(d, Math.max(-2, field.distance(x, sea, z) * 0.6));
+            break;
+          }
+        }
+        depth[i] = d;
+      }
+    }
+    const index: number[] = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < columns; c++) {
+        const a = r * (columns + 1) + c;
+        const b = a + columns + 1;
+        index.push(a, b, a + 1, a + 1, b, b + 1);
+      }
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("depth", new THREE.BufferAttribute(depth, 1));
+    geometry.setAttribute("flow", new THREE.BufferAttribute(new Float32Array((columns + 1) * (rows + 1) * 2), 2));
+    geometry.setAttribute("foam", new THREE.BufferAttribute(new Float32Array((columns + 1) * (rows + 1)), 1));
+    geometry.setIndex(index);
+    geometry.computeBoundingSphere();
+    this.geometries.push(geometry);
+    const mesh = new THREE.Mesh(geometry, this.material(poolVertex, poolFragment, uniforms, true));
+    mesh.renderOrder = 1;
+    this.group.add(mesh);
+  }
+
+  /** Curtains pouring off island rims, arcing out and fading into the clouds far below */
+  private buildIslandFalls(falls: IslandFall[], uniforms: Record<string, THREE.IUniform>) {
+    const DOWN = 26;
+    const SIDE = 5;
+    const positions: number[] = [];
+    const uv: number[] = [];
+    const index: number[] = [];
+    let base = 0;
+    for (const f of falls) {
+      const half = f.width / 2;
+      for (let d = 0; d <= DOWN; d++) {
+        const t = d / DOWN;
+        const out = 4 + Math.sqrt(t) * (6 + f.drop * 0.05);
+        for (let s = 0; s <= SIDE; s++) {
+          const u = s / SIDE;
+          const across = (u * 2 - 1) * half * (1 + t * 0.6);
+          positions.push(f.x + f.dx * out - f.dz * across, f.y - f.drop * t, f.z + f.dz * out + f.dx * across);
+          uv.push(u, t);
+        }
+      }
+      for (let d = 0; d < DOWN; d++) {
+        for (let s = 0; s < SIDE; s++) {
+          const a = base + d * (SIDE + 1) + s;
+          const b = a + SIDE + 1;
+          index.push(a, b, a + 1, a + 1, b, b + 1);
+        }
+      }
+      base += (DOWN + 1) * (SIDE + 1);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute("fall", new THREE.Float32BufferAttribute(uv, 2));
+    geometry.setIndex(index);
+    geometry.computeBoundingSphere();
+    this.geometries.push(geometry);
+    const material = this.material(fallVertex, fallFragment, uniforms, true);
+    material.side = THREE.DoubleSide;
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.renderOrder = 2;
+    this.group.add(mesh);
+  }
+
+  private uniforms(kind: WaterKind, colors: { deep: string; shallow: string; foam: string }, night: number, flowing: number, fade: number): Record<string, THREE.IUniform> {
     return {
       time: fxTime,
-      kind: { value: KINDS[spec.kind] },
-      deep: { value: new THREE.Color(spec.colors.deep) },
-      shallow: { value: new THREE.Color(spec.colors.shallow) },
-      foamColor: { value: new THREE.Color(spec.colors.foam) },
+      kind: { value: KINDS[kind] },
+      deep: { value: new THREE.Color(colors.deep) },
+      shallow: { value: new THREE.Color(colors.shallow) },
+      foamColor: { value: new THREE.Color(colors.foam) },
       glitter: { value: 1 },
       glow: { value: 1 },
       night: { value: night },
+      flowing: { value: flowing },
+      fade: { value: fade },
       horizon: ATMOSPHERE.horizon,
       zenith: ATMOSPHERE.zenith,
       atmoSunDirection: ATMOSPHERE.sunDirection,

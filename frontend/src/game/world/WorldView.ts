@@ -11,6 +11,7 @@ import { applyTerrainTuning, type TerrainUniforms, terrainMaterial } from "./ter
 import { LandStreamer, type NodeRequest, type NodeResult } from "./terrain/streamer";
 import { FloraView } from "./flora/view";
 import { WaterView } from "./water";
+import { SoftClouds } from "./clouds";
 import { Tree } from "./trees";
 import { sunDirection } from "./palette";
 import type { World } from "./World";
@@ -93,6 +94,7 @@ export class WorldView {
   private readonly terrainUniforms: TerrainUniforms | null = null;
   private readonly flora: FloraView | null = null;
   private readonly water: WaterView | null = null;
+  private readonly softClouds: SoftClouds | null = null;
   private readonly byKey = new Map<number, RockChunk>();
   private readonly workers: Worker[] = [];
   private readonly busy: number[] = [];
@@ -126,6 +128,8 @@ export class WorldView {
     ATMOSPHERE.zenith.value.set(palette.zenith);
     ATMOSPHERE.clouds.value.set(palette.cloud);
     ATMOSPHERE.night.value = palette.night;
+    ATMOSPHERE.aurora.value = palette.aurora ?? 0;
+    ATMOSPHERE.underglow.value.set(palette.underglow ?? "#000000");
 
     scene.background = new THREE.Color(palette.horizon);
     scene.fog = new THREE.Fog(palette.horizon, FOG_NEAR, FOG_FAR);
@@ -148,9 +152,14 @@ export class WorldView {
     this.sky = new THREE.Mesh(this.geometry(new THREE.SphereGeometry(4000, 32, 16)), this.material(skyMaterial()));
     this.sky.renderOrder = -2;
     this.group.add(this.sky);
-    const { cloudSea, puffs, puffsBelow, puffLift } = world.biome.sky;
+    const { cloudSea, puffs, puffsBelow, puffLift, banks } = world.biome.sky;
     if (cloudSea) this.buildCloudSea(cloudSea.depth);
-    if (puffs > 0) this.buildClouds(puffs, puffsBelow, puffLift);
+    if (world.biome.terrain.kind === "legacyIslands") {
+      if (puffs > 0) this.buildClouds(puffs, puffsBelow, puffLift);
+    } else if (puffs > 0 || banks) {
+      this.softClouds = new SoftClouds(world, puffs, puffLift, banks ?? 0);
+      this.group.add(this.softClouds.mesh);
+    }
     this.gates = new CrystalGates(
       world.seed,
       world.course.rings,
@@ -175,7 +184,7 @@ export class WorldView {
       this.material(material);
       this.terrainUniforms = uniforms;
       if (world.biome.vegetation.kind === "flora") this.flora = new FloraView(world, this.group);
-      if (world.steps) {
+      if (world.steps || world.seaLevel !== null || world.islandFalls.length) {
         this.water = new WaterView(world);
         this.group.add(this.water.group);
       }
@@ -414,6 +423,7 @@ export class WorldView {
     this.land?.dispose();
     this.flora?.dispose();
     this.water?.dispose();
+    this.softClouds?.dispose();
     this.instanced.forEach((m) => m.dispose());
     this.geometries.forEach((g) => g.dispose());
     this.materials.forEach((m) => m.dispose());

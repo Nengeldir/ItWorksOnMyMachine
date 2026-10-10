@@ -158,6 +158,46 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Milestone 3, part 2: every planned biome (Claude)
+
+- **Six more biomes** (`world/biomes/`), each with a day and a night mood:
+  Glacier Peaks (`glacier`: icefalls and frozen lakes on the steps,
+  crevasses, ice spires and arches, snowy firs, snow and glitter, aurora at
+  night), Sky Archipelago (`archipelago`: no ground, noise islands with
+  tunnels, waterfalls pouring off their rims into the void, cloud banks
+  across the line, golden hour), Coral Lagoon (`lagoon`: a turquoise sea over
+  a sandy floor, limestone stacks notched by the waves, islets, coral arches,
+  palms and jungle, floating jungle islands up high), Twilight Forest
+  (`twilight`: giant trees and giant mushrooms as rock, root arches,
+  bioluminescent streams and ponds, glowing flowers, fireflies and spores),
+  Ember Wastes (`ember`: lava steps and falls, terraced basalt, obsidian
+  shards, a volcano, embers and ash, light from below the horizon), Aurora
+  Summit (`aurora`: the finale, peaks over a sea of clouds, frozen lakes,
+  floating crystal rings, one colossal spire, starfall). Explore any of them
+  at `/?explore=<id>&seed=<n>`; seeds 1 to 3 cover both moods of each.
+- **Generator**: gate kinds `shards`, `mushroom`, `roots`; features `shards`,
+  `trunks` (giant trees with crowns), `mushrooms`, `islets`, `rings`,
+  `volcano` (new `Volcano` shape with a crater), `summit`. Pillars standing in
+  a sea get a wave-cut notch at its level.
+- **Sea** (`SeaSpec`): solid water at a fixed height (`World.seaLevel`, in
+  `distance()`), drawn as a grid with the depth over the ground and the rock
+  standing in it, beaches in the mesher, no plants below it, skim spray over
+  it (`World.waterNear`).
+- **Island waterfalls** (`IslandFallsSpec`): `World` finds a rim on some big
+  noise islands; curtains arc off them and fade into the clouds.
+- **Sky**: `Palette.aurora` (seamless curtains of green and violet) and
+  `Palette.underglow` (light from below the horizon).
+- **Soft clouds** (`world/clouds.ts`) for every generator-v2 biome: clusters
+  of camera-facing puffs in one draw call, lit from the sun's side with a
+  silver lining, moonlit veils at night, thinning out as you fly into them;
+  `sky.banks` puts banks across the racing line. Sky Isles keeps its faceted
+  puffs.
+- Also: glowing flowers (`grass.glow`), `starfall` ambient kind, a softer ice
+  glint, dimmer bioluminescent specks.
+- Verified: build and lint pass; race hashes unchanged; every new biome
+  looked at in Chrome (day and night for Glacier, Twilight; one mood for the
+  others so far), no console errors.
+
 ### 2026-10-10: Milestone 3, part 1: Verdant Highlands' systems (Claude)
 
 - **Vegetation** (`world/flora/`): 14 species built from primitives
@@ -387,34 +427,18 @@ ported to the islands world:
 
 ## Next up
 
-**Resume here:** milestones 1 and 2 are done, and milestone 3's systems for
-Verdant Highlands (part 1). In progress: the other six biomes. Done so far:
-`biomes/types.ts` declares the new gate kinds (`shards`, `mushroom`, `roots`),
-features (`shards`, `trunks`, `mushrooms`, `islets`, `rings`, `volcano`,
-`summit`), `SeaSpec` and `IslandFallsSpec` (types only; nothing builds them
-yet). Next steps, in order:
-1. `terrain/recipes.ts`: build the new gate kinds and features (pillars get a
-   wave-cut notch at sea level when there is a sea; a `Volcano` shape with a
-   crater in `shapes.ts`; expose `NoiseIsland`'s center and size).
-2. `World`: `sea` (collision `y - level`, valley mist at sea level, wet beaches
-   in `terrain/mesh.ts`, no plants below it) and island falls (find each lip
-   by marching out from the island's top); `WaterView`: a sea grid with depth
-   over the ground, curtains for island falls fading into the void.
-3. Sky shader: `aurora` and `underglow` on `Palette`; soft billboard clouds
-   for v2 biomes (the faceted puffs look like dark discs at night).
-4. Biome files with a day and a night mood each, as planned: Glacier Peaks
-   (ice river steps, crevasses, ice spires, snowy firs, snow, aurora at
-   night), Sky Archipelago (no ground: noise islands with tunnels, falls into
-   the void, cloud banks, golden hour), Coral Lagoon (sea, notched stacks,
-   islets, palms), Twilight Forest (glowing ponds, giant trunks and mushrooms,
-   root arches, fireflies and spores), Ember Wastes (lava steps and falls,
-   terraced basalt, obsidian shards, volcano, embers and ash), Aurora Summit
-   (summit spire, crystal rings, starfall). Register them in `biomes/index.ts`
-   and check each in a day and a night mood with `/?explore=<id>&seed=<n>`.
-5. Then milestones 4 and 5.
+**Resume here:** milestones 1 to 3 are done (all eight biomes exist). Next
+is milestone 4, the run loop: a run state machine (biome → portal → upgrade
+pick → next biome), portals, the upgrade picker, run score, sidequests (two
+per biome, already named in each biome's data), objectives HUD and compass.
+Races and time trials stay on Sky Isles.
 
-- The faceted cloud puffs look like dark discs at night; v2 biomes want soft
-  clouds.
+- Sky Isles' faceted cloud puffs look like dark discs at night (Starlight
+  mood). The race map's looks may change, but its colliders mustn't.
+- Giant mushrooms, trunks and rings are rock: they collide, as they should,
+  but plants can grow on mushroom caps only if their surface isn't `bare`.
+- The sea grid's depth and the island falls are computed on the main thread
+  at level load (about 100 ms for the lagoon). Could move to a worker.
 - Far ridged mountains are spiky at 24 m voxels; maybe smooth the ridges with
   distance or lower `sharpness`.
 
@@ -445,7 +469,7 @@ The first playable slice of the roguelike, in order. After each: commit to
    meshing in workers with LOD rings, analytic deterministic collisions, a
    terrain shader blending grass, rock, snow and sand by slope and height
    (triplanar on cliffs, on top of `atmospheric()`, flat-shaded look).
-3. **Verdant Highlands** and the reusable systems it needs: stylized water
+3. **Verdant Highlands** (done) and the reusable systems it needs: stylized water
    (depth tint, foam, sky reflection, sun glitter, skim spray), procedural
    trees (3+ species, wind sway, instanced, impostors far away), GPU grass and
    flowers near the camera, fireflies in shade. Then every other planned biome.

@@ -6,7 +6,7 @@ import type { GroundSpec } from "../terrain/ground";
 // the air, and what there is to do. One engine renders them all; nothing here
 // is code that runs per frame.
 
-export type BiomeId = "skyIsles" | "verdant";
+export type BiomeId = "skyIsles" | "verdant" | "glacier" | "archipelago" | "lagoon" | "twilight" | "ember" | "aurora";
 
 /**
  * How a kind of land is painted. The mesher picks the rock color per face
@@ -128,6 +128,7 @@ export interface GrassSpec {
   tip: string; // tips
   flowers: string[]; // flower colors (empty: none)
   flowerShare: number; // share of tufts that flower, where flowers grow at all
+  glow?: number; // flowers light up by themselves (bioluminescent), mostly at night
 }
 
 /** What grows on the land */
@@ -157,6 +158,8 @@ export interface SkySpec {
   puffsBelow: boolean;
   /** Metres added to the height of the puffs above the line (clear of hills and mountains) */
   puffLift: number;
+  /** Cloud banks lying across the racing line, to fly through (generator-v2 biomes) */
+  banks?: number;
   /**
    * Where the mood's mist gathers: below the camera (over a sea of clouds), or
    * pooling `above` metres over the valley floor, fading out `thickness` metres higher
@@ -164,7 +167,7 @@ export interface SkySpec {
   mist: { mode: "camera" } | { mode: "valley"; above: number; thickness: number };
 }
 
-export type AmbientKind = "fireflies" | "motes" | "snow" | "leaves" | "embers" | "spores" | "ash" | "glitter" | "petals";
+export type AmbientKind = "fireflies" | "motes" | "snow" | "leaves" | "embers" | "spores" | "ash" | "glitter" | "petals" | "starfall";
 
 /** One kind of particle drifting around the camera */
 export interface Ambient {
@@ -179,7 +182,7 @@ export interface ParticleStyle {
   ambient: Ambient[];
 }
 
-export type SidequestKind = "beacons" | "thread" | "collect" | "chase" | "skim" | "thermals" | "rescue" | "waterfalls";
+export type SidequestKind = "beacons" | "thread" | "collect" | "chase" | "skim" | "thermals" | "rescue" | "rush";
 
 /** A sidequest as data; the framework places it from the level's seed */
 export interface SidequestSpec {

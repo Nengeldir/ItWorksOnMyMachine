@@ -1,5 +1,11 @@
 import { hashToUnit, makeRng } from "../../rng";
+import { ARCHIPELAGO } from "./archipelago";
+import { AURORA } from "./aurora";
+import { EMBER } from "./ember";
+import { GLACIER } from "./glacier";
+import { LAGOON } from "./lagoon";
 import { SKY_ISLES } from "./skyIsles";
+import { TWILIGHT } from "./twilight";
 import { VERDANT } from "./verdant";
 import type { Biome, BiomeId, Level, LevelKey } from "./types";
 
@@ -9,6 +15,12 @@ export { SKY_ISLES };
 export const BIOMES: Record<BiomeId, Biome> = {
   skyIsles: SKY_ISLES,
   verdant: VERDANT,
+  glacier: GLACIER,
+  archipelago: ARCHIPELAGO,
+  lagoon: LAGOON,
+  twilight: TWILIGHT,
+  ember: EMBER,
+  aurora: AURORA,
 };
 
 /** Races and time trials: always Sky Isles, with the mood the seed has always picked */

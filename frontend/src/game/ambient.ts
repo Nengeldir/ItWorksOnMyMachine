@@ -137,6 +137,14 @@ export class Ambient {
         this.soft.emit(at, vel.set(rand(-1, 1), rand(-1.2, -0.5), rand(-1, 1)), s);
         break;
       }
+      case "starfall": {
+        // Shooting stars streaking across the sky far above
+        at.set(cx + rand(-300, 300), cy + rand(120, 240), cz + rand(-200, 400));
+        look(s, rand(0.7, 1.3), rand(1.4, 2.4), Kind.Star, 0, 0, 3);
+        const a = rand(0, Math.PI * 2);
+        this.glow.emit(at, vel.set(Math.cos(a) * 55, rand(-35, -20), Math.sin(a) * 55), s);
+        break;
+      }
       case "leaves":
       case "petals": {
         at.set(cx + rand(-45, 45), cy + rand(-10, 25), cz + rand(-45, 45));

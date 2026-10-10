@@ -343,6 +343,8 @@ export class Cap extends BaseShape {
  * with tunnels bored right through (natural arches) and terraced tops.
  */
 export class NoiseIsland extends BaseShape {
+  /** Where the island is: its top's center and its size (waterfalls start from its rim) */
+  readonly anchor: { x: number; y: number; z: number; size: number };
   private readonly island: Island;
   private readonly noise: Noise;
   private readonly amp: number;
@@ -362,6 +364,7 @@ export class NoiseIsland extends BaseShape {
     look: ShapeLook = {},
   ) {
     super(look, size * 0.05);
+    this.anchor = { x, y, z, size };
     this.island = new Island(x, y, z, size, yaw, options.style);
     this.noise = noise;
     this.amp = (options.amp ?? 0.16) * size;
@@ -393,6 +396,44 @@ export class NoiseIsland extends BaseShape {
     const wz = pz + n(px * f * 0.5, py * f * 0.5 - 5.7, pz * f * 0.5) * this.amp;
     d += this.amp * (n(wx * f, wy * f, wz * f) * 0.7 + n(wx * f * 2.3, wy * f * 2.3, wz * f * 2.3) * 0.3);
     for (const hole of this.holes) d = smax(d, hole.r - segmentDistance(px, py, pz, hole.a, hole.b), 3);
+    return d;
+  }
+}
+
+/** A volcanic cone standing on the ground, its flanks curving in to a rim around a crater */
+export class Volcano extends BaseShape {
+  private readonly x: number;
+  private readonly z: number;
+  private readonly base: number;
+  private readonly top: number;
+  private readonly radius: number; // at the foot
+  private readonly rim: number; // radius at the top
+  private readonly slope: number;
+
+  constructor(x: number, z: number, base: number, top: number, radius: number, look: ShapeLook = {}) {
+    super(look, radius * 0.03);
+    this.x = x;
+    this.z = z;
+    this.base = base;
+    this.top = top;
+    this.radius = radius;
+    this.rim = radius * 0.28;
+    const h = top - base;
+    this.slope = h / Math.hypot(h, radius - this.rim);
+    this.box(x, (base + top) / 2, z, radius, h / 2 + this.rim * 0.3, radius);
+  }
+
+  distance(px: number, py: number, pz: number): number {
+    const dx = px - this.x;
+    const dz = pz - this.z;
+    const t = clamp((py - this.base) / (this.top - this.base), 0, 1);
+    // Concave flanks: wide at the foot, steepening towards the rim
+    const r = this.rim + (this.radius - this.rim) * (1 - t) ** 1.6;
+    const side = (Math.hypot(dx, dz) - r) * this.slope;
+    let d = Math.max(side, py - this.top, this.base - py);
+    // The crater, a bowl sunk into the top
+    const bowl = this.rim * 0.85 - Math.hypot(dx, py - (this.top + this.rim * 0.3), dz);
+    d = smax(d, bowl, this.rim * 0.15);
     return d;
   }
 }

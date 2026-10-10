@@ -18,7 +18,7 @@ import { TOON_LIGHT } from "./toon";
 import { FX, RANGES, RINGS, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveTuning } from "./tuning";
 import { type Level, raceLevel } from "./world/biomes";
 import type { WaterKind } from "./world/terrain/river";
-import { World } from "./world/World";
+import { type WaterHit, World } from "./world/World";
 import { WorldView } from "./world/WorldView";
 
 const STEP = 1 / 120; // physics runs at a fixed rate, rendering interpolates
@@ -118,6 +118,7 @@ const basisB = new THREE.Vector3();
 const color = new THREE.Color();
 const normal = new THREE.Vector3();
 const surface = new THREE.Vector3();
+const waterHit: WaterHit = { distance: 0, level: 0, kind: "water" };
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
 export class Game {
@@ -579,13 +580,10 @@ export class Game {
     const { x, y, z } = this.flight.position;
     const rock = this.world.rock;
     const gap = rock.distance(x, y, z);
-    const steps = this.world.steps;
-    if (steps) {
-      const water = steps.waterDistance(x, y, z);
-      if (water < 9 && water < gap) {
-        this.waterSpray(dt, water, steps.pool(z).level, steps.river!.kind);
-        return;
-      }
+    const water = this.world.waterNear(x, y, z, waterHit);
+    if (water && water.distance < 9 && water.distance < gap) {
+      this.waterSpray(dt, water.distance, water.level, water.kind);
+      return;
     }
     if (gap > 9) return;
     // The rock's surface normal from the distance field's gradient; the nearest surface point is along it

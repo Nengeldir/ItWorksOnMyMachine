@@ -33,7 +33,7 @@ const FRAME_Y0 = -0.05;
 const FRAME_Y1 = 1.1;
 
 /** Lambert, hazed by the atmosphere, with leaves moving in the wind and self-lit parts */
-function plantMaterial(sway: number, grass = false): THREE.MeshLambertMaterial {
+function plantMaterial(sway: number, grass = false, grassGlow = 0): THREE.MeshLambertMaterial {
   const material = atmospheric(new THREE.MeshLambertMaterial({ vertexColors: !grass, side: grass ? THREE.DoubleSide : THREE.FrontSide }), 0);
   const atmosphere = material.onBeforeCompile;
   const wind = { value: sway };
@@ -101,12 +101,13 @@ function plantMaterial(sway: number, grass = false): THREE.MeshLambertMaterial {
       .replace(
         "#include <emissivemap_fragment>",
         grass
-          ? "#include <emissivemap_fragment>"
+          ? `#include <emissivemap_fragment>
+          totalEmissiveRadiance += diffuseColor.rgb * floraGlow * ${grassGlow.toFixed(3)};`
           : `#include <emissivemap_fragment>
           totalEmissiveRadiance += diffuseColor.rgb * vGlow * floraGlow;`,
       );
   };
-  material.customProgramCacheKey = () => `wingrace-flora-${grass}`;
+  material.customProgramCacheKey = () => `wingrace-flora-${grass}-${grassGlow}`;
   return material;
 }
 
@@ -292,7 +293,7 @@ export class FloraView {
       const flower = flowerGeometry();
       this.geometries.push(tuft, flower);
       const grassMaterial = plantMaterial(0.12, true);
-      const flowerMaterial = plantMaterial(0.08, true);
+      const flowerMaterial = plantMaterial(0.08, true, veg.grass.glow ?? 0);
       this.materials.push(grassMaterial, flowerMaterial);
       this.grass = new InstancePool(tuft, grassMaterial, this.group, 2048);
       this.flowers = new InstancePool(flower, flowerMaterial, this.group, 512);

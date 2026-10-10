@@ -1,0 +1,133 @@
+import type { Biome } from "./types";
+
+// Glacier Peaks: a glacier valley between jagged ridged peaks, stepping down in
+// icefalls past frozen lakes, crossed by crevasses, ice spires and arches,
+// snow-laden firs low down, and the land falling away into a sea of clouds.
+// Polar day or polar night under the aurora.
+
+export const GLACIER: Biome = {
+  id: "glacier",
+  name: "Glacier Peaks",
+  tagline: "Icefalls, crevasses and jagged peaks above a sea of clouds",
+  moods: [
+    {
+      name: "Polar day",
+      horizon: "#e2edf7",
+      zenith: "#4a82c4",
+      grass: "#f4f8fc",
+      forest: "#24493f",
+      trunk: "#4a3a30",
+      rock: "#7d8fa3",
+      snow: "#fbfdff",
+      cloud: "#ffffff",
+      accent: "#ff3d5a",
+      sun: "#ffffff",
+      sunIntensity: 2.4,
+      ambient: 1.6,
+      sunElevation: 30,
+      sunAzimuth: 25,
+      night: 0,
+      mist: "#eef4fb",
+      mistDensity: 0.55,
+      glow: 1.3,
+    },
+    {
+      name: "Polar night",
+      horizon: "#1d3656",
+      zenith: "#040a1d",
+      grass: "#cfdcec",
+      forest: "#1a3530",
+      trunk: "#3a2e28",
+      rock: "#55667a",
+      snow: "#dfe9ff",
+      cloud: "#3a5076",
+      accent: "#7dffb2",
+      sun: "#cfe0ff",
+      sunIntensity: 1.3,
+      ambient: 1.5,
+      sunElevation: 24,
+      sunAzimuth: -30,
+      night: 0.9,
+      mist: "#2b4669",
+      mistDensity: 0.55,
+      glow: 0.9,
+      aurora: 1,
+    },
+  ],
+  terrain: {
+    kind: "v2",
+    ground: {
+      depth: 30,
+      steps: { length: [220, 380], clearance: 30 },
+      river: {
+        kind: "ice",
+        colors: { deep: "#4f8fbf", shallow: "#cfe9f7", foam: "#ffffff" },
+        width: [22, 40],
+        lakes: 0.45,
+        meander: 18,
+        bank: 2,
+        bed: 3,
+      },
+      valley: 60,
+      wall: 0.55,
+      wallCurve: 0.0002,
+      floorHills: 3,
+      hills: { amp: 80, scale: 140 },
+      mountains: { amp: 520, scale: 420, warp: 1.1, sharpness: 3, from: 240, ramp: 260 },
+      terraces: null,
+      crevasses: { spacing: 60, width: 5, depth: 12 },
+      overhang: 5,
+      roughness: 2,
+      falloff: { from: 900, drop: 420 },
+      level: null,
+      extent: 1400,
+    },
+    groundSurface: 0,
+    surfaces: [
+      // 0: snowfields over blue-grey rock and ice cliffs
+      { rock: "#7d8fa3", rock2: "#9fbfd6", under: "#4d5f73", top: "#f4f8fc", top2: "#dce8f3", snow: true },
+      // 1: ice: spires, arches, seracs
+      { rock: "#a9dcf2", rock2: "#6fb7dc", under: "#3f7fa6", top: "#eef7fc", snow: true, bare: true },
+      // 2: dark rock outcrops
+      { rock: "#4f5864", rock2: "#606a78", under: "#2f353d", top: "#e8eef5", snow: true },
+    ],
+    layers: { dirt: "#a9b8c8", sand: "#c8d4de", snow: "#fbfdff", snowLine: -60, topSlope: 0.66, texture: 1.1, glow: "#9fe4ff" },
+    land: {
+      gates: { arch: 3, shards: 3, pillars: 2, overhang: 1, spur: 2 },
+      gateSurface: 1,
+      features: [
+        { kind: "shards", count: 70, radius: [5, 11], rise: [40, 150], lateral: [90, 420], tilt: 0.35, surface: 1 },
+        { kind: "pillars", count: 25, radius: [10, 18], rise: [60, 200], lateral: [150, 500], surface: 2 },
+        { kind: "boulders", count: 120, size: [2, 5], lateral: [20, 150], surface: 2 },
+        { kind: "arches", count: 5, radius: [14, 26], lateral: [120, 380], surface: 1 },
+      ],
+    },
+  },
+  vegetation: {
+    kind: "flora",
+    spacing: 9,
+    density: 0.5,
+    openDensity: 0.03,
+    forest: { scale: 220, cover: 0.35 },
+    treeline: 70,
+    minUp: 0.75,
+    species: [
+      { id: "snowFir", weight: 6, height: [8, 15], foliage: "#24493f", foliage2: "#2d5a4c", trunk: "#4a3a30" },
+      { id: "crystal", weight: 1.2, height: [2, 4.5], foliage: "#9fe8ff", foliage2: "#d8f6ff", where: { forest: false } },
+      { id: "boulder", weight: 1, height: [1.2, 3], foliage: "#e8eef5", foliage2: "#8a96a6", where: { forest: false } },
+    ],
+    grass: null,
+  },
+  sky: { cloudSea: { depth: 300 }, puffs: 40, puffsBelow: false, puffLift: 300, mist: { mode: "valley", above: 14, thickness: 40 } },
+  particles: {
+    ambient: [
+      { kind: "snow", rate: 90, colors: ["#ffffff", "#eef6ff"] },
+      { kind: "glitter", rate: 14, colors: ["#ffffff", "#bfeaff"] },
+    ],
+  },
+  sidequests: [
+    { kind: "beacons", title: "Ring the ice bells", thing: "ice bell", count: 4, reward: 1600 },
+    { kind: "rescue", title: "Rescue the stranded glider", thing: "glider", count: 1, reward: 2000 },
+  ],
+  portals: { color: "#a8f0ff", secret: true },
+};

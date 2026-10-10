@@ -21,6 +21,8 @@ export interface Palette {
   mist: string; // haze that thickens below you, towards the sea of clouds
   mistDensity: number; // 0..1
   glow: number; // brightness of particles and trails; bright scenes need more to read
+  aurora?: number; // 0..1: curtains of light across the night sky
+  underglow?: string; // light from below the horizon (lava), if any
 }
 
 /** Unit vector towards the sun (or moon) */

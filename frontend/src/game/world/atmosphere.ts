@@ -22,6 +22,8 @@ export const ATMOSPHERE = {
   zenith: { value: new THREE.Color("#3366cc") },
   clouds: { value: new THREE.Color("#ffffff") },
   night: { value: 0 },
+  aurora: { value: 0 },
+  underglow: { value: new THREE.Color("#000000") },
   time: fxTime,
 };
 
@@ -134,6 +136,8 @@ const skyFragment = /* glsl */ `
   uniform vec3 zenith;
   uniform vec3 clouds;
   uniform float night;
+  uniform float aurora;
+  uniform vec3 underglow;
   uniform float time;
   varying vec3 vDirection;
   ${SUN_GLOW}
@@ -169,6 +173,21 @@ const skyFragment = /* glsl */ `
     cloud += atmoSunColor * pow(max(d, 0.0), 24.0) * (1.0 - smoothstep(0.6, 0.85, shape)) * 1.5;
     color = mix(color, cloud, cover * 0.85);
 
+    // Aurora: curtains of green and violet light rippling along the sky
+    if (aurora > 0.0) {
+      // Around the horizon as a circle, so the noise has no seam
+      vec2 ring = normalize(dir.xz + vec2(1e-5, 0.0));
+      float wave = fbm(ring * 2.2 + vec2(time * 0.015, time * 0.04)) * 2.0;
+      float top = 0.42 + 0.12 * sin(ring.x * 3.0 + ring.y * 2.0 + wave);
+      float band = smoothstep(0.05, 0.16, dir.y) * (1.0 - smoothstep(top - 0.2, top, dir.y));
+      float rays = pow(clamp(fbm(ring * 18.0 + vec2(wave * 2.5, time * 0.06)), 0.0, 1.0), 2.2);
+      float fold = 0.45 + 0.55 * sin(ring.x * 7.0 - ring.y * 5.0 + wave * 3.0 + time * 0.12);
+      vec3 hue = mix(vec3(0.2, 1.0, 0.55), vec3(0.65, 0.35, 1.0), smoothstep(0.12, top, dir.y));
+      color += hue * band * rays * fold * aurora * 1.8 * (1.0 - cover * 0.6);
+    }
+    // Light from below the horizon: lava seas and burning lands
+    color += underglow * pow(clamp(1.0 - (dir.y + 0.05) * 4.0, 0.0, 1.0), 2.0) * 0.9;
+
     // Stars at night, twinkling
     if (night > 0.0) {
       vec3 cell = floor(dir * 220.0);
@@ -191,6 +210,8 @@ export function skyMaterial(): THREE.ShaderMaterial {
       zenith: ATMOSPHERE.zenith,
       clouds: ATMOSPHERE.clouds,
       night: ATMOSPHERE.night,
+      aurora: ATMOSPHERE.aurora,
+      underglow: ATMOSPHERE.underglow,
       time: ATMOSPHERE.time,
     },
     vertexShader: skyVertex,
