@@ -5,7 +5,7 @@ import { clamp } from "../math";
 import type { Particles } from "../particles";
 import { RUN } from "../tuning";
 import { ATMOSPHERE } from "../world/atmosphere";
-import { BIOMES, type BiomeId, type Level, runLevel } from "../world/biomes";
+import { BIOMES, type BiomeId, type Level, runLevel } from "../world/biomes/index";
 import type { World } from "../world/World";
 import type { WorldView } from "../world/WorldView";
 import { Abilities, type AbilityPress } from "./abilities";
@@ -17,16 +17,17 @@ import {
   LEVEL_BONUS,
   PAR_POINTS,
   RUN_LENGTH,
+  START_LIVES,
   type RunHud,
   type RunPhase,
   type RunSummary,
   destination,
   runOrder,
 } from "./run";
-import { type RunStats, type Upgrade, type UpgradeId, baseStats, offer, statsFor } from "./upgrades";
+import { type RunStats, UPGRADES, type Upgrade, type UpgradeId, baseStats, offer, statsFor } from "./upgrades";
 
 // One roguelike run, from the first level to the last portal: it loads each
-// biome, scores gates and style, runs the
+// biome, scores gates and style, keeps the lives, runs the
 // abilities (handing the flight model its FlightMods), and plays the portal,
 // the upgrade pick and the wormhole to the next biome. Game calls it only in
 // run mode, so races never see any of it.
@@ -119,6 +120,9 @@ const BLUR_CLEAR = 0.8;
 const BLUR_OUT = 0.4;
 /** At most this long in the wormhole waiting for the next land, then out anyway (it glides in) */
 const EXIT_WAIT = 8;
+/** Out of lives: the crash plays, the view fades into light over these seconds, then the summary */
+const LOST_FADE_FROM = 1;
+const LOST_FADE = 0.9;
 
 const ease = (t: number) => {
   const x = clamp(t, 0, 1);
@@ -139,6 +143,7 @@ export class RunController {
   private readonly picked: UpgradeId[] = [];
   private stats: RunStats = baseStats();
   private score = 0;
+  private lives: number;
   private chain = 0;
   // For the summary
   private totalTime = 0;
@@ -172,8 +177,10 @@ export class RunController {
   /** The last portal's cutscene */
   private finale: Finale | null = null;
 
-  constructor(seed: number, host: RunHost, events: RunEvents) {
+  /** `lives`: crashes before the run ends (Infinity: never, the test sandbox) */
+  constructor(seed: number, host: RunHost, events: RunEvents, lives = START_LIVES) {
     this.seed = seed;
+    this.lives = lives;
     this.host = host;
     this.events = events;
     host.scene.add(this.group, this.wormhole.group);
@@ -202,7 +209,7 @@ export class RunController {
   }
 
   get frozen(): boolean {
-    return this.phase === "portal" || this.phase === "pick" || this.phase === "finale" || this.phase === "won";
+    return this.phase === "portal" || this.phase === "pick" || this.phase === "finale" || this.phase === "won" || this.phase === "lost";
   }
 
   start(initial?: Level) {
@@ -338,12 +345,39 @@ export class RunController {
     if (this.phase === "explore" || this.phase === "arrive") this.levelTime += dt;
   }
 
-  /** A crash breaks the gate chain. Flight resets the shared boost state. */
+  /** A crash costs a life and breaks the gate chain; the last life's crash ends the run. Flight resets the shared boost state. */
   crashed() {
+    if (this.phase !== "explore" && this.phase !== "arrive") return;
     this.crashes++;
     this.abilities.crashed();
-    if (this.chain > 1) this.notify("Gate chain lost", 0);
+    const chain = this.chain;
     this.chain = 0;
+    this.lives--;
+    if (this.lives <= 0) {
+      this.lives = 0;
+      this.bankLevel();
+      this.phase = "lost";
+      this.phaseTime = 0;
+      return;
+    }
+    if (Number.isFinite(this.lives)) this.notify(this.lives === 1 ? "Last life!" : `${this.lives} lives left`, 0);
+    else if (chain > 1) this.notify("Gate chain lost", 0);
+  }
+
+  /** This level's clock and style into the run's totals, when it ends without its portal */
+  private bankLevel() {
+    if (this.styleBanked) return;
+    this.totalTime += this.levelTime;
+    this.totalStyle += this.host.style;
+    this.score += Math.round(this.host.style);
+    this.styleBanked = true;
+  }
+
+  private gain(id: UpgradeId) {
+    this.picked.push(id);
+    this.stats = statsFor(this.picked);
+    this.abilities.setStats(this.stats);
+    this.lives += UPGRADES.find((u) => u.id === id)?.effect.lives ?? 0;
   }
 
   private notify(text: string, points: number) {
@@ -399,9 +433,7 @@ export class RunController {
   /** The player chose an upgrade: out to the next biome (already built, maybe still streaming) */
   pick(id: UpgradeId) {
     if (this.phase !== "pick" || !this.through) return;
-    this.picked.push(id);
-    this.stats = statsFor(this.picked);
-    this.abilities.setStats(this.stats);
+    this.gain(id);
     this.host.stinger("upgrade");
     if (!this.through.built) this.buildNext();
     this.phase = "portal";
@@ -414,9 +446,7 @@ export class RunController {
 
   /** Adds an upgrade right now, without a portal (dev tools: `__game.grant(id)`) */
   grant(id: UpgradeId) {
-    this.picked.push(id);
-    this.stats = statsFor(this.picked);
-    this.abilities.setStats(this.stats);
+    this.gain(id);
   }
 
   /** The last portal: out into space under the Milky Way, then white light */
@@ -444,12 +474,7 @@ export class RunController {
 
   /** Test mode: show the real summary immediately, including this level's stats. */
   testWin() {
-    if (!this.styleBanked) {
-      this.totalTime += this.levelTime;
-      this.totalStyle += this.host.style;
-      this.score += Math.round(this.host.style);
-      this.styleBanked = true;
-    }
+    this.bankLevel();
     this.finish();
   }
 
@@ -458,20 +483,22 @@ export class RunController {
     this.finale?.skip();
   }
 
-  private finish() {
+  private finish(completed = true) {
     if (this.ended) return;
     this.ended = true;
-    this.phase = "won";
+    this.phase = completed ? "won" : "lost";
     this.host.freeze(true);
     this.events.ended?.({
       seed: this.seed,
       score: this.score,
+      completed,
       levels: this.level,
       path: [...this.path],
       upgrades: [...this.picked],
       timeMs: Math.round(this.totalTime * 1000),
       gates: this.gates,
       crashes: this.crashes,
+      livesLeft: this.lives,
       bestChain: this.bestChain,
       style: Math.round(this.totalStyle),
     });
@@ -485,6 +512,14 @@ export class RunController {
     if (this.toast && (this.toastTime -= dt) <= 0) this.toast = null;
     if (this.stats.flap > 0) this.stamina = Math.min(2 + this.stats.flap, this.stamina + dt / 9);
     if (this.phase === "arrive" && this.phaseTime > 3) this.phase = "explore";
+
+    if (this.phase === "lost") {
+      // The last crash plays out, the view fades into light, then the summary
+      this.host.whiteOut(ease((this.phaseTime - LOST_FADE_FROM) / LOST_FADE));
+      this.host.portalHum(0);
+      if (this.phaseTime >= LOST_FADE_FROM + LOST_FADE) this.finish(false);
+      return;
+    }
 
     if (this.phase === "finale" && this.finale) {
       if (!this.sparkled) {
@@ -635,6 +670,7 @@ export class RunController {
       mood: world.palette.name,
       phase: this.phase,
       score: this.score + (this.styleBanked ? 0 : Math.round(this.host.style)),
+      lives: this.lives,
       chain: this.chain,
       objectives,
       compass,

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { formatTime } from "../format";
-import type { RunHud as RunHudState, RunSummary } from "../game/run/run";
+import { RUN_LENGTH, type RunHud as RunHudState, type RunSummary } from "../game/run/run";
 import { UPGRADES, type Upgrade, type UpgradeId } from "../game/run/upgrades";
 import type { BindingAction } from "../game/bindings";
 import { BIOMES, type BiomeId } from "../game/world/biomes";
@@ -35,7 +35,7 @@ function abilityKey(id: UpgradeId, fallback: string): string {
   return key ?? fallback;
 }
 
-/** The run on top of the flight HUD: score, objectives, the portal compass, abilities */
+/** The run on top of the flight HUD: score, lives, objectives, the portal compass, abilities */
 export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compassScale: number; toasts: boolean }) => (
   <div className="run-hud">
     {/* Like the race timer: a glass pill at the top, the score big, where you are small */}
@@ -46,6 +46,15 @@ export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compas
         {run.chain > 1 && <b className="run-chain"> · chain ×{run.chain}</b>}
       </span>
     </div>
+
+    {Number.isFinite(run.lives) && (
+      <div className={`run-lives${run.lives <= 1 ? " last" : ""}`} title="Lives: crashes left" key={run.lives}>
+        {Array.from({ length: run.lives }, (_, i) => (
+          <span key={i}>💖</span>
+        ))}
+        {run.lives === 1 && <small>last life</small>}
+      </div>
+    )}
 
     {run.compass && run.phase !== "pick" && run.phase !== "portal" && (
       <div className="run-compass" style={{ transform: `translateX(-50%) scale(${compassScale})` }}>
@@ -135,21 +144,26 @@ export const FinishScreen = ({
   onMenu: () => void;
   testMode?: boolean;
 }) => {
+  const won = summary.completed;
   const verdict = testMode ? "test result · not saved" :
     best === null || summary.score > best ? "a new best on this run" : summary.score === best ? "ties your best" : `your best: ${best.toLocaleString()}`;
   const stats: [string, string][] = [
     ["Flying time", formatTime(summary.timeMs)],
-    ["Biomes", `${summary.levels} of 8`],
+    ["Biomes cleared", `${won ? summary.levels : summary.levels - 1} of ${RUN_LENGTH}`],
     ["Gates", summary.gates.toLocaleString()],
     ["Best chain", `×${summary.bestChain}`],
     ["Style", summary.style.toLocaleString()],
-    ["Crashes", summary.crashes.toLocaleString()],
+    // A finished run shows what it had to spare; a lost one, or the sandbox's endless lives, the crashes
+    won && Number.isFinite(summary.livesLeft) ? ["Lives left", `${summary.livesLeft} 💖`] : ["Crashes", summary.crashes.toLocaleString()],
   ];
+  const last = summary.path[summary.path.length - 1];
   return (
     <div className="run-finish">
       <section className="finish-card">
-        <small>{testMode ? "Test" : "Run"} #{summary.seed} · complete</small>
-        <h2>Journey's end</h2>
+        <small>
+          {testMode ? "Test" : "Run"} #{summary.seed} · {won ? "complete" : `fell in ${BIOMES[last].name}`}
+        </small>
+        <h2>{won ? "Journey's end" : "Out of lives"}</h2>
         <div className="finish-score">
           <strong>{summary.score.toLocaleString()}</strong>
           <span>{verdict}</span>

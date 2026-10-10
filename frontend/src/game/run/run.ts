@@ -8,8 +8,10 @@ import type { UpgradeId } from "./upgrades";
 // flies seven of the other eight in an order the seed draws; one sits out.
 // Every level ends in a portal to the next biome and a choice of upgrades,
 // the last one in the finale.
+// A crash costs a life; with none left the run is over where you fell.
 
 export const RUN_LENGTH = 8;
+export const START_LIVES = 3; // crashes a run survives, less one: the last life's crash ends it
 export const GATE_POINTS = 100;
 export const CHAIN_MAX = 5; // gates in a row without crashing multiply their points, up to this
 export const LEVEL_BONUS = 1000;
@@ -36,7 +38,7 @@ export function destination(runSeed: number, path: readonly BiomeId[]): BiomeId 
   return order.find((biome) => !path.includes(biome)) ?? order[order.length - 1];
 }
 
-export type RunPhase = "arrive" | "explore" | "portal" | "pick" | "finale" | "won";
+export type RunPhase = "arrive" | "explore" | "portal" | "pick" | "finale" | "won" | "lost";
 
 export interface Objective {
   title: string;
@@ -55,6 +57,8 @@ export interface RunHud {
   mood: string;
   phase: RunPhase;
   score: number;
+  /** Crashes left before the run ends (Infinity in the test sandbox) */
+  lives: number;
   chain: number;
   /** Gates passed in this level: a crash puts you back after the last one */
   checkpoint: number;
@@ -70,6 +74,9 @@ export interface RunHud {
 export interface RunSummary {
   seed: number;
   score: number;
+  /** Through the last portal (false: out of lives on the way) */
+  completed: boolean;
+  /** The level reached, 1-based */
   levels: number;
   path: BiomeId[];
   upgrades: UpgradeId[];
@@ -77,6 +84,8 @@ export interface RunSummary {
   timeMs: number;
   gates: number;
   crashes: number;
+  /** Lives still in hand at the end */
+  livesLeft: number;
   bestChain: number;
   /** Style points, all levels together */
   style: number;
