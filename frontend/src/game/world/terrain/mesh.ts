@@ -164,7 +164,7 @@ export function meshNode(world: World, lod: number, ix: number, iy: number, iz: 
     (s) => s.max.x + 20 >= ox && s.min.x - 20 <= ox + C * S && s.max.y + 20 >= oy && s.min.y - 20 <= oy + C * S && s.max.z + 20 >= oz && s.min.z - 20 <= oz + C * S,
   );
   const steps = world.steps;
-  const sea = world.seaLevel;
+  const seaAt = world.hasSea ? (z: number) => world.seaAt(z)! : null;
   const noise = field.noise.n2;
   const rock = new Color();
   const cover = new Color();
@@ -235,7 +235,10 @@ export function meshNode(world: World, lod: number, ix: number, iy: number, iz: 
       wet = (1 - smoothstep(-1, 7, lateral)) * (1 - smoothstep(0.5, 4, my - steps.level(mz)));
     }
     // Beaches: sand from just under the sea up a few metres
-    if (sea !== null && my > sea - 8) wet = Math.max(wet, 1 - smoothstep(1, 4.5, my - sea));
+    if (seaAt) {
+      const sea = seaAt(mz);
+      if (my > sea - 8) wet = Math.max(wet, 1 - smoothstep(1, 4.5, my - sea));
+    }
 
     // Glowing cracks
     let glow = 0;

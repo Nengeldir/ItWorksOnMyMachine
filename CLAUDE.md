@@ -275,6 +275,35 @@ seen (with different lighting) in adventure mode.
   hard to make out in them). Not reached through a portal in a real run.
   Frame times not measured in a focused window. Backend untouched.
 
+### 2026-10-10: Coral Lagoon's sea follows the racing line (Claude)
+
+Reported: the water is below the world border, so the structures standing in
+it are never seen.
+- **Cause**: the sea was one flat plane at the last gate's height (-24 m),
+  but the line drops about 480 m over a level. Most of the flight the water
+  was 100 to 500 m below you, and `World.lost` ends the flight 240 m under
+  the line. The sandy floor (`ground.level`) was flat for the same reason.
+- **Fix**: `World.seaAt(z)` replaces `seaLevel`: the line's height, averaged
+  over ±200 m so it doesn't undulate, plus the biome's `sea.level`. The sea
+  mesh, collisions, skim spray, beaches, plant and structure sites, stacks'
+  wave-cut notches, islets and valley mist all read it per z. Lagoon's ground
+  now follows the line (`level: null`, `depth: 36`) instead of a flat floor.
+  A gameplay change in runs (rule 6): you now fly 24 m over water all level.
+  Races (Sky Isles, no sea) are untouched.
+- Verified: lint and 31 frontend tests pass. `tsc` reports only the `reef`
+  biome missing from `music.ts` and `biomes/index.ts`; that was there before
+  this change. **Not looked at in a browser**: check `/?explore=lagoon&seed=1`
+  (water slope, depth over the floor, structures in sight, sea stacks'
+  notches, lighthouse sites needing `water: [-40, -1]`).
+
+- Checked later, with the Sunken Reef in the tree (same pull request): `tsc`,
+  lint, the build and 33 frontend tests pass. In headless Chrome
+  (`/?explore=lagoon&seed=1`, Tropical noon): the sea is 23 to 25 m under the
+  line at z = 0, 1100 and 2200, and in sight from the start and mid-level,
+  with stacks and islets standing in it; no console errors. Still not
+  looked at: the structures in the water, the notches, the night mood, and
+  flying it by hand.
+
 ### 2026-10-10: Portal ring upright, portal audio (Claude)
 
 - **Ring**: the portal took the course's tangent as its normal, which points

@@ -16,6 +16,8 @@ import { TreeIndex } from "./trees";
 export const PROXIMITY_RANGE = 12;
 /** Fall this far below the racing line and you're lost in the clouds */
 const ABYSS = 240;
+const SEA_STEP = 8;
+const SEA_PAD = 1700;
 const START_AIM_LIFT = 4; // metres above the first ring's centre the start aims at, for the sink on the way
 const START_CLEARANCE = 3; // metres of air the aimed start needs all the way to the first ring
 
@@ -56,8 +58,9 @@ export class World {
   readonly land: TerrainField | null = null;
   /** The stepped valley floor and its river, if the biome has one */
   readonly steps: Steps | null = null;
-  /** The sea's height, if the biome has a sea */
-  readonly seaLevel: number | null = null;
+  /** Whether the biome has a sea. Its surface follows the racing line down (`seaAt`) */
+  readonly hasSea: boolean = false;
+  private seaTable: Float32Array | null = null;
   /** Waterfalls off floating islands */
   readonly islandFalls: IslandFall[] = [];
   /** Trees grow on the land; chunks add them as they are meshed */
@@ -79,14 +82,43 @@ export class World {
       const noise = makeNoise(this.seed, "land");
       const ground = terrain.ground ? new Ground(this.course, terrain.ground, makeRng(this.seed, "ground"), noise) : null;
       const field = new TerrainField(this.course, ground, terrain.groundSurface, noise);
-      this.seaLevel = terrain.sea ? this.course.y(this.course.endZ) + terrain.sea.level : null;
-      buildLand({ course: this.course, field, ground, rng: makeRng(this.seed, "land"), noise, seaLevel: this.seaLevel }, terrain.land);
+      if (terrain.sea) {
+        this.hasSea = true;
+        this.seaTable = this.buildSeaTable(terrain.sea.level);
+      }
+      buildLand({ course: this.course, field, ground, rng: makeRng(this.seed, "land"), noise, seaAt: this.hasSea ? (z) => this.seaAt(z) : null }, terrain.land);
       this.land = field;
       this.rock = field;
       this.steps = ground?.steps?.river ? ground.steps : null;
       if (terrain.islandFalls) this.findIslandFalls(terrain.islandFalls.chance);
     }
     this.startDirection = this.startHeading();
+  }
+
+  /**
+   * The sea keeps its depth under the line (a flat sea at the last gate's height
+   * lay hundreds of metres below the start, out of sight and past the world's
+   * edge). The line's slope is smoothed so the surface doesn't undulate with it.
+   */
+  private buildSeaTable(level: number): Float32Array {
+    const { course } = this;
+    const table = new Float32Array(Math.ceil((course.endZ + SEA_PAD * 2 - course.start.z) / SEA_STEP) + 2);
+    for (let i = 0; i < table.length; i++) {
+      const z = course.start.z - SEA_PAD + i * SEA_STEP;
+      let sum = 0;
+      for (let k = -5; k <= 5; k++) sum += course.y(z + k * 40);
+      table[i] = sum / 11 + level;
+    }
+    return table;
+  }
+
+  /** The sea's surface height at z, or null if there is no sea */
+  seaAt(z: number): number | null {
+    const table = this.seaTable;
+    if (!table) return null;
+    const f = Math.min(Math.max((z - this.course.start.z + SEA_PAD) / SEA_STEP, 0), table.length - 1.001);
+    const i = Math.floor(f);
+    return table[i] + (table[i + 1] - table[i]) * (f - i);
   }
 
   /** Flying straight off the start goes through the first ring, unless rock is in the way: then follow the line */
@@ -141,7 +173,8 @@ export class World {
   otherDistance(x: number, y: number, z: number): number {
     let d = this.trees.distance(x, y, z);
     if (this.steps) d = Math.min(d, this.steps.waterDistance(x, y, z));
-    if (this.seaLevel !== null) d = Math.min(d, y - this.seaLevel);
+    const sea = this.seaAt(z);
+    if (sea !== null) d = Math.min(d, y - sea);
     return d;
   }
 
@@ -161,9 +194,10 @@ export class World {
         found = true;
       }
     }
-    if (this.seaLevel !== null && y - this.seaLevel < out.distance) {
-      out.distance = y - this.seaLevel;
-      out.level = this.seaLevel;
+    const sea = this.seaAt(z);
+    if (sea !== null && y - sea < out.distance) {
+      out.distance = y - sea;
+      out.level = sea;
       out.kind = "water";
       found = true;
     }
@@ -172,7 +206,8 @@ export class World {
 
   /** Height of the valley floor under the racing line at z (where valley mist pools) */
   valleyFloor(z: number): number {
-    if (this.seaLevel !== null) return this.seaLevel;
+    const sea = this.seaAt(z);
+    if (sea !== null) return sea;
     const ground = this.land?.ground;
     if (!ground) return this.course.y(z) - 40;
     if (ground.steps) return ground.steps.level(z);
