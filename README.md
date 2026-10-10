@@ -78,6 +78,10 @@ below the islands, and you respawn at your last ring, with the clock still
 running. While the land around you is still loading (outside races), the
 pilot glides in slowly by itself and you get control once it has arrived.
 
+Flying into a portal blurs the view into sparkles and drops you into a
+wormhole: a dark tube of twisting stars and drifting spirits, where you pick
+an upgrade while the next biome is built.
+
 In an adventure there is no clock. Gates score more in a chain without a
 crash, and skimming earns style points. The arrow at the top of the screen
 points to the portal. A crash puts you back at the last gate and breaks your

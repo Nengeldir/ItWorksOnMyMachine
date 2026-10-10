@@ -156,6 +156,11 @@ export class Game implements RunHost {
   private readonly debris: Debris;
   private readonly marker: HTMLDivElement;
   private readonly vignette: HTMLDivElement;
+  /** Blur and sparkles over the screen while passing through a portal */
+  private readonly portalVeil: HTMLDivElement;
+  private veilAmount = 0;
+  /** Inside a portal's wormhole: the level is hidden */
+  private inWormhole = false;
   private readonly crystalPoints: THREE.Vector3[] = [];
   private composer: EffectComposer | null = null;
   private bloomPass: UnrealBloomPass | null = null;
@@ -253,6 +258,9 @@ export class Game implements RunHost {
     this.marker = document.createElement("div");
     this.marker.className = "ring-marker";
     container.appendChild(this.marker);
+    this.portalVeil = document.createElement("div");
+    this.portalVeil.className = "portal-veil";
+    container.appendChild(this.portalVeil);
 
     this.setLevel(options.level ?? raceLevel(options.seed));
 
@@ -357,6 +365,26 @@ export class Game implements RunHost {
     this.audio.stinger(kind);
   }
 
+  veil(amount: number) {
+    if (Math.abs(amount - this.veilAmount) < 0.002) return;
+    this.veilAmount = amount;
+    this.portalVeil.style.setProperty("--veil", amount.toFixed(3));
+    this.portalVeil.classList.toggle("on", amount > 0.002);
+  }
+
+  insideWormhole(on: boolean) {
+    if (this.inWormhole === on) return;
+    this.inWormhole = on;
+    this.view.group.visible = !on;
+    this.softParticles.points.visible = !on;
+    this.speedLines.mesh.visible = !on;
+    if (on) this.debris.mesh.visible = false;
+  }
+
+  get pixelHeight(): number {
+    return this.renderer.domElement.height;
+  }
+
   /** Keeps the camera out of the rock */
   private clearance = (x: number, y: number, z: number) => this.world.rock.distance(x, y, z);
   /** Everything solid: rock, trees, water */
@@ -392,6 +420,7 @@ export class Game implements RunHost {
     this.view = new WorldView(this.world, this.scene);
     this.view.prepare(this.renderer);
     this.scene.add(this.view.group);
+    this.view.group.visible = !this.inWormhole;
     // Compile the level's shaders now (behind the loading wait or the tunnel), not mid-flight
     this.renderer.compile(this.scene, this.rig.camera);
     this.particles.clear();
@@ -513,6 +542,7 @@ export class Game implements RunHost {
     this.renderer.domElement.remove();
     this.marker.remove();
     this.vignette.remove();
+    this.portalVeil.remove();
   }
 
   // --- flying ------------------------------------------------------------------
@@ -1001,11 +1031,13 @@ export class Game implements RunHost {
     camera.updateMatrixWorld();
     this.view.update(camera, dt);
     this.run?.frame(dt);
-    this.gateMotes(dt);
-    this.gateGlints(dt);
+    if (!this.inWormhole) {
+      this.gateMotes(dt);
+      this.gateGlints(dt);
+    }
     const flying = !crashed && this.raceState !== "countdown" && !waiting && this.attract !== "drift";
     this.speedLines.update(dt, body.position, flying ? this.flight.velocity : tmp.set(0, 0, 0), camera, this.particles.budget);
-    this.ambient.update(dt, camera.position, flying ? this.flight.velocity : tmp.set(0, 0, 0), this.particles.budget);
+    if (!this.inWormhole) this.ambient.update(dt, camera.position, flying ? this.flight.velocity : tmp.set(0, 0, 0), this.particles.budget);
 
     const liveTime = t - INTERPOLATION_DELAY_MS;
     this.live.forEach((pilot) => pilot.update(liveTime, dt, camera.position));

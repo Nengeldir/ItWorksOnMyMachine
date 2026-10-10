@@ -243,3 +243,58 @@
   border-radius: 999px;
   font-weight: 600;
 }
+
+/* Passing through a portal: the view blurs, brightens a little and fills with sparkles (--veil 0..1) */
+.portal-veil {
+  --veil: 0;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  visibility: hidden;
+  backdrop-filter: blur(calc(var(--veil) * 22px)) saturate(calc(1 + var(--veil) * 0.4)) brightness(calc(1 + var(--veil) * 0.35));
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, calc(var(--veil) * 0.12)) 0%, rgba(190, 210, 255, calc(var(--veil) * 0.3)) 100%);
+}
+
+.portal-veil.on {
+  visibility: visible;
+}
+
+.portal-veil::before,
+.portal-veil::after {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  opacity: var(--veil);
+  mix-blend-mode: screen;
+  background-image:
+    radial-gradient(circle, #fff 0 1.5px, rgba(255, 255, 255, 0.35) 3px, transparent 7px),
+    radial-gradient(circle, #fff3c8 0 1px, rgba(255, 236, 190, 0.3) 2.5px, transparent 6px),
+    radial-gradient(circle, #d8ecff 0 2px, rgba(200, 225, 255, 0.3) 4px, transparent 10px);
+  background-size: 193px 167px, 131px 211px, 307px 263px;
+  background-position: 0 0, 71px 43px, 157px 101px;
+  animation: veil-sparkle 2.4s linear infinite;
+}
+
+.portal-veil::after {
+  background-size: 149px 233px, 241px 157px, 113px 139px;
+  background-position: 31px 77px, 93px 29px, 17px 119px;
+  animation: veil-sparkle 1.7s linear infinite reverse, veil-twinkle 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes veil-sparkle {
+  from {
+    transform: scale(1) rotate(0deg);
+  }
+  to {
+    transform: scale(1.12) rotate(4deg);
+  }
+}
+
+@keyframes veil-twinkle {
+  from {
+    filter: brightness(0.6);
+  }
+  to {
+    filter: brightness(1.5);
+  }
+}
