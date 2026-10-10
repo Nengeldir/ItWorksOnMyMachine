@@ -21,7 +21,7 @@ class User(BaseModel):
 
 
 class Ghost(BaseModel):
-    """A recorded run: samples of [t_ms, x, y, z, qx, qy, qz, qw, boost?, brake?]."""
+    """A recorded run: samples of [t_ms, x, y, z, qx, qy, qz, qw, boost?, brake?, dodge?]."""
 
     hz: Annotated[int, Field(ge=1, le=GHOST_HZ_MAX)]
     samples: Annotated[list[list[FiniteFloat]], Field(max_length=GHOST_SAMPLES_MAX)]
@@ -29,10 +29,12 @@ class Ghost(BaseModel):
     @field_validator("samples")
     @classmethod
     def check_samples(cls, samples: list[list[float]]) -> list[list[float]]:
-        if any(len(sample) not in (8, 10) for sample in samples):
-            raise ValueError("each ghost sample must have 8 or 10 numbers")
-        if any(len(sample) == 10 and any(not 0 <= value <= 1 for value in sample[8:]) for sample in samples):
+        if any(len(sample) not in (8, 10, 11) for sample in samples):
+            raise ValueError("each ghost sample must have 8, 10 or 11 numbers")
+        if any(len(sample) >= 10 and any(not 0 <= value <= 1 for value in sample[8:10]) for sample in samples):
             raise ValueError("ghost boost and brake must be between 0 and 1")
+        if any(len(sample) == 11 and not -1 <= sample[10] <= 1 for sample in samples):
+            raise ValueError("ghost dodge progress must be between -1 and 1")
         return samples
 
 
@@ -52,6 +54,7 @@ class StateRequest(BaseModel):
     q: Annotated[list[FiniteFloat], Field(min_length=4, max_length=4)]
     boost: Annotated[FiniteFloat, Field(ge=0, le=1)] = 0
     brake: Annotated[FiniteFloat, Field(ge=0, le=1)] = 0
+    dodge: Annotated[FiniteFloat, Field(ge=-1, le=1)] = 0
     v: FiniteFloat
     cp: Annotated[int, Field(ge=-1, le=1000)]  # checkpoints passed
 

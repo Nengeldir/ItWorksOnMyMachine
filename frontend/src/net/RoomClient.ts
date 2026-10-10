@@ -121,7 +121,7 @@ export class RoomClient {
     const token = this.token;
     fetch(this.url("state"), {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Flight-Rules": "speed-control-v1" },
+      headers: { "Content-Type": "application/json", "X-Flight-Rules": "speed-control-v2" },
       body: JSON.stringify({ token, t: Math.round(this.clock.now()), ...state }),
     })
       .then((response) => {
@@ -157,7 +157,7 @@ export class RoomClient {
       void fetch(this.url("leave"), {
         method: "POST",
         keepalive: true,
-        headers: { "Content-Type": "application/json", "X-Flight-Rules": "speed-control-v1" },
+        headers: { "Content-Type": "application/json", "X-Flight-Rules": "speed-control-v2" },
         body: JSON.stringify({ token: this.token }),
       }).catch(() => {});
     }

@@ -122,6 +122,7 @@ export interface NetState {
   cp: number;
   boost: number;
   brake: number;
+  dodge: number;
 }
 
 const tmp = new THREE.Vector3();
@@ -494,7 +495,7 @@ export class Game implements RunHost {
 
   netState(): NetState {
     const { position: p, quaternion: q, speed } = this.flight;
-    return { p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], v: speed, cp: this.checkpoints, boost: this.flight.boost, brake: this.flight.brake };
+    return { p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w], v: speed, cp: this.checkpoints, boost: this.flight.boost, brake: this.flight.brake, dodge: this.flight.dodgePhase };
   }
 
   toggleMute(): boolean {
@@ -607,7 +608,7 @@ export class Game implements RunHost {
     this.style += this.proximity ** 2 * this.flight.speed * STEP * this.multiplier * 0.5;
 
     if (this.raceState === "racing") {
-      this.recorder.record(this.clock() - this.startAt, this.flight.position, this.flight.quaternion, this.flight.boost, this.flight.brake);
+      this.recorder.record(this.clock() - this.startAt, this.flight.position, this.flight.quaternion, this.flight.boost, this.flight.brake, this.flight.dodgePhase);
       this.checkRing();
     } else if (this.run) {
       this.run.step(STEP);
@@ -675,7 +676,7 @@ export class Game implements RunHost {
       this.view.setRings("hidden", 0);
       this.gateBurst(index);
       this.audio.finish();
-      const ghost = this.recorder.finish(timeMs, this.flight.position, this.flight.quaternion, this.flight.boost, this.flight.brake);
+      const ghost = this.recorder.finish(timeMs, this.flight.position, this.flight.quaternion, this.flight.boost, this.flight.brake, this.flight.dodgePhase);
       this.events.finished?.({ timeMs, ghost });
     } else {
       this.audio.ring();
@@ -687,8 +688,8 @@ export class Game implements RunHost {
   // --- effects -------------------------------------------------------------------
 
   private barrelRoll(dir: 1 | -1) {
-    if (this.crashedAt !== null || this.raceState === "countdown") return;
-    this.avatar.barrelRoll(dir);
+    if (this.crashedAt !== null || this.raceState === "countdown" || this.frozen || !this.view.ready) return;
+    this.flight.dodge(dir);
   }
 
   /** A gate was passed: it flares (WorldView), and shards, stars and light burst out of it */
@@ -919,6 +920,7 @@ export class Game implements RunHost {
     if (this.attract === "drift") {
       this.drift(dt);
     } else if (!crashed) {
+      this.avatar.setDodge(this.flight.dodgePhase);
       this.avatar.setSpeedControls(this.flight.boost, this.flight.brake);
       this.avatar.update(dt, this.flight.speed, this.smoothProximity);
       // Frozen on the start line or while islands load: no motes, or they pile up into a glowing ball

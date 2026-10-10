@@ -11,6 +11,7 @@ export interface PilotSample {
   cp: number;
   boost?: number;
   brake?: number;
+  dodge?: number;
 }
 
 // Draw live players this far in the past, so there is usually a newer sample to blend towards
@@ -131,6 +132,11 @@ export class Pilot {
     if (appeared || this.position.distanceTo(this.lastPosition) > 40) this.avatar.resetMotion();
     this.lastPosition.copy(this.position);
     const blend = b ? Math.min(1, Math.max(0, (time - a.t) / (b.t - a.t))) : 0;
+    const dodgeA = a.dodge ?? 0, dodgeB = b?.dodge ?? dodgeA;
+    // Never interpolate a completed roll backwards to its resting pose.
+    const dodge = (dodgeA === 0 || Math.sign(dodgeA) === Math.sign(dodgeB)) && Math.abs(dodgeB) >= Math.abs(dodgeA)
+      ? dodgeA + (dodgeB - dodgeA) * blend : dodgeA;
+    this.avatar.setDodge(dodge);
     this.avatar.setSpeedControls((a.boost ?? 0) + ((b?.boost ?? a.boost ?? 0) - (a.boost ?? 0)) * blend,
       (a.brake ?? 0) + ((b?.brake ?? a.brake ?? 0) - (a.brake ?? 0)) * blend);
     this.avatar.update(dt, this.speed, 0, camera.distanceTo(this.position));

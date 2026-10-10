@@ -8,9 +8,13 @@ export const FLIGHT = {
   gravity: 9.81, // Earth's gravitational acceleration, m/s²
   drag: 0.0013, // vertical terminal speed ≈ 87 m/s
   pitchRate: 2.4, // rad/s at full input
-  rollRate: 4.2,
+  rollRate: 4.2, // maximum bank response, rad/s
+  maxBank: 50, // degrees: steering cannot roll past this
+  dodgeDistance: 5, // metres along the unbanked right axis at activation
+  dodgeDuration: 0.6,
+  dodgeCooldown: 1, // seconds between starts
   turnRate: 1.4, // gameplay multiplier on coordinated turning
-  autoLevel: 2, // how fast the wings level out when you let go (0 = off)
+  autoLevel: 2, // bank-target response; releasing steering always levels the wings
   pathResponse: 14, // flight-path response, 1/s (about 70 ms)
   maxLoad: 8, // maximum steering acceleration in g; tuned for arcade handling
   stallSpeed: 16, // below this the nose drops
@@ -55,7 +59,7 @@ export interface FlightInput {
   boost?: number; // 0..1, held
   brake?: number; // 0..1, held
   pitch: number; // -1..1, positive = nose up
-  roll: number; // -1..1, positive = roll right
+  roll: number; // -1..1 steering target, positive = turn right
 }
 
 const LOCAL_RIGHT = new Vector3(1, 0, 0);
@@ -82,13 +86,41 @@ export class Flight {
   brake = 0;
   boostCharge = 1;
   private exhausted = false;
+  private steeringBank = 0;
+  private readonly dodgeAxis = new Vector3();
+  private dodgeElapsed = -1;
+  private dodgeWait = 0;
+  private dodgeDirection = 1;
+  private dodgeLength = 5;
+  private dodgeDuration = 0.6;
 
-  releaseControls() { this.boost = 0; this.brake = 0; }
+  /** Signed animation progress; zero means no dodge. */
+  get dodgePhase(): number {
+    return this.dodgeElapsed < 0 ? 0 : this.dodgeDirection * Math.max(0.0001, this.dodgeElapsed / this.dodgeDuration);
+  }
+
+  dodge(direction: 1 | -1, p = FLIGHT): boolean {
+    if (this.dodgeElapsed >= 0 || this.dodgeWait > 0) return false;
+    // Remove steering bank so a horizontal dodge doesn't also change altitude.
+    turn.setFromAxisAngle(LOCAL_BACK, this.steeringBank);
+    this.dodgeAxis.set(1, 0, 0).applyQuaternion(turn).applyQuaternion(this.quaternion).normalize();
+    this.dodgeDirection = direction;
+    this.dodgeLength = p.dodgeDistance;
+    this.dodgeDuration = Math.max(0.1, p.dodgeDuration);
+    this.dodgeElapsed = 0;
+    this.dodgeWait = Math.max(this.dodgeDuration, p.dodgeCooldown);
+    return true;
+  }
+
+  releaseControls() { this.boost = 0; this.brake = 0; this.dodgeElapsed = -1; }
 
   reset(position: Vector3, direction: Vector3, speed: number) {
     this.releaseControls();
     this.boostCharge = 1;
     this.exhausted = false;
+    this.steeringBank = 0;
+    this.dodgeElapsed = -1;
+    this.dodgeWait = 0;
     this.position.copy(position);
     // Matrix4.lookAt points -z at the target, which is our forward
     lookMatrix.lookAt(ORIGIN, direction, WORLD_UP);
@@ -108,14 +140,18 @@ export class Flight {
   /** A wingbeat (run mode): a burst of speed and the nose lifted a little */
   flap(speed: number, pitch: number) {
     this.speed += speed;
+    turn.setFromAxisAngle(LOCAL_BACK, this.steeringBank);
+    this.quaternion.multiply(turn);
     turn.setFromAxisAngle(LOCAL_RIGHT, pitch);
+    this.quaternion.multiply(turn);
+    turn.setFromAxisAngle(LOCAL_BACK, -this.steeringBank);
     this.quaternion.multiply(turn).normalize();
     this.updateAxes();
   }
 
-  /** Bank angle in radians, positive with the right wing down */
+  /** Steering bank relative to the pitch frame; continuous through vertical flight. */
   get bank(): number {
-    return Math.atan2(-this.right.y, this.up.y);
+    return this.steeringBank;
   }
 
   step(dt: number, input: FlightInput, proximity: number, p = FLIGHT, mods: FlightMods | null = null) {
@@ -142,18 +178,19 @@ export class Flight {
       input = locked;
     }
 
-    // Pitch and roll in the pilot's own frame
+    // Unbank before pitching: pitch remains continuous through a full loop.
+    // A/D choose a bounded bank target, rather than continuously adding roll.
     const stallSpeed = p.stallSpeed * (mods ? mods.stall : 1);
     const liftAuthority = clamp(this.speed / Math.max(stallSpeed, 0.01), 0, 1) ** 2;
+    turn.setFromAxisAngle(LOCAL_BACK, this.steeringBank);
+    this.quaternion.multiply(turn);
     turn.setFromAxisAngle(LOCAL_RIGHT, clamp(input.pitch, -1, 1) * p.pitchRate * liftAuthority * dt);
     this.quaternion.multiply(turn);
-    this.updateAxes();
-    let rollRate = clamp(input.roll, -1, 1) * p.rollRate * liftAuthority;
-    if (Math.abs(input.roll) < 0.05 && p.autoLevel > 0 && this.up.y > 0) {
-      rollRate = clamp(-this.bank * p.autoLevel * 2, -p.rollRate * 0.5, p.rollRate * 0.5) * liftAuthority;
-    }
-    // Rolling right turns about the forward axis (-z), i.e. negative about +z
-    turn.setFromAxisAngle(LOCAL_BACK, -rollRate * dt);
+    const limit = p.maxBank * Math.PI / 180;
+    const bankTarget = clamp(input.roll, -1, 1) * limit;
+    const bankChange = (bankTarget - this.steeringBank) * (1 - Math.exp(-Math.max(2, p.autoLevel * 2) * dt));
+    this.steeringBank = clamp(this.steeringBank + clamp(bankChange, -p.rollRate * dt, p.rollRate * dt) * liftAuthority, -limit, limit);
+    turn.setFromAxisAngle(LOCAL_BACK, -this.steeringBank);
     this.quaternion.multiply(turn);
 
     // A coordinated turn tightens at lower airspeed. Limit the bank factor near
@@ -227,5 +264,17 @@ export class Flight {
     const averageSpeed = (previousSpeed + this.speed) * 0.5;
     this.velocity.copy(this.flightPath).multiplyScalar(this.speed);
     this.position.addScaledVector(this.flightPath, averageSpeed * dt);
+    this.dodgeWait = Math.max(0, this.dodgeWait - dt);
+    if (this.dodgeElapsed >= 0) {
+      const before = this.dodgeElapsed / this.dodgeDuration;
+      this.dodgeElapsed = Math.min(this.dodgeDuration, this.dodgeElapsed + dt);
+      const after = this.dodgeElapsed / this.dodgeDuration;
+      // Smoothstep displacement integrates to exactly 5 m, with zero end speeds.
+      const moved = this.dodgeDirection * this.dodgeLength
+        * (after * after * (3 - 2 * after) - before * before * (3 - 2 * before));
+      this.position.addScaledVector(this.dodgeAxis, moved);
+      if (dt > 0) this.velocity.addScaledVector(this.dodgeAxis, moved / dt);
+      if (this.dodgeElapsed >= this.dodgeDuration) this.dodgeElapsed = -1;
+    }
   }
 }

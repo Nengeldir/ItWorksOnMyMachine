@@ -10,6 +10,8 @@ def test_legacy_results_are_preserved_but_excluded(tmp_path):
     db.commit()
     db.close()
     store = Store(path)
+    store.db.execute("INSERT INTO runs (seed,user_id,name,time_ms,created_at,rules) VALUES (42,'v1','V1',25000,0,'speed-control-v1')")
+    store.db.commit()
     assert store.leaderboard(42) == []
     assert store.add_run(42, "pilot", "New", 40000, None) == 40000
     assert store.leaderboard(42)[0].time_ms == 40000

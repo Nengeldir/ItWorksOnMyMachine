@@ -55,11 +55,11 @@ docker compose up -d --build
 
 | Input                     | Action                                             |
 | :------------------------ | :------------------------------------------------- |
-| Mouse (click the view)    | Pitch and roll. The mouse acts like a stick.       |
+| Mouse (click the view)    | Pitch and turn; bank is limited to 50°.       |
 | `W` `S` / `↑` `↓`         | Dive / pull up (flight-stick style)                |
-| `A` `D` / `←` `→`         | Roll left / right. Banking turns you.              |
-| `Q` `E` | Barrel roll (just for show; gamepad: `LB` `RB`)  |
-| Gamepad left stick        | Pitch and roll. `Y` respawns.                      |
+| `A` `D` / `←` `→`         | Turn left / right; maximum bank 50°.              |
+| `Q` `E` | 5 m sideways dodge + roll (gamepad: `LB` `RB`)  |
+| Gamepad left stick        | Pitch and turn. `Y` respawns.                      |
 | `R`                       | Respawn at the last ring                           |
 | `M`                       | Mute                                               |
 | `P`                       | Pause / resume local gameplay                      |
@@ -100,7 +100,15 @@ held boost by 25% per stack; it no longer adds a separate dash action.
 
 The camera follows a blend of the nose and travel direction with restrained
 bank and FOV, and checks the whole player-to-camera segment for rock. Automatic
-and double-tap barrel rolls are disabled; use Q/E or LB/RB explicitly.
+and double-tap barrel rolls are disabled. A/D, the mouse and left stick target
+a bank of at most 50° and level smoothly on release. Pitch remains unrestricted.
+Q/E or LB/RB perform a 5 m sideways dodge over 0.6 s, with 1 s between starts.
+Dodge movement uses the unbanked right axis captured at activation, passes
+through normal collision checks, and leaves the forward heading unchanged.
+The roll animation follows the same physics timing, including for other players
+and ghosts. The camera carries its previous orientation through vertical flight
+and restores the horizon gradually. The boost panel keeps a fixed size across
+Ready, Boosting, Recharging and Braking states.
 
 ## How It Works
 
@@ -223,12 +231,13 @@ doesn't fly the course itself.
 | `frontend/src/components/`             | React screens: menu, HUD, lobby and result panels        |
 | `frontend/Caddyfile`                   | Static files, compression, `/api` to the backend         |
 
-Race results now use the `speed-control-v1` flight rules. SQLite migration
-preserves existing rows and ghosts as `legacy`; current leaderboards, personal
-bests and ghost queries exclude them. Deploy frontend and backend together.
-Gameplay POSTs carry `X-Flight-Rules: speed-control-v1`; stale clients receive
+Race results now use the `speed-control-v2` flight rules. SQLite migration
+preserves original rows as `legacy` and leaves v1 scores intact; current
+leaderboards, personal bests and ghost queries use only v2 results. Deploy frontend and backend together.
+Gameplay POSTs carry `X-Flight-Rules: speed-control-v2`; stale clients receive
 409 and a reload message. Ghost playback accepts both the old eight-number
-samples and new ten-number samples carrying boost/brake intensity.
+samples, ten-number boost/brake samples, and new eleven-number samples
+including signed dodge progress.
 
 ## API
 
