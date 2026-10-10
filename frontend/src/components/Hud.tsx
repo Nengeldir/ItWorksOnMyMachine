@@ -1,12 +1,67 @@
+import { useEffect, useState } from "react";
 import { formatTime } from "../format";
 import type { HudState } from "../game/Game";
+import { FLIGHT } from "../game/flight";
 import { KEY_BINDINGS, keyLabel } from "../game/input";
 import "./Hud.css";
 
-/** Speed, timer, rings, style and standings over the game view */
-const Hud = ({ hud }: { hud: HudState }) => {
+const MOUSE_HINT_MS = 2500; // how long the mouse hint stays after the mouse stops
+
+/** True for a moment whenever the mouse moves over the game while it isn't locked to it */
+function useMouseHint(locked: boolean): boolean {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (locked) return;
+    let timer = 0;
+    const onMove = (event: MouseEvent) => {
+      // Over buttons and panels the mouse is just being used as a mouse
+      if (!(event.target instanceof HTMLCanvasElement)) return;
+      setShown(true);
+      clearTimeout(timer);
+      timer = window.setTimeout(() => setShown(false), MOUSE_HINT_MS);
+    };
+    window.addEventListener("mousemove", onMove);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      clearTimeout(timer);
+    };
+  }, [locked]);
+  return shown && !locked;
+}
+
+// Skimming rock, from Game.step and flight.ts: style points per second are proximity² × speed (m/s) ×
+// multiplier × 0.5, and the flight model adds FLIGHT.proximityBoost × proximity² m/s² of speed
+const STYLE_RATE = 0.5;
+
+const boostLabel = (hud: HudState) =>
+  hud.boosting ? "Boosting" : hud.boostCharge < 0.999 ? "Boost charging" : "Boost ready";
+
+/** What skimming the rock is earning right now: points in a run, speed in a race */
+function skimLabel(hud: HudState, points: boolean): string {
+  const closeness = hud.proximity ** 2;
+  if (points) {
+    const rate = Math.round(closeness * (hud.speedKmh / 3.6) * hud.multiplier * STYLE_RATE);
+    return rate >= 1 ? `Gaining ${rate} points/s` : "Skim the rock for points";
+  }
+  const rate = Math.round(closeness * FLIGHT.proximityBoost * 3.6);
+  return rate >= 1 ? `Gaining ${rate} km/h per second` : "Skim the rock for speed";
+}
+
+/** A labelled meter in the flight panel, 0..1 */
+const Bar = ({ kind, label, value }: { kind: "boost" | "skim"; label: string; value: number }) => (
+  <div className={`hud-meter ${kind}`}>
+    <span>{label}</span>
+    <div className="hud-bar" role="progressbar" aria-label={label} aria-valuenow={Math.round(value * 100)}>
+      <div style={{ width: `${Math.round(value * 100)}%` }} />
+    </div>
+  </div>
+);
+
+/** Speed, timer, rings and standings over the game view; style points only where they score (runs) */
+const Hud = ({ hud, showStyle = false }: { hud: HudState; showStyle?: boolean }) => {
   const racing = hud.raceState === "racing" || hud.raceState === "countdown";
   const go = hud.raceState === "racing" && hud.raceTimeMs !== null && hud.raceTimeMs < 1000;
+  const mouseHint = useMouseHint(hud.locked);
   return (
     <div className="hud">
       {hud.raceState !== "free" && (
@@ -26,7 +81,14 @@ const Hud = ({ hud }: { hud: HudState }) => {
         </div>
       )}
       {!hud.paused && go && <div className="hud-big glass go">GO!</div>}
-      {!hud.paused && hud.crashed && <div className="hud-crash glass">Crashed!</div>}
+      {!hud.paused && hud.crashed && (
+        <div className="hud-crash glass">
+          Crashed!
+          <small>
+            {hud.raceState !== "free" && hud.checkpoints > 0 ? `Back to ring ${hud.checkpoints}` : "Back to the start"}
+          </small>
+        </div>
+      )}
       {hud.paused && (
         <div className="hud-pause glass" role="status">
           <strong>Paused</strong>
@@ -50,29 +112,22 @@ const Hud = ({ hud }: { hud: HudState }) => {
         </ol>
       )}
 
-      <div className="hud-flight glass">
-        <div className="hud-boost" aria-label={`Boost reserve ${Math.round(hud.boostCharge * 100)} percent`}>
-          <span>{hud.braking ? "Braking" : hud.boosting ? "Boosting" : hud.boostCharge < 0.999 ? "Recharging" : "Ready"}</span>
-          <progress aria-label="Boost reserve" max={1} value={hud.boostCharge} />
-          <span className="hud-boost-keys">Shift · boost / Space · brake</span>
+      {/* The hint sits on top of the flight panel, whatever its height */}
+      <div className="hud-bottom">
+        {mouseHint && !hud.paused && <div className="hud-hint glass">Click to steer with the mouse</div>}
+        <div className={`hud-flight glass ${hud.crashed ? "crashed" : ""}`}>
+          <Bar kind="boost" label={boostLabel(hud)} value={hud.boostCharge} />
+          <Bar kind="skim" label={skimLabel(hud, showStyle)} value={hud.proximity} />
+          <div className="hud-speed">
+            <strong>{hud.speedKmh}</strong> km/h
+          </div>
+          {showStyle && (
+            <div className="hud-style">
+              Style {hud.style.toLocaleString()} {hud.multiplier > 1 && <b>×{hud.multiplier}</b>}
+            </div>
+          )}
         </div>
-        <div className="hud-speed">
-          <strong>{hud.speedKmh}</strong> km/h
-        </div>
-        <div className="hud-proximity" title="Proximity">
-          <div style={{ width: `${Math.round(hud.proximity * 100)}%` }} />
-        </div>
-        <div className="hud-style">
-          Style {hud.style.toLocaleString()} {hud.multiplier > 1 && <b>×{hud.multiplier}</b>}
-        </div>
-        <div className="hud-altitude">{hud.clearance < 40 ? `${hud.clearance} m to the rock` : "\u00a0"}</div>
       </div>
-
-      {!hud.locked && !hud.paused && (
-        <div className="hud-hint glass">
-          {racing ? "Click to steer with the mouse" : "Click the view to steer with the mouse · keys and gamepads work anytime"}
-        </div>
-      )}
     </div>
   );
 };

@@ -93,6 +93,28 @@
   gap: 0.75rem;
 }
 
+.panel-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.panel-head > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.panel .panel-toggle {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--ink-06);
+  color: var(--ink-70);
+}
+
 .panel-head small {
   display: block;
   font-size: 0.78rem;
@@ -126,6 +148,35 @@
 
 .panel p strong {
   color: var(--ink);
+}
+
+/* Sits where the race timer appears, so starting swaps one for the other */
+.ready-card {
+  position: absolute;
+  top: 4.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 2rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 0.8rem 0.8rem;
+  border-radius: 26px;
+  text-align: center;
+}
+
+.ready-card > span {
+  padding: 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink-70);
+}
+
+.ready-card button {
+  padding: 0.7rem 1.6rem;
+  border-radius: 999px;
 }
 
 .chips {
@@ -164,48 +215,14 @@
   color: var(--ink-70);
 }
 
-.invite {
-  display: flex;
-  gap: 0.4rem;
-}
-
-.invite input {
-  flex: 1;
-  font-size: 0.85rem;
-}
-
-.pilots {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.pilots li {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.35rem 0.5rem;
-  border-radius: 10px;
-  font-weight: 600;
-}
-
-.pilots .you {
-  font-size: 0.72rem;
-  color: var(--ink-70);
-  background: var(--ink-06);
-  border-radius: 999px;
-  padding: 0.05em 0.6em;
-}
-
 .banner,
 .ghost-note {
   position: absolute;
   top: 4.5rem;
   left: 50%;
   transform: translateX(-50%);
+  /* Centred with left: 50%, which would otherwise squeeze it into half the screen */
+  width: max-content;
   max-width: calc(100% - 2rem);
   padding: 0.5rem 1.1rem;
   border-radius: 999px;
@@ -214,9 +231,9 @@
   pointer-events: none;
 }
 
+/* Just under the race timer */
 .ghost-note {
-  top: auto;
-  bottom: 11.5rem;
+  top: 10rem;
   font-size: 0.85rem;
   color: var(--ink-70);
 }

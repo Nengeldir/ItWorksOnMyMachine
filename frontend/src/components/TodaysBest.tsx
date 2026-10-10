@@ -1,7 +1,7 @@
 import { IconFlag } from "@tabler/icons-react";
-import { useEffect, useState } from "react";
 import type { LeaderboardEntry } from "../api";
 import { formatTime } from "../format";
+import { useMediaToggle } from "../media";
 
 // Wide screens show the board open; narrow ones only the flag until it's tapped
 const WIDE = "(min-width: 900px)";
@@ -12,14 +12,7 @@ interface TodaysBestProps {
 
 /** The top three on today's course, folded into a flag in the corner */
 const TodaysBest = ({ entries }: TodaysBestProps) => {
-  const [open, setOpen] = useState(() => matchMedia(WIDE).matches);
-
-  useEffect(() => {
-    const query = matchMedia(WIDE);
-    const onChange = () => setOpen(query.matches);
-    query.addEventListener("change", onChange);
-    return () => query.removeEventListener("change", onChange);
-  }, []);
+  const [open, setOpen] = useMediaToggle(WIDE);
 
   return (
     <aside className={`menu-best glass ${open ? "open" : ""}`}>
