@@ -87,7 +87,25 @@ docker compose up -d --build
 | `?` (top right)           | How to fly: every key and what it does             |
 
 New players are asked once whether they want a tutorial: a short flight that
-asks for each control in turn (skippable). Pitch can be inverted in the menu. Diving turns height into speed, climbing
+asks for each control in turn (skippable).
+
+### Phones and tablets
+
+The game is flown sideways (landscape). Held upright, a phone is asked to turn;
+on Android the first tap goes full screen and turns the screen for you.
+
+| Touch                     | Action                                             |
+| :------------------------ | :------------------------------------------------- |
+| Drag anywhere on the view | A stick appears under your thumb: pitch and turn   |
+| **Tilt**                  | Steer by tilting the device instead: turn it like a wheel to bank, lean it away to dive. Level is how you hold it when you turn Tilt on or resume from pause. Needs an https page; iOS asks for permission |
+| Hold **Boost** / **Brake** | Boost / air brake                                 |
+| `‹` `›`                   | 5 m sideways dodge                                 |
+| **Flap** / **Hover** | Adventure abilities, once you have the upgrade     |
+| **Respawn**, **Pause**    | As `R` and `P`                                     |
+
+Tilt sensitivity and "Invert touch and tilt up / down" are in Settings.
+
+Pitch can be inverted in the menu. Diving turns height into speed, climbing
 turns speed back into height. Flying within a few metres of rock or trees fills
 the orange bar: you get extra acceleration (up to 18 km/h a second), so risky
 lines are faster, and in an adventure style points with a growing multiplier.
@@ -320,6 +338,7 @@ doesn't fly the course itself.
 | `backend/tests/`                       | pytest tests for rooms and the API                       |
 | `frontend/src/game/Game.ts`            | The game: loop, physics steps, race state, HUD data      |
 | `frontend/src/game/input.ts`           | Input, actions and shared keyboard bindings (including pause) |
+| `frontend/src/game/touch.ts`, `tilt.ts` | Phones and tablets: on-screen stick and buttons, tilt steering |
 | `frontend/src/game/world/`             | Racing line, rock field, meshing workers, palettes, view |
 | `frontend/src/game/world/meshCleanup.ts` | Preserves compact stones, removes closed slivers and trims narrow tips; protects chunk borders |
 | `frontend/src/game/world/landCollider.ts` | Collisions with the land exactly as drawn             |
@@ -405,7 +424,6 @@ browser console, handy for teleporting around or poking at the race state.
 
 ## Ideas for Next Steps
 
-- Touch and tilt controls for phones
 - More gate types (spirals, crumbling bridges) and difficulty settings for the tube radius
 - AI race commentary or course names through the hackathon's LLM proxy
 - Spectator camera that follows the race leader

@@ -1,6 +1,7 @@
 import type { FlightInput } from "./flight";
 import { clamp } from "./math";
 import { DEFAULT_BINDINGS, type Bindings, type BindingAction } from "./bindings";
+import { tilt } from "./tilt";
 export { keyLabel } from "./bindings";
 
 export interface ControlSettings {
@@ -8,6 +9,9 @@ export interface ControlSettings {
   mouseSensitivity: number; // 0.3..6, 2 = default
   invertMouse?: boolean;
   invertGamepad?: boolean;
+  /** The touch stick and tilting: up / top away from you climbs instead of diving */
+  invertTouch?: boolean;
+  tiltSensitivity?: number; // 0.4..2.5, 1 = default
   bindings?: Bindings;
   deadZone?: number;
   reducedMotion?: boolean;
@@ -33,13 +37,24 @@ function deadZone(value: number, threshold = 0.12): number {
   return (value - Math.sign(value) * threshold) / (1 - threshold);
 }
 
+// Tilting the phone: how far is full deflection, and how much of it around level does nothing
+const TILT_ROLL = 0.5; // radians, about 29°
+const TILT_PITCH = 0.36; // about 21°
+const TILT_DEAD = 0.035; // about 2°
+
+function tiltAxis(angle: number, full: number, sensitivity: number): number {
+  const beyond = Math.max(0, Math.abs(angle) - TILT_DEAD);
+  return clamp((Math.sign(angle) * beyond * sensitivity) / (full - TILT_DEAD), -1, 1);
+}
+
 function isTyping(event: KeyboardEvent): boolean {
   const target = event.target as HTMLElement | null;
   return !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
 }
 
 /**
- * Keyboard, mouse (pointer lock) and gamepad, merged into pitch and roll.
+ * Keyboard, mouse (pointer lock), gamepad, the touch stick and buttons
+ * (`TouchControls`) and tilting the phone (`tilt`), merged into pitch and roll.
  * Flight-stick convention by default: forward / W / mouse up dives.
  */
 export class Input {
@@ -54,6 +69,11 @@ export class Input {
   private stickX = 0;
   private stickY = 0;
   private padButtons: boolean[] = [];
+  // The on-screen stick (-1..1, down and right positive) and held buttons, set by TouchControls
+  touchX = 0;
+  touchY = 0;
+  touchBoost = false;
+  touchBrake = false;
 
   constructor(element: HTMLElement, settings: ControlSettings) {
     this.element = element;
@@ -76,8 +96,9 @@ export class Input {
 
   /** Call from a click handler: browsers only lock the pointer on a user gesture */
   lockPointer() {
+    // Phones have no pointer to lock (and Safari there has no such method)
     if (document.pointerLockElement !== this.element) {
-      this.element.requestPointerLock()?.catch?.(() => {});
+      this.element.requestPointerLock?.()?.catch?.(() => {});
     }
   }
 
@@ -125,6 +146,8 @@ export class Input {
     this.keys.clear();
     this.stickX = this.stickY = 0;
     this.padButtons = [];
+    this.touchX = this.touchY = 0;
+    this.touchBoost = this.touchBrake = false;
   }
 
   private onMouseMove = (event: MouseEvent) => {
@@ -162,8 +185,17 @@ export class Input {
       + this.stickY * ((this.settings.invertMouse ?? this.settings.invertPitch) ? -1 : 1);
     let roll = this.key("turnRight") - this.key("turnLeft") + this.stickX;
 
-    let boost = this.key("boost");
-    let brake = this.key("brake");
+    const touchSign = this.settings.invertTouch ? -1 : 1;
+    pitch += this.touchY * touchSign;
+    roll += this.touchX;
+    if (tilt.active) {
+      const sensitivity = this.settings.tiltSensitivity ?? 1;
+      roll += tiltAxis(tilt.roll, TILT_ROLL, sensitivity);
+      pitch += tiltAxis(tilt.pitch, TILT_PITCH, sensitivity) * touchSign;
+    }
+
+    let boost = this.touchBoost ? 1 : this.key("boost");
+    let brake = this.touchBrake ? 1 : this.key("brake");
     const pad = navigator.getGamepads?.().find((p) => p?.connected);
     if (pad) {
       roll += deadZone(pad.axes[0] ?? 0, this.settings.deadZone);

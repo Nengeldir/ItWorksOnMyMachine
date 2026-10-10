@@ -119,7 +119,9 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/camera.ts` | Chase camera (`CAMERA` tuning): lag, partial horizon roll, FOV with speed, FOV kick on gates, shake when skimming; after a crash (`startFall`, `fall`) it arcs up over the pilot and looks down on the fall (`CAMERA.fall*`) |
 | `game/tuning.ts` | `ANIM`, `FX`, `RINGS`, `CAMERA`: every look constant, slider ranges, localStorage persistence |
 | `game/testPlayback.ts` | Test-only playback rate: the frame loop scales its delta, CSS animations/transitions follow through the Web Animations API, and a scoped observer handles new overlays; cleanup restores normal playback |
-| `game/input.ts` | Test-only Shift+P/O/S chords are consumed before ordinary bindings; keyboard, pointer-lock mouse and gamepad, merged into pitch and roll, plus actions (respawn, mute, barrel rolls) |
+| `game/input.ts` | Test-only Shift+P/O/S chords are consumed before ordinary bindings; keyboard, pointer-lock mouse, gamepad, the touch stick and buttons and tilt, merged into pitch and roll, plus actions (respawn, mute, barrel rolls) |
+| `game/touch.ts` | Phones and tablets. `watchTouchMode()` keeps `html.touch` on while the player uses a finger (CSS shows touch UI and hides key hints by it: `.touch-only`, `.no-touch`). `TouchControls` (built by `Game`, plain DOM in the game view, styled in `components/Touch.css`): a stick that appears under the thumb anywhere on the canvas, Boost / Brake / dodge / Flap / Hover buttons, Tilt / Respawn / Pause pills; it only writes `Input.touch*` and calls `Input.onAction`. On the first finished tap it goes full screen and locks landscape (Android), and takes a screen wake lock |
+| `game/tilt.ts` | `tilt`, the one device-orientation sensor: `tiltAngles()` gets roll and lean from the direction of gravity (no jumps where the event's angles flip), `enable()` asks iOS for permission (from a tap), `recenter()` makes the current hold level flight. On/off is kept in `wingrace.tilt`, outside `Settings` (the in-game button owns it). `Input.sample` adds it to pitch and roll (`TILT_*` in `input.ts`) |
 | `game/pilots.ts` | Remote players and ghosts: interpolated samples driving an `Avatar` and `PilotFx` |
 | `game/ghost.ts` | Recording and decoding ghost runs (15 Hz) |
 | `game/autopilot.ts` | `Autopilot`: while nobody plays (the menu's `chase` backdrop, the victory lap) the pilot flies the racing line on rails (`Flight.place`), through the middle of every gate and inside the 11 m tube the land is carved away from; speed from the slope against drag, bank from the line's curve (`AUTOPILOT` in `tuning.ts`). Never scored; Game loops it 40 m past the finish |
@@ -407,370 +409,65 @@ designer). UI only: runs play as before.
   cliff and Glacier fragments under neutral light, plus Verdant gameplay with
   no rendering errors. Full seed coverage and integrated-GPU profiling remain.
 
+### 2026-10-10: Touch controls rebased onto main (Claude)
+
+PR #32 conflicted with `main` (Pengyue adventure, tutorial). Docs kept both
+sides. Main made Hover-Stall a one-off press (`hover` action, upgrade id
+`hoverStall`), so the touch Hover button now taps like Flap (`Input.touchHover`
+and `Input.hovering` are gone) and `Game.hud` shows it for `hoverStall`. Not
+done: touch buttons for Plunge and Gale Force. Verified: build, lint and 49
+frontend tests pass. Not tried on a device.
+
 ### 2026-10-10: Rebased onto main's Pengyue adventure (Claude)
+### 2026-10-10: Phones and tablets: landscape, touch controls, tilt steering (Claude)
 
-PR #31 conflicted with `main` (`e374fef`); rebased (no merge commits allowed).
-Conflicts in `CLAUDE.md`, `README.md` (both sides kept) and `App.tsx` (main's
-`route.ts` imports plus the tutorial's storage imports). Main renamed Hover to
-`hoverStall` and added `plunge` and `galeForce`, so `RunHud`'s
-`ABILITY_ACTIONS` maps them to the bound keys. Verified: build, lint and 48
-frontend tests pass. Not checked in a browser.
-
-### 2026-10-10: Merged `main` (Sunken Reef, Lagoon sea, portal rework, Wind Rider) into `Pengyue` (Claude)
-
-For PR #30. Conflicts, both sides kept: `audio.ts` has the abilities'
-`whoosh`/`glide`/`ability` and main's `sweep`/`portalHum`; `tuning.ts` has
-`AUTOPILOT`, `ABILITIES_FX` and main's `DEEP`; README and this file merged
-by hand (run order with the Reef, abilities in the upgrade blurb).
-Verified: build and lint pass, 48 frontend tests (Node 22.14 with a
-`module.register` resolver). In Chrome: `?test=reef&seed=2` flies the Reef
-with the test panel and run HUD; Shift+P, Shift+S, Shift+O, a granted
-ability and a portal into the picker work; no console errors.
-
-### 2026-10-10: Autopilot on the racing line, orbiting camera in the wormhole (Claude)
-
-Asked for: an autopilot that never hits the terrain, always flies through
-the middle of every gate and keeps a safe distance from the land; and a
-cinematic camera in the wormhole that circles the pilot in every direction
-so the pilot always seems to fly forwards.
-- **Why it crashed**: `Game.autopilot()` steered the flight model towards
-  the line 35 m ahead in z, so it cut corners and sank on the way. Headless
-  simulation (same flight model and hitbox, against the distance field):
-  3 to 7 crashes per Sky Isles course, seeds 1 to 42.
-- **`game/autopilot.ts`** (new): flies the racing line on rails. The line
-  goes through every gate's centre, and both generators carve an 11 m tube
-  around it that rock, trees and structures keep out of. The speed follows
-  the slope against `FLIGHT.drag` (31 to 43 m/s), the bank follows the
-  line's curvature like a coordinated turn (`AUTOPILOT.railBank`, banking
-  `railLead` s early), and a start off the line settles onto it over
-  1.2 s. `Flight.place` sets the state without the flight model. `Game`:
-  `autopilotStep` replaces the physics step while self-flying (no crash
-  test, no glide-in; gates still shine); the old `autopilot()` is gone.
-  It now loops 40 m past the finish instead of 100: on Coral Lagoon the line
-  reaches the sea about 90 m past the finish. Looks only (rule 6): nobody
-  plays, nothing is scored or saved.
-- **Wormhole** (`run/portal.ts`, `run/controller.ts`): `WormholeCamera`
-  takes the chase view on the way in and eases, over 4 s, into an orbit
-  around the pilot: once round every `RUN.orbitLap` s (26), swinging
-  `RUN.orbitTilt` rad above and below, at about `RUN.orbitRadius` m, with a
-  slight crane roll. On the way out it swings the shortest way back to the
-  chase pose, which it reaches as the blur peaks (no cut). The tube is now
-  fixed to the pilot's heading, not the camera's view: spirits stream past
-  the pilot, the shell stays centred on the camera. The shell's stars and
-  nebula used to drift into the far end (looked like flying backwards);
-  they now stream out of it. `RUN.wormholeFlow` sets the speed (spirits are
-  about twice as fast as before).
-- Verified: build and lint pass; 44 frontend tests (new
-  `tests/autopilot.test.mjs`: Sky Isles 42 and 7, Lagoon, Ember: every gate
-  passed within 0.5 m of its centre, hitbox more than 6 m from the land).
-  Simulation over 12 Sky Isles seeds and 3 seeds of each run biome: zero
-  contacts, every ring passed at its centre, at least 8.8 m between any
-  hitbox point and the land's distance field. In Chrome (dev server):
-  victory lap on Sky Isles seed 42 for a full lap and its loop, no crash,
-  at most 0.01 m off the line; run 7 through the portal, the camera went
-  from behind-above to in front-below over 12 s, the pick, and the way
-  out arriving 10 m behind the pilot; no console errors. Clearance was
-  measured against the distance field, not the drawn mesh (off by about
-  1 m at most). Frames were stepped by hand in a hidden tab, so the orbit's
-  smoothness and the feel of the 0.4 s swing back weren't watched in real
-  time.
-
-### 2026-10-10: Test mode brought onto `Pengyue` (Claude)
-
-Asked for: move every test-mode function and the test panel from
-`claudia-debug` onto `Pengyue`, so it stays while `Pengyue` moves on.
-- Cherry-picked `4acb722` (test mode) and `2819fc0` (its fixes: `route.ts`,
-  `&test` on any single-player URL, run HUD and panel layout, docs, tests).
-  Not merged: `claudia-debug`'s merges of `main` stay out.
-- Conflicts with the abilities work: `input.ts` keeps the new actions
-  (hover, plunge, burst) and adds `TestAction`; `Game.loop` keeps the
-  non-negative frame clamp and scales it by the test playback rate
-  (adaptive quality reads the unscaled time). Docs: both sides kept.
-- Verified: build and lint pass; 45 frontend tests (Node 22.14 with a
-  `module.register` resolver). In Chrome: `?explore=verdant&seed=2&test`
-  opens Verdant as `?seed=2&test=verdant`, the panel and run HUD show,
-  Shift+P puts the portal 40 m ahead, Shift+S halves the rate and relabels
-  the panel, `__game.grant` still works in a test run, a portal opens the
-  picker and leads to level 2, Shift+O shows "Test #2 · complete"; no
-  console errors. Keys sent as script events, not typed.
-- The `?debug` variant on `origin/claudia-test_mode` (buttons, portal
-  distance setting) is a different implementation and was not brought over.
-
-### 2026-10-10: The design list's first ten abilities (Claude)
-
-Asked for: write the items and abilities list into this file (the new
-section "Items and abilities"), then build only the first ten abilities,
-with models and animations in the game's style, adapting descriptions that
-don't fit the game. A deliberate gameplay change in **runs only** (rule 6):
-everything reaches the flight through `FlightMods` and the run controller;
-races, time trials and ghosts fly the plain model (tested: default mods
-change nothing).
-- **As upgrades** (`run/upgrades.ts`): ten new cards offered at portals.
-  Featherfalling replaces Featherweight (same idea, stronger: sink ×0.55,
-  stall ×0.8, drag ×0.92 per stack) and Hover-Stall replaces the old hold-F
-  Featherfall hover; saved run summaries with those ids just show a dot.
-  The offers per run seed changed.
-- **Rules** (`run/abilities.ts`, `ABILITY` in `?tune`): Skim-Booster refills
-  the boost with proximity ("thrill"). Cloud-Surfing: no cloud in the game is
-  reachable from the line (puffs float 160 m up, the cloud sea is below the
-  abyss), so the ability gathers three or four rivers of cloud along the line,
-  5 m under it; surfing up to 7 m over one pushes you (to 62 m/s), refills boost
-  and wingbeats and doubles cooldowns. Plunging Attack (X): the nose is hauled to
-  62° down with a push; a gate passed mid-plunge is a strike (300 × chain,
-  half the cooldown back); pulling up ends it. Wind-Shear Dash: Q/E become a
-  9 m blink in 0.16 s, every 0.8 s. Thermal Vision is information only: warm
-  rings over every gate ahead and the portal, through fog and rock, rising warm
-  air along the line, the manta and lanes glowing from afar (there are no
-  updrafts or boost rings yet; gates stand in). Slipstream Rider: there are no
-  moving things in runs, so the ability brings one: a spirit manta that glides
-  the racing line ahead of you (inside the tube), waits when you fall behind,
-  surges when you close in, comes back ahead if lost; within 34 m behind it
-  you're pushed (to 74 m/s). Gale Force (Z): energy from gates, skimming and
-  time; a 320 m tunnel ahead for 4 s, pushing you inside it, gates inside get
-  6 m more radius. Acrobatic Recovery: a wing (never the body) touching rock
-  glances off (`Flight.deflect`, 92% speed kept) and barrel rolls away, every 4 s;
-  if it can't be got clear, it's a crash after all. Hover-Stall (F): 2 s with the
-  flight model off (`Flight.hangStep`): the speed bleeds away, steering turns
-  you on the spot, then (or on F again) you launch at 80% of the speed you came
-  in with (at least 28 m/s); 7 s cooldown.
-- **Looks** (`game/abilities/`, see the architecture map; `ABILITIES_FX` in
-  `?tune`): halo of down feathers, thrill flares and ribbons, cloud rivers with a
-  surf wake, a comet tail and a strike shockwave, afterimage and wind blades,
-  warm gate markers, the spirit manta (with ribbons and a wake), the Gale Force
-  tunnel and wind halos, a recovery spiral, the hover sigil with its timer and
-  chevrons. Poses (`Avatar.stance`): tuck, hover, cast, surf. Sounds:
-  `GameAudio.ability`.
-- **Controls**: X plunge, Z Gale Force (gamepad X, right stick click), F
-  hover-stall is now a press (gamepad B). Settings saved before these
-  actions existed keep their keys and get the defaults for the new ones
-  (`storage.ts`). Controls list and README updated.
-- Also: `Game.loop` never takes a negative frame time (hand-stepped dev frames
-  could interleave with the browser's and run the easing backwards).
-- Dev: `__game.grant(id)` gives the running run an upgrade.
-- Verified: build and lint pass; 43 frontend tests (Node 24 in Docker; 12 new
-  for the abilities and saved bindings). In Chrome (run 7, Sky Isles by day,
-  hand-stepped): the manta in flight, the plunge's tuck, the hover pose and
-  sigil, Gale Force's tunnel, the blink's leaves and afterimage, a cloud lane
-  with the surfing pose, thrill flares, the recovery spiral, a strike's
-  shockwave, Thermal Vision's rings. Several were too bright under bloom on a
-  white day sky at first (the sigil, tunnel and blades now use normal blending,
-  the comet and lanes were dimmed). Not checked: any night biome, a real
-  strike or recovery in play (both were triggered by hand), the sounds (not
-  listened to), frame time, gamepad. The work was done in a worktree
-  (`../ItWorksOnMyMachine-abilities`, on `Pengyue`): the checkout switched
-  branches mid-task.
-
-### 2026-10-10: `docker compose up --build` looked stuck at `npm ci` (Claude)
-
-Reported: the build hangs at `Step 4/10 : RUN npm ci`. Not reproduced: on
-this machine (Colima, 4 CPUs, 4 GiB) the step finished in 1 to 2 min and
-the stack served `/` and `/api/time`. DNS and connect take milliseconds, but
-downloads from npm run at about 0.5 MB/s (single tarballs 50 to 120 s), and
-without `docker buildx` Compose falls back to the classic builder, which
-prints nothing until a step ends.
-- `frontend/Dockerfile`: `npm ci --no-audit --no-fund --loglevel=http`, so
-  every download is logged and a slow build is distinguishable from a hung
-  one.
-- Verified: `docker compose build --no-cache frontend` and
-  `docker compose up --build -d`; `/` returns 200. The user's own hang is
-  not diagnosed yet (needs their log). Installing `docker-buildx` would add
-  live progress and npm cache mounts.
-
-### 2026-10-10: Test mode: `&test` on any URL, run HUD, panel layout (Claude)
-
-Asked for: verify what's wrong with test mode, fix it, and make sure the
-debug panel works as intended.
-- **URL** (new `route.ts`, out of `App.tsx`): `test` only counted as
-  `test=<world>`, so `?explore=verdant&test` and `?test&explore=ember` opened
-  Sky Isles, and `?run=5&test` opened a normal, saved run. Now `test` wins
-  over run, explore and solo URLs (world from `test=` or `explore=`, seed from
-  `seed=` or `run=`); rooms and the gallery ignore it. `ExploreSession` drops
-  the leftover `explore`/`run` params when it rewrites the URL. Removed
-  `ExploreSession.valid` (now `validBiome` in `route.ts`).
-- **Screen** (`GameScreen.tsx`, `GameScreen.css`): test mode flies a run but
-  showed none of it; it now has the run HUD (score, chain, "Reach the portal"
-  with its distance, compass), style points, and `level n/8 · world · mood` in
-  the top bar. The panel is a short list whose Shift+S line says what it
-  will do (half or normal speed). It overlapped the flight panel below about
-  1100 px wide; now compact, and below 840 px it sits on the right under the
-  compass.
-- **Docs**: `docs/debug-mode.md` described the other branch's `?debug` mode
-  (`VITE_ENABLE_DEBUG`, `__PLAYTEST__`, a portal-distance setting) and is
-  rewritten for `?test`. README: the `&test` URLs; removed a `Shift+V`
-  quarter-speed explore slow motion that doesn't exist in the code.
-- **Correction** to the entry below: `tests/test-mode.test.mjs` was never
-  committed, and the four failing untracked test files it mentions aren't in
-  this checkout. The file exists now: URL parsing (15 URLs) and the chords
-  (consumed before pause/boost/pitch, once per press).
-- Verified: on a clean worktree of `4acb722` plus these files, build and lint
-  pass, and all 33 frontend tests pass (Node 22.14, run with a
-  `module.register` resolver: `tests/register.mjs` needs 22.15). In Chrome
-  (dev server): every URL above lands in the right world and seed; Shift+P
-  moves the objective to 45 m; Shift+S flips the panel's label; Shift+O shows
-  "Test #n · complete", nothing in localStorage; Enter flies again; explore
-  still switches worlds with N. Panel bounds checked at 390, 700, 840, 900,
-  1000 and 1440 px against the flight panel, score, compass, objectives and
-  abilities: no overlap. Shortcuts were sent as script events, not typed.
-- Not done: the main working tree has another session's uncommitted
-  abilities work (`Game.ts`, `audio.ts`, `avatar.ts`, `run/controller.ts`,
-  `tuning.ts`, `game/abilities/`) that doesn't compile yet; it was left
-  untouched, and these changes were verified without it.
-
-### 2026-10-10: Confirm test mode works with the existing Docker build
-
-- Verified that the URL selects test mode in the normal frontend bundle;
-  it has no development-only or debug-build guard. Both Dockerfiles and
-  the standard Compose configuration remain unchanged.
-- README now documents `docker compose up --build` followed by
-  `http://localhost:8080/?test`, without build arguments or debug overrides.
-  The pre-existing untracked `docker-compose.debug.yml` is not required.
-- Verification: frontend production build and lint pass. Firefox on Vite
-  preview confirms test UI in the production bundle (no `__game` dev hook),
-  Shift+S at 0.5×, Shift+O opening victory, its CSS animation at 0.5×, and
-  saved bests unchanged. Screenshot inspected. No Docker image was built.
-
-
-### 2026-10-10: Remove biome controls from test mode
-
-- `GameScreen.tsx`: hide the world/light selectors and music diagnostics in
-  test mode, and disable its N/B/V world/light shortcuts. Keep the compact
-  Shift+P/O/S hints. Explore retains its existing controls.
-- `RunHud.tsx`: test victory offers replay and menu, without the next-world
-  action. The URL can still select an initial biome; portals still advance
-  through the adventure. README and architecture notes updated.
-- Verification: frontend build and lint pass. In Firefox, test mode shows
-  only Shift+P/O/S hints, with zero world/light buttons; N/B/V leave the URL
-  unchanged. Explore still shows both selectors and V changes the light.
-  Test panel visually checked. No new tests needed for this UI-only change.
-
-
-### 2026-10-10: URL test mode with portal, victory and half-speed shortcuts
-
-- `App.tsx`, `ExploreSession.ts`, `GameScreen.tsx`: `/?test` (or
-  `?test=<biome>&seed=<n>`) reuses explore's worlds/lights panel and starts
-  immediately. Test runs use the existing adventure controller, picker and
-  finish screen (`RunHud.tsx`), with explicit unsaved-result text. They never
-  call the score-saving RunSession or server APIs. World switches retain
-  `?test` and other query flags; invalid biome names fall back to Sky Isles.
-- `input.ts`: Shift+P places a usable portal ahead along the pilot's heading;
-  Shift+O shows victory with the current stats and autopilot; Shift+S toggles
-  normal/half speed. Chords are consumed before pause, pitch and held boost;
-  repeats, text fields and open settings dialogs cannot trigger them.
-- `run/controller.ts`: accepts the sandbox's starting biome/mood, can replace
-  its exit with a nearby portal, and can finish immediately through the real
-  summary event. `Game.ts` resets the run cleanly after victory/world changes.
-- `Game.ts`, new `game/testPlayback.ts`: scale the shared frame delta before
-  fixed-step accumulation and shader time, slowing flight, cooldowns, crash
-  recovery, camera, scenery, particles, equipment, portal/finale transitions
-  and the victory lap together. CSS animations/transitions (including newly
-  mounted picker/finish overlays) get the same playback rate without restarting.
-  Adaptive graphics quality still measures real frame time. Rate persists
-  across biome changes; leaving the test session restores normal playback.
-- Verification: frontend build and lint pass. New `tests/test-mode.test.mjs`
-  covers chord isolation/repeats/editing, oriented portal placement and actual
-  upgrade entry, initial biome/mood, one victory event with stats, and CSS
-  playback/cleanup. Browser: Firefox with an isolated temporary profile,
-  test UI and portal visually checked; picker and victory both at 0.5 playback
-  rate, saved bests unchanged. One second of manual frame stepping advanced
-  game/avatar/portal clocks by 1 s normally and 0.5 s when slowed, with 119/60
-  fixed physics steps (fractional accumulator accounts for the first count).
-- Full `npm test`: the six existing tracked test files and the new test file
-  pass; four pre-existing untracked test files fail (`camera`, `debug`,
-  `flight-realism`, `input`). The debug test imports missing `debugMode.ts`;
-  those unrelated files were left intact. Backend unchanged. Real gamepad,
-  audible mix and focused-window performance were not tested.
-### 2026-10-10: The interactive tutorial (Claude)
-
-Asked for by the UX group, on `shiyu-tutorial`: if a newcomer says yes to
-the tutorial, a short practice flight before the first level, a prompt for
-each main control, moving on once it's used; under 30 seconds, skippable.
-
-- **`Coach`** (`Coach.tsx`, `Coach.css`): a card where the start button
-  goes asks for one control at a time, with the player's own keys: Turn,
-  Dive, Climb, Boost, Brake, Dodge (Dive and Climb swap under "Invert
-  pitch"). Using it counts: the bound keys, the mouse while it steers (80 px
-  that way), the gamepad's left stick, RT, LT or the shoulders. The keys
-  press down into ink with a tick, the next step comes 0.65 s later, then
-  "You're ready!" for 1.4 s. Progress dots; Skip (or `Esc` with the mouse
-  free) any time. It only watches the controls: the game flies on.
-- **Where:** "Start with a tutorial" sets it going (`App.tsx`, the screens'
-  `tutorial` prop). Time trial: in the warm-up, with the start button (and
-  Enter) held back until it's over. Room: in the lobby; if the race starts
-  first, it ends. Adventure: no free flight before the start, so in the
-  first level's opening seconds, ending if the level does. Leaving the game
-  ends it. Replaces the stand-in (How to fly) behind "Start with a tutorial".
-- Verified: build and lint pass. In the app's browser on the Docker build,
-  a time trial through all six steps by script (about 7 s), the start button
-  after "You're ready!". Not tried: a room, an adventure, a real gamepad, a
-  person's timing (aim: under 30 s).
-
-### 2026-10-10: Wind Rider, Cinzel and Philosopher, a quieter start (Claude)
-
-Asked for by the UX group, on `shiyu-tutorial`.
-
-- **Name:** the game is Wind Rider (title, tab, no-WebGL page, README, this
-  file); the landing page's title is the logo and reads "WindRider". Internal
-  names too, since nothing was live: localStorage `windrider.*`, shader cache
-  keys, the dev log prefix. Browsers start fresh (a new guest id, default
-  settings, the newcomer question again). This replaces the rename entry
-  below, which kept the `wingrace` keys (decided by the UX group: never in
-  production, so nothing to keep).
-- **Fonts** (`main.tsx`, `index.css`): headings (`h1`, `h2`) in Cinzel
-  (`--font-display`, carved capitals, a little open tracking), everything
-  else in Philosopher (`--font-body`; it only has 400 and 700, so 500 shows
-  as 400 and 600 or more as 700). Numbers that change as you watch keep Plus
-  Jakarta Sans (`--font-numbers`): Philosopher's digits differ in width even
-  with `tabular-nums` (1111 is 52 px, 8888 92 px), so clocks would jitter.
-  That's the race timer, speed, the countdown, standings, the ring marker's
-  distance, the "New in" countdowns, times on boards and results, the run's
-  score and stats. All bundled with `@fontsource`.
-- **Start button** (`ReadyCard`): only the button(s), on a glass pill, 6.5rem
-  from the top. The start button breathes a halo and a light sweeps across it
-  now and then (CSS only, off under reduced motion). The time trial's line of
-  text and the room's pilot count are gone.
-- **Mouse hint** removed (How to fly has Mouse control).
-- **Countdown, GO, Crashed** in the middle of the screen, in the theme's ink
-  (GO was green, Crashed red).
-- Tried and reverted: waiting for Enter after a crash. It changes gameplay
-  (the race clock keeps running while you wait), so it's for the team.
-- Verified: build, lint and the frontend tests (31) pass. In the app's
-  browser: the fonts in use (computed families, Philosopher loaded). A
-  comparison of six body fonts rendered in headless Chromium. Not checked:
-  phones.
-
-### 2026-10-10: Key guide, newcomer question, overlays pause the game (Claude)
-
-Asked for by the UX group, on `shiyu-tutorial`: a "?" left of the settings
-gear (landing) and at the top right in game that shows the keys, a "First
-flight?" question for newcomers, and the game paused behind both.
-
-- **How to fly** (`Help.tsx`, `Help.css`): the "?" opens a card with every
-  key and what it does, in two equal panels: Dive, Climb, Turn left, Turn
-  right, Boost, Brake, Dodge | Respawn, Pause, Mute, Mouse control (click /
-  `Esc`). Keys come from the player's bindings (`components/keys.ts`,
-  `boundKeys`): both slots (`W` / `↑`), either Shift as one, Dive and Climb
-  swapped under "Invert pitch". Wingbeat and Hover are left out (adventure
-  upgrades; the run HUD shows them once you have them).
-- **First flight?** (`FirstFlight` in `App.tsx`): asked once on entering a
-  time trial, room or run, when the server has no finished run for the
-  player (`/api/me` now returns `has_played`: by login, or by browser id for
-  guests via `?client_id=`) and nothing was started or skipped in this
-  browser (`windrider.tutorial` in localStorage, per user id). "Start with a
-  tutorial" opens How to fly for now (the interactive tutorial is next),
-  "Skip tutorial" ends it. `/?tutorial` asks anyway, for demos.
-- **Overlays pause the game** (`game/hold.ts`, `Game.hold`): an open overlay
-  holds the game paused and resumes only a pause it made; the HUD shows no
-  "Paused" for it. Enter and `Esc` go to the overlay first (Enter would start
-  the run behind it). Race clocks keep running, as with `P`.
-- **Run HUD:** the ability keys on the HUD and the upgrade cards follow the
-  bindings (they were fixed "C", "F", "Shift").
-- Backend: `Store.has_played`, an index on `runs.user_id`, the `Me` model.
-  Deploy frontend and backend together.
-- Verified: build, lint, frontend tests (31), backend tests (23, one new).
-  In the app's browser on the Docker build: the question and its keys, the
-  guide's rows from the bindings, the game frozen behind both overlays and
-  running again after, no "Paused" over them. Not checked: gamepad, phones,
-  a real portal login.
+Asked for: support mobile, in the sense that it should be horizontal, and
+the tilt sensor if possible. There was no touch input at all before.
+- **Landscape**: held upright on a touch device, every game screen shows
+  "Turn your device sideways to fly" (CSS only, `Touch.css`; the Menu button
+  stays in reach). The first finished tap in a game goes full screen and
+  asks for a landscape lock, which Android honors (it turns the screen even
+  with rotation locked); iOS has neither API, so there the prompt is all.
+  Full screen is left again when the game screen closes. The menu is not
+  forced sideways. `manifest.webmanifest` (landscape, fullscreen) for a page
+  added to the home screen; `viewport-fit=cover` and safe-area insets for
+  notches.
+- **Touch controls** (`game/touch.ts`, `TouchControls`): drag anywhere on
+  the view for a stick under your thumb (56 px for full deflection), hold
+  Boost or Brake, `‹` `›` dodge, Flap and Hover once a run has them,
+  Respawn and Pause (Resume while paused). They feed `Input` (`touchX/Y`,
+  `touchBoost/Brake/Hover`, `onAction`), so the flight model sees the same
+  `FlightInput` as from keys (rule 6: no gameplay change). Hidden while
+  there is nothing to steer (a run's start panel, the wormhole, the victory
+  lap). Like keys, held buttons are let go by a respawn.
+- **Tilt** (`game/tilt.ts`): the Tilt pill turns it on (iOS asks for
+  permission then). Turning the device like a wheel banks (29° for full),
+  leaning its top away dives (21° for full), 2° dead zone; level is the hold
+  when it is turned on or when you resume from pause. Angles come from the
+  direction of gravity and `screen.orientation.angle`, so both landscapes
+  work and nothing jumps near upright. The stick still works on top of it.
+  Browsers only give the sensor to https pages (or localhost). A screen wake
+  lock keeps the phone awake.
+- **Settings**: "Touch and tilt": tilt sensitivity (0.4 to 2.5) and "Invert
+  touch and tilt up / down" (`tiltSensitivity`, `invertTouch`).
+- **Touch mode in the UI** (`html.touch`): key caps and the mouse hint are
+  hidden, the pause card says "Tap Resume", the run intro explains the touch
+  controls, the finale's skip is a button, the run's ability meters move to
+  the left corner, the top bar leaves room for the pills.
+- **Short screens** (`max-height: 520px`): top bar, timer, ready card,
+  panels, countdown and the flight panel are more compact.
+- Fixed on the way: `requestPointerLock` doesn't exist on iOS Safari, so a
+  tap on the view threw; taps no longer ask for a pointer lock at all.
+- Verified: build and lint pass; 34 frontend tests (new: the touch stick and
+  buttons through `Input`, and `tiltAngles` flat, upright, in both
+  landscapes and past upright). In headless Chrome with a coarse pointer
+  (software GL): a time trial at 844 × 390 (pills, ready card, flight panel
+  and buttons don't overlap) and the sideways prompt in portrait.
+- **Not verified: nothing was tried on a real phone.** The stick and
+  buttons under real fingers, tilt (the sign of each axis on a real sensor,
+  the iOS permission prompt, the feel of the ranges), full screen and the
+  landscape lock on Android, the wake lock, notches, and a run's screens
+  (upgrade picker, finish screen) on a short screen are all untested.
 
 ### 2026-10-10: Renamed the game to Wind Rider (Claude)
 
@@ -2123,6 +1820,16 @@ ported to the islands world:
 - Test mode: check shortcut feel with a physical keyboard and mouse;
   browser automation verified behavior, timing and layout, not
   focused-window performance or audio.
+
+- **Mobile follow-ups**: try it on real phones (Android Chrome and iOS
+  Safari) over https; see the list of what wasn't verified in the change
+  log. Known gaps: the menu and map select weren't looked at in landscape on
+  a short screen (and map select has no swipe); the explore debug panel
+  sits in the stick's corner; the room lobby's New map and the settings
+  dialog weren't checked at 390 px of height; no haptics; the tilt ranges
+  (`TILT_ROLL`, `TILT_PITCH`, `TILT_DEAD` in `input.ts`) and the stick
+  radius are guesses; Low quality might be the right default on phones
+  (auto quality only steps down after slow frames).
 
 - **Sunken Reef follow-ups**: fly it by hand and watch it move (fish,
   jellyfish, kelp, shafts, bubbles); reach it through a portal in a real

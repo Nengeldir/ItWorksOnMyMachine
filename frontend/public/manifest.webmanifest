@@ -1,0 +1,11 @@
+{
+  "name": "Wind Rider",
+  "short_name": "Wind Rider",
+  "description": "Multiplayer wingsuit racing in your browser",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#2b1d3a",
+  "theme_color": "#2b1d3a",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

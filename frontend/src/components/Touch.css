@@ -1,0 +1,392 @@
+/* Phones and tablets: the stick and buttons built by game/touch.ts, the sideways
+   prompt, and the game's panels on a screen that is wide but short. `html.touch`
+   is on while the player is using a finger (watchTouchMode). */
+
+.touch-only {
+  display: none;
+}
+
+html.touch .touch-only {
+  display: revert;
+}
+
+html.touch .no-touch,
+html.touch kbd,
+html.touch .hud-hint,
+html.touch .run-abilities .key {
+  display: none;
+}
+
+/* No scrolling, pinching or long-press menus on the view: every touch is the game's */
+.game {
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.game .panel,
+.game .run-finish {
+  touch-action: pan-y;
+}
+
+.touch-controls {
+  display: none;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html.touch .touch-controls {
+  display: block;
+}
+
+/* Nothing to steer (a run's start panel, the wormhole, the victory lap) */
+html.touch .touch-controls.idle:not(.paused) {
+  display: none;
+}
+
+.touch-controls button {
+  pointer-events: auto;
+  touch-action: none;
+  color: var(--ink);
+  background: var(--glass);
+  backdrop-filter: blur(12px) saturate(1.2);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--ink) 16%, transparent);
+  font-weight: 700;
+}
+
+.touch-top {
+  position: absolute;
+  top: 1rem;
+  right: max(1rem, env(safe-area-inset-right));
+  display: flex;
+  gap: 0.4rem;
+}
+
+.touch-pill {
+  height: 2.75rem;
+  padding: 0 0.9rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+
+.touch-pill.on {
+  background: var(--ink);
+  color: #fff;
+}
+
+/* While paused only the way back is left */
+.touch-controls.paused .touch-pill:not(:last-child),
+.touch-controls.paused .touch-pad {
+  display: none;
+}
+
+/* Under the right thumb: boost in the corner, the rest fanned around it */
+.touch-pad {
+  position: absolute;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  width: 11.5rem;
+  display: flex;
+  flex-wrap: wrap-reverse;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.touch-button {
+  width: 4.25rem;
+  height: 4.25rem;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 0.8rem;
+}
+
+.touch-button.big {
+  width: 5.5rem;
+  height: 5.5rem;
+  font-size: 0.95rem;
+}
+
+.touch-button.small {
+  width: 3.4rem;
+  height: 3.4rem;
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.touch-button.held,
+.touch-button:active {
+  background: var(--glass-strong);
+  transform: scale(0.94);
+}
+
+.touch-button[hidden] {
+  display: none;
+}
+
+/* Appears where the thumb lands */
+.touch-stick {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.touch-stick.on {
+  opacity: 1;
+}
+
+.touch-stick::before {
+  content: "";
+  position: absolute;
+  left: -4.5rem;
+  top: -4.5rem;
+  width: 9rem;
+  height: 9rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, #fff 16%, transparent);
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+}
+
+.touch-knob {
+  position: absolute;
+  left: -1.75rem;
+  top: -1.75rem;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--ink) 25%, transparent);
+}
+
+.touch-note {
+  position: absolute;
+  top: 4.25rem;
+  right: max(1rem, env(safe-area-inset-right));
+  max-width: min(20rem, calc(100% - 2rem));
+  padding: 0.45rem 1rem;
+  border-radius: 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+
+.touch-note.on {
+  opacity: 1;
+}
+
+/* Room for the pills beside the top bar, and for a notch beside everything */
+html.touch .topbar {
+  left: max(1rem, env(safe-area-inset-left));
+  right: calc(max(1rem, env(safe-area-inset-right)) + 16rem);
+}
+
+.topbar-title {
+  min-width: 0;
+}
+
+/* The run's ability meters and upgrades leave the corner to the buttons */
+html.touch .run-abilities,
+html.touch .run-upgrades {
+  right: auto;
+  left: max(1rem, env(safe-area-inset-left));
+}
+
+/* The finale's skip is a button here; with a keyboard it stays a quiet hint */
+html.touch .finale-skip {
+  pointer-events: auto;
+  padding: 0.6rem 1.1rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  color: #f4f0ff;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+/* --- Sideways ----------------------------------------------------------------------- */
+
+/* The game is flown in landscape: held upright, a phone is asked to turn.
+   (Android turns by itself on the first tap, see TouchControls.onGesture.) */
+@media (orientation: portrait) and (pointer: coarse) {
+  .game::after {
+    content: "Turn your device sideways to fly";
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    display: grid;
+    place-items: center;
+    padding: 9rem 2rem 2rem;
+    text-align: center;
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--ink);
+    background: color-mix(in srgb, var(--tint) 82%, transparent);
+    backdrop-filter: blur(18px);
+  }
+
+  .game::before {
+    content: "";
+    position: absolute;
+    z-index: 11;
+    left: 50%;
+    top: calc(50% - 5.5rem);
+    width: 3.2rem;
+    height: 5.6rem;
+    margin: -2.8rem 0 0 -1.6rem;
+    border: 3px solid var(--ink);
+    border-radius: 12px;
+    animation: turn-sideways 2.4s ease-in-out infinite;
+  }
+
+  /* The way back to the menu stays in reach */
+  .game .topbar {
+    z-index: 12;
+  }
+
+  .game .topbar-title,
+  .game .connection {
+    display: none;
+  }
+}
+
+@keyframes turn-sideways {
+  0%,
+  25% {
+    transform: rotate(0deg);
+  }
+  60%,
+  100% {
+    transform: rotate(-90deg);
+  }
+}
+
+/* --- Wide but short: a phone on its side ---------------------------------------------- */
+
+@media (max-height: 520px) {
+  .topbar,
+  .touch-top {
+    top: 0.5rem;
+  }
+
+  .topbar button,
+  .topbar-title,
+  .touch-pill {
+    height: 2.4rem;
+    font-size: 0.85rem;
+  }
+
+  .touch-note {
+    top: 3.3rem;
+  }
+
+  .hud-race,
+  .ready-card,
+  .banner,
+  .panel,
+  .hud-standings {
+    top: 3.4rem;
+  }
+
+  .panel {
+    max-height: calc(100% - 3.9rem);
+    padding: 0.9rem 1rem;
+  }
+
+  .panel.results h2 {
+    font-size: 2.2rem;
+  }
+
+  .hud-race {
+    padding: 0.2rem 1.1rem 0.3rem;
+  }
+
+  .hud-timer {
+    font-size: 1.6rem;
+  }
+
+  .ghost-note {
+    top: 7.4rem;
+  }
+
+  .ready-card {
+    flex-direction: row;
+    padding: 0.4rem 0.5rem 0.4rem 0.8rem;
+  }
+
+  .ready-card button {
+    min-height: 2.6rem;
+    padding: 0.4rem 1.2rem;
+  }
+
+  .hud-big {
+    top: 50%;
+    min-width: 5.5rem;
+    height: 5.5rem;
+    font-size: 3rem;
+  }
+
+  .hud-crash,
+  .hud-pause {
+    top: 46%;
+  }
+
+  .hud-bottom {
+    bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+
+  .hud-flight {
+    width: 15rem;
+    gap: 0.2rem;
+    padding: 0.45rem 1rem 0.4rem;
+    border-radius: 18px;
+  }
+
+  .hud-speed {
+    line-height: 1.1;
+  }
+
+  .hud-speed strong {
+    font-size: 1.5rem;
+  }
+
+  .hud-meter {
+    font-size: 0.72rem;
+  }
+
+  /* Six pilots' standings would run into the buttons */
+  html.touch .hud-standings {
+    display: none;
+  }
+
+  .run-score {
+    top: 2.9rem;
+  }
+
+  .run-compass {
+    top: 5.6rem;
+  }
+
+  .run-objectives {
+    top: 3.6rem;
+  }
+
+  .run-picker {
+    justify-content: flex-start;
+    overflow-y: auto;
+    touch-action: pan-y;
+  }
+
+  .debug-panel {
+    max-height: calc(100% - 4rem);
+    overflow: auto;
+    touch-action: pan-y;
+  }
+}
