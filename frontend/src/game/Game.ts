@@ -9,6 +9,10 @@ import { Ambient } from "./ambient";
 import { Autopilot } from "./autopilot";
 import { GameAudio } from "./audio";
 import { Avatar } from "./avatar";
+import { APPEARANCE_EVENT } from "./cosmetics/storage";
+import { Companion } from "./pets/companion";
+import { validateAppearance, type Appearance } from "./cosmetics/storage";
+import { profileClient } from "../profile/client";
 import { CameraRig } from "./camera";
 import { DISSOLVE_AT, type DeathKind, DeathFall, classifyCrash, fieldNormal } from "./death";
 import { Debris } from "./effects";
@@ -179,6 +183,13 @@ export class Game implements RunHost {
   private readonly renderVelocity = new THREE.Vector3();
   private readonly prevQuaternion = new THREE.Quaternion();
   private readonly avatar: Avatar;
+  private readonly companion: Companion;
+  private testLook: Appearance | null = null;
+  private readonly appearanceChanged = () => {
+    const appearance = this.testLook ?? profileClient.appearance();
+    this.avatar.setAppearance(appearance);
+    this.companion.set(appearance.pet);
+  };
   private readonly fx: PilotFx;
   /** What the pilot carries (models and animations only, for now) */
   private readonly equipment: Equipment;
@@ -320,6 +331,9 @@ export class Game implements RunHost {
     this.softParticles = new Particles(3000, true);
     this.ambient = new Ambient(this.particles, this.softParticles);
     this.avatar = new Avatar(options.color);
+    this.companion = new Companion(this.scene);
+    this.appearanceChanged();
+    window.addEventListener(APPEARANCE_EVENT, this.appearanceChanged);
     this.fx = new PilotFx(this.avatar, options.color, this.particles);
     if (!this.attract) {
       // Your own wings make a sound on each downstroke (the effects keep their own hook)
@@ -454,6 +468,13 @@ export class Game implements RunHost {
     this.equipment.equip(id);
   }
 
+  /** ?test only, local to this Game: no inventory writes or unlock checks. */
+  testAppearance(look: Appearance | null) {
+    if (!this.testPlayback) return;
+    this.testLook = look ? validateAppearance(look) : null;
+    this.appearanceChanged();
+  }
+
   unequip(slot: ItemSlot) {
     this.equipment.unequip(slot);
   }
@@ -495,7 +516,7 @@ export class Game implements RunHost {
     }
   }
 
-  stinger(kind: "portal" | "upgrade" | "dash" | "gate" | "finish") {
+  stinger(kind: "portal" | "upgrade" | "dash" | "gate" | "finish" | "item") {
     if (kind === "gate") this.audio.ring();
     else if (kind === "finish") this.audio.finish();
     else this.audio.stinger(kind);
@@ -788,6 +809,8 @@ export class Game implements RunHost {
     this.abilityFx.dispose();
     this.abilityFx2.dispose();
     this.equipment.dispose();
+    window.removeEventListener(APPEARANCE_EVENT, this.appearanceChanged);
+    this.companion.dispose();
     this.avatar.dispose();
     this.particles.dispose();
     this.softParticles.dispose();
@@ -1427,6 +1450,8 @@ export class Game implements RunHost {
       this.deathEffects(dt);
       this.rig.fall(body.position, dt, this.field);
     }
+    this.avatar.showCosmeticHat(this.equipment.wearing("head") === null);
+    this.companion.update(dt, body, !crashed && !this.inWormhole && !waiting && this.attract !== "drift", this.world.course, this.flight.speed);
     this.debris.update(dt);
 
     const camera = this.rig.camera;

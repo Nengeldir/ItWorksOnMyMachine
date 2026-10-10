@@ -1,0 +1,97 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { Group, Quaternion, Vector3 } from "three";
+import { PETS } from "../src/game/pets/catalog.ts";
+import { PetModel } from "../src/game/pets/models.ts";
+import { Companion } from "../src/game/pets/companion.ts";
+import { PET_LOOKS } from "../src/game/tuning.ts";
+import { Course } from "../src/game/world/course.ts";
+import { World } from "../src/game/world/World.ts";
+import { runLevel } from "../src/game/world/biomes/index.ts";
+
+test("all eight pets animate finite, budgeted toon geometry and clean up their owned resources", () => {
+  const signatures = new Set();
+  for (const pet of PETS) {
+    if (pet.id === "none") continue;
+    const model = new PetModel(pet.id), geometries = new Set(); let meshes = 0, vertices = 0;
+    model.group.traverse(o => {
+      if (!o.isMesh) return; meshes++; if (geometries.has(o.geometry)) return;
+      const g = o.geometry; geometries.add(g); const p = g.getAttribute("position"); vertices += p.count;
+      for (const attr of ["position", "normal", "color", "glow"]) {
+        assert.ok(g.getAttribute(attr).array.every(Number.isFinite)); assert.equal(g.getAttribute(attr).count, p.count);
+      }
+    });
+    assert.ok(meshes <= 12); assert.ok(vertices < 16000);
+    signatures.add(`${vertices}:${geometries.size}`);
+    for (let i = 0; i < 300; i++) model.animate(1/60);
+    model.group.updateMatrixWorld(true);
+    model.group.traverse(o => assert.ok(o.matrixWorld.elements.every(Number.isFinite)));
+    const pose = model.group.children.map(o => o.quaternion.toArray());
+    model.animate(0); assert.deepEqual(model.group.children.map(o => o.quaternion.toArray()), pose);
+    let disposed = 0; geometries.forEach(g => g.addEventListener("dispose", () => disposed++));
+    model.dispose(); assert.equal(disposed, geometries.size);
+  }
+  assert.equal(signatures.size, 8, "pets have different geometry, not only different colors");
+});
+
+test("follower handles pause, hiding, respawn, re-equip and removal without touching the pilot", () => {
+  const scene = new Group(), pilot = new Group(), follower = new Companion(scene);
+  pilot.position.set(12, 8, -30); pilot.quaternion.setFromAxisAngle(new Vector3(0,1,0), 0.8);
+  const p = pilot.position.clone(), q = pilot.quaternion.clone();
+  follower.set("dragon"); assert.equal(scene.children.length, 1);
+  follower.update(1/60, pilot, true); const g = follower.group;
+  const at = g.position.clone(), rotation = g.quaternion.clone();
+  follower.update(0, pilot, true); assert.ok(g.position.equals(at)); assert.ok(g.quaternion.equals(rotation));
+  for (let i=0;i<60;i++) { pilot.position.z -= 0.5; follower.update(1/60, pilot, true); }
+  assert.ok(g.position.distanceTo(pilot.position) < 12);
+  follower.update(1/60, pilot, false); assert.equal(g.visible, false);
+  pilot.position.set(400, 80, -1000); follower.update(1/60, pilot, true);
+  assert.equal(g.visible, true); assert.ok(g.position.distanceTo(pilot.position) < 5);
+  const unchanged = pilot.position.clone(); follower.update(1/60, pilot, true);
+  assert.ok(pilot.position.equals(unchanged)); assert.ok(pilot.quaternion.equals(q));
+  follower.set("dragon"); assert.equal(follower.group, g);
+  follower.set("owl"); assert.equal(g.parent, null); assert.equal(scene.children.length, 1);
+  follower.set("none"); assert.equal(scene.children.length, 0); assert.equal(follower.group, null);
+  follower.dispose(); follower.dispose();
+  pilot.position.copy(p); pilot.quaternion.copy(q);
+});
+
+test("teleports while visible snap instead of dragging a pet through the whole world", () => {
+  const scene = new Group(), pilot = new Group(), follower = new Companion(scene);
+  follower.set("fox"); follower.update(1/60, pilot, true);
+  pilot.position.x = PET_LOOKS.snapDistance * 3;
+  follower.update(1/60, pilot, true);
+  assert.ok(follower.group.position.distanceTo(pilot.position) < 5);
+  assert.ok(follower.group.quaternion.angleTo(new Quaternion()) < 1e-8);
+  follower.dispose();
+});
+
+test("all existing pets are genuine pets and a rail guide leads through every hoop without changing the player", () => {
+  assert.deepEqual(PETS.map(p => p.id), ["swallow", "owl", "crane", "phoenix", "dragon", "kirin", "fox", "griffin"]);
+  for (const biome of ["skyIsles", "verdant", "reef", "glacier", "archipelago", "lagoon", "twilight", "ember", "aurora"]) {
+    const world = new World(runLevel(7, 1, biome)), course = world.course;
+    const scene = new Group(), pilot = new Group(), companion = new Companion(scene);
+    companion.set("crane"); let previous = null;
+    const nearest = new Map(course.rings.map(r => [r.index, Infinity]));
+    for (let z = course.start.z; z < course.endZ + 3; z += .25) {
+      course.pointAt(z, pilot.position); const saved = pilot.position.clone();
+      companion.update(1/120, pilot, true, course, 50);
+      const at = companion.group.position;
+      assert.ok(pilot.position.equals(saved)); assert.ok(pilot.quaternion.equals(new Quaternion()));
+      assert.ok(at.z > z && at.z - z < 25);
+      assert.ok(course.pointAt(at.z).distanceTo(at) < 1e-9);
+      assert.ok(world.distance(at.x, at.y, at.z) > 6, biome);
+      if (previous) for (const ring of course.rings) {
+        const span = at.clone().sub(previous), t = Math.max(0, Math.min(1, ring.position.clone().sub(previous).dot(span) / Math.max(1e-12, span.lengthSq())));
+        nearest.set(ring.index, Math.min(nearest.get(ring.index), previous.clone().addScaledVector(span, t).distanceTo(ring.position)));
+      }
+      previous = at.clone();
+    }
+    assert.ok([...nearest.values()].every(distance => distance < .5), biome);
+    const frozen = companion.group.position.clone(); companion.update(0,pilot,true,course); assert.ok(companion.group.position.equals(frozen));
+    companion.update(1/60,pilot,false,course); assert.equal(companion.group.visible,false);
+    const replacement = new Course(42); pilot.position.copy(replacement.start);
+    companion.update(1/60,pilot,true,replacement); assert.ok(companion.group.position.z > pilot.position.z);
+    companion.dispose();
+  }
+});

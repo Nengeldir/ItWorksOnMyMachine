@@ -165,7 +165,13 @@ export const AUDIO = {
   nightMuffle: 0.55, // how much the highs are rolled off at night
 };
 
-const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, STRUCTURES, WATER, DEEP, RUN, AUTOPILOT, ABILITIES_FX, AUDIO } as const;
+export const PET_LOOKS = { size: 1.8, spacing: 2.9, height: 0.7, trail: 0.8, follow: 8, snapDistance: 30, bob: 0.12, wingbeat: 1, tailSway: 1, lead: 20 };
+/** Small ornaments and particle emission, never the pilot's hitbox. */
+export const COSMETIC_FX = { capeDetail: 1, wingParticles: 22, wingParticleSize: .22 };
+/** Collection models and motion; reward rules live on the server. */
+export const COLLECTION_FX = { bob: 0.5, spin: 0.65, size: 2.2, viewDistance: 240, burst: 1 };
+
+const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, STRUCTURES, WATER, DEEP, RUN, AUTOPILOT, ABILITIES_FX, PET_LOOKS, COSMETIC_FX, COLLECTION_FX, AUDIO } as const;
 const DEFAULTS = JSON.parse(JSON.stringify(GROUPS)) as typeof GROUPS;
 const STORAGE_KEY = "wingrace.tuning.speed-control-v1";
 
@@ -307,6 +313,9 @@ export const RANGES: Record<string, [number, number, number?]> = {
 };
 
 export const TUNING_GROUPS: [string, Group][] = [
+  ["Companions", PET_LOOKS],
+  ["Cosmetic detail", COSMETIC_FX],
+  ["Collection pickups", COLLECTION_FX],
   ["Pilot animation", ANIM],
   ["Trails & particles", FX],
   ["Crystal gates", RINGS],

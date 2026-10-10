@@ -14,10 +14,14 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from models import (
+    AdventureStartRequest,
+    ClientId,
+    EquipRequest,
     FinishRequest,
     GhostRun,
     JoinRequest,
     LeaderboardEntry,
+    PickupClaimRequest,
     RunFinishRequest,
     RunFinishResponse,
     RunStartRequest,
@@ -29,6 +33,7 @@ from models import (
 )
 from rooms import Listener, Player, Room, RoomError, RoomManager, check_finish_time, encode, now_ms
 from store import Store
+from profiles import Profiles
 
 # Load the .env file from the project root (Docker passes the variables in directly)
 load_dotenv()
@@ -39,6 +44,7 @@ MAX_OPEN_RUNS = 10_000
 
 rooms = RoomManager()
 store = Store(os.path.join(os.getenv("DATA_DIR", "data"), "game.db"))
+profiles = Profiles(store)
 # Solo time trials in progress: run token -> (seed, server time the clock started)
 solo_runs: dict[str, tuple[int, int]] = {}
 
@@ -112,6 +118,32 @@ def auth_me(request: Request):
 def server_time():
     """The server clock, so clients can agree on when a race starts."""
     return {"t": now_ms()}
+
+
+@app.get("/api/profile")
+def get_profile(request: Request, client_id: ClientId, nickname: str = ""):
+    return profiles.get(extract_user(request, client_id, nickname))
+
+
+@app.post("/api/profile/adventures")
+def start_adventure(body: AdventureStartRequest, request: Request):
+    return profiles.start(extract_user(request, body.client_id, body.nickname), body.seed)
+
+
+@app.post("/api/profile/claim")
+def claim_pickups(body: PickupClaimRequest, request: Request):
+    try:
+        return profiles.claim(extract_user(request, body.client_id, body.nickname), body.token, body.pickups)
+    except ValueError as error:
+        raise HTTPException(400, str(error))
+
+
+@app.post("/api/profile/equip")
+def equip_cosmetic(body: EquipRequest, request: Request):
+    try:
+        return profiles.equip(extract_user(request, body.client_id, body.nickname), body.slot, body.asset)
+    except ValueError as error:
+        raise HTTPException(400, str(error))
 
 
 # --- Race rooms ---------------------------------------------------------------

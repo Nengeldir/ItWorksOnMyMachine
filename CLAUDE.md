@@ -105,6 +105,10 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 
 | Path | What it does |
 | :--- | :--- |
+| `profile/` | Profile types/API client, server-authoritative balances, durable account-scoped pickup outbox and equipped appearance notifications |
+| `game/run/collection.ts` | Adventure-only hoop-distance rarity placement, streamed obstacle clearance, swept collection, toon crystal/cape tokens and pickup animation |
+| `game/cosmetics/`, `game/pets/` | Cape/hat/shoe/wing catalogs and toon models; eight detailed bird/mythological pets leading on their own unscored autopilot rail |
+| `components/ProfilePanel.tsx`, `components/CollectionPreview.tsx` | Persistent profile/inventory, equip controls, XP/crystal HUD, animated model preview and unsaved test fitting room |
 | `game/Game.ts` | The game: frame loop, fixed 120 Hz physics steps, race state, ring checks, HUD data, effects wiring (gate bursts, skim spray, gate motes), rendering with optional bloom, adaptive quality, test-only shared time scaling, the `?tune` panel |
 | `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only. `touching()` is the pilot's hitbox (`FLIGHT.hit*`): a ball for the body and a rectangle per wing, tilted up at a dihedral, fixed in the flight frame (never the animated pose), sampled against the distance field with early-outs; `hitboxWorld()` is the same hitbox in world space, which `Game.step` tests against the land drawn (`LandCollider`). `FlightMods` (run upgrades: drag, sink, stall, proximity boost, dash boost, thermal lift, hover, glide lock, `thrust`, a plunge's `dive`, Hover-Stall's `hang`, `turn` for stances and Aero-Braking, Zenith's `climb`, Ascension's `ascend`, a rise on rails in `ascendStep`) are only ever passed in run mode; `flap()`, `launch()`, `deflect()`, `surge()` and a forced `dodge()` are run abilities |
 | `game/avatar.ts` | The pilot: a cel-shaded chibi flyer built from primitives (merged per body part, vertex-colored), a procedural cape and scarf (`Cloth`), two-segment feathered wings, and all its animation: bank lead spring, barrel rolls, flapping driven by effort, bobbing, cloth ripples, limb reactions. Also `createLabel` and `glowTexture` |
@@ -125,7 +129,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/abilities/` | The run abilities' looks (rules: `run/abilities.ts`; looks only). `models.ts`: down feathers, the spirit manta (`buildManta`: toon primitives, flapping two-part wings, a whip of a tail), `RingQuads` (instanced rings of light: gate markers through rock, wind halos, shockwaves), wind blades, the Gale Force tunnel, the Hover-Stall sigil and chevrons, the recovery helix. `lanes.ts`: `CloudLanes`, the cloud rivers drawn as soft puffs fitted clear of the rock. `fx.ts`: `AbilityFx`, which reads `Abilities` every frame and animates all of it, sets `Avatar.stance` (tuck, hover, cast, surf) and plays `GameAudio.ability` sounds. The design list's abilities 11 to 20 have their own pair: `models2.ts` (`Swarm`: creatures of light in one instanced draw call each, wings beating in the vertex shader and painted in the fragment shader: moths, butterflies, the spirit falcon; `funnelMesh`: wind funnels for Zenith's updraft, the Draft-Weaving tornado and Ascension's column; `songMesh`, `cushionMesh`; `Ribbon`: CPU-built glowing ribbons for the ley line and the Echo-Trail) and `fx2.ts` (`AbilityFx2`: their animations, `Avatar.stance` climb, sing, flare, falcon, butterfly, `GameAudio.ability2` sounds, and turning Resonance's gates through `CrystalGates.orient`). Additive light is kept for small things: big shapes (sigil, tunnel, blades, funnels, the song, the cushion) are painted with normal blending, or they white out a bright day sky under bloom; even a thin additive ring, if large and bright, fills with bloom (`RingQuads` styles 3 and 4 have no glow inside) |
 | `game/death.ts` | Crash animations, looks only: `classifyCrash` picks headfirst (into a wall: bounce and tumble), slide (glancing ground: roll down the slope), wing (a wing clipped: spin down) or fall (below the islands); `DeathFall` is a small rigid-body tumble (impulses at contact points: balls for head, hips and feet, five points per wing from the live pose via `Avatar.wingPoints`; a few position passes per step) kept out of the land drawn by `Game.contact`; a wing still wedged (`wedged`) is folded in by `Avatar.foldWings`. The avatar plays `die(kind)`, the camera arcs up overhead (`startFall`, `fall`), the body dissolves into light at `DISSOLVE_AT`, all inside `RESPAWN_DELAY` |
 | `game/effects.ts` | Crash debris: feathers knocked loose that flutter down (instanced) |
-| `game/audio.ts` | Synthesized wind and event sounds, run stingers (portal, upgrade, dash; sidequest and item are unused for now), the wingbeat sample (`public/audio/sfx/wingbeat.mp3`, pitch-randomized, played on each of your downstrokes and on the Wingbeat ability) and the `MusicPlayer` |
+| `game/audio.ts` | Synthesized wind and event sounds, run stingers (portal, upgrade, dash, collection items; sidequest is unused for now), the wingbeat sample (`public/audio/sfx/wingbeat.mp3`, pitch-randomized, played on each of your downstrokes and on the Wingbeat ability) and the `MusicPlayer` |
 | `game/music.ts` | `MusicPlayer`: one looping track per biome from `public/audio/music/<biome>_<title>.mp3`, crossfaded on biome change (`TRACK_OF` maps biomes to tracks; similar biomes share one). Night dims and muffles the same track. Loaded lazily, decoded with Web Audio, no music if a file fails |
 | `game/webgl.ts` | WebGL 2 availability check; `GameScreen` shows help if it's missing |
 | `game/run/` | The roguelike run. `run.ts`: run length, biome order from the run seed (Sky Isles, Verdant, then the Sunken Reef and four of the five other middle biomes shuffled, Aurora last), portal destinations, scoring constants, `RunHud`. `upgrades.ts`: twenty-seven data-defined upgrades (seven of the original, the design list's twenty abilities) and the 3-of-N offer. `abilities.ts`: `Abilities`, the twenty abilities' rules (`ABILITY` constants, in `?tune` as "Run abilities", not saved): cooldowns, Gale Force's energy and tunnel, cloud lanes (`laneAt`), the spirit manta's path, the slipstream, Wind-Shear's dodge params, Resonance's turned gates (`attuned`, `gateNormal`), the ley line's chain, the stances' multipliers, Draft-Weaving's tornado and the saves (`save`, `saved`: Acrobatic Recovery or the tornado), Ascension, the Echo-Trail's ribbon samples and wind ring; it answers each step with `FlightMods` and boost refills, and counts one-off moments (`cue`) for the looks. `controller.ts`: `RunController` (levels, gates and chains, abilities as `FlightMods`, the portal transition: blur in, the next level built under the blur (`buildNext`), wormhole and upgrade pick while it streams, blur out with the palette cross-fade; HUD data). `finale.ts`: `Finale`, the last portal's cutscene (space under a world-fixed Milky Way with dust lanes and its core overhead, the camera's scripted pan beneath the pilot and back, then white light; Enter skips). `portal.ts`: the portal (ring, a flat disk like a window onto night, beam), the `Wormhole` (a camera-centred shell mapping the view onto an endless twisting tube of lensed stars and nebula with the exit glowing ahead, spirit motes, its own lights) and `screenSparkle`. Game's `veil(k)` (the `.portal-veil` DOM blur and sparkles) and `insideWormhole(on)` (hides the level: land, sky, soft particles, speed lines, ambient, gate effects) serve it |
@@ -158,6 +162,9 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 Backend (`backend/`): `app.py` endpoints, `rooms.py` race state machine and
 15 Hz SSE relay, `store.py` SQLite runs and ghosts, `models.py` Pydantic models.
 Players never collide, so the server only relays positions.
+`profiles.py` adds account-owned adventure profiles, issued reward manifests,
+claim deduplication, XP progression and equipment in the same SQLite file.
+See `docs/adventure-profile.md` for the four new endpoints and initial balance.
 
 ### Key mechanics
 
@@ -215,6 +222,75 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Decorated wings, detailed pets and the test fitting room
+
+- Included all eight existing pets (swallow, owl, crane, phoenix, dragon, kirin,
+  fox, griffin). Removed solo flight from the catalog; no-companion is an unequip
+  action. Profile v2 preserves progress and earned pets while adding starter wings.
+- Added eight wing choices: original feathers, prismatic plumage, jade sails,
+  pearl fins, ice blades, phoenix feathers, storm blades and floating star fans.
+  cosmetics/wings.ts builds mirrored merged toon fans on the existing wing joints.
+  Gold shafts, coverts, gems and filigree distinguish their shapes; PilotFx emits
+  budgeted elemental particles. Flight hitboxes and wingtip markers stay unchanged.
+  Finer cape embroidery, colored panels and unique hems.
+- Pets have slimmer proportions, smaller eyes, layered feathers/manes, gilded
+  harnesses and elemental jewels. Autopilot.guide places their own visual Flight
+  on the safe course rail ahead, through hoop centres. It never modifies player
+  flight, collections, gate checks, scores or ghosts.
+- TestCollectionPanel and cosmetics/sandbox.ts expose all 46 choices offline in
+  ?test. Front/rear previews, local flight trials, carry/use/firework controls,
+  unequip and reset; opening pauses, closing restores prior pause state. No profile
+  writes/unlocks. COSMETIC_FX and PET_LOOKS.lead are available through ?tune.
+- Verified production build, lint, 78 frontend tests and 31 backend tests before
+  main integration. New checks cover all nine biomes and every hoop, finite and
+  mirrored wing models, offline sandbox guards and migration without lost pets.
+  Node 22.14 uses the equivalent asynchronous resolver; backend uses the existing
+  temporary Python environment. Bundle-size and Starlette warnings remain.
+  Chrome visual control still fails with unsupported API-key authentication;
+  no visual QA claimed. Main integration and PR publication are next.
+
+
+### 2026-10-10: Persistent adventure profiles and collection inventory
+
+- Added per-user SQLite progression through the existing portal identity, with
+  stable separate development guest profiles. `backend/profiles.py` stores XP,
+  crystals, inventory, equipped looks, frozen issued reward plans and atomic
+  idempotent claims. Four `/api/profile` endpoints expose it; races are unchanged.
+- `frontend/src/profile/` synchronizes balances and saves per-account issued
+  pickup IDs in an outbox; delayed responses cannot regress newer state. Retries
+  survive reload and response loss without duplicate rewards; separate records
+  avoid different tabs overwriting pending pickups. Disabled storage keeps a
+  visit's in-memory retries. Permanent rejections remain visible for retry.
+- Real `RunSession` adventures issue up to 18 crystal clusters and six treasures
+  per biome. `run/collection.ts` places them with terrain/approach clearance,
+  checks streamed obstacles, and collects by swept fixed-step contact. Crashes,
+  explore/test mode, loading fly-ins and victory autopilot grant nothing extra.
+- Reused cosmetic/pet assets from the local `feature/wardrobe-and-pets` branch,
+  preserving this branch's twenty ability poses. Added crystal cluster/cape-token
+  models, rarity halos, bob/spin, budgeted star bursts, saved equipment and an
+  animated inventory preview. `COLLECTION_FX` and `PET_LOOKS` are in `?tune`.
+- Menu inventory and paused adventure inventory show owned/locked entries,
+  stack counts, equipped selections, XP progress and crystals; the flight HUD
+  shows profile progress and a golden level-up notification. Items are persistent
+  keepsakes; gadgets on the separate items branch remain separate.
+- Balance and rarity are documented in `docs/adventure-profile.md`: 50/32/15/3%
+  treasure rarity; 8–13/13–20/20–29/29–45 m from hoops; 8/20/55/140 XP; level cost
+  100 + 40(L−1) + 5(L−1)², capped at level 100. The older item branch's
+  8/13/20/29 m island heights are explicitly distinguished from hoop distance.
+- Verified production build, lint, 75 frontend tests and 30 backend tests.
+  Tests cover restart persistence, atomic concurrent claims, auth ownership,
+  frozen issued rewards, XP boundaries, catalog/model parity, all nine biome
+  distance bands, streamed obstacle rejection, portal/crash collection guards,
+  response loss/outbox recovery and every cosmetic/pet model. Node 22.14 used
+  an equivalent asynchronous module resolver and `--experimental-strip-types`;
+  extended the checked-in test resolver to handle directory indexes. Backend
+  tests used the existing temporary Python environment (system Python lacks
+  FastAPI/Pydantic). Existing bundle-size and Starlette deprecation warnings.
+- Browser control unavailable: in-app browser absent; Chrome rejects API-key
+  sessions. Real-play balance, desktop/mobile visual QA, sounds and
+  focused-window timing remain unverified. No deployment or git history change.
+
 
 ### 2026-10-10: The design list's abilities 11 to 20 (Claude)
 
@@ -1845,6 +1921,19 @@ ported to the islands world:
 
 ## Next up
 
+- Wings/pet guides/test fitting room: inspect front/rear silhouettes, day/night
+  bloom, detours from the rail, pause/restore and phone layouts; browser control
+  remains unavailable. Measure full outfit and companion frame time in a focused
+  window. Networked remote cosmetics remain a future feature.
+
+- Profile/inventory: inspect desktop and phone layouts, animated previews,
+  day/night pickups, level-up notification and pause behavior in a browser;
+  control tools were unavailable. Playtest detours and XP balance, audio and
+  focused-window frame time. Future work: a crystal shop, gameplay consumption
+  of stored item keepsakes if desired, adventure retention and server flight
+  validation before a competitive economy. Current claims trust client contact.
+
+
 - Wormhole camera: watch the orbit and the 0.4 s swing back to the chase
   view in a focused window and tune `RUN.orbit*` and `wormholeFlow`; the
   pilot is held still in the wormhole, so its ribbons and motes stay off.
@@ -2041,7 +2130,7 @@ The first playable slice of the roguelike, in order. After each: commit to
 
 Constraints: never break races, ghosts or leaderboards (Sky Isles stays
 frozen); no per-frame allocations; clamp `pow()` and divisions in every
-shader; no backend API changes; no deleting branches or force-pushing.
+shader; no race API changes; profile APIs are authorized by the persistent-profile task; no deleting branches or force-pushing.
 
 ## Roadmap
 

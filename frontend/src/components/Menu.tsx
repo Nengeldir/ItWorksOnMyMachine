@@ -13,6 +13,7 @@ import SettingsPanel from "./SettingsPanel";
 import CourseSelect from "./CourseSelect";
 import MenuBackdrop from "./MenuBackdrop";
 import TodaysBest from "./TodaysBest";
+import ProfilePanel from "./ProfilePanel";
 import "./Menu.css";
 
 interface MenuProps {
@@ -45,6 +46,7 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
   const [countdown, setCountdown] = useState(untilTomorrow);
   // The map select shows its course behind the glass, and the UI takes its colors
   const [picking, setPicking] = useState(false);
+  const [inventory, setInventory] = useState(false);
   const [preview, setPreview] = useState<number | null>(null);
   const shown = picking && preview !== null ? preview : daily;
   // Pictures of the courses the backdrop has shown, for the map select's cards
@@ -92,6 +94,8 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
   return (
     <main className="menu">
       <MenuBackdrop seed={shown} mode="drift" onSnapshot={keepArt} settings={settings} />
+      <button className="menu-inventory glass" onClick={() => setInventory(true)}>Profile & inventory</button>
+      {inventory && <ProfilePanel onClose={() => setInventory(false)} />}
 
       <button
         className="menu-icon glass settings-button"

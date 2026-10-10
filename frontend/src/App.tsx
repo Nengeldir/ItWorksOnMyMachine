@@ -5,6 +5,7 @@ import { randomSeed } from "./game/rng";
 import Menu from "./components/Menu";
 import { type Screen, screenFromSearch, urlFor } from "./route";
 import { type Settings, loadSettings, saveSettings } from "./storage";
+import { profileClient } from "./profile/client";
 
 export type { Screen } from "./route";
 
@@ -16,6 +17,7 @@ const App = () => {
   const [me, setMe] = useState<User | null>(null);
 
   useEffect(() => {
+    void profileClient.initialize();
     getMe()
       .then(setMe)
       .catch(() => setMe(null));

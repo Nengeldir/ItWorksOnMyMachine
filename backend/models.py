@@ -98,3 +98,17 @@ class GhostRun(BaseModel):
     name: str
     time_ms: int
     ghost: Ghost
+
+
+class AdventureStartRequest(JoinRequest):
+    seed: Seed
+
+
+class PickupClaimRequest(JoinRequest):
+    token: Annotated[str, Field(min_length=1, max_length=128)]
+    pickups: Annotated[list[Annotated[str, Field(max_length=32)]], Field(min_length=1, max_length=24)]
+
+
+class EquipRequest(JoinRequest):
+    slot: Annotated[str, Field(pattern=r"^(cape|hat|shoes|wings|pet)$")]
+    asset: Annotated[str, Field(min_length=1, max_length=40)]

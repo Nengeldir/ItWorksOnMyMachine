@@ -19,6 +19,8 @@ import { useUiTheme } from "../theme";
 import Controls from "./Controls";
 import Hud from "./Hud";
 import Leaderboard from "./Leaderboard";
+import { ProfileStatus } from "./ProfilePanel";
+import TestCollectionPanel from "./TestCollectionPanel";
 import "./GameScreen.css";
 
 interface Mountable {
@@ -265,6 +267,7 @@ const RoomScreen = ({ code, settings, onSettings, onExit }: ScreenProps & { code
 // --- Explore ---------------------------------------------------------------------
 
 const ExploreScreen = ({ biome, seed, settings, onSettings, onExit, testMode = false }: ScreenProps & { biome: BiomeId; seed: number; testMode?: boolean }) => {
+  const [collectionOpen, setCollectionOpen] = useState(false);
   const [session] = useState(() => new ExploreSession(biome, seed, settings, testMode));
   const ref = useMountedSession(session, settings);
   const { hud, error, biome: current, mood, track, playing, speed, offers, next, summary } = useSyncExternalStore(session.store.subscribe, session.store.get);
@@ -323,6 +326,7 @@ const ExploreScreen = ({ biome, seed, settings, onSettings, onExit, testMode = f
         </>}
         {testMode && <>
           <h3>Test mode · nothing saved</h3>
+          <button onClick={() => { session.beginCollectionPreview(); setCollectionOpen(true); }}>Try items, pets & cosmetics</button>
           <ul className="debug-keys">
             <li><kbd>Shift+P</kbd> portal ahead</li>
             <li><kbd>Shift+O</kbd> victory</li>
@@ -331,6 +335,7 @@ const ExploreScreen = ({ biome, seed, settings, onSettings, onExit, testMode = f
         </>}
       </aside>}
       {testMode && phase === "finale" && <div className="finale-skip"><kbd>Enter</kbd> skip</div>}
+      {testMode && collectionOpen && <TestCollectionPanel session={session} onClose={() => { setCollectionOpen(false); session.endCollectionPreview(); }} />}
       {testMode && offers.length > 0 && !hud?.paused && <UpgradePicker offers={offers} next={next} onPick={(id) => session.pick(id)} />}
       {testMode && summary && <FinishScreen testMode summary={summary} best={null} onAgain={() => session.again()} onMenu={onExit} />}
     </div>
@@ -362,6 +367,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
     <div className="game">
       <div ref={ref} className="game-view" />
       {/* Nothing but the wormhole while passing through a portal */}
+      {(stage === "intro" || stage === "summary" || run?.phase === "arrive" || run?.phase === "explore" || hud?.paused) && <ProfileStatus paused={hud?.paused} />}
       {hud && (hud.paused || (stage !== "pick" && stage !== "summary" && run?.phase !== "portal" && run?.phase !== "finale" && run?.phase !== "won")) && <Hud hud={hud} settings={settings} onSettings={onSettings} showStyle />}
       {run && stage !== "intro" && stage !== "summary" && stage !== "pick" && run.phase !== "finale" && run.phase !== "won" && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
       {run?.phase === "finale" && (
@@ -376,7 +382,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
           onExit={onExit}
         />
       )}
-      {error && <div className="banner">{error}</div>}
+      {error && <div className="banner glass">{error} <button onClick={() => session.retry()}>Try again</button></div>}
 
       {stage === "intro" && !error && (
         <aside className="panel glass">
@@ -390,8 +396,9 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
             Adventure upgrades add <kbd>C</kbd> wingbeat and hold <kbd>F</kbd> hover. The arrow at the top points to the portal.
           </p>
           {best !== null && <p>Your best on this run: {best.toLocaleString()}</p>}
-          <button className="primary" onClick={() => session.begin()}>
-            Take off <kbd>Enter</kbd>
+          <p className="hint">Collect wind crystals for XP, and look farther beside hoops for rare keepsakes, cosmetics and companions. Discoveries stay in your profile after a crash or the end of a run.</p>
+          <button className="primary" disabled={!hud} onClick={() => session.begin()}>
+            {hud ? "Take off" : "Preparing adventure…"} <kbd>Enter</kbd>
           </button>
           <details>
             <summary>Controls</summary>

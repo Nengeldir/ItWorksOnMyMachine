@@ -2,7 +2,8 @@ import * as THREE from "three";
 import type { Avatar } from "./avatar";
 import { Kind, type Particles, fx } from "./particles";
 import { Trail } from "./trail";
-import { FX } from "./tuning";
+import { FX, COSMETIC_FX } from "./tuning";
+import { wingSpec } from "./cosmetics/catalog";
 
 const tipL = new THREE.Vector3();
 const tipR = new THREE.Vector3();
@@ -43,6 +44,7 @@ export class PilotFx {
   private readonly center = new THREE.Vector3();
   private moving = true;
   private brakeDebt = 0;
+  private wingDebt = 0;
 
   constructor(avatar: Avatar, color: string, particles: Particles | null, options: PilotFxOptions = {}) {
     this.avatar = avatar;
@@ -73,7 +75,7 @@ export class PilotFx {
 
   reset() {
     this.trails.forEach((t) => t.reset());
-    this.debtL = this.debtR = this.spiralDebt = this.brakeDebt = 0;
+    this.debtL = this.debtR = this.spiralDebt = this.brakeDebt = this.wingDebt = 0;
   }
 
   hide() {
@@ -107,6 +109,16 @@ export class PilotFx {
     const particles = this.particles;
     if (!particles || dt <= 0 || !moving) return;
     const budget = particles.budget * this.share;
+    const style = avatar.wingStyle;
+    if (style !== "classic") {
+      this.wingDebt += dt * COSMETIC_FX.wingParticles * budget * (style === "astral" ? 1.5 : 1);
+      color.set(wingSpec(style).accent);
+      for (; this.wingDebt >= 1; this.wingDebt--) {
+        at.lerpVectors(this.center, Math.random() < .5 ? tipL : tipR, rand(.35, 1));
+        particles.emit(at, vel.copy(velocity).multiplyScalar(.08), fx(.7, COSMETIC_FX.wingParticleSize, color,
+          style === "astral" ? Kind.Star : style === "frost" || style === "storm" ? Kind.Shard : style === "tide" ? Kind.Bubble : Kind.Glow, -.3, 1.5, 1.2));
+      }
+    }
     this.brakeDebt += dt * FX.brakeWisps * avatar.brake * budget;
     for (; this.brakeDebt >= 1; this.brakeDebt--) {
       particles.emit(Math.random() < 0.5 ? tipL : tipR,

@@ -296,12 +296,34 @@ finish time has to match its own clock within 3 s, and nothing under 25 s
 counts. That stops casual cheating, not a determined cheater, since the server
 doesn't fly the course itself.
 
+## Saved adventure profile
+
+**Profile & inventory** in the menu shows your level, XP, crystals, items,
+cosmetics, wings and pets. Collect crystals near hoops and rarer discoveries farther
+beside them during Adventure. Rewards save immediately to your existing login's
+profile in SQLite. Pause an adventure to inspect the inventory; equip collected
+cosmetics or a companion, and preview every model. Races and test mode grant no
+profile rewards. [Progression, rarity distances and API](docs/adventure-profile.md)
+describes spawn rates, the XP curve, duplicate conversion and persistence.
+
+In test mode (`/?test`), **Try items, pets & cosmetics** opens an unsaved fitting
+room for every model, with front/back previews, flight trials, item animations
+and firework controls. All eight existing pets are included; no-companion is an
+unequip action. Equipped pets lead through hoops along the autopilot rail.
+Wings include feather, wind, ocean, ice, phoenix, storm and constellation designs;
+capes have distinct embroidered hems.
+
 ## Project Structure
 
 | Path                                   | Purpose                                                  |
 | :------------------------------------- | :------------------------------------------------------- |
 | `backend/app.py`                       | API endpoints, login headers, solo runs                  |
 | `backend/rooms.py`                     | Rooms, race state machine, SSE listeners, tick loop      |
+| `backend/profiles.py`                  | Persistent adventure profiles, inventory, issued rewards and XP |
+| `frontend/src/profile/`               | Profile API client, types and durable pickup outbox       |
+| `frontend/src/game/run/collection.ts` | Hoop-distance rarity, terrain-safe pickups and collection models |
+| `frontend/src/game/cosmetics/`, `game/pets/` | Toon outfits, decorated wing fans and animated hoop guides |
+| `frontend/src/components/ProfilePanel.tsx`, `CollectionPreview.tsx`, `TestCollectionPanel.tsx` | Profile, inventory, equip controls, preview and unsaved test fitting room |
 | `backend/store.py`                     | SQLite runs, leaderboards and ghosts                     |
 | `backend/models.py`                    | Request and response models (Pydantic)                   |
 | `backend/tests/`                       | pytest tests for rooms and the API                       |
