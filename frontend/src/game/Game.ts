@@ -5,6 +5,7 @@ import { Ambient } from "./ambient";
 import { GameAudio } from "./audio";
 import { Avatar } from "./avatar";
 import { CameraRig } from "./camera";
+import { DISSOLVE_AT, type DeathKind, DeathFall, classifyCrash, fieldNormal } from "./death";
 import { Debris } from "./effects";
 import { FLIGHT, Flight, type FlightInput } from "./flight";
 import { type GhostData, GhostRecorder, type GhostRun, ghostSamples } from "./ghost";
@@ -194,7 +195,10 @@ export class Game implements RunHost {
   private checkpoints = 0;
   private finishMs: number | null = null;
   private crashedAt: number | null = null;
-  private readonly crashPoint = new THREE.Vector3();
+  /** The pilot's tumble after a crash (looks only) */
+  private readonly death = new DeathFall();
+  private dissolved = false;
+  private deathDebt = 0;
   private proximity = 0;
   private smoothProximity = 0;
   style = 0;
@@ -368,6 +372,8 @@ export class Game implements RunHost {
 
   /** Keeps the camera out of the rock */
   private clearance = (x: number, y: number, z: number) => this.world.rock.distance(x, y, z);
+  /** Everything solid: rock, trees, water */
+  private field = (x: number, y: number, z: number) => this.world.distance(x, y, z);
 
   get seed(): number {
     return this.world.seed;
@@ -556,6 +562,7 @@ export class Game implements RunHost {
     this.crashedAt = null;
     this.proximity = 0;
     this.combo = 0;
+    this.avatar.revive();
     this.avatar.visible = true;
     this.fx.reset();
     this.speedLines.reset();
@@ -572,14 +579,21 @@ export class Game implements RunHost {
     this.respawn(this.raceState === "free" ? 0 : this.checkpoints);
   }
 
-  private crash() {
+  /** `lost`: fell below the islands rather than hitting something */
+  private crash(lost: boolean) {
+    const f = this.flight;
     this.crashedAt = this.elapsed;
-    this.crashPoint.copy(this.flight.position);
     this.flight.releaseControls();
-    this.avatar.visible = false;
+    // How the hit plays out depends on how you met the surface (seen from the last step, still outside it)
+    fieldNormal(this.field, this.prevPosition, normal);
+    const kind = classifyCrash(tmp.copy(f.velocity).normalize(), f.right, normal, lost);
+    this.death.start(kind, this.prevPosition, f.velocity, f.quaternion, f.right, f.up, normal);
+    this.avatar.die(kind, this.death.side);
+    this.dissolved = false;
+    this.deathDebt = 0;
     this.fx.hide();
-    this.debris.burst(this.flight.position, this.flight.velocity);
-    this.crashBurst();
+    if (!lost) this.debris.burst(f.position, f.velocity);
+    this.crashBurst(kind, normal);
     this.audio.crash();
     this.combo = 0;
     this.run?.crashed();
@@ -594,7 +608,7 @@ export class Game implements RunHost {
     const { x, y, z } = this.flight.position;
     const distance = this.world.distance(x, y, z);
     if (distance < CRASH_DISTANCE || this.world.lost(y, z)) {
-      this.crash();
+      this.crash(distance >= CRASH_DISTANCE);
       return;
     }
     this.proximity = clamp((SCORE_RANGE - distance) / (SCORE_RANGE - 1.5), 0, 1);
@@ -734,17 +748,68 @@ export class Game implements RunHost {
     }
   }
 
-  private crashBurst() {
+  /** Stars and puffs off the impact, thrown away from the surface; each kind of crash adds its own */
+  private crashBurst(kind: DeathKind, away: THREE.Vector3) {
     const amount = this.particles.budget;
+    const p = this.flight.position;
     color.set(this.world.palette.accent);
-    for (let k = 0; k < Math.round(90 * amount); k++) {
+    // Fewer and smaller than they'd be for a vanishing pilot: the body stays on screen
+    for (let k = 0; k < Math.round(40 * amount); k++) {
+      vel.set(rand(-1, 1), rand(-0.3, 1), rand(-1, 1)).normalize().addScaledVector(away, 0.8).normalize();
       this.particles.emit(
-        this.flight.position,
-        vel.set(rand(-1, 1), rand(-0.3, 1), rand(-1, 1)).normalize().multiplyScalar(rand(4, 18)).addScaledVector(this.flight.velocity, -0.1),
+        p,
+        vel.multiplyScalar(rand(8, 20)).addScaledVector(this.flight.velocity, -0.1),
         k % 3
-          ? fx(rand(0.6, 1.4), rand(0.4, 0.9), WHITE, Kind.Star, 6, 2, 2.4)
-          : fx(rand(0.8, 1.4), rand(1.5, 3), color, Kind.Wisp, -1, 2.5, 0.8),
+          ? fx(rand(0.4, 0.8), rand(0.25, 0.5), WHITE, Kind.Star, 6, 2, 2)
+          : fx(rand(0.6, 1), rand(1, 2), color, Kind.Wisp, -1, 2.5, 0.6),
       );
+    }
+    if (kind === "headfirst") {
+      // Seeing stars: a little ring of gold twinkles around the head
+      for (let k = 0; k < Math.round(14 * amount); k++) {
+        const a = (k / 14) * Math.PI * 2;
+        at.set(Math.cos(a) * 0.9, 0.8, Math.sin(a) * 0.9).add(p);
+        this.particles.emit(at, vel.set(-Math.sin(a) * 2.5, 1.2, Math.cos(a) * 2.5).addScaledVector(away, 2), fx(1.2, 0.3, GOLD, Kind.Star, 1.5, 1, 2));
+      }
+    }
+    if (kind !== "fall") {
+      // A puff of dust (or spray) off the surface itself
+      color.set(this.world.palette.cloud).lerp(WHITE, 0.4);
+      surface.copy(p).addScaledVector(away, -0.5);
+      for (let k = 0; k < Math.round(14 * amount); k++) {
+        vel.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).addScaledVector(away, 0.6).normalize().multiplyScalar(rand(3, 8));
+        this.softParticles.emit(surface, vel, fx(rand(0.7, 1.2), rand(0.7, 1.4), color, Kind.Glow, -0.3, 2.5, 0.45));
+      }
+    }
+  }
+
+  /** While the crash plays out: dust off a rolling body, light shed by a spinning one, and the final dissolve */
+  private deathEffects(dt: number) {
+    const d = this.death;
+    const p = this.avatar.group.position;
+    const amount = this.particles.budget;
+    if (!this.dissolved) {
+      this.deathDebt += (d.grounded ? 18 : d.kind === "wing" ? 30 : 8) * amount * dt;
+      for (; this.deathDebt >= 1; this.deathDebt--) {
+        if (d.grounded) {
+          color.set(this.world.palette.cloud).lerp(WHITE, 0.4);
+          at.copy(p).addScaledVector(d.normal, -0.4).add(tmp.set(rand(-0.5, 0.5), rand(-0.5, 0.5), rand(-0.5, 0.5)));
+          this.softParticles.emit(at, vel.copy(d.normal).multiplyScalar(rand(1, 3)).addScaledVector(d.velocity, -0.2), fx(rand(0.6, 1.1), rand(0.5, 1.1), color, Kind.Glow, -0.2, 2, 0.45));
+        } else {
+          at.copy(p).add(tmp.set(rand(-0.8, 0.8), rand(-0.4, 0.4), rand(-0.8, 0.8)));
+          this.particles.emit(at, vel.set(rand(-1, 1), rand(0, 1.5), rand(-1, 1)), fx(rand(0.6, 1.1), rand(0.2, 0.4), WHITE, Kind.Glow, -0.5, 1.5, 1.8));
+        }
+      }
+    }
+    // At the end the pilot dissolves into light, like a Sky child returning home
+    if (!this.dissolved && d.time >= DISSOLVE_AT) {
+      this.dissolved = true;
+      color.set(this.world.palette.accent).lerp(WHITE, 0.5);
+      for (let k = 0; k < Math.round(70 * amount); k++) {
+        at.copy(p).add(tmp.set(rand(-0.6, 0.6), rand(-0.6, 0.6), rand(-0.6, 0.6)));
+        vel.set(rand(-1, 1), rand(-0.2, 1), rand(-1, 1)).normalize().multiplyScalar(rand(1, 5));
+        this.particles.emit(at, vel, k % 3 ? fx(rand(0.8, 1.6), rand(0.25, 0.5), color, Kind.Glow, -2, 1.5, 2.4) : fx(rand(0.9, 1.6), rand(0.4, 0.7), WHITE, Kind.Star, -1.5, 1.5, 2.6));
+      }
     }
   }
 
@@ -940,7 +1005,13 @@ export class Game implements RunHost {
         this.flight.boost,
       );
     } else {
-      this.rig.watch(this.crashPoint, dt);
+      // The crash plays out: the tumble moves the body, the camera keeps it in view
+      this.death.update(dt, this.field);
+      body.position.copy(this.death.position);
+      body.quaternion.copy(this.death.quaternion);
+      this.avatar.update(dt, this.death.speed, 0);
+      this.deathEffects(dt);
+      this.rig.follow(body.position, dt, this.clearance);
     }
     this.debris.update(dt);
 
