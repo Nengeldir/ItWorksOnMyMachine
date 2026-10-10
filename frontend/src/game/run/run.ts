@@ -1,5 +1,6 @@
 import { makeRng } from "../rng";
 import { type BiomeId, MAPS, seedMap } from "../world/biomes/index";
+import type { ItemsHud } from "./items";
 import type { UpgradeId } from "./upgrades";
 
 // The shape of a roguelike run: which biome comes when, and how it scores.
@@ -69,6 +70,8 @@ export interface RunHud {
   compass: { angle: number; distance: number; ahead: boolean } | null;
   abilities: { id: UpgradeId; name: string; key: string; charge: number; ready: boolean; count?: number }[];
   upgrades: UpgradeId[];
+  /** The bag of items, and the effects under way */
+  items: ItemsHud;
   toast: { text: string; points: number; id: number } | null;
 }
 

@@ -402,6 +402,8 @@ export class Avatar {
   barrelProgress = -1;
   /** Where carried items go: on the back (the firework), on the head (helmets), in the right hand */
   readonly slots: Record<ItemSlot, THREE.Object3D>;
+  /** The right and left shin, for boots */
+  readonly feet: [THREE.Object3D, THREE.Object3D];
   /**
    * Blends the right arm towards a pose, for item animations (items/equip.ts):
    * `amount` 0..1, shoulder angles in radians (z raises the arm towards the
@@ -666,7 +668,15 @@ export class Avatar {
     const hand = new THREE.Object3D();
     hand.position.set(0, -0.215, -0.02);
     this.right.elbow.add(hand);
-    this.slots = { back, head: crown, hand };
+    // Boots go on both shins (items/equip.ts mirrors the left one)
+    const foot = (side: Side) => {
+      const anchor = new THREE.Object3D();
+      anchor.position.set(0, -0.2, -0.005);
+      side.knee.add(anchor);
+      return anchor;
+    };
+    this.feet = [foot(this.right), foot(this.left)];
+    this.slots = { back, head: crown, hand, feet: this.feet[0] };
 
     // The cape: wide, long and rippling, with a golden hem and an emblem
     this.cape = new Cloth(

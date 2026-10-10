@@ -3,6 +3,7 @@
 // Browsers only start audio after a user gesture, so call start() from a click.
 
 import type { AbilitySound2 } from "./abilities/fx2";
+import type { ItemSound } from "./items/fx";
 import { MusicPlayer } from "./music";
 import { AUDIO } from "./tuning";
 import type { BiomeId } from "./world/biomes/types";
@@ -398,6 +399,29 @@ export class GameAudio {
       case "echoPass":
         this.whoosh(600, 2400, 0.4, 0.45);
         this.tone(1319, 0.4, "triangle", 0.07);
+        break;
+    }
+  }
+
+  /** The design list's items: picked up, used, and what each one does */
+  item(kind: ItemSound, pitch = 1) {
+    switch (kind) {
+      case "pickup":
+        // A bright little arpeggio, like Genshin's item pickup
+        [1047, 1319, 1568, 2093].forEach((f, i) => this.tone(f * pitch, 0.35, "triangle", 0.07, i * 0.05));
+        break;
+      case "full":
+        [392, 330].forEach((f, i) => this.tone(f, 0.22, "sine", 0.07, i * 0.09));
+        break;
+      case "auto":
+        this.tone(1175, 0.4, "sine", 0.05);
+        break;
+      case "uncork":
+        // The cork pops, and the bottled wind rushes up
+        this.tone(1800, 0.05, "square", 0.05);
+        this.glide(900, 300, 0.08, "sine", 0.08);
+        this.whoosh(250, 2800, 1.3, 0.6);
+        this.glide(330, 660, 1.1, "sine", 0.05, 0.1);
         break;
     }
   }

@@ -12,6 +12,9 @@ import { type ItemId, type ItemSlot, buildItem, disposeItem, fireworkFlame, item
 //    (`setThrust`). A helmet pops into the air above the head and drops onto
 //    it with a bounce. Candies, fruits and the feather appear in the hand and
 //    are held up; `use()` brings them to the mouth and they vanish in light.
+//    `use("raise")` holds an item up high until it bursts into light (a relic
+//    being activated); `use("toss")` throws it down and away. Boots go on both
+//    feet with a pop. `lift` holds the hand item up (a lantern, a kite's string).
 //  - ItemDisplay: an item floating as a pickup: bobbing, turning, a halo
 //    below and a sparkle now and then.
 
@@ -32,13 +35,19 @@ const HOLD: Record<ItemSlot, { position: THREE.Vector3; rotation: THREE.Euler; s
   back: { position: new THREE.Vector3(0, -0.22, 0.02), rotation: new THREE.Euler(0, 0, 0), scale: 1 },
   head: { position: new THREE.Vector3(0, 0.02, 0.01), rotation: new THREE.Euler(0.25, 0, 0), scale: 1 },
   hand: { position: new THREE.Vector3(0, -0.04, -0.02), rotation: new THREE.Euler(Math.PI, 0, 0), scale: 1 },
+  // Boots: on the shin, the toe along the pointed foot
+  feet: { position: new THREE.Vector3(0, 0, 0), rotation: new THREE.Euler(0, 0, 0), scale: 1 },
 };
 
 /** The firework held in the hand while it is pulled out: along the arm, by its middle */
 const FIREWORK_IN_HAND = { position: new THREE.Vector3(0, 0.25, -0.05), rotation: new THREE.Euler(Math.PI, 0, 0), scale: 0.9 };
 
-const EQUIP_TIME: Record<ItemSlot, number> = { back: 1.5, head: 1.0, hand: 0.6 };
-const USE_TIME = 1.1;
+const EQUIP_TIME: Record<ItemSlot, number> = { back: 1.5, head: 1.0, hand: 0.6, feet: 0.5 };
+/** Strapped straight onto the back, without the swing over the shoulder (used mid-flight) */
+const QUICK_BACK = 0.45;
+/** How using an item looks: eaten, held up high until it bursts into light, or thrown down and away */
+export type UseStyle = "eat" | "raise" | "toss";
+const USE_TIME: Record<UseStyle, number> = { eat: 1.1, raise: 0.75, toss: 0.5 };
 
 const m1 = new THREE.Matrix4();
 const m2 = new THREE.Matrix4();
@@ -58,11 +67,13 @@ const rand = (min: number, max: number) => min + Math.random() * (max - min);
 interface Worn {
   id: ItemId;
   group: THREE.Group;
+  /** The left boot (boots come in pairs) */
+  twin?: THREE.Group;
 }
 
 type Animation =
-  | { kind: "equip"; slot: ItemSlot; t: number; worn: Worn; sparkled: boolean }
-  | { kind: "use"; t: number; worn: Worn; sparkled: boolean }
+  | { kind: "equip"; slot: ItemSlot; t: number; worn: Worn; sparkled: boolean; quick: boolean }
+  | { kind: "use"; t: number; worn: Worn; sparkled: boolean; style: UseStyle }
   | { kind: "drop"; slot: ItemSlot; t: number; worn: Worn };
 
 /** What the pilot carries, and the animations of taking things out, putting them on and using them */
@@ -75,6 +86,11 @@ export class Equipment {
   private thrust = 0;
   private thrustTarget = 0;
   private sparkDebt = 0;
+  /** 0..1: hold the hand item up (a lantern lit, a kite's string); eased */
+  lift = 0;
+  private lifted = 0;
+  /** Fires when an item used with "raise" bursts, or one tossed leaves the hand, with where it was */
+  onRelease?: (id: ItemId, at: THREE.Vector3) => void;
 
   constructor(avatar: Avatar, particles: Particles | null) {
     this.avatar = avatar;
@@ -86,23 +102,37 @@ export class Equipment {
     return this.worn[slot]?.id ?? null;
   }
 
-  /** Takes an item out of the inventory and puts it where it goes (replacing what was there) */
-  equip(id: ItemId) {
+  /**
+   * Takes an item out of the inventory and puts it where it goes (replacing
+   * what was there). `quick`: the firework pops straight onto the back
+   */
+  equip(id: ItemId, quick = false) {
     const slot = itemInfo(id).slot;
     this.unequip(slot);
     const group = buildItem(id);
     group.scale.setScalar(0.001);
-    const worn = { id, group };
+    const worn: Worn = { id, group };
     this.worn[slot] = worn;
+    if (slot === "feet") {
+      // A mirrored pair, one on each shin
+      const twin = new THREE.Group();
+      for (const child of group.children) twin.add(child.clone());
+      twin.scale.set(-0.001, 0.001, 0.001);
+      worn.twin = twin;
+      this.avatar.feet[0].add(group);
+      this.avatar.feet[1].add(twin);
+      this.animations.push({ kind: "equip", slot, t: 0, worn, sparkled: false, quick });
+      return;
+    }
     if (id === "firework") {
       this.flame = fireworkFlame(fxTime);
       this.flame.scale.set(1, 0.001, 1);
       this.flame.visible = false;
       group.add(this.flame);
     }
-    // In the hand to start with (the firework too: it's swung onto the back from there)
-    (slot === "head" ? this.avatar.slots.head : this.avatar.slots.hand).add(group);
-    this.animations.push({ kind: "equip", slot, t: 0, worn, sparkled: false });
+    // In the hand to start with (the firework too: it's swung onto the back from there, unless quick)
+    (slot === "head" ? this.avatar.slots.head : slot === "back" && quick ? this.avatar.slots.back : this.avatar.slots.hand).add(group);
+    this.animations.push({ kind: "equip", slot, t: 0, worn, sparkled: false, quick });
   }
 
   /** Puts an item away again, with a little pop */
@@ -118,12 +148,20 @@ export class Equipment {
     this.animations.push({ kind: "drop", slot, t: 0, worn });
   }
 
-  /** Eats (or uses up) what's in the hand: to the mouth, then gone in a sparkle */
-  use() {
+  /** Eats (or uses up) what's in the hand: to the mouth, then gone in a sparkle (or held up, or tossed) */
+  use(style: UseStyle = "eat") {
     const worn = this.worn.hand;
-    if (!worn || this.animations.some((a) => a.worn === worn)) return;
+    if (!worn) return;
+    // Still popping into the hand: use it from there
+    for (let i = this.animations.length - 1; i >= 0; i--) if (this.animations[i].worn === worn && this.animations[i].kind === "equip") this.animations.splice(i, 1);
+    if (this.animations.some((a) => a.worn === worn)) return;
     delete this.worn.hand;
-    this.animations.push({ kind: "use", t: 0, worn, sparkled: false });
+    this.animations.push({ kind: "use", t: 0, worn, sparkled: false, style });
+  }
+
+  /** Puts away everything worn, without a sound (a new run) */
+  clearWorn() {
+    for (const slot of Object.keys(this.worn) as ItemSlot[]) this.unequip(slot);
   }
 
   /** The firework's flame, 0..1 (only shows with the firework on the back) */
@@ -133,10 +171,10 @@ export class Equipment {
 
   clear() {
     for (const slot of Object.keys(this.worn) as ItemSlot[]) {
-      disposeItem(this.worn[slot]!.group);
+      disposeWorn(this.worn[slot]!);
       delete this.worn[slot];
     }
-    for (const a of this.animations) disposeItem(a.worn.group);
+    for (const a of this.animations) disposeWorn(a.worn);
     this.animations.length = 0;
     this.flame = null;
     this.avatar.armPose.amount = 0;
@@ -145,11 +183,12 @@ export class Equipment {
   /** Call every frame after the avatar has animated (it needs the avatar's world matrices) */
   update(dt: number) {
     const arm = this.avatar.armPose;
-    // Holding something up in the hand keeps the arm half raised
-    let armTarget = this.worn.hand ? 0.45 : 0;
+    // Holding something up in the hand keeps the arm half raised; lifted, it's held up high
+    this.lifted += ((this.worn.hand ? this.lift : 0) - this.lifted) * (1 - Math.exp(-dt * 8));
+    let armTarget = this.worn.hand ? 0.45 + 0.55 * this.lifted : 0;
     let x = 0;
-    let z = 2.0;
-    let elbow = 0.5;
+    let z = 2.0 + 0.7 * this.lifted;
+    let elbow = 0.5 - 0.3 * this.lifted;
     this.avatar.group.updateMatrixWorld(true);
 
     for (let i = this.animations.length - 1; i >= 0; i--) {
@@ -166,7 +205,18 @@ export class Equipment {
         if (a.slot === "hand") {
           this.place(g, HOLD.hand, backOut(a.t / 0.35));
           armTarget = Math.max(armTarget, 1 - smoothstep(0.4, 1, k) * 0.55);
-          z = 2.4;
+          z = Math.max(z, 2.4);
+        } else if (a.slot === "feet") {
+          // Both boots pop on with a little squash, and a sparkle at each foot
+          const size = backOut(a.t / 0.35);
+          this.place(g, HOLD.feet, size);
+          const twin = a.worn.twin!;
+          this.place(twin, HOLD.feet, size);
+          twin.scale.x *= -1;
+          if (a.t > 0.12 && a.t - dt <= 0.12) {
+            this.sparkle(g.getWorldPosition(at), 12);
+            this.sparkle(twin.getWorldPosition(at), 12);
+          }
         } else if (a.slot === "head") {
           // Pops up above the head, then drops on with a squash
           const drop = ease((a.t - 0.25) / 0.3);
@@ -175,6 +225,15 @@ export class Equipment {
           const squash = a.t > 0.55 ? Math.sin(clamp((a.t - 0.55) / 0.3, 0, 1) * Math.PI) * 0.18 : 0;
           g.scale.set(g.scale.x * (1 + squash), g.scale.y * (1 - squash), g.scale.z * (1 + squash));
           if (a.t > 0.55 && a.t - dt <= 0.55) this.sparkle(g.getWorldPosition(at), 14);
+        } else if (a.quick) {
+          // Popped straight onto the back, with a bounce
+          const settle = Math.sin(clamp(a.t / QUICK_BACK, 0, 1) * Math.PI) * 0.15;
+          this.place(g, HOLD.back, backOut(a.t / 0.3));
+          g.scale.set(g.scale.x * (1 + settle), g.scale.y * (1 - settle), g.scale.z * (1 + settle));
+          if (a.t >= QUICK_BACK) {
+            this.animations.splice(i, 1);
+            continue;
+          }
         } else {
           this.equipFirework(a, g);
           if (a.t < 0.45) {
@@ -198,29 +257,63 @@ export class Equipment {
         }
         if (a.t >= time) this.animations.splice(i, 1);
       } else if (a.kind === "use") {
-        // Up to the mouth, a nibble, then gone in light
-        const k = a.t / USE_TIME;
-        armTarget = Math.max(armTarget, 1 - smoothstep(0.75, 1, k));
-        z = 2.5;
-        x = 0.35;
-        elbow = 1.7 * ease(k / 0.35);
-        const nibble = a.t > 0.4 ? 1 - ease((a.t - 0.45) / 0.35) : 1;
-        this.place(g, HOLD.hand, nibble);
-        if (!a.sparkled && a.t > 0.75) {
-          a.sparkled = true;
-          this.sparkle(g.getWorldPosition(at), 30);
+        const time = USE_TIME[a.style];
+        const k = a.t / time;
+        if (a.style === "eat") {
+          // Up to the mouth, a nibble, then gone in light
+          armTarget = Math.max(armTarget, 1 - smoothstep(0.75, 1, k));
+          z = 2.5;
+          x = 0.35;
+          elbow = 1.7 * ease(k / 0.35);
+          const nibble = a.t > 0.4 ? 1 - ease((a.t - 0.45) / 0.35) : 1;
+          this.place(g, HOLD.hand, nibble);
+          if (!a.sparkled && a.t > 0.75) {
+            a.sparkled = true;
+            this.sparkle(g.getWorldPosition(at), 30);
+          }
+        } else if (a.style === "raise") {
+          // Held up high, swelling with light, then it bursts
+          armTarget = Math.max(armTarget, 1 - smoothstep(0.85, 1, k));
+          z = 2.95;
+          x = -0.1;
+          elbow = 0.1;
+          const swell = 1 + 0.35 * ease((a.t - 0.2) / 0.4);
+          this.place(g, HOLD.hand, a.t < 0.6 ? swell : swell * (1 - ease((a.t - 0.6) / 0.15)));
+          g.rotation.y += a.t * 9;
+          if (!a.sparkled && a.t > 0.6) {
+            a.sparkled = true;
+            g.getWorldPosition(at);
+            this.sparkle(at, 36);
+            this.onRelease?.(a.worn.id, at);
+          }
+        } else {
+          // A wind-up, then thrown down and away: it leaves the hand at the bottom of the swing
+          armTarget = Math.max(armTarget, 1 - smoothstep(0.8, 1, k));
+          const swing = ease(k / 0.7);
+          z = 2.3 - swing * 1.6;
+          x = 0.6 - swing * 0.9;
+          elbow = 0.8 - swing * 0.6;
+          this.place(g, HOLD.hand, a.sparkled ? 0.001 : 1);
+          if (!a.sparkled && k > 0.6) {
+            a.sparkled = true;
+            g.getWorldPosition(at);
+            this.sparkle(at, 14);
+            this.onRelease?.(a.worn.id, at);
+            g.scale.setScalar(0.001);
+          }
         }
-        if (a.t >= USE_TIME) {
-          disposeItem(g);
+        if (a.t >= time) {
+          disposeWorn(a.worn);
           this.animations.splice(i, 1);
         }
       } else {
         // Shrinks away with a pop
         const k = a.t / 0.3;
         g.scale.setScalar(Math.max(0.001, (1 - ease(k)) * (a.slot === "back" ? 1 : HOLD[a.slot].scale)));
+        if (a.worn.twin) a.worn.twin.scale.set(-g.scale.x, g.scale.y, g.scale.z);
         if (a.t - dt <= 0) this.sparkle(g.getWorldPosition(at), 16);
         if (k >= 1) {
-          disposeItem(g);
+          disposeWorn(a.worn);
           this.animations.splice(i, 1);
         }
       }
@@ -311,6 +404,11 @@ export class Equipment {
   dispose() {
     this.clear();
   }
+}
+
+function disposeWorn(worn: Worn) {
+  disposeItem(worn.group);
+  if (worn.twin) disposeItem(worn.twin);
 }
 
 const holdQuaternion = new THREE.Quaternion();

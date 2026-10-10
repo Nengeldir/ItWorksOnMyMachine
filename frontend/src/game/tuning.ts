@@ -179,6 +179,11 @@ export const ABILITIES_FX = {
   echo: 1, // the Echo-Trail ribbon and its wind rings
 };
 
+/** How strong the design list's items look (items/fx.ts); what they do is ITEM in run/items.ts */
+export const ITEMS_FX = {
+  wind: 1, // the Anemo Catcher's updraft
+};
+
 /** Music and sound levels */
 export const AUDIO = {
   music: 0.45, // volume of the background music
@@ -188,7 +193,7 @@ export const AUDIO = {
   nightMuffle: 0.55, // how much the highs are rolled off at night
 };
 
-const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, STRUCTURES, WATER, DEEP, RUN, AUTOPILOT, ABILITIES_FX, AUDIO } as const;
+const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, STRUCTURES, WATER, DEEP, RUN, AUTOPILOT, ABILITIES_FX, ITEMS_FX, AUDIO } as const;
 const DEFAULTS = JSON.parse(JSON.stringify(GROUPS)) as typeof GROUPS;
 const STORAGE_KEY = "windrider.tuning.speed-control-v1";
 
@@ -351,5 +356,6 @@ export const TUNING_GROUPS: [string, Group][] = [
   ["Run", RUN],
   ["Autopilot", AUTOPILOT],
   ["Ability looks", ABILITIES_FX],
+  ["Item looks", ITEMS_FX],
   ["Audio", AUDIO],
 ];
