@@ -82,6 +82,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 ```
 
 - `/?seed=42` opens a time trial on seed 42. Add `&tune` for the tuning panel.
+- `/?gallery` shows every item model and the pilot's item animations.
 - `/?explore=<biome>&seed=<n>` flies a run level of any biome freely (no
   clock, nothing saved), e.g. `/?explore=verdant&seed=2` (Morning) or `&seed=3`
   (Moonlit).
@@ -112,6 +113,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/pilots.ts` | Remote players and ghosts: interpolated samples driving an `Avatar` and `PilotFx` |
 | `game/ghost.ts` | Recording and decoding ghost runs (15 Hz) |
 | `game/glidein.ts` | `GlideIn`: while the land near you is loading (free flight, runs, explore; never races), the pilot glides in on rails instead of hanging frozen: no input, no physics step, no scoring; at most 70 m and never within 30 m of the next gate, slowing before rock; control comes back at `START_SPEED` when the land is ready, and a run's level clock keeps running meanwhile |
+| `game/items/` | Items, models and animations only (what they do comes later). `models.ts`: `ITEMS` (id, name, kind, slot) and `buildItem(id)`: the giant firework (worn on the back like a jetpack, with `fireworkFlame`), three candies, the golden feather, two helmets, five fruits, all primitives painted per vertex with the toon material and ink. `equip.ts`: `Equipment` (pull an item out with a sparkle; the firework from the hand over the shoulder onto the back, helmets drop onto the head, hand items are held up; `use()` eats; `setThrust()` lights the firework) and `ItemDisplay` (a floating pickup). `gallery.ts`: the `/?gallery` scene. `Game.equip/unequip/useItem/thrust` drive it on your pilot; `Avatar.slots` and `Avatar.armPose` are the hooks |
 | `game/death.ts` | Crash animations, looks only: `classifyCrash` picks headfirst (into a wall: bounce and tumble), slide (glancing ground: roll down the slope), wing (a wing clipped: spin down) or fall (below the islands); `DeathFall` is a small rigid-body tumble kept out of the rock by the distance field. The avatar plays `die(kind)`, the camera `follow`s, the body dissolves into light at `DISSOLVE_AT`, all inside `RESPAWN_DELAY` |
 | `game/effects.ts` | Crash debris: feathers knocked loose that flutter down (instanced) |
 | `game/audio.ts` | Synthesized wind and event sounds, run stingers (portal, upgrade, dash; sidequest and item are unused for now), the wingbeat sample (`public/audio/sfx/wingbeat.mp3`, pitch-randomized, played on each of your downstrokes and on the Wingbeat ability) and the `MusicPlayer` |
@@ -188,6 +190,33 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Item models and animations (Claude)
+
+Asked for: models (and animations, no mechanics yet) for a giant firework
+carried on the back as a jetpack, candies, feathers, helmets and fruits.
+- **`game/items/`**: 12 items built from primitives in the pilot's style
+  (toon material, ink outline, glow on gold and gems): Giant firework
+  (striped rocket longer than the pilot, star-tipped nose, fins, straps,
+  fuse; a flickering additive flame with sparks), Berry candy, Swirl
+  lollipop, Star candy (with a face), Golden feather (self-lit, Sky's winged
+  light), Aviator cap (with goggles), Winged helm, Apple, Peach, Grapes,
+  Cherries, Starfruit.
+- **Animations** (`Equipment`): pulling the firework out of the inventory
+  (it pops into the raised hand with a sparkle, swings over the shoulder in
+  an arc and settles onto the back with a bounce), its thrust flame,
+  helmets popping up and dropping onto the head, hand items held up and
+  eaten (`use()`: to the mouth, a nibble, gone in light), putting away.
+  `ItemDisplay`: a floating pickup (bob, turn, halo, sparkles). The avatar
+  got `slots` (back, head, hand) and `armPose` (the right arm's override).
+- **`/?gallery`**: every item with its name, buttons to put each on the
+  pilot, eat, light the firework, put away; a demo loop until you click.
+- In the game, `Game.equip(id)`, `useItem()`, `thrust(k)` and
+  `unequip(slot)` (e.g. `__game.equip("firework")` in a dev console). Looks
+  only: no flight or scoring change.
+- Verified: build and lint pass. In Chrome: the gallery (all 12 models), the
+  firework pull-out mid-swing and on the back with its flame, the helm on the
+  head, the held apple; no console errors.
 
 ### 2026-10-10: Art direction made explicit (Claude)
 
