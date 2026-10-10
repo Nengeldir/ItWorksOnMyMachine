@@ -162,6 +162,10 @@ export class Game implements RunHost {
   /** White light over everything (the end of a run's finale) */
   private readonly whiteLight: HTMLDivElement;
   private white = 0;
+  /** After a run: the pilot flies the default map by itself and the player controls nothing */
+  private autopiloting = false;
+  /** When the white light after the finale began to clear (null: not clearing) */
+  private clearWhiteFrom: number | null = null;
   /** Inside a portal's wormhole: the level is hidden */
   private inWormhole = false;
   private readonly crystalPoints: THREE.Vector3[] = [];
@@ -233,8 +237,10 @@ export class Game implements RunHost {
     this.rig = new CameraRig(1);
     this.input = new Input(this.renderer.domElement, options.controls);
     this.input.onAction = (action) => {
-      if (action === "respawn") this.respawnNow();
       if (action === "mute") this.audio.toggleMute();
+      // On autopilot after a run, nothing else answers
+      if (this.autopiloting) return;
+      if (action === "respawn") this.respawnNow();
       if (action === "barrelLeft" || action === "barrelRight") this.barrelRoll(action === "barrelLeft" ? -1 : 1);
       if ((action === "dash" || action === "flap") && this.crashedAt === null && !this.glide.active) this.run?.ability(action);
     };
@@ -287,7 +293,7 @@ export class Game implements RunHost {
 
   /** Call from a click: locks the mouse and starts audio (browsers need a gesture for both) */
   engage = () => {
-    this.input.lockPointer();
+    if (!this.autopiloting) this.input.lockPointer();
     this.audio.start();
   };
 
@@ -300,6 +306,22 @@ export class Game implements RunHost {
     this.run?.dispose();
     this.run = new RunController(seed, this, events);
     this.run.start();
+  }
+
+  /**
+   * After the finale's white light: the run is over, the default sky map
+   * (Sky Isles on `seed`, the menu's map) is built under the white, the pilot
+   * flies it on autopilot with every control locked, and the white clears
+   */
+  victoryLap(seed: number) {
+    this.run?.dispose();
+    this.run = null;
+    this.autopiloting = true;
+    if (document.pointerLockElement) document.exitPointerLock();
+    this.freeze(false);
+    this.setLevel(raceLevel(seed));
+    this.whiteOut(1);
+    this.clearWhiteFrom = this.elapsed;
   }
 
   /** Holds the pilot on the start line until the player takes off */
@@ -379,7 +401,6 @@ export class Game implements RunHost {
   }
 
   whiteOut(amount: number) {
-    if (Math.abs(amount - this.white) < 0.002 && amount !== 0) return;
     this.white = amount;
     const text = amount.toFixed(3);
     if (this.whiteLight.style.opacity !== text) this.whiteLight.style.opacity = text;
@@ -986,7 +1007,15 @@ export class Game implements RunHost {
       }
     }
 
-    this.input0 = this.attract === "chase" ? this.autopilot() : this.input.sample(dt);
+    const selfFlying = this.attract === "chase" || this.autopiloting;
+    this.input0 = selfFlying ? this.autopilot() : this.input.sample(dt);
+    if (this.clearWhiteFrom !== null) {
+      // The white after the finale clears once the map is there (or after a few seconds)
+      if (this.view.ready || this.elapsed - this.clearWhiteFrom > 4) {
+        this.whiteOut(Math.max(0, this.white - dt / 2.2));
+        if (this.white <= 0) this.clearWhiteFrom = null;
+      }
+    }
     // Outside races, the land around you must be on screen before you fly: no flying into
     // invisible rock. Until it is, the pilot glides in on rails, without control (glidein.ts)
     const loading = !this.view.ready && this.raceState === "free" && this.attract !== "drift";
@@ -1007,7 +1036,7 @@ export class Game implements RunHost {
       }
       if (steps >= MAX_STEPS_PER_FRAME) this.accumulator = 0;
     }
-    if (this.attract === "chase" && this.flight.position.z > this.world.course.endZ + 100) this.respawn(0);
+    if (selfFlying && this.flight.position.z > this.world.course.endZ + 100) this.respawn(0);
 
     // Draw between the last two physics states
     const alpha = clamp(this.accumulator / STEP, 0, 1);

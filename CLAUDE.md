@@ -190,6 +190,32 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Victory lap and the finish screen (Claude)
+
+Asked for: after the finale's white light, the player is back in the
+default sky map on autopilot, unable to control anything, under a
+translucent finish screen with the stats and buttons on the side for the
+next actions (return to menu, start again).
+- `Game.victoryLap(seed)` (called by `RunSession` when the run ends): ends
+  the run controller, builds Sky Isles on the daily seed (the menu's map)
+  under the white, and sets `autopiloting`: the racing-line autopilot flies
+  (respawning at the course's end, like the menu's chase), every input and
+  action is ignored except mute, the pointer is released and clicking the
+  view no longer locks it. The white clears over 2.2 s once the map is
+  ready (or after 4 s).
+- The run now counts flying time (the level clocks), gates, crashes, best
+  chain and style for `RunSummary`.
+- `FinishScreen` (`RunHud.tsx`): a translucent glass card on the left (run
+  seed, "Journey's end", score with new best / ties / your best, six stats,
+  the biomes flown, upgrade icons) and the actions on the right edge: Fly it
+  again (`Enter`), New run (`N`), Return to menu (`Backspace`). The pilot
+  flies on between them. It fades in once the white has mostly cleared. The
+  HUD and top bar are hidden.
+- Verified: build and lint pass; race hashes unchanged. In Chrome: run 7
+  through one portal to Verdant, then the forced finale, the victory lap on
+  Sky Isles (seed 24675), the finish screen; held W, R and Q did nothing on
+  autopilot; Fly it again restarted the run; no console errors.
+
 ### 2026-10-10: The finale cutscene (Claude)
 
 Asked for: the last portal (to victory) plays a cutscene that slowly pans
@@ -752,7 +778,24 @@ ported to the islands world:
 
 ## Next up
 
-**Resume here:** the five roguelike milestones are done. What's open:
+**Resume here:** the five roguelike milestones are done, and so are the
+crash animations, the glide-in, items (models only), portal wormholes, the
+finale and the finish screen. What's open:
+
+- **Items need mechanics**: the giant firework's boost (`Game.thrust` only
+  lights the flame), candies and fruit (`useItem` only plays the animation),
+  helmets, pickups placed in levels (`ItemDisplay` is ready), an inventory
+  UI. Mechanics go through `FlightMods` in run mode only.
+- **Measure in a focused window** the new full-screen shaders: the wormhole
+  shell and the finale's Milky Way (fbm per pixel), and the hitch of
+  `buildNext` under the portal blur (hidden, but it stalls the CSS veil for
+  a frame).
+- Remote pilots and ghosts don't play crash animations (they have no crash
+  events); the glide-in doesn't apply in races (the countdown starts even if
+  the land is still loading).
+- The finale can only be reached by flying all eight levels (dev:
+  `__game.run.level = 8` then `__portal()`). Not watched end to end in a
+  real run.
 
 - **Measure in a focused window**: `__bench(2/1/0)` after `__shot(0)` in a
   dev build. Bloom at High was 30 to 70 ms of GPU on an M2 in a hidden tab
