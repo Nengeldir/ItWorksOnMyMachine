@@ -354,6 +354,32 @@ old times or ghosts had to be kept. A deliberate gameplay change (rule 6).
   second pilot), every map's race by hand, a run through a portal to its
   second map by hand (the test checks the order).
 
+### 2026-10-10: Keep the coat's scarf ribbons above its moving surface
+
+- Fixed a remaining cloth overlap after the feet/cape repair: the cape and
+  scarf tails cleared the legs independently, allowing a raised cape ripple
+  to pass through a ribbon or leave the two surfaces at the same depth.
+- `frontend/src/game/avatar.ts`: after shaping the cape and each ribbon,
+  compare their triangles in chest space. Enclosed corners and projected edge
+  crossings determine the required lift across each entire ribbon triangle;
+  shared vertices receive the largest neighboring correction. This preserves
+  the ribbon's flutter while maintaining a 0.02 model-unit gap above the coat,
+  including between mesh vertices. Reuse triangle/vector/buffer storage, retain
+  the distant-pilot detail cutoff and add no draw calls. Gameplay is unchanged.
+- `frontend/tests/avatar.test.mjs`: added 11 ribbon-interior regression scenarios
+  covering low speed, braking turns, boost, hover, surf, flare, butterfly,
+  falcon, maximum ripples, ghosts and crashes. These and the eight existing boot
+  scenarios pass; the regression file fails with the pre-ribbon-fix avatar.
+- Production build and lint pass, with the existing bundle-size warning.
+  Full frontend test run: 13 files pass; the same seven pre-existing untracked
+  camera/debug/flight-realism/input/terrain test files fail. Backend untouched.
+- Headless Firefox: inspected matching before/after rear and side screenshots,
+  day/night lighting and ability/crash poses. Across ten sampled views, no
+  ribbon/coat overlaps remain and the minimum gap is about 0.02 model units;
+  no JavaScript errors. A local Node CPU microbenchmark measured roughly
+  0.36 ms added per detailed avatar update; this is not a focused-window FPS
+  measurement. Manual gameplay and integrated-GPU performance remain unverified.
+
 ### 2026-10-10: Keep the feet beneath the cape at low speed
 
 - Traced the glitch to geometry overlap: stronger low-speed cape ripples and
@@ -2457,6 +2483,11 @@ ported to the islands world:
   through islands and gates, no console errors.
 
 ## Next up
+
+- Extreme flare pose: the coat can still expose a body ink outline through
+  its surface (also present before the ribbon fix). Ribbon/coat and leg/cloth
+  clearance do not resolve all body/coat intersections; inspect the torso
+  contact before extending cloth self-collision.
 
 - PR #33: visually verify the compass, toast and test-panel spacing on short
   screens; browser control failed during review with an API-key auth error.

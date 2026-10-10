@@ -170,6 +170,17 @@ const lathe = (profile: [number, number][], n = 14) =>
 
 type ClothShape = (u: number, v: number, out: THREE.Vector3) => void;
 
+/** Height on a triangle projected into cloth's (x, y) plane. */
+function clothHeight(triangle: THREE.Triangle, x: number, y: number, inside = false): number {
+  const { a, b, c } = triangle;
+  const determinant = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y);
+  if (Math.abs(determinant) < 1e-10) return -Infinity;
+  const u = ((b.y - c.y) * (x - c.x) + (c.x - b.x) * (y - c.y)) / determinant;
+  const v = ((c.y - a.y) * (x - c.x) + (a.x - c.x) * (y - c.y)) / determinant;
+  if (inside && (u < -1e-7 || v < -1e-7 || u + v > 1 + 1e-7)) return -Infinity;
+  return u * a.z + v * b.z + (1 - u - v) * c.z;
+}
+
 /** A grid of vertices moved procedurally every frame: the cape and the scarf tails */
 class Cloth {
   readonly mesh: THREE.Mesh;
@@ -177,10 +188,16 @@ class Cloth {
   private readonly cols: number;
   private readonly rows: number;
   private readonly point = new THREE.Vector3();
+  private readonly clearance: Float32Array;
+  private readonly ribbonTriangle = new THREE.Triangle();
+  private readonly surfaceTriangle = new THREE.Triangle();
+  private readonly ribbonCorners = [this.ribbonTriangle.a, this.ribbonTriangle.b, this.ribbonTriangle.c];
+  private readonly surfaceCorners = [this.surfaceTriangle.a, this.surfaceTriangle.b, this.surfaceTriangle.c];
 
   constructor(cols: number, rows: number, paint: (u: number, v: number, tones: Tones, out: THREE.Color) => void, material: THREE.Material) {
     this.cols = cols;
     this.rows = rows;
+    this.clearance = new Float32Array((cols + 1) * (rows + 1));
     const geometry = new THREE.PlaneGeometry(1, 1, cols, rows);
     geometry.deleteAttribute("uv");
     // Keep (u, v) per vertex so the paint can use them
@@ -215,6 +232,64 @@ class Cloth {
         position.setXYZ(r * (this.cols + 1) + c, this.point.x, this.point.y, this.point.z);
       }
     }
+    position.needsUpdate = true;
+    this.mesh.geometry.computeVertexNormals();
+  }
+
+  /** Lift ribbons above another cloth mesh, including crossings between vertices. */
+  keepAbove(surface: Cloth, gap: number) {
+    const position = this.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+    const surfacePosition = surface.mesh.geometry.getAttribute("position");
+    const index = this.mesh.geometry.index!;
+    const surfaceIndex = surface.mesh.geometry.index!;
+    this.clearance.fill(0);
+    for (let i = 0; i < index.count; i += 3) {
+      for (let k = 0; k < 3; k++) this.ribbonCorners[k].fromBufferAttribute(position, index.getX(i + k));
+      const [a, b, c] = this.ribbonCorners;
+      const minX = Math.min(a.x, b.x, c.x), maxX = Math.max(a.x, b.x, c.x);
+      const minY = Math.min(a.y, b.y, c.y), maxY = Math.max(a.y, b.y, c.y);
+      let lift = 0;
+      for (let j = 0; j < surfaceIndex.count; j += 3) {
+        for (let k = 0; k < 3; k++) this.surfaceCorners[k].fromBufferAttribute(surfacePosition, surfaceIndex.getX(j + k));
+        const [d, e, f] = this.surfaceCorners;
+        if (Math.max(d.x, e.x, f.x) < minX || Math.min(d.x, e.x, f.x) > maxX ||
+            Math.max(d.y, e.y, f.y) < minY || Math.min(d.y, e.y, f.y) > maxY) continue;
+
+        // The height difference is linear on each triangle. Its maximum lies
+        // at a vertex of their projected intersection: an enclosed corner or
+        // an edge crossing. Checking both covers the whole ribbon triangle.
+        for (const p of this.ribbonCorners) {
+          lift = Math.max(lift, clothHeight(this.surfaceTriangle, p.x, p.y, true) + gap - p.z);
+        }
+        for (const p of this.surfaceCorners) {
+          const height = clothHeight(this.ribbonTriangle, p.x, p.y, true);
+          if (height !== -Infinity) lift = Math.max(lift, p.z + gap - height);
+        }
+        for (let k = 0; k < 3; k++) {
+          const p = this.ribbonCorners[k], q = this.ribbonCorners[(k + 1) % 3];
+          const rx = q.x - p.x, ry = q.y - p.y;
+          for (let l = 0; l < 3; l++) {
+            const s = this.surfaceCorners[l], t = this.surfaceCorners[(l + 1) % 3];
+            const sx = t.x - s.x, sy = t.y - s.y;
+            const determinant = rx * sy - ry * sx;
+            if (Math.abs(determinant) < 1e-10) continue;
+            const dx = s.x - p.x, dy = s.y - p.y;
+            const along = (dx * sy - dy * sx) / determinant;
+            const across = (dx * ry - dy * rx) / determinant;
+            if (along < 0 || along > 1 || across < 0 || across > 1) continue;
+            const x = p.x + along * rx, y = p.y + along * ry;
+            lift = Math.max(lift, clothHeight(this.surfaceTriangle, x, y) + gap - clothHeight(this.ribbonTriangle, x, y));
+          }
+        }
+      }
+      // Accumulate first: all three corners must move by at least this lift,
+      // and neighboring triangles share the larger correction without seams.
+      for (let k = 0; k < 3; k++) {
+        const vertex = index.getX(i + k);
+        this.clearance[vertex] = Math.max(this.clearance[vertex], lift);
+      }
+    }
+    for (let i = 0; i < position.count; i++) position.setZ(i, position.getZ(i) + this.clearance[i]);
     position.needsUpdate = true;
     this.mesh.geometry.computeVertexNormals();
   }
@@ -906,6 +981,7 @@ export class Avatar {
         );
         this.clearCloth(out);
       });
+      cloth.keepAbove(this.cape, 0.02);
     });
   }
 
