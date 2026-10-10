@@ -116,7 +116,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `profile/` | Profile types/API client, server-authoritative balances, durable account-scoped pickup outbox and equipped appearance notifications |
 | `game/run/collection.ts` | Adventure-only hoop-distance rarity placement, streamed obstacle clearance, swept collection (5.2 m crystals, 3.2 m treasures), toon crystal/cape tokens, nearby budgeted crystal motes and pickup animation |
 | `game/cosmetics/`, `game/pets/` | Cape/hat/shoe/wing catalogs and toon models; eight detailed bird/mythological pets leading on their own unscored autopilot rail |
-| `components/ProfilePanel.tsx`, `components/CollectionPreview.tsx`, `components/TestCollectionPanel.tsx` | Persistent profile/inventory, equip controls, XP/crystal HUD, animated model preview and unsaved test fitting room |
+| `components/ProfilePanel.tsx`, `components/CollectionPreview.tsx`, `components/TestCollectionPanel.tsx` | The adventure journal (`ProfilePanel`: name, level, crystals, collection, equip; opened from the menu's pilot pill or the pause), the in-flight XP/crystal pill (`ProfileStatus`, not before take-off), animated model preview and the unsaved test fitting room. Journal, settings and fitting room share the `.sheet` card in `index.css` (with `.chip`, `.segmented`, `.meter`); `kindIcons.tsx` has an icon per collection kind |
 | `game/Game.ts` | The game: frame loop, fixed 120 Hz physics steps, race state, ring checks, HUD data, effects wiring (gate bursts, skim spray, gate motes), rendering with optional bloom and bounded broad halos (`FX.bloomHalo`), adaptive quality, test-only shared time scaling, the `?tune` panel |
 | `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only. `touching()` is the pilot's hitbox (`FLIGHT.hit*`): a ball for the body and a rectangle per wing, tilted up at a dihedral, fixed in the flight frame (never the animated pose), sampled against the distance field with early-outs; `hitboxWorld()` is the same hitbox in world space, which `Game.step` tests against the land drawn (`LandCollider`). `FlightMods` (run upgrades: drag, sink, stall, proximity boost, dash boost, thermal lift, hover, glide lock, `thrust`, a plunge's `dive`, Hover-Stall's `hang`, `turn` for stances and Aero-Braking, Zenith's `climb`, Ascension's `ascend`, a rise on rails in `ascendStep`) are only ever passed in run mode; `flap()`, `launch()`, `deflect()`, `surge()` and a forced `dodge()` are run abilities |
 | `game/avatar.ts` | The pilot: a cel-shaded chibi flyer built from primitives (merged per body part, vertex-colored), a procedural cape and scarf (`Cloth`), two-segment feathered wings, and all its animation: bank lead spring, barrel rolls, flapping driven by effort, bobbing, cloth ripples, limb reactions. Also `createLabel` and `glowTexture` |
@@ -234,6 +234,18 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-11: Landing sheets unified, the journal (Claude)
+
+Asked for by the UX group, added to the hide-ui PR. Settings, the profile
+(now the adventure journal) and the test fitting room are one `.sheet` card in
+How to fly's style, themed by the map. The menu's "Profile & inventory"
+button and name popover are gone: the pilot pill shows level and crystals and
+opens the journal (an invite without a name opens it on the name field). The
+in-flight profile pill no longer shows before take-off. UI only. Verified:
+lint, build, 126 tests; in the browser at 1280 × 800 and 375 × 812 (journal
+squeezed on phones, fixed), the invite flow, the fitting room. Entry
+animations not watched (hidden pane).
 
 ### 2026-10-11: In-game glass hidden until the mouse moves (Claude)
 

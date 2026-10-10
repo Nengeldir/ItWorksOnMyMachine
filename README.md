@@ -383,8 +383,9 @@ doesn't fly the course itself.
 
 ## Saved adventure profile
 
-**Profile & inventory** in the menu shows your level, XP, crystals, items,
-cosmetics, wings and pets. Collect crystals near hoops and rarer discoveries farther
+Your **journal** (the pilot pill at the menu's bottom right, with your level
+and crystals) shows your name, level, XP, crystals, items, cosmetics, wings and
+pets. Collect crystals near hoops and rarer discoveries farther
 beside them during Adventure. Rewards save immediately to your existing login's
 profile in SQLite. Pause an adventure to inspect the inventory; equip collected
 cosmetics or a companion, and preview every model. Races and test mode grant no
@@ -406,7 +407,7 @@ capes have distinct embroidered hems.
 | `frontend/src/profile/`               | Profile API client, types and durable pickup outbox       |
 | `frontend/src/game/run/collection.ts` | Hoop-distance rarity, terrain-safe pickups and collection models |
 | `frontend/src/game/cosmetics/`, `game/pets/` | Toon outfits, decorated wing fans and animated hoop guides |
-| `frontend/src/components/ProfilePanel.tsx`, `CollectionPreview.tsx`, `TestCollectionPanel.tsx` | Profile, inventory, equip controls, preview and unsaved test fitting room |
+| `frontend/src/components/ProfilePanel.tsx`, `CollectionPreview.tsx`, `TestCollectionPanel.tsx` | The journal (profile, inventory, equip controls), preview and unsaved test fitting room |
 | `backend/app.py`                       | API endpoints, login headers, solo runs                  |
 | `backend/rooms.py`                     | Rooms, race state machine, SSE listeners, tick loop      |
 | `backend/store.py`                     | SQLite runs, leaderboards and ghosts                     |

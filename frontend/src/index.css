@@ -284,3 +284,166 @@ kbd {
   color: var(--ink-70);
   font-size: 0.9em;
 }
+
+/* --- Sheets: the big dialogs (settings, the journal) --------------------------------------------
+   The How to fly card's glass, a header with a round badge, an eyebrow and the title, a round close,
+   and the content in light inner panels. Small pieces shared with the menu: chips, a segmented
+   control, a soft meter. */
+.sheet {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(40rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  box-sizing: border-box;
+  padding: 1.3rem 1.4rem 1.4rem;
+  overflow: auto;
+  border-radius: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  color: var(--ink);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, color-mix(in srgb, #fff 90%, var(--tint)) 96%, transparent),
+    color-mix(in srgb, color-mix(in srgb, #fff 76%, var(--tint)) 94%, transparent)
+  );
+  box-shadow:
+    0 30px 80px color-mix(in srgb, var(--ink) 40%, transparent),
+    inset 0 1px 0 #fff;
+  text-align: left;
+}
+
+.sheet[open] {
+  animation: sheet-in 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+}
+
+.sheet::backdrop {
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--ink, #2e1b3a) 30%, transparent),
+    color-mix(in srgb, var(--ink, #2e1b3a) 68%, transparent)
+  );
+  backdrop-filter: blur(8px) saturate(1.1);
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.sheet-head .overlay-badge {
+  flex: none;
+}
+
+.sheet-head small {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-45);
+}
+
+.sheet-head h2 {
+  margin: 0.1rem 0 0;
+  font-size: 1.7rem;
+  line-height: 1.1;
+}
+
+.sheet-close {
+  flex: none;
+  margin-left: auto;
+  width: 2.6rem;
+  height: 2.6rem;
+  padding: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+
+.sheet-panel {
+  padding: 1rem 1.1rem;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.sheet-panel + .sheet-panel {
+  margin-top: 0.75rem;
+}
+
+.sheet-panel h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1.05rem;
+}
+
+.sheet input[type=checkbox],
+.sheet input[type=range] {
+  accent-color: var(--ink);
+}
+
+.sheet :focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 8px;
+  background: var(--ink-06);
+  font-family: var(--font-numbers);
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The landing page's tabs, anywhere: one pill, the chosen one lifted out in white */
+.segmented {
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: auto;
+  padding: 4px;
+  border-radius: 16px;
+  background: var(--ink-06);
+}
+
+.segmented button {
+  padding: 0.45rem 0.9rem;
+  border: none;
+  border-radius: 12px;
+  background: none;
+  color: var(--ink-70);
+  white-space: nowrap;
+}
+
+.segmented button[aria-selected="true"] {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 2px 8px var(--ink-12);
+}
+
+/* A soft progress bar (experience), warm like the skim meter */
+.meter {
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--ink-06);
+  overflow: hidden;
+}
+
+.meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--warm) 70%, #fff), var(--warm-deep));
+}
