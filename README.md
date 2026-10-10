@@ -284,18 +284,24 @@ It starts collapsed on narrow screens.
 | Readout / control | Meaning |
 | :--- | :--- |
 | Altitude (m) | The physics position's world Y coordinate; it can be negative. Surface clearance is a separate measurement. |
+| Ground distance (m) | Clearance to terrain or solid water, sampled from the collision field at the pilot's physics position. Clamped to zero inside a surface; excludes trees. This is nearest-surface clearance, not vertical altitude, and the field can be capped far from terrain. |
 | Speed (m/s) | Magnitude of the actual flight velocity. |
 | Climb rate (m/s) | Vertical velocity; positive means climbing. |
 | Acceleration (m/s²) | Magnitude of the velocity change divided by the fixed physics timestep; turning also counts. |
 | Speed change (m/s²) | Signed change in speed; negative means slowing down. |
 | Show flight telemetry | Show or hide the readouts. They refresh at the existing 10 Hz HUD cadence. |
-| Portal every N gates | Adventure only: `0` keeps the normal exit; `1` adds a portal after every gate; `3` adds one after every third gate. Updates immediately and applies to subsequent levels. Entering any portal uses the usual upgrade picker and biome transition. |
+| `Shift+P` / Spawn portal | Adventure only, after take-off: spawns a portal in front of the pilot. Flying through it opens the normal upgrade picker and next biome. Pressing it again replaces the temporary portal; the normal exit remains. |
+| Portal distance (m) | Distance ahead for the spawned portal, default 40 m. |
+| `Shift+O` / Win adventure | Opens the normal victory/end screen immediately, including from the intro, pause or upgrade picker. Keeps the current score and visited-biome history; does not save a best score. |
+| `P` | Normal pause/resume; in debug mode `Shift+P` takes precedence. |
 
 Acceleration, speed-change and climb-rate readings reset during pause,
 loading, countdown, respawn and portal transitions, so teleports and waiting
 do not appear as acceleration spikes.
-Portal controls have no effect in time trials or explore mode. All settings
-belong to the current game and reset on restart; they are never saved in
+Portal/win actions have no effect in time trials or explore mode. Shortcuts
+require Shift, ignore held-key repeats, and do not run while typing in
+editable fields. Both actions also have buttons in the panel and `?tune`.
+All settings belong to the current game and reset on restart; they are never saved in
 localStorage. Test adventures do not update best scores, and test time trials
 do not start the server clock or submit times or ghosts.
 
@@ -308,7 +314,9 @@ server for playtests. This does not add an administrator mode to production.
 To extend it, add defaults and a control descriptor in
 [`tuning.ts`](frontend/src/game/tuning.ts), a typed setting in
 [`debugMode.ts`](frontend/src/game/debugMode.ts), and the corresponding
-`DEV`-guarded consumer. Add flight measurements to `FlightTelemetry` and
+`DEV`-guarded consumer. Add buttons/shortcuts to the `DEBUG_ACTIONS` registry
+in `game/debug/actions.ts` and handle them in `Game.performDebugAction`.
+Add flight measurements to `FlightTelemetry` and
 the `METRICS` registry in the panel. The same control descriptors appear in
 `?debug&tune`, without mixing gameplay overrides into persisted visual tuning.
 Run `npm run test:debug` for the targeted checks (Node 22.15+).

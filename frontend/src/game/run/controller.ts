@@ -120,6 +120,7 @@ export class RunController {
   private readonly passed = new Set<number>();
   private lastGate = 0; // checkpoints: how many gates to respawn after
   private portals: Portal[] = [];
+  private debugPortal: Portal | null = null;
   private levelTime = 0;
   private phaseTime = 0;
   private dashTime = 0;
@@ -187,7 +188,11 @@ export class RunController {
     this.levelTime = 0;
     this.styleBanked = false;
     this.host.view.setRings("race", 0);
-    this.refreshPortals();
+    // Every normal level has a single exit just beyond the final gate.
+    const finish = this.host.world.course.rings.at(-1)!;
+    const portal = new Portal(finish.position.clone().addScaledVector(finish.normal, 3), finish.normal, 15, this.portalColor);
+    this.portals.push(portal);
+    this.group.add(portal.group);
     // Abilities start charged
     this.stamina = 2 + this.stats.flap;
     this.hoverFuel = this.hoverMax;
@@ -200,26 +205,38 @@ export class RunController {
   private disposeLevel() {
     this.portals.forEach((p) => p.dispose());
     this.portals = [];
+    this.debugPortal = null;
   }
 
-  /** The normal exit stays put; local dev playtests can also exit at earlier gates. */
-  refreshPortals() {
-    this.disposeLevel();
-    const rings = this.host.world.course.rings;
-    const color = this.level >= RUN_LENGTH ? "#ffe9a0" : BIOMES[destination(this.seed, this.level, this.path)].portals.color;
-    const add = (index: number) => {
-      const gate = rings[index];
-      const portal = new Portal(gate.position.clone().addScaledVector(gate.normal, 3), gate.normal, 15, color);
-      this.portals.push(portal);
-      this.group.add(portal.group);
-    };
-    if (import.meta.env.DEV) {
-      const interval = this.host.debugSettings?.portalEveryGates ?? 0;
-      if (Number.isInteger(interval) && interval > 0) {
-        for (let i = interval - 1; i < rings.length - 1; i += interval) add(i);
-      }
+  private get portalColor(): string {
+    return this.level >= RUN_LENGTH ? "#ffe9a0" : BIOMES[destination(this.seed, this.level, this.path)].portals.color;
+  }
+
+  /** A dev playtest exit ahead of the pilot; repeated presses replace it, leaving the normal exit intact. */
+  spawnDebugPortal(distance: number) {
+    if (!import.meta.env.DEV || !this.host.debugSettings || this.frozen || !Number.isFinite(distance) || distance <= 0) return;
+    if (this.debugPortal) {
+      this.portals.splice(this.portals.indexOf(this.debugPortal), 1);
+      this.debugPortal.dispose();
     }
-    add(rings.length - 1);
+    const flight = this.host.flight;
+    this.debugPortal = new Portal(flight.position.clone().addScaledVector(flight.forward, distance), flight.forward, 15, this.portalColor);
+    this.portals.push(this.debugPortal);
+    this.group.add(this.debugPortal.group);
+  }
+
+  /** Use the real win/summary event without pretending that skipped biomes were visited. */
+  debugWin() {
+    if (!import.meta.env.DEV || !this.host.debugSettings || this.ended) return;
+    if (!this.styleBanked) {
+      this.score += Math.round(this.host.style);
+      this.styleBanked = true;
+    }
+    this.through = null;
+    this.exiting = false;
+    this.dashTime = 0;
+    this.tunnel.place(this.host.camera.position, this.host.flight.forward, 0, 0);
+    this.finish();
   }
 
   private get hoverMax(): number {

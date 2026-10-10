@@ -120,10 +120,10 @@ export const AUDIO = {
 };
 
 /** Dev-only playtesting. Kept out of GROUPS so gameplay overrides are never persisted. */
-export const DEBUG_DEFAULTS = { showFlight: true, portalEveryGates: 0 } satisfies DebugSettings;
+export const DEBUG_DEFAULTS = { showFlight: true, portalAhead: 40 } satisfies DebugSettings;
 export const DEBUG_CONTROLS = [
   { key: "showFlight", label: "Show flight telemetry" },
-  { key: "portalEveryGates", label: "Portal every N gates", range: [0, 20, 1] },
+  { key: "portalAhead", label: "Portal distance (m)", range: [10, 150, 1] },
 ] as const;
 
 const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, WATER, RUN, AUDIO } as const;

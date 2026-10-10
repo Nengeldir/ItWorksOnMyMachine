@@ -1,0 +1,33 @@
+.lil-gui.playtest-panel {
+  position: absolute;
+  top: 4.5rem;
+  right: 1rem;
+  z-index: 20;
+  width: min(320px, calc(100% - 2rem));
+  max-height: calc(100% - 5.5rem);
+  overflow-y: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.playtest-panel .debug-note {
+  margin: 0;
+  padding: 0.75rem;
+  color: #ccc;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* Read-only measurements should be as legible as editable controls. */
+.playtest-panel .lil-controller.lil-disabled {
+  opacity: 1;
+}
+
+.playtest-panel .lil-controller.lil-disabled input {
+  color: #eee;
+}
+
+@media (min-width: 1000px) {
+  .lil-gui.playtest-panel.playtest-with-tuning {
+    right: 320px;
+  }
+}

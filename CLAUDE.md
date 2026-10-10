@@ -160,6 +160,98 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### Debug playtest mode — 2026-10-10
+
+This record accompanies the code change without editing `CLAUDE.md`, as
+requested. The README contains the controls and architecture additions.
+
+The mode uses Vite's development-build flag plus an explicit `?debug` URL
+opt-in. Its panel, flight telemetry and gameplay overrides load only for a
+local solo, explore or adventure game. Settings live on that game instance;
+they neither persist nor apply to rooms or the menu backdrop. Production
+builds exclude the diagnostic assets and debug shortcut actions.
+
+`FlightTelemetry` samples velocity before and after each fixed physics step
+without allocating or changing flight state. The panel publishes world
+altitude, ground distance, actual speed, climb rate, vector acceleration
+magnitude and signed speed change at the existing HUD interval. Ground
+distance uses the terrain and solid-water collision fields, excludes trees,
+and clamps negative distances to zero. It is nearest-surface clearance rather
+than a vertical raycast; these fields can be capped far from terrain. Pause,
+respawn, loading, countdown and frozen transitions clear acceleration,
+speed-change and climb-rate readings while still sampling ground clearance.
+
+The earlier portal-frequency control is replaced by `Shift+P`: after take-off,
+`RunController.spawnDebugPortal()` places a temporary exit ahead of the pilot,
+40 m by default (tunable in the debug panel). Repeated presses replace and
+dispose that portal, while retaining the normal exit. Entering it uses the
+usual upgrade and transition flow; changing levels removes it.
+
+`Shift+O` calls `RunController.debugWin()`: it banks current style once, closes
+any portal tunnel, freezes flight and sends the existing victory event. The
+normal end screen shows the actual score, upgrades and visited biomes; skipped
+biomes are not fabricated. This also works from pause, intro and the upgrade
+picker, and still bypasses score storage.
+
+Both actions have panel buttons and share a `DEBUG_ACTIONS` registry with
+their keyboard bindings. `Input.onShortcut` lets mode-specific chords take
+precedence over pause without adding debug bindings to normal input.
+Plain P retains pause/resume, repeated shortcut keydowns are consumed without
+re-running actions, and typing in editable fields is ignored. The seeded
+course, collision surfaces and flight physics are unchanged.
+
+Changed paths:
+
+- `frontend/src/game/debugMode.ts`: shared activation gate and settings type.
+- `frontend/src/game/debug/`: panel, registry, styling and telemetry.
+- `frontend/src/game/tuning.ts`: session-only debug defaults and controls.
+- `frontend/src/game/Game.ts`: lazy loading, lifecycle cleanup and telemetry hooks.
+- `frontend/src/game/input.ts`: optional shortcut precedence over normal input.
+- `frontend/src/game/run/controller.ts`: optional extra adventure portals.
+- `frontend/src/session/{Run,Solo,Room}Session.ts`: isolate scores/uploads and rooms.
+- `frontend/src/App.tsx`: preserve debug opt-in during navigation.
+- `frontend/package.json`, `frontend/tests/debug.test.mjs`: targeted test command.
+- `README.md`, this document: usage, extension points, verification and follow-ups.
+
+Verification:
+
+- `npm run build` and `npm run lint` pass.
+- Ten targeted tests pass: dev/URL gate, acceleration and signed speed
+  change, idle/respawn reset, terrain/water ground clearance, shortcut
+  precedence and typing/repeat guards, portal placement/replacement and
+  unchanged course, transition into Verdant Highlands, idempotent wins and
+  tunnel cleanup, and disabled actions outside active dev playtests.
+- Five existing input tests pass, including pause, typing, rebinding, held
+  controls and disposal.
+- Headless Firefox: one test panel under React StrictMode; ground-distance
+  reading matches the collision field; actual Shift+P spawns a portal 40 m
+  ahead without pausing; repeated presses replace it; plain P pauses; flying
+  straight ahead enters that portal and offers three upgrades; selecting one
+  reaches Verdant Highlands and removes the temporary exit. Shift+O from a
+  paused transition opens the normal victory screen, clears the tunnel,
+  unpauses and leaves best-score storage unchanged. Both actions also appear
+  in `?tune`. Normal dev games and production ignore debug actions. No
+  JavaScript errors.
+- The test panel now uses its own `playtest-panel` CSS class so the newer
+  exploration panel's layout cannot cover the victory screen.
+- Production preview with `?run=42&debug`: normal adventure UI, no debug
+  panel and no development console hooks.
+- `__raceHashes()` for seeds 1, 7 and 42 matches all documented mesh,
+  tree, collision-distance and gate hashes.
+- Production JS/CSS scan: no debug panel selector, telemetry labels,
+  control/action labels or `portalAhead` property.
+- `CLAUDE.md` and `flight.ts` have no diff from HEAD.
+- The pre-existing untracked `frontend/tests/flight.test.mjs` passes four
+  checks and fails its gravity-only energy-conservation assertion. The
+  flight model is unchanged in this task; this failure remains open.
+
+Follow-ups: manually play with pointer-lock mouse controls and measure in a
+focused browser window. Headless checks validate behavior and layout, not
+the project's 60 fps target. Production administrator testing would need a
+separately protected deployment; a client-side secret would not provide
+access control.
+
+
 ### 2026-10-10: Biome music and the wingbeat sample (Claude)
 
 Asked for: an audio controller for the generated ElevenLabs tracks, files moved
