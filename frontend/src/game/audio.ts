@@ -423,6 +423,16 @@ export class GameAudio {
         this.whoosh(250, 2800, 1.3, 0.6);
         this.glide(330, 660, 1.1, "sine", 0.05, 0.1);
         break;
+      case "shield":
+        // Ice forming: a crystalline shimmer of high notes
+        [1568, 2093, 2637, 3136].forEach((f, i) => this.tone(f, 0.5, "sine", 0.05, i * 0.04));
+        this.whoosh(3000, 6000, 0.4, 0.12, "highpass");
+        break;
+      case "shatter":
+        // Glass bursting: a bright crash of noise and falling chimes
+        this.whoosh(6000, 1500, 0.5, 0.5, "highpass");
+        [2637, 2093, 1760, 1319].forEach((f, i) => this.tone(f, 0.35, "triangle", 0.06, i * 0.035));
+        break;
     }
   }
 

@@ -182,6 +182,7 @@ export const ABILITIES_FX = {
 /** How strong the design list's items look (items/fx.ts); what they do is ITEM in run/items.ts */
 export const ITEMS_FX = {
   wind: 1, // the Anemo Catcher's updraft
+  shield: 1, // the Starflake Shield's aura of ice
 };
 
 /** Music and sound levels */

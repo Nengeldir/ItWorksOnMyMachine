@@ -7,7 +7,7 @@ import { Builder, GOLD, blend, cyl, lathe, leaf, star } from "./builder";
 // is a hand's length or two); `y` is up, `-z` the front. The giant firework
 // (the Comet Tail Firework) is in models.ts.
 
-export type RelicId = "anemoCatcher";
+export type RelicId = "anemoCatcher" | "starflakeShield";
 
 const ANEMO = "#5fe6c6";
 const ANEMO_LIGHT = "#c8fff1";
@@ -38,6 +38,21 @@ function anemoCatcher(): THREE.BufferGeometry {
   return b.build();
 }
 
+/** The Starflake Shield: a six-pointed crystal of ice, a smaller star turned inside it, a bright heart */
+function starflakeShield(): THREE.BufferGeometry {
+  const b = new Builder();
+  b.add(star(0.12, 0.045, 0.026, 6), (p, out) => blend("#eafcff", "#7fd3ff", Math.hypot(p.x, p.y) * 9, out), 0.6);
+  b.add(star(0.075, 0.03, 0.04, 6), (p, out) => blend("#ffffff", "#bfeaff", Math.hypot(p.x, p.y) * 12, out), 0.9, [0, 0, 0], [0, 0, Math.PI / 6]);
+  b.add(new THREE.OctahedronGeometry(0.03, 0), "#ffffff", 1, [0, 0, 0], [0, 0, 0], [1, 1, 1.6]);
+  // Little frost buds between the points
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    b.add(new THREE.OctahedronGeometry(0.014, 0), "#d8f6ff", 0.8, [Math.cos(a) * 0.07, Math.sin(a) * 0.07, 0]);
+  }
+  return b.build();
+}
+
 export const RELIC_BUILDERS: Record<RelicId, () => THREE.BufferGeometry> = {
   anemoCatcher,
+  starflakeShield,
 };
