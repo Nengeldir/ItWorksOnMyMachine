@@ -192,6 +192,27 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Rebase Pengyue's newest work onto main
+
+- Replayed the ten new feature commits from `origin/Pengyue` (`fec0aee`)
+  onto `main` (`f532f3e`) on `pengyue-rebase`. Older biome work was already
+  integrated in main; main's flight/pause/music commits were not replayed.
+  The shared Pengyue branch was left unchanged.
+- Resolved conflicts in crash/dodge animation, camera, flight hitboxes,
+  loading fly-ins, portal/finale HUD, pause behavior, item gallery and docs.
+  Kept 80° banking, upright recovery, boost/brake, 5 m dodges, stable camera
+  orientation, fixed boost UI and biome audio. Removed obsolete dash effects
+  and restored the explore biome import. Synced camera velocity interpolation
+  during fly-in and handover.
+- New body/wing collision rules use `speed-control-v3` in frontend and backend;
+  v2 results remain stored but are excluded from current rankings. Deploy both
+  together. Added tests for hitbox orientation, crash-camera respawn, glide-in
+  handover and preservation/exclusion of v2 scores.
+- Verified build, lint, 20 frontend tests and 22 backend tests. Browser smoke
+  check: Verdant Morning/Moonlit, loading fly-in, pause overlay, crash state and
+  item-gallery page load. Full portal/finale and two-client/gamepad playtests
+  remain outstanding. The explore debug panel overlaps the HUD at narrow widths.
+
 ### 2026-10-10: Crash camera from above, pilot hitbox, land matching its collisions (Claude)
 
 Asked for: after a crash the camera changes to a view from the top to see
@@ -952,6 +973,10 @@ ported to the islands world:
   through islands and gates, no console errors.
 
 ## Next up
+
+- Play through the integrated portal/finale and victory lap; check multiplayer
+  and gamepad controls. Make the explore debug panel usable at narrow widths
+  without covering the HUD.
 
 - **Hitbox and land follow-ups**: features thinner than the 6 m grid (thin
   needles, sharp spikes) still collide where nothing is drawn (snapping

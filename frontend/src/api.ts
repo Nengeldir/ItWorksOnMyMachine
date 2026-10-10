@@ -74,7 +74,7 @@ export class ApiError extends Error {
 export async function request<T>(endpoint: string, method: "GET" | "POST" = "GET", body?: unknown): Promise<T> {
   const response = await fetch(endpoint, {
     method,
-    headers: { "X-Flight-Rules": "speed-control-v2", ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+    headers: { "X-Flight-Rules": "speed-control-v3", ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) {

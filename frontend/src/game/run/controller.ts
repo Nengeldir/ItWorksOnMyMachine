@@ -427,13 +427,6 @@ export class RunController {
     if (this.stats.flap > 0) this.stamina = Math.min(2 + this.stats.flap, this.stamina + dt / 9);
     if (this.phase === "arrive" && this.phaseTime > 3) this.phase = "explore";
 
-    // A dash trails light
-    if (this.dashTime > 0) {
-      for (let i = 0; i < 3; i++) {
-        particles.emit(this.host.flight.position, tmp.copy(this.host.flight.velocity).multiplyScalar(-0.2).add(forward.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5)), fx(0.5, 1, DASH_COLOR, Kind.Wisp, 0, 2, 1.4));
-      }
-    }
-
     if (this.phase === "finale" && this.finale) {
       if (!this.sparkled) {
         this.sparkled = true;
