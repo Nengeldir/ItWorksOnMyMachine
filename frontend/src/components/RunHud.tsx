@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import type { RunHud as RunHudState } from "../game/run/run";
+import { formatTime } from "../format";
+import type { RunHud as RunHudState, RunSummary } from "../game/run/run";
 import { UPGRADES, type Upgrade, type UpgradeId } from "../game/run/upgrades";
 import { BIOMES, type BiomeId } from "../game/world/biomes";
 import "./RunHud.css";
@@ -80,6 +81,80 @@ export const TitleCard = ({ level, length, biome }: { level: number; length: num
     <p>{BIOMES[biome].tagline}</p>
   </div>
 );
+
+/**
+ * The finish screen, over the default sky map flown on autopilot: the run's
+ * stats on a translucent card, and the next actions in a column beside it
+ */
+export const FinishScreen = ({
+  summary,
+  best,
+  onAgain,
+  onNewRun,
+  onMenu,
+}: {
+  summary: RunSummary;
+  best: number | null;
+  onAgain: () => void;
+  onNewRun: () => void;
+  onMenu: () => void;
+}) => {
+  const verdict =
+    best === null || summary.score > best ? "a new best on this run" : summary.score === best ? "ties your best" : `your best: ${best.toLocaleString()}`;
+  const stats: [string, string][] = [
+    ["Flying time", formatTime(summary.timeMs)],
+    ["Biomes", `${summary.levels} of 8`],
+    ["Gates", summary.gates.toLocaleString()],
+    ["Best chain", `×${summary.bestChain}`],
+    ["Style", summary.style.toLocaleString()],
+    ["Crashes", summary.crashes.toLocaleString()],
+  ];
+  return (
+    <div className="run-finish">
+      <section className="finish-card">
+        <small>Run #{summary.seed} · complete</small>
+        <h2>Journey's end</h2>
+        <div className="finish-score">
+          <strong>{summary.score.toLocaleString()}</strong>
+          <span>{verdict}</span>
+        </div>
+        <dl className="finish-stats">
+          {stats.map(([label, value]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <ol className="finish-path">
+          {summary.path.map((b, i) => (
+            <li key={i}>{BIOMES[b].name}</li>
+          ))}
+        </ol>
+        {summary.upgrades.length > 0 && (
+          <p className="finish-upgrades">
+            {summary.upgrades.map((id, i) => (
+              <span key={i} title={UPGRADES.find((u) => u.id === id)?.name}>
+                {icon(id)}
+              </span>
+            ))}
+          </p>
+        )}
+      </section>
+      <nav className="finish-actions">
+        <button className="primary" onClick={onAgain}>
+          Fly it again <kbd>Enter</kbd>
+        </button>
+        <button onClick={onNewRun}>
+          New run <kbd>N</kbd>
+        </button>
+        <button onClick={onMenu}>
+          Return to menu <kbd>⌫</kbd>
+        </button>
+      </nav>
+    </div>
+  );
+};
 
 /** The upgrade picker, shown in the tunnel between biomes */
 export const UpgradePicker = ({

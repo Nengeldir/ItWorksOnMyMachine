@@ -70,4 +70,11 @@ export interface RunSummary {
   levels: number;
   path: BiomeId[];
   upgrades: UpgradeId[];
+  /** Flying time over all levels (the level clocks), in milliseconds */
+  timeMs: number;
+  gates: number;
+  crashes: number;
+  bestChain: number;
+  /** Style points, all levels together */
+  style: number;
 }

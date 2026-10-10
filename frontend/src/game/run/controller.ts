@@ -137,6 +137,12 @@ export class RunController {
   private stats: RunStats = baseStats();
   private score = 0;
   private chain = 0;
+  // For the summary
+  private totalTime = 0;
+  private gates = 0;
+  private crashes = 0;
+  private bestChain = 0;
+  private totalStyle = 0;
   private readonly passed = new Set<number>();
   private lastGate = 0; // checkpoints: how many gates to respawn after
   private portals: Portal[] = [];
@@ -281,6 +287,8 @@ export class RunController {
       if (tmp.distanceTo(ring.position) > ring.radius + 1 + this.stats.magnet) continue;
       this.passed.add(i);
       this.chain = Math.min(CHAIN_MAX, this.chain + 1);
+      this.bestChain = Math.max(this.bestChain, this.chain);
+      this.gates++;
       this.lastGate = Math.max(this.lastGate, i + 1);
       this.score += (GATE_POINTS + this.stats.gateBonus) * this.chain;
       // Every gate refills a wingbeat
@@ -306,6 +314,7 @@ export class RunController {
 
   /** A crash breaks the gate chain. Flight resets the shared boost state. */
   crashed() {
+    this.crashes++;
     if (this.chain > 1) this.notify("Gate chain lost", 0);
     this.chain = 0;
   }
@@ -322,6 +331,8 @@ export class RunController {
     // Clearing the level: a bonus, more for a fast one
     const par = (this.host.world.course.endZ - this.host.world.course.start.z) / 42;
     this.score += LEVEL_BONUS + Math.round(Math.max(0, par - this.levelTime) * PAR_POINTS) + Math.round(this.host.style);
+    this.totalTime += this.levelTime;
+    this.totalStyle += this.host.style;
     this.styleBanked = true;
     this.host.stinger("portal");
     if (this.level >= RUN_LENGTH) {
@@ -398,6 +409,11 @@ export class RunController {
       levels: this.level,
       path: [...this.path],
       upgrades: [...this.picked],
+      timeMs: Math.round(this.totalTime * 1000),
+      gates: this.gates,
+      crashes: this.crashes,
+      bestChain: this.bestChain,
+      style: Math.round(this.totalStyle),
     });
   }
 
