@@ -4,7 +4,7 @@ import { outlineMaterial, toonMaterial } from "./toon";
 import { ATMOSPHERE } from "./world/atmosphere";
 import { ANIM, FX } from "./tuning";
 import { clamp, smoothstep } from "./math";
-import { DISSOLVE_AT, type DeathKind } from "./death";
+import { DISSOLVE_AT, type DeathKind, WING_POINTS } from "./death";
 import type { ItemSlot } from "./items/models";
 
 // The pilot: a small cel-shaded flyer with Genshin / Sky proportions (a big
@@ -240,6 +240,8 @@ interface Side {
   wing: THREE.Object3D;
   wingOuter: THREE.Object3D;
   tip: THREE.Object3D;
+  /** The tip of the last (innermost) primary, the wing's trailing corner */
+  trail: THREE.Object3D;
 }
 
 const localOmega = new THREE.Vector3();
@@ -247,6 +249,7 @@ const dq = new THREE.Quaternion();
 const prevInverse = new THREE.Quaternion();
 const forwardTmp = new THREE.Vector3();
 const rightTmp = new THREE.Vector3();
+const elbowTmp = new THREE.Vector3();
 
 function springStep(value: number, velocity: number, target: number, stiffness: number, damping: number, dt: number) {
   const c = 2 * damping * Math.sqrt(stiffness);
@@ -526,8 +529,13 @@ export class Avatar {
       const tip = new THREE.Object3D();
       tip.position.set((0.05 + 0.98 * Math.cos(0.12)) * s, 0.98 * Math.sin(0.12), 0);
       wingOuter.add(tip);
+      const last = 0.12 - (primaries - 1) * 0.3;
+      const lastLength = 0.98 - (primaries - 1) * 0.1;
+      const trail = new THREE.Object3D();
+      trail.position.set((0.05 + (primaries - 1) * 0.045 + lastLength * Math.cos(last)) * s, -0.02 * (primaries - 1) + lastLength * Math.sin(last), 0);
+      wingOuter.add(trail);
 
-      return { shoulder, elbow, hip, knee, wing, wingOuter, tip };
+      return { shoulder, elbow, hip, knee, wing, wingOuter, tip, trail };
     };
     this.right = makeSide(1);
     this.left = makeSide(-1);
@@ -609,6 +617,27 @@ export class Avatar {
   wingtips(left: THREE.Vector3, right: THREE.Vector3) {
     this.left.tip.getWorldPosition(left);
     this.right.tip.getWorldPosition(right);
+  }
+
+  /**
+   * Points along both wings in the pilot's own frame (the group's), left wing
+   * then right, five each: the wrist, the leading edge, the tip, the trailing
+   * corner and the middle of the outer edge. The crash tumble keeps them out
+   * of the rock (call after update)
+   */
+  wingPoints(out: THREE.Vector3[]) {
+    this.sidePoints(this.left, out, 0);
+    this.sidePoints(this.right, out, WING_POINTS);
+  }
+
+  private sidePoints(side: Side, out: THREE.Vector3[], k: number) {
+    const g = this.group;
+    const elbow = g.worldToLocal(side.wingOuter.getWorldPosition(elbowTmp));
+    const tip = g.worldToLocal(side.tip.getWorldPosition(out[k + 2]));
+    const trail = g.worldToLocal(side.trail.getWorldPosition(out[k + 3]));
+    out[k].copy(elbow);
+    out[k + 1].lerpVectors(elbow, tip, 0.5);
+    out[k + 4].lerpVectors(tip, trail, 0.5);
   }
 
   /** The middle of the cape's hem in world space (call after update) */

@@ -167,7 +167,10 @@ glowing ponds), soft clouds, valley mist, auroras and ambient particles
 **Flight model** ([`frontend/src/game/flight.ts`](frontend/src/game/flight.ts)):
 an arcade, energy-based wingsuit. The nose points where you go, gravity along
 the flight path speeds you up or slows you down, drag caps the speed, and
-banking turns you. Physics runs at a fixed 120 Hz. Open the game with `?tune`
+banking turns you. Physics runs at a fixed 120 Hz. What you can hit is a small
+ball for the body and a rectangle for each wing, tilted up like the wings
+drawn, a little smaller than the pilot so near misses stay graceful; the land
+you see is snapped onto the same surface the collisions use. Open the game with `?tune`
 (e.g. `http://localhost:5173/?seed=42&tune`) to tune every constant live:
 flight physics, the pilot's animation, trails and particles, the crystal gates,
 the camera and the render quality. Look tweaks are remembered in the browser;
@@ -182,7 +185,9 @@ back in a dive, the cloth ripples with speed, and hard turns throw a barrel
 roll. A crash plays out on screen before you respawn: hit a wall head-on and
 the pilot bounces off and tumbles head over heels; graze a slope and they roll
 down it in a trail of dust; clip a wing and they spin down like a seed; then
-they dissolve into light. Gates are cohorts of floating crystals that flare and burst when you fly
+they dissolve into light. The camera arcs up over the pilot to watch the fall
+from above, and the tumbling body (head, hips, feet and both wings) stays out
+of the rock. Gates are cohorts of floating crystals that flare and burst when you fly
 through. One GPU particle system draws every mote, star and shard, and bright
 things bloom (High quality). Each palette is a lighting mood as well: sun
 position, valley mist, painted clouds, stars at night, and how brightly trims
@@ -207,7 +212,8 @@ doesn't fly the course itself.
 | `backend/tests/`                       | pytest tests for rooms and the API                       |
 | `frontend/src/game/Game.ts`            | The game: loop, physics steps, race state, HUD data      |
 | `frontend/src/game/world/`             | Racing line, rock field, meshing workers, palettes, view |
-| `frontend/src/game/flight.ts`          | Flight model                                             |
+| `frontend/src/game/world/snap.ts`      | Snaps meshed land onto the collision surface             |
+| `frontend/src/game/flight.ts`          | Flight model and the pilot's hitbox                      |
 | `frontend/src/game/avatar.ts`          | The pilot's model and animation                          |
 | `frontend/src/game/death.ts`           | Crash animations: how a crash plays out (looks only)     |
 | `frontend/src/game/items/`             | Item models and animations; `/?gallery` shows them all   |
