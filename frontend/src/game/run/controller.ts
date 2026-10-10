@@ -321,7 +321,7 @@ export class RunController {
     m.climb = 1;
     m.ascend = 0;
     if (this.phase !== "explore" && this.phase !== "arrive") return;
-    this.levelTime += dt;
+    if (!this.items.frozenCombo) this.levelTime += dt;
     this.abilities.step(dt, input, proximity, flight, m);
     this.items.step(dt, input, proximity, flight, m);
     if (this.items.points > 0) {
@@ -376,7 +376,7 @@ export class RunController {
 
   /** A frame without control (gliding in while the land loads): the level's clock still runs */
   wait(dt: number) {
-    if (this.phase === "explore" || this.phase === "arrive") this.levelTime += dt;
+    if ((this.phase === "explore" || this.phase === "arrive") && !this.items.frozenCombo) this.levelTime += dt;
   }
 
   /** A crash costs a life and breaks the gate chain; the last life's crash ends the run. Flight resets the shared boost state. */

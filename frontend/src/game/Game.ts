@@ -1008,7 +1008,7 @@ export class Game implements RunHost {
     if (this.proximity > 0.15) {
       this.combo += STEP;
       this.comboIdle = 0;
-    } else if ((this.comboIdle += STEP) > 1.2) {
+    } else if (!this.run?.items.frozenCombo && (this.comboIdle += STEP) > 1.2) {
       this.combo = 0;
     }
     this.style += this.proximity ** 2 * this.flight.speed * STEP * this.multiplier * 0.5;
