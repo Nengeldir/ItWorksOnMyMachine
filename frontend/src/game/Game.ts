@@ -20,6 +20,7 @@ const RESPAWN_DELAY = 1.4; // seconds
 const START_SPEED = 32; // m/s
 const HUD_INTERVAL = 100; // ms
 const DRIFT_SPEED = 14; // m/s along the course, for the menu's camera
+const MARKER_EDGE = 8; // px the ring marker keeps from the screen edge
 
 export type RaceState = "free" | "countdown" | "racing" | "finished";
 
@@ -106,6 +107,7 @@ export class Game {
   private readonly trails: Trail[];
   private readonly debris: Debris;
   private readonly marker: HTMLDivElement;
+  private markerBox: { left: number; top: number; width: number; height: number } | null = null;
   private readonly recorder = new GhostRecorder();
   private readonly live = new Map<string, Pilot>();
   private ghosts: Pilot[] = [];
@@ -607,11 +609,28 @@ export class Game {
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
     this.marker.style.display = "block";
-    this.marker.style.transform = `translate(${((px + 1) / 2) * width}px, ${((1 - py) / 2) * height}px)`;
     this.marker.classList.toggle("offscreen", !onScreen);
     this.marker.classList.toggle("finish", ring.finish);
     const text = `${Math.round(this.flight.position.distanceTo(ring.position))} m`;
     if (this.marker.textContent !== text) this.marker.textContent = text;
+
+    // Keep the whole label on screen, not just the point it marks
+    const box = this.markerBox ?? this.measureMarker();
+    const x = clamp(((px + 1) / 2) * width, MARKER_EDGE - box.left, width - box.left - box.width - MARKER_EDGE);
+    const y = clamp(((1 - py) / 2) * height, MARKER_EDGE - box.top, height - box.top - box.height - MARKER_EDGE);
+    this.marker.style.transform = `translate(${x}px, ${y}px)`;
+  }
+
+  /** Where the marker's box sits around its point. The CSS fixes its size, so this runs once. */
+  private measureMarker() {
+    const style = getComputedStyle(this.marker);
+    this.markerBox = {
+      left: parseFloat(style.marginLeft),
+      top: parseFloat(style.marginTop),
+      width: this.marker.offsetWidth,
+      height: this.marker.offsetHeight,
+    };
+    return this.markerBox;
   }
 
   private resize() {
