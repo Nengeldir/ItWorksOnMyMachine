@@ -19,6 +19,7 @@ the last ring.
   last. Chain gates, skim for style, and pick an upgrade at every portal
   (stronger boost, wingbeats, glide lock, and abilities like Hover-Stall,
   Plunging Attack, Gale Force and a spirit manta to draft behind).
+  A map select on the Adventure tab shows every biome.
 
 Races and time trials always fly Sky Isles, so recorded ghosts and
 leaderboards stay valid; the other biomes are for the adventure.

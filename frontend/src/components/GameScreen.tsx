@@ -15,8 +15,7 @@ import { RoomSession } from "../session/RoomSession";
 import { SoloSession } from "../session/SoloSession";
 import { useMediaToggle } from "../media";
 import { type Settings, clientId } from "../storage";
-import { useUiTheme } from "../theme";
-import Controls from "./Controls";
+import { usePaletteTheme, useUiTheme } from "../theme";
 import Coach from "./Coach";
 import { HelpButton } from "./Help";
 import Hud from "./Hud";
@@ -282,6 +281,7 @@ const ExploreScreen = ({ biome, seed, settings, onSettings, onExit, testMode = f
   const [session] = useState(() => new ExploreSession(biome, seed, settings, testMode));
   const ref = useMountedSession(session, settings);
   const { hud, error, biome: current, mood, track, playing, speed, offers, next, summary } = useSyncExternalStore(session.store.subscribe, session.store.get);
+  usePaletteTheme(hud?.palette);
 
   // The mouse is often locked to the game, so everything has a key
   useHotkeys({
@@ -358,6 +358,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onT
   const ref = useMountedSession(session, settings);
   const { hud, stage, offers, next, arrived, summary, best, error } = useSyncExternalStore(session.store.subscribe, session.store.get);
   const run = hud?.run ?? null;
+  usePaletteTheme(hud?.palette);
 
   useHotkeys({
     Enter: () => {
@@ -399,25 +400,11 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onT
       {error && <div className="banner">{error}</div>}
 
       {stage === "intro" && !error && (
-        <aside className="panel glass">
-          <h2>Run #{seed}</h2>
-          <p>
-            Fly through eight biomes, from Sky Isles to the Aurora Summit. Every level ends at a portal: fly into it
-            and choose an upgrade. Gates score more in a chain, and skimming the land earns style.
-          </p>
-          <p className="hint">
-            A crash puts you back at the last gate and breaks your gate chain. Hold <kbd>Shift</kbd> to boost or <kbd>Space</kbd> to brake.
-            Adventure upgrades add <kbd>C</kbd> wingbeat and hold <kbd>F</kbd> hover. The arrow at the top points to the portal.
-          </p>
-          {best !== null && <p>Your best on this run: {best.toLocaleString()}</p>}
-          <button className="primary" onClick={() => session.begin()}>
+        <ReadyCard>
+          <button className="primary start-cta" onClick={() => session.begin()}>
             Take off <kbd>Enter</kbd>
           </button>
-          <details>
-            <summary>Controls</summary>
-            <Controls settings={settings} onSettings={onSettings} />
-          </details>
-        </aside>
+        </ReadyCard>
       )}
 
       {stage === "pick" && !hud?.paused && <UpgradePicker offers={offers} next={next} onPick={(id) => session.pick(id)} />}

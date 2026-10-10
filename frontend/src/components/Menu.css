@@ -156,12 +156,13 @@ body:has(.menu-backdrop:empty) {
 .menu-join input {
   flex: 1;
   padding: 0.6rem 0.9rem;
+  border-radius: 999px;
 }
 
-.menu-join .primary {
-  min-height: 0;
+/* Joining is the second way in: a quiet row under the big button, like Solo's links */
+.menu-join button {
   padding: 0 1.3rem;
-  box-shadow: none;
+  border-radius: 999px;
 }
 
 .menu-hint {

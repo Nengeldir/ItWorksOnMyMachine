@@ -1,15 +1,17 @@
-import { IconMap, IconSettings, IconUser, IconX } from "@tabler/icons-react";
+import { IconDice5, IconMap, IconSettings, IconUser, IconX } from "@tabler/icons-react";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { type LeaderboardEntry, type User, getLeaderboard } from "../api";
 import type { Screen } from "../App";
 import { randomRoomCode } from "../format";
 import { dailySeed, randomSeed } from "../game/rng";
 import { raceLevel } from "../game/world/biomes";
+import type { Level } from "../game/world/biomes/types";
 import { Course } from "../game/world/course";
 import { bestRun } from "../session/RunSession";
 import { type Settings, clientId } from "../storage";
-import { useUiTheme } from "../theme";
+import { usePaletteTheme } from "../theme";
 import SettingsPanel from "./SettingsPanel";
+import BiomeSelect from "./BiomeSelect";
 import CourseSelect from "./CourseSelect";
 import { HelpButton } from "./Help";
 import MenuBackdrop from "./MenuBackdrop";
@@ -42,16 +44,21 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
   const [tab, setTab] = useState<"solo" | "friends" | "adventure">(joinCode ? "friends" : "solo");
   const [code, setCode] = useState(joinCode ?? "");
   const [board, setBoard] = useState<LeaderboardEntry[]>([]);
+  const best = useMemo(() => bestRun(daily), [daily]);
   const [panel, setPanel] = useState<"none" | "settings" | "pilot">(joinCode && !settings.nickname ? "pilot" : "none");
   const [countdown, setCountdown] = useState(untilTomorrow);
   // The map select shows its course behind the glass, and the UI takes its colors
-  const [picking, setPicking] = useState(false);
+  // The course select (Solo) or the map select (Adventure)
+  const [picking, setPicking] = useState<"course" | "map" | null>(null);
   const [preview, setPreview] = useState<number | null>(null);
-  const shown = picking && preview !== null ? preview : daily;
+  const [previewLevel, setPreviewLevel] = useState<Level | null>(null);
+  const shown = picking === "course" && preview !== null ? preview : daily;
+  const level = picking === "map" ? previewLevel : null;
+  const shownPalette = useMemo(() => raceLevel(shown).palette, [shown]);
   // Pictures of the courses the backdrop has shown, for the map select's cards
   const [art, setArt] = useState<Record<number, string>>({});
   const keepArt = useCallback((seed: number, url: string) => setArt((all) => ({ ...all, [seed]: url })), []);
-  useUiTheme(shown);
+  usePaletteTheme(level ? level.palette : shownPalette);
 
   useEffect(() => {
     getLeaderboard(daily, clientId())
@@ -69,9 +76,11 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
   }, []);
 
   useEffect(() => {
-    // Enter flies today's course, unless a field or button has the focus
+    // Enter flies today's course (Solo) or run (Adventure), unless a field or button has the focus
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Enter" && e.target === document.body && tab === "solo" && !picking) go({ kind: "solo", seed: daily });
+      if (e.key !== "Enter" || e.target !== document.body || picking) return;
+      if (tab === "solo") go({ kind: "solo", seed: daily });
+      else if (tab === "adventure") go({ kind: "run", seed: daily });
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -84,15 +93,16 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
   };
 
   const closePicker = () => {
-    setPicking(false);
+    setPicking(null);
     setPreview(null);
+    setPreviewLevel(null);
   };
 
   const pilotName = me?.verified ? me.name : settings.nickname || "Guest";
 
   return (
     <main className="menu">
-      <MenuBackdrop seed={shown} mode="drift" onSnapshot={keepArt} settings={settings} />
+      <MenuBackdrop seed={shown} level={level} mode="drift" onSnapshot={keepArt} settings={settings} />
 
       <HelpButton className="menu-help" />
       <button
@@ -104,7 +114,9 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
       </button>
       {panel === "settings" && <SettingsPanel settings={settings} onSettings={onSettings} onClose={() => setPanel("none")} />}
 
-      {picking ? (
+      {picking === "map" ? (
+        <BiomeSelect onPreview={setPreviewLevel} onStart={() => go({ kind: "run", seed: daily })} onBack={closePicker} />
+      ) : picking === "course" ? (
         <CourseSelect
           daily={daily}
           countdown={countdown}
@@ -147,25 +159,31 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
                   Fly today's course <kbd>Enter</kbd>
                 </button>
                 <div className="menu-more">
-                  <button className="menu-link" onClick={() => setPicking(true)}>
+                  <button className="menu-link" onClick={() => setPicking("course")}>
                     <IconMap size={18} /> Choose a course
                   </button>
                 </div>
               </>
             ) : tab === "adventure" ? (
               <>
-                <p className="menu-hint">
-                  A roguelike run through eight biomes linked by portals. Pick an upgrade at every portal and chain gates
-                  for points.
-                </p>
+                <div className="menu-course">
+                  <div>
+                    <small>Today's run · #{daily}</small>
+                    <b>Eight biomes</b>
+                  </div>
+                  {best !== null && <span>Best {best.toLocaleString()}</span>}
+                  <span>New in {countdown}</span>
+                </div>
                 <button className="primary" onClick={() => go({ kind: "run", seed: daily })}>
-                  Today's run · #{daily}
+                  Start today's run <kbd>Enter</kbd>
                 </button>
                 <div className="menu-more">
-                  <button className="menu-link" onClick={() => go({ kind: "run", seed: randomSeed() })}>
-                    New random run
+                  <button className="menu-link" onClick={() => setPicking("map")}>
+                    <IconMap size={18} /> Choose a map
                   </button>
-                  {bestRun(daily) !== null && <span className="menu-hint">Your best today: {bestRun(daily)!.toLocaleString()}</span>}
+                  <button className="menu-link" onClick={() => go({ kind: "run", seed: randomSeed() })}>
+                    <IconDice5 size={18} /> New random run
+                  </button>
                   {import.meta.env.DEV && (
                     <button className="menu-link" onClick={() => go({ kind: "explore", biome: "skyIsles", seed: 1 })}>
                       Debug: explore worlds
@@ -175,7 +193,13 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
               </>
             ) : (
               <>
-                <p className="menu-hint">Everyone in a room flies the same map at the same time.</p>
+                <div className="menu-course">
+                  <div>
+                    <small>Race room</small>
+                    <b>Same map, same time</b>
+                  </div>
+                  <span>Up to 12 pilots</span>
+                </div>
                 <button className="primary" onClick={() => go({ kind: "room", code: randomRoomCode() })}>
                   Create a room
                 </button>
@@ -188,7 +212,7 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
                     aria-label="Room code"
                     autoFocus={!!joinCode}
                   />
-                  <button type="submit" className="primary" disabled={!/^[A-Za-z0-9]{3,8}$/.test(code.trim())}>
+                  <button type="submit" disabled={!/^[A-Za-z0-9]{3,8}$/.test(code.trim())}>
                     Join
                   </button>
                 </form>

@@ -25,6 +25,12 @@ function skimLabel(hud: HudState, points: boolean): string {
   return rate >= 1 ? `Gaining ${rate} km/h per second` : "Skim the rock for speed";
 }
 
+/** Where a crash puts you back: the last ring in a race, the last gate in a run, else the start */
+function respawnLabel(hud: HudState): string {
+  if (hud.run) return hud.run.checkpoint > 0 ? `Back to gate ${hud.run.checkpoint}` : "Back to the start";
+  return hud.raceState !== "free" && hud.checkpoints > 0 ? `Back to ring ${hud.checkpoints}` : "Back to the start";
+}
+
 /** A labelled meter in the flight panel, 0..1 */
 const Bar = ({ kind, label, value }: { kind: "boost" | "skim"; label: string; value: number }) => (
   <div className={`hud-meter ${kind}`}>
@@ -64,7 +70,7 @@ const Hud = ({ hud, settings, onSettings, showStyle = false }: { hud: HudState; 
         <div className="hud-crash glass">
           Crashed!
           <small>
-            {hud.raceState !== "free" && hud.checkpoints > 0 ? `Back to ring ${hud.checkpoints}` : "Back to the start"}
+            {respawnLabel(hud)}
           </small>
         </div>
       )}

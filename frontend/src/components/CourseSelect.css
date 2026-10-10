@@ -17,7 +17,7 @@
   padding: 0 1rem 0 0.8rem;
 }
 
-.course-title h1 {
+.menu-title.course-title h1 {
   font-size: clamp(2.2rem, 6vw, 3.4rem);
 }
 
@@ -122,6 +122,14 @@
 
 .course-card.side h2 {
   font-size: 1.25rem;
+}
+
+/* A biome's one-line description, on the map select's middle card */
+.course-tagline {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: var(--ink-70);
 }
 
 .course-chips {
