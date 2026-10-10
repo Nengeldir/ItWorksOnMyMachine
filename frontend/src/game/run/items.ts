@@ -32,6 +32,9 @@ export const ITEM = {
   kiteLift: 18,
   prismTime: 5,
   nectarStamina: 9,
+  tetherTime: 1.5,
+  tetherRange: 110,
+  tetherPull: 85,
   bag: 3, // items carried at once
   // Anemo Catcher: a bottled updraft
   updraftTime: 1.6, // seconds
@@ -55,7 +58,7 @@ export const ITEM = {
   fireWobble: 0.45, // how hard it yanks the controls about
 };
 
-export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar";
+export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether";
 
 /** How an item saved the pilot from a hit */
 export type ItemSave = "starflake";
@@ -97,12 +100,14 @@ export const RUN_ITEMS: readonly RunItemInfo[] = [
   { id: "stormKite", model: "stormKite", name: "Stormcaller's Kite", icon: "🪁", rarity: 1, charges: 1, description: "An enchanted kite catches the high wind and tows you upward for five seconds." },
   { id: "glacialPrism", model: "glacialPrism", name: "Glacial Prism", icon: "🧊", rarity: 2, charges: 1, description: "Freeze the adventure level timer and the decay of your skim combo for five seconds." },
   { id: "sunNectar", model: "sunNectar", name: "Sun-Kissed Nectar", icon: "🌼", rarity: 0, charges: 1, description: "Drink golden nectar to refill your boost reserve and wingbeat stamina immediately." },
+  { id: "windTether", model: "windTether", name: "Tether of the Wind Spirit", icon: "🪝", rarity: 2, charges: 1, description: "A hook of light pulls you into a sharp swing around a nearby gate. Find an anchor within 110 metres." },
 ];
 
 export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.id === id)!;
 
 /** How long each item's effect lasts once used (seconds) */
 const DURATION: Record<RunItemId, () => number> = {
+  windTether: () => ITEM.tetherTime,
   sunNectar: () => 0.8,
   glacialPrism: () => ITEM.prismTime,
   stormKite: () => ITEM.kiteTime,
@@ -119,7 +124,7 @@ const DURATION: Record<RunItemId, () => number> = {
 };
 
 /** Effects that move the pilot: they end on a crash or a respawn */
-const FLIGHT_EFFECTS: RunItemId[] = ["anemoCatcher", "cometFirework", "silkRibbon", "aeroBoots", "stormKite"];
+const FLIGHT_EFFECTS: RunItemId[] = ["anemoCatcher", "cometFirework", "silkRibbon", "aeroBoots", "stormKite", "windTether"];
 
 /** A push along the path, fading out as the speed nears its own top speed */
 const push = (amount: number, top: number, speed: number) => amount * clamp((top - speed) / 15, 0, 1);
@@ -167,6 +172,7 @@ export class Items {
   readonly lights: { position: THREE.Vector3; energy: boolean; collected: boolean }[] = [];
   readonly ghostGates: { position: THREE.Vector3; normal: THREE.Vector3; radius: number; collected: boolean }[] = [];
   readonly path: THREE.Vector3[] = [];
+  readonly anchor = new THREE.Vector3();
   readonly previous = new THREE.Vector3();
   private sampled = false;
   private readonly crossing = new THREE.Vector3();
@@ -248,6 +254,17 @@ export class Items {
     }
     if(id === "aeroBoots" && this.active.has(id)) return false;
     if(id === "sunNectar"){ flight.refillBoost(1); this.restore=ITEM.nectarStamina; }
+    if(id === "windTether"){
+      let found=false, nearest=ITEM.tetherRange**2;
+      for(const ring of this.world?.course.rings ?? []){
+        const distance=ring.position.distanceToSquared(flight.position);
+        if(distance<9 || distance>=nearest)continue;
+        let clear=true;
+        for(let t=0.1;t<1;t+=0.1){this.crossing.lerpVectors(flight.position,ring.position,t);if(this.world!.distance(this.crossing.x,this.crossing.y,this.crossing.z)<2){clear=false;break;}}
+        if(clear){this.anchor.copy(ring.position);nearest=distance;found=true;}
+      }
+      if(!found)return false;
+    }
     // ITEM STARTS
     // A shield already up would be wasted
     if (id === "starflakeShield" && this.active.has(id)) return false;
@@ -340,6 +357,10 @@ export class Items {
     if(this.active.has("silkRibbon")) mods.turn *= ITEM.ribbonTurn;
     if(this.active.has("aeroBoots")) { mods.lift += ITEM.bootLift; mods.hover = Math.max(mods.hover,0.8); }
     if(this.active.has("stormKite")){ mods.lift+=ITEM.kiteLift; mods.hover=Math.max(mods.hover,0.7); mods.turn*=0.8; }
+    if(this.active.has("windTether")) {
+      if(flight.position.distanceToSquared(this.anchor)<9) this.active.delete("windTether");
+      else flight.pullToward(this.anchor,dt,ITEM.tetherPull);
+    }
     // ITEM RULES
     // Anemo Catcher: the bottled updraft lifts the path and holds the speed while it lasts
     const updraft = this.time("anemoCatcher");
