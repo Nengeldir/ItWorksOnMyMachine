@@ -258,7 +258,10 @@ the course. `__raceHashes()` checks the race map hasn't moved.
   wardrobe branch's already-resolved integration for overlapping ability/mobile
   code; its separate local wardrobe UI is not imported. Installed the locked
   font dependencies added on main. The integrated branch passes 98 frontend
-  tests and 32 backend tests; production build and lint pass. PR publication follows.
+  tests and 32 backend tests; production build and lint pass. Committed as
+  2123ccc, merged current main, and published
+  [PR #43](https://github.com/Nengeldir/ItWorksOnMyMachine/pull/43)
+  from Pengyue to main. GitHub reports no merge conflicts; review is pending.
 
 
 ### 2026-10-10: Persistent adventure profiles and collection inventory
