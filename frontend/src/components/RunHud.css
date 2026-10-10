@@ -183,7 +183,8 @@
 
 .run-toast {
   position: absolute;
-  top: 26%;
+  /* Keep notifications below the compass on short laptop screens. */
+  top: max(26%, 14rem);
   left: 50%;
   transform: translateX(-50%);
   padding: 0.45rem 1.1rem;
