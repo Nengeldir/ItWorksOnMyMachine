@@ -244,6 +244,30 @@ the course. `__raceHashes()` checks the race map hasn't moved.
   Follow-up: inspect toasts, compass and the test panel at laptop and phone
   sizes, plus the three menu tabs, all nine biome previews and in-game settings.
 
+### 2026-10-10: Mobile playtest fixes for PR #32
+
+- Restored every change-log entry from main and removed the orphan duplicate heading.
+- `Input.observe` feeds the tutorial the same merged pitch, roll, boost, brake
+  and one-off actions as flight. Solo, room and run sessions subscribe it;
+  all six steps work with touch and tilt, with instructions that honor inversion.
+- Added Plunge and Gale buttons for acquired abilities; corrected Hover-Stall
+  press instructions and replaced picker key hints with touch button names.
+- Signed gravity-based lean distinguishes both sides of a flat hold; enabling,
+  resuming and screen rotation calibrate both pitch and roll. Bank alone no
+  longer changes pitch in landscape. No flight-model changes.
+- Short-screen picker clears the top bar; score and compass clear each other;
+  the run intro hides the flight panel and scrolls by touch; the stick draws
+  above the read-only HUD. Phone/tablet test controls are buttons above the
+  left thumb area. Help and test-mode finale skipping work by touch.
+- Rebased onto main (no merge commits); the 68 count below was measured before the rebase.
+- Build and lint pass; 68 frontend tests including signed tilt, calibration,
+  inversion and observer cleanup. Headless Chrome: six touch tutorial steps,
+  keyboard tutorial, acquired ability actions, pause/resume, picker and layouts
+  at 844 × 390, 667 × 375 and 1024 × 768; simulated sensor and touch help,
+  portrait rotation, intro scrolling, victory preview and finale skipping.
+- Real Android/iOS sensor signs, permissions, landscape lock, wake lock,
+  notches, control feel and focused-window performance still need devices.
+
 ### 2026-10-10: Adventure in the Solo look, a map select for every biome (Claude)
 
 Asked for by the UX group, on `shiyu-unify-ui` (from `shiyu-tutorial`): the
