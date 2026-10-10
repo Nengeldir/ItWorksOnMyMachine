@@ -7,11 +7,22 @@
 		reverse_proxy backend:8000
 	}
 
+	# Built files have a content hash in their name, so browsers can keep them forever.
+	# No fallback to index.html here: a missing file from an older build must be a 404,
+	# not a page of HTML that the browser refuses to run as a script.
+	handle /assets/* {
+		root * /srv
+		encode zstd gzip
+		@built file
+		header @built Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
 	handle {
 		root * /srv
 		encode zstd gzip
-		# Built files have a content hash in their name, so browsers can keep them forever
-		header /assets/* Cache-Control "public, max-age=31536000, immutable"
+		# index.html names the current build's files, so browsers must check it on every visit
+		header Cache-Control "no-cache"
 		try_files {path} /index.html
 		file_server
 	}
