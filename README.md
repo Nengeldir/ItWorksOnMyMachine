@@ -83,6 +83,7 @@ docker compose up -d --build
 | `Shift+P` in `?test`       | Spawn a usable portal ahead of the pilot            |
 | `Shift+O` in `?test`       | Show the victory screen (nothing saved)             |
 | `Shift+S` in `?test`       | Toggle the whole simulation and animations between ½× and 1× speed |
+| `?` (top right)           | How to fly: every key and what it does             |
 
 Pitch can be inverted in the menu. Diving turns height into speed, climbing
 turns speed back into height. Flying within a few metres of rock or trees fills
@@ -326,7 +327,7 @@ All routes start with `/api`; interactive docs are at `/api/docs`.
 
 | Method | Path                       | Description                                              |
 | :----- | :------------------------- | :------------------------------------------------------- |
-| `GET`  | `/api/me`                  | The current user (portal login or guest)                 |
+| `GET`  | `/api/me`                  | The current user (portal login or guest), `has_played`   |
 | `GET`  | `/api/time`                | Server clock in ms, for clock sync                       |
 | `POST` | `/api/rooms/{code}/join`   | Join (or create) a room; returns your id and token       |
 | `GET`  | `/api/rooms/{code}/stream` | SSE: room events and position snapshots                  |

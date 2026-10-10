@@ -2,10 +2,22 @@ import { useEffect } from "react";
 import { formatTime } from "../format";
 import type { RunHud as RunHudState, RunSummary } from "../game/run/run";
 import { UPGRADES, type Upgrade, type UpgradeId } from "../game/run/upgrades";
+import type { BindingAction } from "../game/bindings";
 import { BIOMES, type BiomeId } from "../game/world/biomes";
+import { boundKeys } from "./keys";
 import "./RunHud.css";
 
 const icon = (id: UpgradeId) => UPGRADES.find((u) => u.id === id)?.icon ?? "•";
+
+// Abilities use the keys the player bound in the settings, not the defaults written in the upgrades
+const ABILITY_ACTIONS: Partial<Record<UpgradeId, BindingAction>> = { dash: "boost", flap: "flap", hover: "hover" };
+
+/** The ability's key as bound now, else the upgrade's own label */
+function abilityKey(id: UpgradeId, fallback: string): string {
+  const action = ABILITY_ACTIONS[id];
+  const key = action ? boundKeys(action)[0]?.[0] : undefined;
+  return key ?? fallback;
+}
 
 /** The run on top of the flight HUD: score, objectives, the portal compass, abilities */
 export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compassScale: number; toasts: boolean }) => (
@@ -46,7 +58,7 @@ export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compas
         {run.abilities.map((a) => (
           <div key={a.id} className={a.ready ? "ready" : undefined}>
             <span className="icon">{icon(a.id)}</span>
-            <span className="key">{a.key}</span>
+            <span className="key">{abilityKey(a.id, a.key)}</span>
             {a.count !== undefined && <span className="count">{a.count}</span>}
             <span className="charge" style={{ height: `${Math.round(Math.min(1, a.charge) * 100)}%` }} />
           </div>
@@ -189,7 +201,7 @@ export const UpgradePicker = ({
           <button key={u.id} className={`card ${u.kind}`} onClick={() => onPick(u.id)}>
             <span className="icon">{u.icon}</span>
             <strong>{u.name}</strong>
-            <span className="kind">{u.kind === "ability" ? `ability · ${u.key}` : "passive"}</span>
+            <span className="kind">{u.kind === "ability" ? `ability · ${u.id === "hover" ? "hold " : ""}${abilityKey(u.id, u.key ?? "")}` : "passive"}</span>
             <span className="text">{u.description}</span>
             <kbd>{i + 1}</kbd>
           </button>

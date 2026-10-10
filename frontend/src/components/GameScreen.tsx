@@ -17,6 +17,7 @@ import { useMediaToggle } from "../media";
 import { type Settings, clientId } from "../storage";
 import { useUiTheme } from "../theme";
 import Controls from "./Controls";
+import { HelpButton } from "./Help";
 import Hud from "./Hud";
 import Leaderboard from "./Leaderboard";
 import "./GameScreen.css";
@@ -67,7 +68,10 @@ const TopBar = ({ title, onExit, children }: { title: string; onExit: () => void
       <IconArrowLeft size={18} /> Menu
     </button>
     <span className="topbar-title glass">{title}</span>
-    {children}
+    <div className="topbar-end">
+      {children}
+      <HelpButton />
+    </div>
   </div>
 );
 
