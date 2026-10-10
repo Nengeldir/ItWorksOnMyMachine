@@ -5,7 +5,7 @@ import { RUN_ITEMS, type RunItemId } from "./run/items";
 import { pickupClear } from "./run/pickups";
 import { plainMods } from "./flight";
 import { fxTime } from "./particles";
-import { skyIslesLevel } from "./world/biomes";
+import { skyIslesLevel } from "./world/biomes/index";
 import { meshChunk, rockChunks } from "./world/mesher";
 import { World } from "./world/World";
 
