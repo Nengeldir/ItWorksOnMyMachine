@@ -52,6 +52,13 @@ export class Plant implements Collider {
   private readonly cz: number;
   private readonly cr: number;
   private readonly ch: number;
+  private readonly dx: number;
+  private readonly dy: number;
+  private readonly dz: number;
+  private readonly nx: number;
+  private readonly nz: number;
+  private readonly dr: number;
+  private readonly dt: number;
 
   constructor(x: number, ground: number, z: number, height: number, radius: number, yaw: number, shape: ColliderShape) {
     this.x = x;
@@ -74,6 +81,15 @@ export class Plant implements Collider {
     } else {
       this.cx = this.cy = this.cz = this.cr = this.ch = 0;
     }
+    // The model's z axis, turned by the yaw
+    this.nx = Math.sin(yaw);
+    this.nz = Math.cos(yaw);
+    const disc = shape.disc;
+    this.dx = x + this.nx * (disc?.out ?? 0) * height;
+    this.dz = z + this.nz * (disc?.out ?? 0) * height;
+    this.dy = ground + (disc?.y ?? 0) * height;
+    this.dr = (disc?.r ?? 0) * height;
+    this.dt = (disc?.t ?? 0) * height;
     this.radius = Math.max(radius, Math.abs(lean) + radius * 0.9);
   }
 
@@ -97,6 +113,16 @@ export class Plant implements Collider {
       const ez = (pz - this.cz) / this.cr;
       const k = Math.hypot(ex, ey, ez);
       d = Math.min(d, (k - 1) * Math.min(this.cr, this.ch));
+    }
+    if (this.dr > 0) {
+      // Sails: the disc they sweep
+      const qx = px - this.dx;
+      const qy = py - this.dy;
+      const qz = pz - this.dz;
+      const along = qx * this.nx + qz * this.nz;
+      const rim = Math.hypot(qx - along * this.nx, qy, qz - along * this.nz) - this.dr;
+      const face = Math.abs(along) - this.dt;
+      d = Math.min(d, Math.min(Math.max(rim, face), 0) + Math.hypot(Math.max(rim, 0), Math.max(face, 0)));
     }
     return d;
   }

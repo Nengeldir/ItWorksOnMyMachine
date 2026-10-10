@@ -1,5 +1,6 @@
 import type { SpeciesId } from "../flora/species";
 import type { Palette } from "../palette";
+import type { StructureId } from "../structures/kinds";
 import type { GroundSpec } from "../terrain/ground";
 
 // A biome is data: what a level looks like, what grows there, what floats in
@@ -148,6 +149,33 @@ export type VegetationSpec =
       grass: GrassSpec | null;
     };
 
+/**
+ * Something built, standing on the land: placed on its own sparse grid by site
+ * rules, drawn and collided like a plant. Only where the vegetation is "flora".
+ */
+export interface StructureSpec {
+  id: StructureId;
+  spacing: number; // metres between candidate sites (a jittered grid)
+  chance: number; // share of candidates tried
+  height: [number, number]; // metres
+  colors: {
+    stone: string; // walls
+    stone2?: string; // mossy or weathered patches
+    roof: string;
+    wood?: string;
+    cloth?: string; // banners, sails
+    trim?: string; // gold caps and finials
+    light?: string; // windows and lanterns: dim by day, glowing at night
+  };
+  where?: {
+    above?: [number, number]; // metres above the racing line
+    lateral?: [number, number]; // metres to the side of the racing line
+    wet?: boolean; // only near water (true) or away from it (false)
+    forest?: boolean; // true: only in forests, false: only in the open
+    hilltop?: boolean; // only where the land falls away on most sides
+  };
+}
+
 /** Mist and clouds around the land */
 export interface SkySpec {
   /** A faceted floor of clouds this far below the racing line (null: none) */
@@ -195,6 +223,8 @@ export interface Biome {
   readonly moods: readonly Palette[];
   readonly terrain: TerrainRecipe;
   readonly vegetation: VegetationSpec;
+  /** Towers, lanterns, windmills… (generator-v2 biomes with flora) */
+  readonly structures?: readonly StructureSpec[];
   readonly sky: SkySpec;
   readonly particles: ParticleStyle;
   readonly portals: PortalSpec;

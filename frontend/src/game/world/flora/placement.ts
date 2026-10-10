@@ -2,6 +2,7 @@ import { smoothstep } from "../../math";
 import { hash3 } from "../../rng";
 import type { FloraSpecies } from "../biomes/types";
 import { TUBE_RADIUS } from "../course";
+import { STRUCTURE_INFO, structuresOf } from "../structures/kinds";
 import { fbm } from "../terrain/noise";
 import type { World } from "../World";
 import { PLANT_STRIDE, SPECIES, TUFT_STRIDE } from "./species";
@@ -22,6 +23,10 @@ export interface Box {
 }
 
 const EMPTY = new Float32Array(0);
+/** Structures are looked for this far around a node, so its plants keep clear of a neighbour's tower */
+const SITE_MARGIN = 12;
+/** Floats per structure site: x, y, z, the radius plants keep clear of */
+const SITE_STRIDE = 4;
 
 /** The topmost land surface in a column within [y0, y1), or NaN */
 function surfaceIn(world: World, x: number, z: number, y0: number, y1: number, shapesNear: boolean): number {
@@ -96,8 +101,81 @@ export function placeFlora(world: World, box: Box, withTufts: boolean): { plants
     return lateral < 14 && y < steps.level(z) + 5;
   };
 
-  // --- plants ---------------------------------------------------------------------
+  // --- structures -----------------------------------------------------------------
+  // A site depends only on where it is, never on the node's box: a tower stands
+  // in the same spot at every level of detail. They come after the species in
+  // the plant list (see structures/kinds.ts). Standing on the ground only, for now
   const plants: number[] = [];
+  const sites: number[] = [];
+  const ground = field.ground;
+  const structures = ground ? structuresOf(world.biome) : [];
+  const start = world.course.start;
+  for (let index = 0; index < structures.length; index++) {
+    const spec = structures[index];
+    const info = STRUCTURE_INFO[spec.id];
+    const step = spec.spacing;
+    const s0 = salt + 101 + index * 37;
+    const where = spec.where;
+    const earlier = sites.length;
+    for (let gi = Math.floor((box.x0 - SITE_MARGIN) / step) - 1; gi <= Math.floor((box.x1 + SITE_MARGIN) / step) + 1; gi++) {
+      for (let gk = Math.floor((box.z0 - SITE_MARGIN) / step) - 1; gk <= Math.floor((box.z1 + SITE_MARGIN) / step) + 1; gk++) {
+        if (hash3(gi, gk, s0) > spec.chance) continue;
+        const x = (gi + 0.5 + (hash3(gi, gk, s0 + 1) - 0.5) * 0.6) * step;
+        const z = (gk + 0.5 + (hash3(gi, gk, s0 + 2) - 0.5) * 0.6) * step;
+        if (x < box.x0 - SITE_MARGIN || x >= box.x1 + SITE_MARGIN || z < box.z0 - SITE_MARGIN || z >= box.z1 + SITE_MARGIN) continue;
+        const height = spec.height[0] + (spec.height[1] - spec.height[0]) * hash3(gi, gk, s0 + 3);
+        const foot = info.foot * height;
+        if (field.shapes.some((s) => x >= s.min.x - foot - 2 && x <= s.max.x + foot + 2 && z >= s.min.z - foot - 2 && z <= s.max.z + foot + 2)) continue;
+        let y = ground!.height(x, z);
+        for (let i = 0; i < 3; i++) y -= field.distance(x, y, z);
+        if (Math.abs(field.distance(x, y, z)) > 0.4) continue;
+        const above = y - world.course.y(z);
+        if (where?.above && (above < where.above[0] || above > where.above[1])) continue;
+        const lateral = Math.abs(x - world.course.x(z));
+        if (where?.lateral && (lateral < where.lateral[0] || lateral > where.lateral[1])) continue;
+        if (inWater(x, y, z)) continue;
+        if (where?.wet !== undefined && where.wet !== nearWater(x, y, z)) continue;
+        if (where?.forest !== undefined && where.forest !== forestAt(world, x, z) > 0.5) continue;
+        if (upness(world, x, y, z) < 0.75) continue;
+        // Level ground under the whole plinth
+        const slack = info.sink * height;
+        let level = true;
+        for (let i = 0; i < 4 && level; i++) {
+          const fx = x + (i % 2 ? foot : -foot);
+          const fz = z + (i < 2 ? foot : -foot);
+          level = Math.abs(field.distance(fx, y, fz)) < slack && !inWater(fx, y, fz);
+        }
+        if (!level) continue;
+        if (where?.hilltop) {
+          // The land falls away on at least half its sides
+          let open = 0;
+          for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2;
+            if (field.distance(x + Math.cos(a) * height * 2.2, y - height * 0.2, z + Math.sin(a) * height * 2.2) > 0) open++;
+          }
+          if (open < 4) continue;
+        }
+        // Keep the racing line and the start clear
+        if (world.course.distance(x, y + height / 2, z) < TUBE_RADIUS + height / 2 + 3) continue;
+        if (Math.hypot(x - start.x, y - start.y, z - start.z) < 40 + height) continue;
+        // Structures listed earlier come first where two would stand in each other's way
+        const clear = foot + 1.5;
+        let taken = false;
+        for (let o = 0; o < earlier && !taken; o += SITE_STRIDE) taken = Math.hypot(x - sites[o], z - sites[o + 2]) < clear + sites[o + 3];
+        // (a site that loses still counts for the kinds after it, so no node sees a different outcome)
+        sites.push(x, y, z, clear);
+        if (taken) continue;
+        if (x < box.x0 || x >= box.x1 || z < box.z0 || z >= box.z1 || y < box.y0 || y >= box.y1) continue;
+        plants.push(veg.species.length + index, x, y - 0.1, z, height, height, hash3(gi, gk, s0 + 4) * Math.PI * 2, hash3(gi, gk, s0 + 5));
+      }
+    }
+  }
+  const built = (x: number, z: number, reach: number) => {
+    for (let o = 0; o < sites.length; o += SITE_STRIDE) if (Math.hypot(x - sites[o], z - sites[o + 2]) < sites[o + 3] + reach) return true;
+    return false;
+  };
+
+  // --- plants ---------------------------------------------------------------------
   const spacing = veg.spacing;
   const gx0 = Math.ceil(box.x0 / spacing - 0.5);
   const gx1 = Math.floor(box.x1 / spacing - 0.5);
@@ -109,6 +187,7 @@ export function placeFlora(world: World, box: Box, withTufts: boolean): { plants
       const x = (gi + 0.5 + (hash3(gi, gk, salt) - 0.5) * 0.9) * spacing;
       const z = (gk + 0.5 + (hash3(gi, gk, salt + 1) - 0.5) * 0.9) * spacing;
       if (x < box.x0 || x >= box.x1 || z < box.z0 || z >= box.z1) continue;
+      if (built(x, z, 3)) continue;
       const forest = forestAt(world, x, z);
       const keep = veg.openDensity + (veg.density - veg.openDensity) * forest;
       if (hash3(gi, gk, salt + 2) > keep) continue;
@@ -168,6 +247,7 @@ export function placeFlora(world: World, box: Box, withTufts: boolean): { plants
         const x = (gi + 0.5 + (hash3(gi, gk, salt + 11) - 0.5) * 0.95) * step;
         const z = (gk + 0.5 + (hash3(gi, gk, salt + 12) - 0.5) * 0.95) * step;
         if (x < box.x0 || x >= box.x1 || z < box.z0 || z >= box.z1) continue;
+        if (built(x, z, -1.5)) continue;
         // Meadows come and go
         const meadow = 0.5 + 0.5 * fbm(noise, x / 70 - 13.7, z / 70, 2);
         if (hash3(gi, gk, salt + 13) > 0.35 + meadow * 0.75) continue;

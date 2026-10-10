@@ -1,10 +1,12 @@
 import * as THREE from "three";
 import { fxTime } from "../../particles";
 import { TOON_LIGHT } from "../../toon";
-import { FLORA } from "../../tuning";
+import { FLORA, STRUCTURES } from "../../tuning";
 import { ATMOSPHERE, MIST, atmospheric } from "../atmosphere";
-import type { FloraSpecies, VegetationSpec } from "../biomes/types";
+import type { VegetationSpec } from "../biomes/types";
 import { sunDirection } from "../palette";
+import { STRUCTURE_INFO, structuresOf } from "../structures/kinds";
+import { structureGeometry } from "../structures/models";
 import type { World } from "../World";
 import { speciesGeometry } from "./meshes";
 import { InstancePool } from "./pool";
@@ -32,8 +34,13 @@ const FRAME_X = 1.15;
 const FRAME_Y0 = -0.05;
 const FRAME_Y1 = 1.1;
 
-/** Lambert, hazed by the atmosphere, with leaves moving in the wind and self-lit parts */
-function plantMaterial(sway: number, grass = false, grassGlow = 0): THREE.MeshLambertMaterial {
+/**
+ * Lambert, hazed by the atmosphere, with leaves moving in the wind and self-lit parts.
+ * `built`: a structure, whose lights follow STRUCTURES.lights and whose `spin` parts
+ * turn about the model's z axis at height `spin.y`
+ */
+function plantMaterial(sway: number, grass = false, grassGlow = 0, built: { spin: { y: number; rate: number } | null } | null = null): THREE.MeshLambertMaterial {
+  const spin = built?.spin ?? null;
   const material = atmospheric(new THREE.MeshLambertMaterial({ vertexColors: !grass, side: grass ? THREE.DoubleSide : THREE.FrontSide }), 0);
   const atmosphere = material.onBeforeCompile;
   const wind = { value: sway };
@@ -44,11 +51,14 @@ function plantMaterial(sway: number, grass = false, grassGlow = 0): THREE.MeshLa
     shader.uniforms.floraGust = FLORA_UNIFORMS.gust;
     shader.uniforms.floraWind = wind;
     shader.uniforms.floraFade = { get value() { return FLORA.grassDistance; } };
+    shader.uniforms.floraLights = { get value() { return built ? STRUCTURES.lights : 1; } };
+    if (spin) shader.uniforms.floraSpin = { get value() { return spin.rate * STRUCTURES.sails; } };
     shader.vertexShader = shader.vertexShader
       .replace(
         "void main() {",
         `attribute float sway;
         ${grass ? "" : "attribute float glow;"}
+        ${spin ? "attribute float spin; uniform float floraSpin;" : ""}
         uniform float floraTime;
         uniform float floraWind;
         uniform float floraGust;
@@ -71,6 +81,13 @@ function plantMaterial(sway: number, grass = false, grassGlow = 0): THREE.MeshLa
             vec3 root = vec3(0.0);
           #endif
           float phase = root.x * 0.11 + root.z * 0.07;
+          ${spin ? `
+          if (spin > 0.5) {
+            // Sails turn about the hub (their faces look along the axis, so normals stay)
+            float turn = floraTime * floraSpin + phase * 3.0;
+            vec2 arm = transformed.xy - vec2(0.0, ${spin.y.toFixed(4)});
+            transformed.xy = vec2(arm.x * cos(turn) - arm.y * sin(turn), arm.x * sin(turn) + arm.y * cos(turn)) + vec2(0.0, ${spin.y.toFixed(4)});
+          }` : ""}
           // Gusts roll across the land
           float gust = 0.55 + 0.45 * sin(floraTime * 0.7 - root.x * 0.012 - root.z * 0.008);
           float w = sway * floraWind * floraGust * gust;
@@ -87,6 +104,7 @@ function plantMaterial(sway: number, grass = false, grassGlow = 0): THREE.MeshLa
       .replace(
         "void main() {",
         `uniform float floraGlow;
+        uniform float floraLights;
         varying float vGlow;
         varying float vBlade;
         void main() {`,
@@ -104,10 +122,10 @@ function plantMaterial(sway: number, grass = false, grassGlow = 0): THREE.MeshLa
           ? `#include <emissivemap_fragment>
           totalEmissiveRadiance += diffuseColor.rgb * floraGlow * ${grassGlow.toFixed(3)};`
           : `#include <emissivemap_fragment>
-          totalEmissiveRadiance += diffuseColor.rgb * vGlow * floraGlow;`,
+          totalEmissiveRadiance += diffuseColor.rgb * vGlow * floraGlow * floraLights;`,
       );
   };
-  material.customProgramCacheKey = () => `wingrace-flora-${grass}-${grassGlow}`;
+  material.customProgramCacheKey = () => `wingrace-flora-${grass}-${grassGlow}-${spin ? spin.y : ""}`;
   return material;
 }
 
@@ -234,7 +252,6 @@ const YAXIS = new THREE.Vector3(0, 1, 0);
 export class FloraView {
   private readonly world: World;
   private readonly group = new THREE.Group();
-  private readonly species: FloraSpecies[];
   private readonly full: InstancePool[] = [];
   private readonly impostors: InstancePool | null = null;
   private readonly grass: InstancePool | null = null;
@@ -255,7 +272,6 @@ export class FloraView {
     this.world = world;
     parent.add(this.group);
     const veg = world.biome.vegetation as Extract<VegetationSpec, { kind: "flora" }>;
-    this.species = veg.species;
     const terrain = world.biome.terrain;
     const snow = new THREE.Color(terrain.kind === "v2" ? terrain.layers.snow : "#ffffff");
     for (const spec of veg.species) {
@@ -265,6 +281,16 @@ export class FloraView {
       this.materials.push(material);
       this.full.push(new InstancePool(geometry, material, this.group, 256));
       this.tints.push((spec.tints ?? []).map((t) => new THREE.Color(t)));
+    }
+    // Structures follow the species, as in the nodes' plant lists
+    for (const spec of structuresOf(world.biome)) {
+      const info = STRUCTURE_INFO[spec.id];
+      const geometry = structureGeometry(spec, info.spin?.y ?? 0);
+      this.geometries.push(geometry);
+      const material = plantMaterial(info.sway, false, 0, { spin: info.spin });
+      this.materials.push(material);
+      this.full.push(new InstancePool(geometry, material, this.group, 32));
+      this.tints.push([]);
     }
     this.atlas = new THREE.WebGLRenderTarget(CELL_W * ATLAS_COLUMNS, CELL_H * ATLAS_ROWS, { samples: 0 });
     this.atlas.texture.generateMipmaps = true;
@@ -325,7 +351,7 @@ export class FloraView {
     renderer.setClearColor(new THREE.Color(palette.horizon).multiplyScalar(0.5), 0);
     renderer.clear();
     renderer.setScissorTest(true);
-    this.geometries.slice(0, this.species.length).forEach((geometry, i) => {
+    this.geometries.slice(0, this.full.length).forEach((geometry, i) => {
       const material = new THREE.MeshLambertMaterial({ vertexColors: true });
       material.emissive.setScalar(0);
       const mesh = new THREE.Mesh(geometry, material);
@@ -377,11 +403,11 @@ export class FloraView {
     const count = plants.length / PLANT_STRIDE;
     if (!count) return;
     // Count per species, then write straight into typed arrays (no garbage)
-    const counts = new Array<number>(this.species.length).fill(0);
+    const counts = new Array<number>(this.full.length).fill(0);
     for (let i = 0; i < count; i++) counts[plants[i * PLANT_STRIDE]]++;
     const matrices = counts.map((n) => new Float32Array(n * 16));
     const colors = counts.map((n) => new Float32Array(n * 3));
-    const filled = new Array<number>(this.species.length).fill(0);
+    const filled = new Array<number>(this.full.length).fill(0);
     for (let i = 0; i < count; i++) {
       const o = i * PLANT_STRIDE;
       const s = plants[o];

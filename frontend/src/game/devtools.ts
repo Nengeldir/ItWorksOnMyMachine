@@ -37,6 +37,8 @@ export function installDevtools() {
     g.avatar.group.position.copy(g.flight.position);
     g.avatar.group.quaternion.copy(g.flight.quaternion);
     const cam = g.rig.camera;
+    // The chase camera carries its own up vector through loops: shots are level
+    cam.up.set(0, 1, 0);
     const course = g.world.course;
     const s = course.start;
     const d = course.startDirection;

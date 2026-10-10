@@ -117,6 +117,12 @@ export const VERDANT: Biome = {
     ],
     grass: { spacing: 2.4, height: [0.5, 0.95], color: "#4f8a32", tip: "#a8c95a", flowers: ["#ffffff", "#ffd84a", "#c58cff", "#ff7a9c"], flowerShare: 0.25 },
   },
+  structures: [
+    // Old mills on the shoulders of the hills, watchtowers above the valley, lanterns along the river
+    { id: "windmill", spacing: 130, chance: 0.9, height: [15, 19], colors: { stone: "#d9cfbb", stone2: "#b9b59a", roof: "#b5533c", cloth: "#f6ecd6" }, where: { above: [-10, 150], lateral: [60, 700], forest: false, hilltop: true } },
+    { id: "watchtower", spacing: 170, chance: 0.6, height: [15, 21], colors: { stone: "#cfc6b4", stone2: "#9aa784", roof: "#3f6f8f", cloth: "#d84a4a" }, where: { above: [-15, 170], lateral: [50, 800] } },
+    { id: "stoneLantern", spacing: 12, chance: 0.7, height: [2.6, 3.6], colors: { stone: "#bdb6a6", stone2: "#93a07c", roof: "#7a7466" }, where: { lateral: [0, 160], wet: true } },
+  ],
   sky: { cloudSea: null, puffs: 50, puffsBelow: false, puffLift: 380, mist: { mode: "valley", above: 18, thickness: 34 } },
   particles: {
     ambient: [

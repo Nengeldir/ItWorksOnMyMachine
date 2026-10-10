@@ -28,6 +28,8 @@ export interface ColliderShape {
   taper: number; // trunk radius at the top, as a share of the bottom
   canopy: { y: number; r: number; h: number } | null; // center height, radius, half height (shares)
   lean: number; // the top leans sideways by this share of the height (palms), along the plant's yaw
+  /** An upright disc facing along the yaw (a windmill's sails): center height and distance out front, radius, half thickness (shares of the height) */
+  disc?: { y: number; out: number; r: number; t: number };
 }
 
 export interface SpeciesInfo {

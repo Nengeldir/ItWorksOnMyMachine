@@ -128,7 +128,9 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/world/islands.ts` | `RockField`: the floating islands as one signed distance field (shapes melted with `smin`, roughened, a tube carved along the racing line) |
 | `game/world/mesher.ts`, `mesher.worker.ts` | Cuts chunks of the rock field into flat-shaded meshes in Web Workers, and places trees (from the grid's own vertices, so the race map's tree colliders never move; `treeSink` stretches a trunk down to snapped rock, drawn only). Workers rebuild the World from a `LevelKey` |
 | `game/world/snap.ts` | Makes the land drawn match the land you hit: `snapToSurface` moves surface-nets vertices onto the field's zero surface (Newton steps), `SurfaceCutter` splits faces whose edges or middles still stray more than 0.5 m (crack-free: an edge's split depends only on its ends). Used by both meshers (v2 at full detail only) |
-| `game/world/trees.ts` | Tree colliders and their lookup index |
+| `game/world/trees.ts` | Tree colliders and their lookup index. `Plant` is the collider of generator-v2 plants and structures: a tapered trunk, an optional canopy ellipsoid and an optional upright disc (a windmill's sails) |
+| `game/world/flora/` | Generator-v2 vegetation: `species.ts` (sizes, colliders), `meshes.ts` (models from primitives), `placement.ts` (`placeFlora`, run in the mesher workers: structures first, then plants keeping clear of them, then grass), `view.ts` (`FloraView`: one instanced pool per kind, impostor atlas, grass), `pool.ts` |
+| `game/world/structures/` | Built things (towers, lanterns, windmills) riding the flora pipeline as extra kinds after a biome's species. `kinds.ts`: `StructureId`, `STRUCTURE_INFO` (collider, footprint, plinth depth, spinning parts), `kindInfo(biome, kind)`. `models.ts`: `structureGeometry` (1 m tall, true proportions, vertex color / sway / glow / spin). A biome lists them in `Biome.structures` (`StructureSpec`: spacing, chance, height, colors, `where` site rules). Run biomes only; they collide |
 | `game/world/course.ts` | The racing line (a descending curve in z) and the gates along it |
 | `game/world/palette.ts` | The `Palette` type: a lighting mood (colors, sun elevation and azimuth, night factor, mist, effect glow), and `sunDirection(palette)`. Each biome lists its moods |
 | `game/world/atmosphere.ts` | `ATMOSPHERE` light uniforms shared per biome; `atmospheric()` patches Lambert materials (sun-tinted haze matching the sky, valley mist, backlit rims, rock strata); `skyMaterial()` (gradient, HDR sun or moon disc and halo, painted clouds, twinkling stars at night) |
@@ -191,6 +193,48 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Structures, step 1: the format, and Verdant's first three (Claude)
+
+Asked for: a plan of which structures to add to which biome, then to proceed
+with it. The plan is in "Structures per biome" under the biome plan. This is
+its step 1. Structures are solid, a gameplay change in runs only (rule 6);
+Sky Isles and races are untouched.
+- **Format** (`world/structures/`, `StructureSpec` in `biomes/types.ts`):
+  structures ride the flora pipeline as extra kinds after a biome's species,
+  so they get worker placement, instancing, impostors and colliders for free.
+  `Biome.structures` lists them with a spacing, a chance, a height range,
+  colors and site rules (`where`: above the line, lateral, wet, forest,
+  hilltop).
+- **Placement** (`flora/placement.ts`): each kind has its own sparse jittered
+  grid. A site needs ground with no rock shape over it, level enough for its
+  plinth (`STRUCTURE_INFO.sink`), out of the water, clear of the racing tube
+  and the start. A site depends only on where it is, never on the node's box,
+  so a tower is in the same spot at every level of detail (tested). Plants
+  keep 3 m clear of a structure and grass doesn't grow through its floor.
+- **Models** (`structures/models.ts`): watchtower (lantern room, gallery,
+  cone roof, banner that sways), stone lantern, windmill (round cap, four
+  cloth sails). Windows, lanterns and gold finials carry glow: dim by day,
+  blooming at night.
+- **Shader** (`flora/view.ts`): `plantMaterial` takes a structure variant:
+  lights scaled by `STRUCTURES.lights`, and `spin` vertices turning about the
+  hub in the vertex shader (`STRUCTURES.sails`). No collider moves.
+- **Colliders** (`trees.ts`): `ColliderShape.disc`, the disc a windmill's
+  sails sweep, turned by the yaw.
+- **Verdant Highlands**: windmills on the shoulders of hills, watchtowers
+  above the valley, stone lanterns along the river. Per level, within 500 m
+  of the line: about 10 windmills, 20 towers, 70 to 100 lanterns.
+- **Tuning**: new `STRUCTURES` group in `?tune` (`lights`, `sails`).
+- Dev: `__shot` now levels the camera (the chase camera's own up vector
+  rolled the shots).
+- Verified: build and lint pass; 22 frontend tests (two new: the windmill's
+  collider, and placement matching across levels of detail and staying clear
+  of the line). In headless Chrome with `__shot` (`/?explore=verdant`, seeds 2
+  Morning and 3 Moonlit): all three kinds by day and night, lights blooming at
+  night, no console errors but the missing backend's 502s
+  (`docs/screenshots/structures-verdant/`). Not flown by hand: crashing into
+  a structure, the sails in motion and the frame time weren't checked in a
+  focused window. Backend untouched.
 
 ### 2026-10-10: Rebase Pengyue's newest work onto main
 
@@ -974,6 +1018,16 @@ ported to the islands world:
 
 ## Next up
 
+- **Structures, next steps** (plan: "Structures per biome"): step 2 is
+  Verdant's stone bridge over the river as a distance-field shape; then one
+  landmark and three scattered kinds per remaining biome. Open from step 1:
+  fly into a tower, a lantern and a windmill's sails by hand; structures only
+  stand on ground with no rock shape over the column (nothing yet on floating
+  islands, mushroom caps or mesas, which Archipelago needs); impostors don't
+  glow, so distant windows are dark at night; the impostor atlas has 16 cells
+  for species plus structures; Verdant's cottages and shrine gates aren't
+  built; the windmill is plain up close (no balcony, few windows).
+
 - Play through the integrated portal/finale and victory lap; check multiplayer
   and gamepad controls. Make the explore debug panel usable at narrow widths
   without covering the HUD.
@@ -1192,6 +1246,35 @@ modules, never a fork of the renderer.
 | 6 | **Twilight Forest** | Giant mushroom and redwood forest, roots forming tunnels, glowing ponds | Blue hour, bioluminescence (Nightshade) | Fireflies, glowing spores reacting to your wingbeats, light trails brighter | Relight the lanterns; follow the spirit fox |
 | 7 | **Ember Wastes** | Volcanic ridges, lava rivers, obsidian spires, ash plumes | Red-orange, underlit by lava, dark sky | Embers rising on thermals, heat haze, sparks off obsidian | Ride the thermals to the caldera; outrun the eruption |
 | 8 | **Aurora Summit** (finale) | A spire above the clouds, ring of ancient crystal gates | Night, aurora, stars, moon glare | Aurora ribbons, starfall, every gate a light pillar | The final ascent: a gauntlet of every gate type |
+
+### Structures per biome
+
+Agreed on 2026-10-10. Weathered pale stone, gold trims, cloth that moves, and
+a light that comes on at night. Structures are solid in run biomes (skimming
+a tower scores style). Sky Isles is frozen, so it only gets small dressing
+that is drawn but never collides, kept well off the line.
+
+| Biome | Signature landmark (1 or 2 per level) | Scattered structures | Night |
+| :- | :- | :- | :- |
+| **Sky Isles** (frozen) | None | Small cairns, prayer-flag lines and stone lanterns on island tops, drawn only | Lanterns glow |
+| **Verdant Highlands** | Stone windmill on a hilltop (done); arched stone bridge over the river at a fall | Watchtowers (done), stone lanterns (done), shrine gates on terraces, cottages with round roofs near the pools | Warm windows, lanterns |
+| **Glacier Peaks** | Mountain monastery on a ledge, gold roof caps and banners | Ice-bell pavilions, prayer-flag lines between ice shards, snowed-in stone huts, half-buried cairns | Bells and windows glow under the aurora |
+| **Sky Archipelago** | Floating temple on one big island: colonnade, dome, a broken stair into the void | Rope-and-plank bridges between islands, broken columns, wind chimes, moored cloth kites | Braziers along the colonnade |
+| **Coral Lagoon** | Lighthouse on a sea stack with a slow sweeping beam | Stilt huts and jetties on islets, sunken ruin columns in the shallows, small sailboats, shell-roof pavilions | Lighthouse beam, hut lanterns on the water |
+| **Twilight Forest** | Great lantern tree shrine: platforms spiralling round a giant trunk | Treehouses and hanging lanterns on trunks, doors and windows in mushroom stems, mossy spirit statues, root-bridge railings | Everything bioluminescent |
+| **Ember Wastes** | Ruined forge-temple on a mesa with lava channels through it | Obsidian obelisks with glowing runes, chain bridges over lava, broken aqueduct arches, ancient braziers | Runes and braziers lit from below |
+| **Aurora Summit** | Observatory with a crystal dome near the spire; a stair of gate arches up it | Ancient crystal pylons, star altars, ring fragments on stone plinths | Pylons send faint beams up |
+
+How: scattered structures are kinds in the flora pipeline
+(`world/structures/`). Landmarks are placed once per level from the level
+seed, off the line. Bridges and aqueducts you fly under are rock shapes in
+the distance field, so the drawn stone and the collision match. Moving parts
+animate in the vertex shader and never move a collider.
+
+Order: (1) the format, proven with Verdant's watchtower, lantern and windmill
+(done); (2) Verdant's bridge, the first distance-field structure; (3) one
+landmark and three scattered kinds per remaining biome, in run order;
+(4) night lights, moving parts, and a day and night browser check per biome.
 
 ### Shared systems to build (in this order)
 
