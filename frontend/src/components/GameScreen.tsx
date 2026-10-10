@@ -1,4 +1,4 @@
-import { IconArrowLeft, IconCheck, IconChevronDown, IconChevronUp, IconCopy } from "@tabler/icons-react";
+import { IconArrowLeft, IconChevronDown, IconChevronUp } from "@tabler/icons-react";
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from "react";
 import type { Screen } from "../App";
 import { formatTime, ordinal } from "../format";
@@ -106,9 +106,17 @@ const Panel = ({ head, intro, actions, className = "", children }: PanelProps) =
   );
 };
 
+/** Before a race, where the race timer will be: one line and the button that starts it */
+const ReadyCard = ({ note, children }: { note: ReactNode; children: ReactNode }) => (
+  <div className="ready-card glass">
+    <span>{note}</span>
+    {children}
+  </div>
+);
+
 // --- Time trial ------------------------------------------------------------------
 
-const SoloScreen = ({ seed, settings, onSettings, onExit }: ScreenProps & { seed: number }) => {
+const SoloScreen = ({ seed, settings, onExit }: ScreenProps & { seed: number }) => {
   const [session] = useState(() => new SoloSession(seed, clientId(), settings));
   const ref = useMountedSession(session, settings);
   const { hud, stage, result, leaderboard, ghosts, error } = useSyncExternalStore(
@@ -130,37 +138,11 @@ const SoloScreen = ({ seed, settings, onSettings, onExit }: ScreenProps & { seed
       {error && <div className="banner glass">{error}</div>}
 
       {stage === "ready" && !error && (
-        <Panel
-          head={
-            <>
-              <small>Time trial · #{seed}</small>
-              <h2>{hud ? `${hud.paletteName} isles` : `Course #${seed}`}</h2>
-              {hud && (
-                <div className="chips">
-                  <span>{hud.totalCheckpoints} gates</span>
-                </div>
-              )}
-            </>
-          }
-          intro={
-            <p>
-              Fly through all the rings, in order, as fast as you can. Warm up first if you like: the clock only starts
-              when you do.
-            </p>
-          }
-          actions={
-            <button className="primary" onClick={() => session.start()}>
-              Start the run <kbd>Enter</kbd>
-            </button>
-          }
-        >
-          <h3>Best times</h3>
-          <Leaderboard entries={leaderboard} empty="No times yet on this course." />
-          <details>
-            <summary>Controls</summary>
-            <Controls settings={settings} onSettings={onSettings} />
-          </details>
-        </Panel>
+        <ReadyCard note={hud ? `${hud.totalCheckpoints} gates · warm up as long as you like` : "Warm up as long as you like"}>
+          <button className="primary" onClick={() => session.start()}>
+            Start the run <kbd>Enter</kbd>
+          </button>
+        </ReadyCard>
       )}
 
       {stage === "racing" && ghosts.length > 0 && hud?.raceState !== "finished" && (
@@ -216,23 +198,14 @@ const RoomScreen = ({ code, settings, onExit }: ScreenProps & { code: string }) 
     session.store.subscribe,
     session.store.get,
   );
-  const [copied, setCopied] = useState(false);
   useUiTheme(hud?.seed);
   const me = room?.players.find((p) => p.id === selfId);
   const lobby = room?.phase === "lobby";
-  const inviteLink = `${location.origin}/?room=${code}`;
 
   useHotkeys({
     Enter: () => lobby && session.start(),
     KeyN: () => lobby && session.newMap(),
   });
-
-  const copyInvite = () => {
-    navigator.clipboard
-      ?.writeText(inviteLink)
-      .then(() => setCopied(true))
-      .catch(() => {});
-  };
 
   return (
     <div className="game">
@@ -250,62 +223,16 @@ const RoomScreen = ({ code, settings, onExit }: ScreenProps & { code: string }) 
       )}
 
       {room && lobby && (
-        <Panel
-          head={
-            <>
-              <small>
-                Race room · {room.players.length} {room.players.length === 1 ? "pilot" : "pilots"}
-              </small>
-              <h2>Room {code}</h2>
-            </>
-          }
-          actions={
-            <div className="row">
-              <button className="primary" onClick={() => session.start()}>
-                Start race <kbd>Enter</kbd>
-              </button>
-              <button onClick={() => session.newMap()}>
-                New map <kbd>N</kbd>
-              </button>
-            </div>
-          }
-          intro={
-            <>
-              <div className="invite">
-                <input readOnly value={inviteLink} aria-label="Invite link" onFocus={(e) => e.target.select()} />
-                <button onClick={copyInvite}>
-                  {copied ? <IconCheck size={18} /> : <IconCopy size={18} />}
-                  {copied ? "Copied" : "Copy"}
-                </button>
-              </div>
-              <h3>Pilots</h3>
-              <ul className="pilots">
-                {room.players.map((p) => (
-                  <li key={p.id}>
-                    <span className="dot" style={{ background: p.color }} />
-                    {p.name}
-                    {p.id === selfId && <span className="you">you</span>}
-                  </li>
-                ))}
-              </ul>
-              {room.results.length > 0 && (
-                <>
-                  <h3>Last race</h3>
-                  <ol className="leaderboard">
-                    {room.results.map((r, i) => (
-                      <li key={r.id} className={r.id === selfId ? "me" : undefined}>
-                        <span className="rank">{i + 1}</span>
-                        <span className="name">{r.name}</span>
-                        <span className="time">{formatTime(r.time_ms)}</span>
-                      </li>
-                    ))}
-                  </ol>
-                </>
-              )}
-              <p className="hint">Fly around while everyone joins. Anyone can start the race.</p>
-            </>
-          }
-        />
+        <ReadyCard note={`Race room · ${room.players.length} ${room.players.length === 1 ? "pilot" : "pilots"}`}>
+          <div className="row">
+            <button className="primary" onClick={() => session.start()}>
+              Start race <kbd>Enter</kbd>
+            </button>
+            <button onClick={() => session.newMap()}>
+              New map <kbd>N</kbd>
+            </button>
+          </div>
+        </ReadyCard>
       )}
 
       {room && !lobby && me && !me.racing && (
@@ -410,7 +337,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
     <div className="game">
       <div ref={ref} className="game-view" />
       {/* Nothing but the wormhole while passing through a portal */}
-      {hud && (hud.paused || (stage !== "pick" && stage !== "summary" && run?.phase !== "portal" && run?.phase !== "finale" && run?.phase !== "won")) && <Hud hud={hud} />}
+      {hud && (hud.paused || (stage !== "pick" && stage !== "summary" && run?.phase !== "portal" && run?.phase !== "finale" && run?.phase !== "won")) && <Hud hud={hud} showStyle />}
       {run && stage !== "intro" && stage !== "summary" && stage !== "pick" && run.phase !== "finale" && run.phase !== "won" && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
       {run?.phase === "finale" && (
         <div className="finale-skip">

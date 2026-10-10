@@ -150,6 +150,35 @@
   color: var(--ink);
 }
 
+/* Sits where the race timer appears, so starting swaps one for the other */
+.ready-card {
+  position: absolute;
+  top: 4.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 2rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 0.8rem 0.8rem;
+  border-radius: 26px;
+  text-align: center;
+}
+
+.ready-card > span {
+  padding: 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink-70);
+}
+
+.ready-card button {
+  padding: 0.7rem 1.6rem;
+  border-radius: 999px;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -186,42 +215,6 @@
   color: var(--ink-70);
 }
 
-.invite {
-  display: flex;
-  gap: 0.4rem;
-}
-
-.invite input {
-  flex: 1;
-  font-size: 0.85rem;
-}
-
-.pilots {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.pilots li {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.35rem 0.5rem;
-  border-radius: 10px;
-  font-weight: 600;
-}
-
-.pilots .you {
-  font-size: 0.72rem;
-  color: var(--ink-70);
-  background: var(--ink-06);
-  border-radius: 999px;
-  padding: 0.05em 0.6em;
-}
-
 .banner,
 .ghost-note {
   position: absolute;
@@ -238,9 +231,9 @@
   pointer-events: none;
 }
 
+/* Just under the race timer */
 .ghost-note {
-  top: auto;
-  bottom: 11.5rem;
+  top: 10rem;
   font-size: 0.85rem;
   color: var(--ink-70);
 }
