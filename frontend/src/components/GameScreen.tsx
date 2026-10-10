@@ -1,9 +1,10 @@
-import { IconArrowLeft, IconCheck, IconCopy } from "@tabler/icons-react";
+import { IconArrowLeft, IconCheck, IconChevronDown, IconChevronUp, IconCopy } from "@tabler/icons-react";
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from "react";
 import type { Screen } from "../App";
 import { formatTime, ordinal } from "../format";
 import { RoomSession } from "../session/RoomSession";
 import { SoloSession } from "../session/SoloSession";
+import { useMediaToggle } from "../media";
 import { type Settings, clientId } from "../storage";
 import { useUiTheme } from "../theme";
 import Controls from "./Controls";
@@ -83,6 +84,42 @@ const TopBar = ({ title, onExit, leaveWarning, children }: TopBarProps) => {
   );
 };
 
+// Roomy screens show panels in full; narrow ones only the heading and the main buttons until opened
+const ROOMY = "(min-width: 700px)";
+
+interface PanelProps {
+  head: ReactNode;
+  /** Above the main buttons, while open */
+  intro?: ReactNode;
+  /** The main buttons: shown even when the panel is folded */
+  actions?: ReactNode;
+  className?: string;
+  /** Below the main buttons, while open */
+  children?: ReactNode;
+}
+
+const Panel = ({ head, intro, actions, className = "", children }: PanelProps) => {
+  const [open, setOpen] = useMediaToggle(ROOMY);
+  return (
+    <aside className={`panel glass ${className}`}>
+      <header className="panel-head">
+        <div>{head}</div>
+        <button
+          className="panel-toggle"
+          aria-label={open ? "Show less" : "Show more"}
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          {open ? <IconChevronUp size={18} /> : <IconChevronDown size={18} />}
+        </button>
+      </header>
+      {open && intro}
+      {actions}
+      {open && children}
+    </aside>
+  );
+};
+
 // --- Time trial ------------------------------------------------------------------
 
 const SoloScreen = ({ seed, settings, onSettings, onExit }: ScreenProps & { seed: number }) => {
@@ -113,30 +150,37 @@ const SoloScreen = ({ seed, settings, onSettings, onExit }: ScreenProps & { seed
       {error && <div className="banner glass">{error}</div>}
 
       {stage === "ready" && !error && (
-        <aside className="panel glass">
-          <header className="panel-head">
-            <small>Time trial · #{seed}</small>
-            <h2>{hud ? `${hud.paletteName} isles` : `Course #${seed}`}</h2>
-            {hud && (
-              <div className="chips">
-                <span>{hud.totalCheckpoints} gates</span>
-              </div>
-            )}
-          </header>
-          <p>
-            Fly through all the rings, in order, as fast as you can. Warm up first if you like: the clock only starts
-            when you do.
-          </p>
-          <button className="primary" onClick={() => session.start()}>
-            Start the run <kbd>Enter</kbd>
-          </button>
+        <Panel
+          head={
+            <>
+              <small>Time trial · #{seed}</small>
+              <h2>{hud ? `${hud.paletteName} isles` : `Course #${seed}`}</h2>
+              {hud && (
+                <div className="chips">
+                  <span>{hud.totalCheckpoints} gates</span>
+                </div>
+              )}
+            </>
+          }
+          intro={
+            <p>
+              Fly through all the rings, in order, as fast as you can. Warm up first if you like: the clock only starts
+              when you do.
+            </p>
+          }
+          actions={
+            <button className="primary" onClick={() => session.start()}>
+              Start the run <kbd>Enter</kbd>
+            </button>
+          }
+        >
           <h3>Best times</h3>
           <Leaderboard entries={leaderboard} empty="No times yet on this course." />
           <details>
             <summary>Controls</summary>
             <Controls settings={settings} onSettings={onSettings} />
           </details>
-        </aside>
+        </Panel>
       )}
 
       {stage === "racing" && ghosts.length > 0 && hud?.raceState !== "finished" && (
@@ -144,28 +188,38 @@ const SoloScreen = ({ seed, settings, onSettings, onExit }: ScreenProps & { seed
       )}
 
       {stage === "results" && result && (
-        <aside className="panel glass results">
-          <header className="panel-head">
-            <small>Finished · #{seed}</small>
-            <h2>{formatTime(result.timeMs)}</h2>
-          </header>
-          {result.saving && <p>Saving your time…</p>}
-          {result.error && <p className="error">{result.error}</p>}
-          {result.rank !== undefined && (
-            <p>
-              <strong>{ordinal(result.rank)}</strong> on this course
-              {result.personalBestMs !== undefined && result.personalBestMs < result.timeMs && (
-                <> · your best is {formatTime(result.personalBestMs)}</>
+        <Panel
+          className="results"
+          head={
+            <>
+              <small>Finished · #{seed}</small>
+              <h2>{formatTime(result.timeMs)}</h2>
+            </>
+          }
+          intro={
+            <>
+              {result.saving && <p>Saving your time…</p>}
+              {result.error && <p className="error">{result.error}</p>}
+              {result.rank !== undefined && (
+                <p>
+                  <strong>{ordinal(result.rank)}</strong> on this course
+                  {result.personalBestMs !== undefined && result.personalBestMs < result.timeMs && (
+                    <> · your best is {formatTime(result.personalBestMs)}</>
+                  )}
+                  {result.personalBestMs === result.timeMs && <> · new personal best!</>}
+                </p>
               )}
-              {result.personalBestMs === result.timeMs && <> · new personal best!</>}
-            </p>
-          )}
-          <button className="primary" onClick={() => session.start()}>
-            Fly again <kbd>Enter</kbd>
-          </button>
+            </>
+          }
+          actions={
+            <button className="primary" onClick={() => session.start()}>
+              Fly again <kbd>Enter</kbd>
+            </button>
+          }
+        >
           <h3>Best times</h3>
           <Leaderboard entries={leaderboard} empty="No times yet on this course." />
-        </aside>
+        </Panel>
       )}
     </div>
   );
@@ -223,52 +277,62 @@ const RoomScreen = ({ code, settings, onExit }: ScreenProps & { code: string }) 
       )}
 
       {room && lobby && (
-        <aside className="panel glass">
-          <header className="panel-head">
-            <small>Race room · {room.players.length} {room.players.length === 1 ? "pilot" : "pilots"}</small>
-            <h2>Room {code}</h2>
-          </header>
-          <div className="invite">
-            <input readOnly value={inviteLink} aria-label="Invite link" onFocus={(e) => e.target.select()} />
-            <button onClick={copyInvite}>
-              {copied ? <IconCheck size={18} /> : <IconCopy size={18} />}
-              {copied ? "Copied" : "Copy"}
-            </button>
-          </div>
-          <h3>Pilots</h3>
-          <ul className="pilots">
-            {room.players.map((p) => (
-              <li key={p.id}>
-                <span className="dot" style={{ background: p.color }} />
-                {p.name}
-                {p.id === selfId && <span className="you">you</span>}
-              </li>
-            ))}
-          </ul>
-          {room.results.length > 0 && (
+        <Panel
+          head={
             <>
-              <h3>Last race</h3>
-              <ol className="leaderboard">
-                {room.results.map((r, i) => (
-                  <li key={r.id} className={r.id === selfId ? "me" : undefined}>
-                    <span className="rank">{i + 1}</span>
-                    <span className="name">{r.name}</span>
-                    <span className="time">{formatTime(r.time_ms)}</span>
+              <small>
+                Race room · {room.players.length} {room.players.length === 1 ? "pilot" : "pilots"}
+              </small>
+              <h2>Room {code}</h2>
+            </>
+          }
+          actions={
+            <div className="row">
+              <button className="primary" onClick={() => session.start()}>
+                Start race <kbd>Enter</kbd>
+              </button>
+              <button onClick={() => session.newMap()}>
+                New map <kbd>N</kbd>
+              </button>
+            </div>
+          }
+          intro={
+            <>
+              <div className="invite">
+                <input readOnly value={inviteLink} aria-label="Invite link" onFocus={(e) => e.target.select()} />
+                <button onClick={copyInvite}>
+                  {copied ? <IconCheck size={18} /> : <IconCopy size={18} />}
+                  {copied ? "Copied" : "Copy"}
+                </button>
+              </div>
+              <h3>Pilots</h3>
+              <ul className="pilots">
+                {room.players.map((p) => (
+                  <li key={p.id}>
+                    <span className="dot" style={{ background: p.color }} />
+                    {p.name}
+                    {p.id === selfId && <span className="you">you</span>}
                   </li>
                 ))}
-              </ol>
+              </ul>
+              {room.results.length > 0 && (
+                <>
+                  <h3>Last race</h3>
+                  <ol className="leaderboard">
+                    {room.results.map((r, i) => (
+                      <li key={r.id} className={r.id === selfId ? "me" : undefined}>
+                        <span className="rank">{i + 1}</span>
+                        <span className="name">{r.name}</span>
+                        <span className="time">{formatTime(r.time_ms)}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </>
+              )}
+              <p className="hint">Fly around while everyone joins. Anyone can start the race.</p>
             </>
-          )}
-          <p className="hint">Fly around while everyone joins. Anyone can start the race.</p>
-          <div className="row">
-            <button className="primary" onClick={() => session.start()}>
-              Start race <kbd>Enter</kbd>
-            </button>
-            <button onClick={() => session.newMap()}>
-              New map <kbd>N</kbd>
-            </button>
-          </div>
-        </aside>
+          }
+        />
       )}
 
       {room && !lobby && me && !me.racing && (
@@ -276,17 +340,22 @@ const RoomScreen = ({ code, settings, onExit }: ScreenProps & { code: string }) 
       )}
 
       {room && !lobby && me?.finish_ms != null && (
-        <aside className="panel glass results">
-          <header className="panel-head">
-            <small>Finished · Room {code}</small>
-            <h2>{formatTime(me.finish_ms)}</h2>
-          </header>
-          {lastPlace !== null && (
-            <p>
-              You finished <strong>{ordinal(lastPlace)}</strong>. Waiting for the others…
-            </p>
-          )}
-        </aside>
+        <Panel
+          className="results"
+          head={
+            <>
+              <small>Finished · Room {code}</small>
+              <h2>{formatTime(me.finish_ms)}</h2>
+            </>
+          }
+          intro={
+            lastPlace !== null && (
+              <p>
+                You finished <strong>{ordinal(lastPlace)}</strong>. Waiting for the others…
+              </p>
+            )
+          }
+        />
       )}
     </div>
   );

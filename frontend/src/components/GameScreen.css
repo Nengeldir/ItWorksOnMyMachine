@@ -112,6 +112,28 @@
   gap: 0.75rem;
 }
 
+.panel-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.panel-head > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.panel .panel-toggle {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--ink-06);
+  color: var(--ink-70);
+}
+
 .panel-head small {
   display: block;
   font-size: 0.78rem;
@@ -210,6 +232,8 @@
   top: 4.5rem;
   left: 50%;
   transform: translateX(-50%);
+  /* Centred with left: 50%, which would otherwise squeeze it into half the screen */
+  width: max-content;
   max-width: calc(100% - 2rem);
   padding: 0.5rem 1.1rem;
   border-radius: 999px;

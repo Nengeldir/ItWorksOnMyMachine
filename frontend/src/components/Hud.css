@@ -178,6 +178,8 @@
   bottom: 10.25rem;
   left: 50%;
   transform: translateX(-50%);
+  /* Centred with left: 50%, which would otherwise squeeze it into half the screen */
+  width: max-content;
   max-width: calc(100% - 2rem);
   padding: 0.4rem 1rem;
   border-radius: 999px;
