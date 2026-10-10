@@ -51,15 +51,37 @@ interface ScreenProps {
   onExit: () => void;
 }
 
-const TopBar = ({ title, onExit, children }: { title: string; onExit: () => void; children?: ReactNode }) => (
-  <div className="topbar">
-    <button className="glass" onClick={onExit}>
-      <IconArrowLeft size={18} /> Menu
-    </button>
-    <span className="topbar-title glass">{title}</span>
-    {children}
-  </div>
-);
+interface TopBarProps {
+  title: string;
+  onExit: () => void;
+  /** Set while leaving would cost something: Menu then asks first */
+  leaveWarning?: string;
+  children?: ReactNode;
+}
+
+const TopBar = ({ title, onExit, leaveWarning, children }: TopBarProps) => {
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <div className="topbar">
+      <button className="glass" onClick={() => (leaveWarning ? setConfirming(true) : onExit())}>
+        <IconArrowLeft size={18} /> Menu
+      </button>
+      <span className="topbar-title glass">{title}</span>
+      {children}
+      {confirming && leaveWarning && (
+        <div className="leave-confirm glass" role="alertdialog" aria-label="Leave?">
+          <p>{leaveWarning}</p>
+          <div className="row">
+            <button onClick={() => setConfirming(false)}>Keep flying</button>
+            <button className="primary" onClick={onExit}>
+              Leave
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // --- Time trial ------------------------------------------------------------------
 
@@ -81,7 +103,13 @@ const SoloScreen = ({ seed, settings, onSettings, onExit }: ScreenProps & { seed
     <div className="game">
       <div ref={ref} className="game-view" />
       {hud && <Hud hud={hud} />}
-      <TopBar title={`Time trial · #${seed}${hud ? ` · ${hud.paletteName}` : ""}`} onExit={onExit} />
+      <TopBar
+        // A new key per stage, so a confirmation left open doesn't come back with the next run
+        key={stage}
+        title={`Time trial · #${seed}${hud ? ` · ${hud.paletteName}` : ""}`}
+        onExit={onExit}
+        leaveWarning={stage === "racing" ? "Leave the run? This time won't count." : undefined}
+      />
       {error && <div className="banner glass">{error}</div>}
 
       {stage === "ready" && !error && (
@@ -158,6 +186,7 @@ const RoomScreen = ({ code, settings, onExit }: ScreenProps & { code: string }) 
   useUiTheme(hud?.seed);
   const me = room?.players.find((p) => p.id === selfId);
   const lobby = room?.phase === "lobby";
+  const racing = !!room && !lobby && !!me?.racing && me.finish_ms == null;
   const inviteLink = `${location.origin}/?room=${code}`;
 
   useHotkeys({
@@ -176,7 +205,13 @@ const RoomScreen = ({ code, settings, onExit }: ScreenProps & { code: string }) 
     <div className="game">
       <div ref={ref} className="game-view" />
       {hud && <Hud hud={hud} />}
-      <TopBar title={`Room ${code}${hud ? ` · course #${hud.seed} · ${hud.paletteName}` : ""}`} onExit={onExit}>
+      <TopBar
+        // A new key per race, so a confirmation left open doesn't come back with the next one
+        key={racing ? "racing" : "free"}
+        title={`Room ${code}${hud ? ` · course #${hud.seed} · ${hud.paletteName}` : ""}`}
+        onExit={onExit}
+        leaveWarning={racing ? "Leave the race? You'll drop out of it." : undefined}
+      >
         <span className={`connection glass ${connection}`}>
           <span className="dot" />
           {connection === "connected" ? "online" : connection}
