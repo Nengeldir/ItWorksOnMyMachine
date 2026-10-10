@@ -119,6 +119,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/input.ts` | Test-only Shift+P/O/S chords are consumed before ordinary bindings; keyboard, pointer-lock mouse and gamepad, merged into pitch and roll, plus actions (respawn, mute, barrel rolls) |
 | `game/pilots.ts` | Remote players and ghosts: interpolated samples driving an `Avatar` and `PilotFx` |
 | `game/ghost.ts` | Recording and decoding ghost runs (15 Hz) |
+| `game/autopilot.ts` | `Autopilot`: while nobody plays (the menu's `chase` backdrop, the victory lap) the pilot flies the racing line on rails (`Flight.place`), through the middle of every gate and inside the 11 m tube the land is carved away from; speed from the slope against drag, bank from the line's curve (`AUTOPILOT` in `tuning.ts`). Never scored; Game loops it 40 m past the finish |
 | `game/glidein.ts` | `GlideIn`: while the land near you is loading (free flight, runs, explore; never races), the pilot glides in on rails instead of hanging frozen: no input, no physics step, no scoring; at most 70 m and never within 30 m of the next gate, slowing before rock; control comes back at `START_SPEED` when the land is ready, and a run's level clock keeps running meanwhile |
 | `game/items/` | Items, models and animations only (what they do comes later). `models.ts`: `ITEMS` (id, name, kind, slot) and `buildItem(id)`: the giant firework (worn on the back like a jetpack, with `fireworkFlame`), three candies, the golden feather, two helmets, five fruits, all primitives painted per vertex with the toon material and ink. `equip.ts`: `Equipment` (pull an item out with a sparkle; the firework from the hand over the shoulder onto the back, helmets drop onto the head, hand items are held up; `use()` eats; `setThrust()` lights the firework) and `ItemDisplay` (a floating pickup). `gallery.ts`: the `/?gallery` scene. `Game.equip/unequip/useItem/thrust` drive it on your pilot; `Avatar.slots` and `Avatar.armPose` are the hooks |
 | `game/abilities/` | The run abilities' looks (rules: `run/abilities.ts`; looks only). `models.ts`: down feathers, the spirit manta (`buildManta`: toon primitives, flapping two-part wings, a whip of a tail), `RingQuads` (instanced rings of light: gate markers through rock, wind halos, shockwaves), wind blades, the Gale Force tunnel, the Hover-Stall sigil and chevrons, the recovery helix. `lanes.ts`: `CloudLanes`, the cloud rivers drawn as soft puffs fitted clear of the rock. `fx.ts`: `AbilityFx`, which reads `Abilities` every frame and animates all of it, sets `Avatar.stance` (tuck, hover, cast, surf) and plays `GameAudio.ability` sounds. Additive light is kept for small things: big shapes (sigil, tunnel, blades) are painted with normal blending, or they white out a bright day sky under bloom |
@@ -213,6 +214,54 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Autopilot on the racing line, orbiting camera in the wormhole (Claude)
+
+Asked for: an autopilot that never hits the terrain, always flies through
+the middle of every gate and keeps a safe distance from the land; and a
+cinematic camera in the wormhole that circles the pilot in every direction
+so the pilot always seems to fly forwards.
+- **Why it crashed**: `Game.autopilot()` steered the flight model towards
+  the line 35 m ahead in z, so it cut corners and sank on the way. Headless
+  simulation (same flight model and hitbox, against the distance field):
+  3 to 7 crashes per Sky Isles course, seeds 1 to 42.
+- **`game/autopilot.ts`** (new): flies the racing line on rails. The line
+  goes through every gate's centre, and both generators carve an 11 m tube
+  around it that rock, trees and structures keep out of. The speed follows
+  the slope against `FLIGHT.drag` (31 to 43 m/s), the bank follows the
+  line's curvature like a coordinated turn (`AUTOPILOT.railBank`, banking
+  `railLead` s early), and a start off the line settles onto it over
+  1.2 s. `Flight.place` sets the state without the flight model. `Game`:
+  `autopilotStep` replaces the physics step while self-flying (no crash
+  test, no glide-in; gates still shine); the old `autopilot()` is gone.
+  It now loops 40 m past the finish instead of 100: on Coral Lagoon the line
+  reaches the sea about 90 m past the finish. Looks only (rule 6): nobody
+  plays, nothing is scored or saved.
+- **Wormhole** (`run/portal.ts`, `run/controller.ts`): `WormholeCamera`
+  takes the chase view on the way in and eases, over 4 s, into an orbit
+  around the pilot: once round every `RUN.orbitLap` s (26), swinging
+  `RUN.orbitTilt` rad above and below, at about `RUN.orbitRadius` m, with a
+  slight crane roll. On the way out it swings the shortest way back to the
+  chase pose, which it reaches as the blur peaks (no cut). The tube is now
+  fixed to the pilot's heading, not the camera's view: spirits stream past
+  the pilot, the shell stays centred on the camera. The shell's stars and
+  nebula used to drift into the far end (looked like flying backwards);
+  they now stream out of it. `RUN.wormholeFlow` sets the speed (spirits are
+  about twice as fast as before).
+- Verified: build and lint pass; 44 frontend tests (new
+  `tests/autopilot.test.mjs`: Sky Isles 42 and 7, Lagoon, Ember: every gate
+  passed within 0.5 m of its centre, hitbox more than 6 m from the land).
+  Simulation over 12 Sky Isles seeds and 3 seeds of each run biome: zero
+  contacts, every ring passed at its centre, at least 8.8 m between any
+  hitbox point and the land's distance field. In Chrome (dev server):
+  victory lap on Sky Isles seed 42 for a full lap and its loop, no crash,
+  at most 0.01 m off the line; run 7 through the portal, the camera went
+  from behind-above to in front-below over 12 s, the pick, and the way
+  out arriving 10 m behind the pilot; no console errors. Clearance was
+  measured against the distance field, not the drawn mesh (off by about
+  1 m at most). Frames were stepped by hand in a hidden tab, so the orbit's
+  smoothness and the feel of the 0.4 s swing back weren't watched in real
+  time.
 
 ### 2026-10-10: Test mode brought onto `Pengyue` (Claude)
 
@@ -1577,6 +1626,10 @@ ported to the islands world:
   through islands and gates, no console errors.
 
 ## Next up
+
+- Wormhole camera: watch the orbit and the 0.4 s swing back to the chase
+  view in a focused window and tune `RUN.orbit*` and `wormholeFlow`; the
+  pilot is held still in the wormhole, so its ribbons and motes stay off.
 
 - **The ten abilities** (see the change log): look at them at night (the
   manta's spots and the sigil were tuned on a bright day), listen to the

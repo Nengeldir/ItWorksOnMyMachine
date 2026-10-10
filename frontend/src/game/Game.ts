@@ -5,6 +5,7 @@ import type { EffectComposer } from "three/examples/jsm/postprocessing/EffectCom
 import type { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { AbilityFx } from "./abilities/fx";
 import { Ambient } from "./ambient";
+import { Autopilot } from "./autopilot";
 import { GameAudio } from "./audio";
 import { Avatar } from "./avatar";
 import { CameraRig } from "./camera";
@@ -40,6 +41,8 @@ const MAX_STEPS_PER_FRAME = 12;
 const SCORE_RANGE = 10; // proximity counts within this many metres
 const RESPAWN_DELAY = 1.4; // seconds
 const START_SPEED = 32; // m/s
+/** The autopilot starts the course again this far past the finish (the line runs on, down towards a sea) */
+const AUTOPILOT_LOOP = 40;
 const HUD_INTERVAL = 100; // ms
 const GOLD = new THREE.Color("#ffd23f");
 const WHITE = new THREE.Color("#ffffff");
@@ -197,6 +200,8 @@ export class Game implements RunHost {
   private white = 0;
   /** After a run: the pilot flies the default map by itself and the player controls nothing */
   private autopiloting = false;
+  /** Flies the racing line on rails while nobody plays (the chase backdrop, the victory lap) */
+  private readonly rails = new Autopilot();
   /** When the white light after the finale began to clear (null: not clearing) */
   private clearWhiteFrom: number | null = null;
   /** Inside a portal's wormhole: the level is hidden */
@@ -800,6 +805,7 @@ export class Game implements RunHost {
     this.input.reset();
     this.avatar.resetMotion();
     this.flight.reset(position, direction, START_SPEED);
+    this.rails.reset();
     this.glide.stop();
     this.prevPosition.copy(this.flight.position);
     this.prevQuaternion.copy(this.flight.quaternion);
@@ -976,13 +982,22 @@ export class Game implements RunHost {
     this.accumulator = 0;
   }
 
-  /** Steers along the racing line, like a player who never misses */
-  private autopilot(): FlightInput {
-    const f = this.flight;
-    const target = this.world.course.pointAt(f.position.z + 35, tmp).sub(f.position);
-    const ahead = Math.max(target.dot(f.forward), 1);
-    const bank = clamp(2.2 * Math.atan2(target.dot(f.right), ahead), -1.1, 1.1);
-    return { roll: clamp(2.5 * (bank - f.bank), -1, 1), pitch: clamp(3 * Math.atan2(target.dot(f.up), ahead), -1, 1) };
+  /**
+   * One fixed step of the autopilot: along the racing line, through the middle of every gate,
+   * never near rock (autopilot.ts). Nothing is scored; gates shine as it passes them
+   */
+  private autopilotStep() {
+    this.prevPosition.copy(this.flight.position);
+    this.prevQuaternion.copy(this.flight.quaternion);
+    this.prevVelocity.copy(this.flight.velocity);
+    this.rails.step(STEP, this.flight, this.world.course);
+    const { x, y, z } = this.flight.position;
+    const distance = Math.min(this.world.rock.distance(x, y, z), this.world.otherDistance(x, y, z));
+    this.proximity = clamp((SCORE_RANGE - distance) / (SCORE_RANGE - 1.5), 0, 1);
+    const rings = this.world.course.rings;
+    for (let i = 0; i < rings.length; i++) {
+      if (!this.view.gates.passing(i) && this.crossed(i)) this.gateBurst(i);
+    }
   }
 
   /** Glides the camera high over the course, looking ahead and down at the islands */
@@ -1288,7 +1303,7 @@ export class Game implements RunHost {
     this.adaptQuality(realDt);
 
     const selfFlying = this.attract === "chase" || this.autopiloting;
-    this.input0 = selfFlying ? this.autopilot() : this.input.sample(dt);
+    if (!selfFlying) this.input0 = this.input.sample(dt);
     if (this.clearWhiteFrom !== null) {
       // The white after the finale clears once the map is there (or after a few seconds)
       if (this.view.ready || this.elapsed - this.clearWhiteFrom > 4) {
@@ -1304,6 +1319,17 @@ export class Game implements RunHost {
     if (waiting || loading || this.raceState === "countdown") this.flight.releaseControls();
     if (this.crashedAt !== null) {
       if (this.elapsed - this.crashedAt > RESPAWN_DELAY) this.respawnNow();
+    } else if (selfFlying && !waiting) {
+      // On rails along the line: it never needs the land to steer clear of it, so no glide-in
+      if (this.glide.active) this.glide.stop();
+      this.accumulator += dt;
+      let steps = 0;
+      while (this.accumulator >= STEP && steps < MAX_STEPS_PER_FRAME) {
+        steps++;
+        this.autopilotStep();
+        this.accumulator -= STEP;
+      }
+      if (this.accumulator >= STEP) this.accumulator %= STEP;
     } else if (loading && !waiting) {
       this.glideIn(dt);
     } else if (this.raceState !== "countdown" && !waiting && this.attract !== "drift") {
@@ -1319,7 +1345,7 @@ export class Game implements RunHost {
       // Drop only whole excess steps; preserve the fractional rendering phase.
       if (this.accumulator >= STEP) this.accumulator %= STEP;
     }
-    if (selfFlying && this.flight.position.z > this.world.course.endZ + 100) this.respawn(0);
+    if (selfFlying && this.flight.position.z > this.world.course.endZ + AUTOPILOT_LOOP) this.respawn(0);
 
     // Draw between the last two physics states
     const alpha = clamp(this.accumulator / STEP, 0, 1);

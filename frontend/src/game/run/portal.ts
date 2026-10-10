@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { clamp } from "../math";
 import { Kind, type Particles, fx, fxTime } from "../particles";
+import { RUN } from "../tuning";
 
 // Portals end every level of a run: a ring of light around a flat disk that
 // looks like a window onto deep night, with a beam rising from it so you can
@@ -219,6 +220,7 @@ const shellFragment = /* glsl */ `
   uniform vec3 to;
   uniform float blend;
   uniform float time;
+  uniform float speed;
   varying vec3 vDir;
 
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -271,9 +273,10 @@ const shellFragment = /* glsl */ `
     float c = clamp(d.z, -0.9999, 0.9999);
     float theta = acos(c);
     float phi = atan(d.y, d.x + 1e-5);
-    // Looking down an endless tube: depth runs to infinity at the far end
+    // Looking down an endless tube: depth runs to infinity at the far end. Everything
+    // streams out of it and past the pilot, who seems to fly on towards it
     float depth = log((1.0 + c) / (1.0 - c));
-    float flow = depth - time * 0.22;
+    float flow = depth + time * 0.3 * speed;
     // The tube twists: everything swirls slowly towards the way out
     float twist = phi + depth * 0.32 + time * 0.025;
     float around = fract(twist / 6.28318530718);
@@ -314,6 +317,7 @@ const shellFragment = /* glsl */ `
 const spiritVertex = /* glsl */ `
   attribute vec4 seed;
   uniform float time;
+  uniform float speed;
   uniform float pixelScale;
   varying vec3 vColor;
   varying float vAlpha;
@@ -321,7 +325,7 @@ const spiritVertex = /* glsl */ `
   void main() {
     // Each spirit floats on its own slow path through the tube, drifting past you
     float span = 150.0;
-    float z = mod(seed.z * span - time * (1.5 + seed.w * 3.5), span) - 25.0;
+    float z = mod(seed.z * span - time * speed * (3.0 + seed.w * 6.0), span) - 25.0;
     float angle = seed.y * 6.28318 + time * 0.06 * (seed.w - 0.5) + sin(time * 0.3 + seed.x * 9.0) * 0.15;
     float r = 2.5 + pow(seed.x, 0.7) * 45.0;
     vec3 p = vec3(cos(angle) * r, sin(angle) * r, z);
@@ -374,7 +378,7 @@ export class Wormhole {
     this.shell = new THREE.Mesh(
       new THREE.SphereGeometry(60, 64, 40),
       new THREE.ShaderMaterial({
-        uniforms: { from: { value: new THREE.Color() }, to: { value: new THREE.Color() }, blend: { value: 0 }, time: fxTime },
+        uniforms: { from: { value: new THREE.Color() }, to: { value: new THREE.Color() }, blend: { value: 0 }, time: fxTime, speed: { value: 1 } },
         vertexShader: shellVertex,
         fragmentShader: shellFragment,
         side: THREE.BackSide,
@@ -395,7 +399,7 @@ export class Wormhole {
     this.spirits = new THREE.Points(
       geometry,
       new THREE.ShaderMaterial({
-        uniforms: { time: fxTime, pixelScale: { value: 800 }, opacity: { value: 1 } },
+        uniforms: { time: fxTime, speed: { value: 1 }, pixelScale: { value: 800 }, opacity: { value: 1 } },
         vertexShader: spiritVertex,
         fragmentShader: spiritFragment,
         transparent: true,
@@ -422,15 +426,21 @@ export class Wormhole {
   }
 
   /**
-   * Puts the wormhole around the camera, its far end straight ahead along
-   * `forward`. `inside` false hides it; `blend` moves the colors towards the next biome
+   * Puts the wormhole around the pilot, its far end straight ahead along the
+   * pilot's `forward` wherever the camera looks from: the spirits stream past
+   * the pilot, and the tube's shell stays centred on the camera (it is the
+   * view's backdrop). `inside` false hides it; `blend` moves the colors
+   * towards the next biome
    */
-  place(camera: THREE.Camera, forward: THREE.Vector3, inside: boolean, blend: number, pixelHeight: number) {
+  place(camera: THREE.Camera, pilot: THREE.Vector3, forward: THREE.Vector3, inside: boolean, blend: number, pixelHeight: number) {
     this.group.visible = inside;
     if (!inside) return;
-    this.group.position.copy(camera.position);
+    this.group.position.copy(pilot);
     this.group.quaternion.setFromUnitVectors(Z, forward);
+    this.shell.position.subVectors(camera.position, pilot).applyQuaternion(inverse.copy(this.group.quaternion).invert());
     this.shell.material.uniforms.blend.value = blend;
+    this.shell.material.uniforms.speed.value = RUN.wormholeFlow;
+    this.spirits.material.uniforms.speed.value = RUN.wormholeFlow;
     const fov = (camera as THREE.PerspectiveCamera).fov ?? 70;
     this.spirits.material.uniforms.pixelScale.value = pixelHeight / (2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2));
   }
@@ -456,5 +466,87 @@ export function screenSparkle(particles: Particles, camera: THREE.Camera, forwar
   }
 }
 
+/**
+ * The camera inside the wormhole: it leaves the chase view and slowly
+ * circles the pilot, all the way round and swinging above and below, always
+ * watching the pilot. The tube is fixed to the pilot's heading (`Wormhole.
+ * place`), so from every side the pilot is seen flying on through it. On the
+ * way out it swings back into the chase view, which it reaches as the blur
+ * peaks. Looks only: the pilot is held still in the wormhole
+ */
+export class WormholeCamera {
+  private entry: { azimuth: number; elevation: number; radius: number } | null = null;
+  private time = 0;
+  private travel = 0;
+
+  /** Out of the wormhole: the next time starts from the chase view again */
+  reset() {
+    this.entry = null;
+  }
+
+  /**
+   * After the chase rig has placed `camera` this frame: moves it on its orbit
+   * around `pilot`, heading `forward`. `back` 0…1 swings it back to the chase view
+   */
+  update(dt: number, camera: THREE.PerspectiveCamera, pilot: THREE.Vector3, forward: THREE.Vector3, back: number) {
+    // The orbit's frame: behind the pilot, its right, and up (level, unless the pilot points straight up or down)
+    behind.copy(forward).normalize().negate();
+    up.set(0, 1, 0).addScaledVector(behind, -behind.y);
+    if (up.lengthSq() < 1e-4) up.set(0, 0, 1).addScaledVector(behind, -behind.z);
+    up.normalize();
+    side.crossVectors(up, behind);
+    // Where the chase view is now, in that frame
+    offset.subVectors(camera.position, pilot);
+    const radius = Math.max(offset.length(), 1);
+    const chase = { azimuth: Math.atan2(offset.dot(side), offset.dot(behind)), elevation: Math.asin(clamp(offset.dot(up) / radius, -1, 1)), radius };
+    if (!this.entry) {
+      this.entry = chase;
+      this.time = 0;
+      this.travel = 0;
+    }
+    const entry = this.entry;
+    this.time += dt;
+    const lap = Math.max(4, RUN.orbitLap);
+    // The orbit eases in from the chase view over a few seconds
+    const ramp = smooth(this.time / 4);
+    this.travel += ((dt * Math.PI * 2) / lap) * ramp;
+    let azimuth = entry.azimuth + this.travel;
+    let elevation = entry.elevation + (RUN.orbitTilt * Math.sin((this.time * Math.PI * 2) / (lap * 0.62)) - entry.elevation) * ramp;
+    let radius2 = entry.radius + (RUN.orbitRadius * (1 + 0.15 * Math.sin((this.time * Math.PI * 2) / (lap * 0.41))) - entry.radius) * ramp;
+    if (back > 0) {
+      // The shortest way round to the chase view
+      const turn = Math.atan2(Math.sin(chase.azimuth - azimuth), Math.cos(chase.azimuth - azimuth));
+      azimuth += turn * back;
+      elevation += (chase.elevation - elevation) * back;
+      radius2 += (chase.radius - radius2) * back;
+    }
+    chaseQuaternion.copy(camera.quaternion);
+    const flat = Math.cos(elevation) * radius2;
+    camera.position
+      .copy(pilot)
+      .addScaledVector(behind, Math.cos(azimuth) * flat)
+      .addScaledVector(side, Math.sin(azimuth) * flat)
+      .addScaledVector(up, Math.sin(elevation) * radius2);
+    camera.up.copy(up);
+    camera.lookAt(look.copy(pilot).addScaledVector(up, 0.5));
+    // A slow, slight roll, like a camera on a crane
+    camera.rotateZ(0.07 * Math.sin(this.time * 0.37) * ramp);
+    if (back > 0) camera.quaternion.slerp(chaseQuaternion, back);
+    camera.updateMatrixWorld();
+  }
+}
+
+const smooth = (t: number) => {
+  const k = clamp(t, 0, 1);
+  return k * k * (3 - 2 * k);
+};
+
 const WHITE = new THREE.Color("#ffffff");
 const Z = new THREE.Vector3(0, 0, 1);
+const inverse = new THREE.Quaternion();
+const behind = new THREE.Vector3();
+const up = new THREE.Vector3();
+const side = new THREE.Vector3();
+const offset = new THREE.Vector3();
+const look = new THREE.Vector3();
+const chaseQuaternion = new THREE.Quaternion();

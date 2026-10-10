@@ -10,7 +10,7 @@ import type { World } from "../world/World";
 import type { WorldView } from "../world/WorldView";
 import { Abilities } from "./abilities";
 import { Finale } from "./finale";
-import { Portal, Wormhole, screenSparkle } from "./portal";
+import { Portal, Wormhole, WormholeCamera, screenSparkle } from "./portal";
 import {
   CHAIN_MAX,
   GATE_POINTS,
@@ -131,6 +131,7 @@ export class RunController {
   private readonly group = new THREE.Group();
   private readonly mods: FlightMods = plainMods();
   private readonly wormhole = new Wormhole();
+  private readonly orbit = new WormholeCamera();
   private level = 1;
   private readonly path: BiomeId[] = [];
   private readonly picked: UpgradeId[] = [];
@@ -544,7 +545,11 @@ export class RunController {
         }
       }
     }
-    this.wormhole.place(camera, forward, inside, blend, this.host.pixelHeight);
+    // Inside, the camera circles the pilot, who flies on down the tube; it swings back to the chase view on the way out
+    const pilot = this.host.flight;
+    if (inside) this.orbit.update(dt, camera, pilot.position, pilot.forward, this.exiting ? ease(this.exitTime / BLUR_OUT) : 0);
+    else this.orbit.reset();
+    this.wormhole.place(camera, pilot.position, pilot.forward, inside, blend, this.host.pixelHeight);
     this.host.insideWormhole(inside);
     // From inside, the portal you came through is gone too
     this.group.visible = !inside;

@@ -238,6 +238,25 @@ export class Flight {
     this.velocity.copy(this.forward).multiplyScalar(speed);
   }
 
+  /**
+   * Puts the pilot on a path without the flight model (the autopilot's
+   * rails): at `position`, heading along `direction`, banked `bank` radians
+   * (positive: right wing down)
+   */
+  place(position: Vector3, direction: Vector3, speed: number, bank: number) {
+    this.releaseControls();
+    this.position.copy(position);
+    lookMatrix.lookAt(ORIGIN, direction, WORLD_UP);
+    this.quaternion.setFromRotationMatrix(lookMatrix);
+    turn.setFromAxisAngle(LOCAL_BACK, -bank);
+    this.quaternion.multiply(turn);
+    this.steeringBank = bank;
+    this.speed = speed;
+    this.updateAxes();
+    this.flightPath.copy(direction).normalize();
+    this.velocity.copy(this.flightPath).multiplyScalar(speed);
+  }
+
   private updateAxes() {
     this.forward.set(0, 0, -1).applyQuaternion(this.quaternion);
     this.up.set(0, 1, 0).applyQuaternion(this.quaternion);

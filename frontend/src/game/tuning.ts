@@ -121,6 +121,19 @@ export const RUN = {
   tunnelFade: 1.4, // seconds to fade out of the tunnel into the next biome
   compass: 1, // size of the portal compass
   toasts: true, // pop-ups for points and run events
+  // Inside the wormhole the camera circles the pilot while the tube streams past along its heading
+  orbitLap: 26, // seconds for the camera to go once round the pilot
+  orbitRadius: 9, // metres from the pilot
+  orbitTilt: 0.85, // radians the camera swings above and below the pilot
+  wormholeFlow: 1, // how fast the stars and spirits stream past
+};
+
+/** The autopilot (the menu's chase view, the victory lap): flies the racing line on rails */
+export const AUTOPILOT = {
+  railMinSpeed: 28, // m/s: the slowest it glides…
+  railMaxSpeed: 48, // …and the fastest it dives
+  railBank: 55, // degrees it banks into turns at most
+  railLead: 0.35, // seconds it banks ahead of a turn
 };
 
 /** How the run's abilities look (their rules: ABILITY in run/abilities.ts) */
@@ -139,7 +152,7 @@ export const AUDIO = {
   nightMuffle: 0.55, // how much the highs are rolled off at night
 };
 
-const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, STRUCTURES, WATER, RUN, ABILITIES_FX, AUDIO } as const;
+const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, STRUCTURES, WATER, RUN, AUTOPILOT, ABILITIES_FX, AUDIO } as const;
 const DEFAULTS = JSON.parse(JSON.stringify(GROUPS)) as typeof GROUPS;
 const STORAGE_KEY = "wingrace.tuning.speed-control-v1";
 
@@ -257,6 +270,14 @@ export const RANGES: Record<string, [number, number, number?]> = {
   spray: [0, 4],
   tunnelFade: [0.3, 4],
   compass: [0.5, 2],
+  orbitLap: [8, 60],
+  orbitRadius: [4, 20],
+  orbitTilt: [0, 1.3],
+  wormholeFlow: [0, 3],
+  railMinSpeed: [15, 45],
+  railMaxSpeed: [30, 80],
+  railBank: [0, 80],
+  railLead: [0, 1],
   thrill: [0, 2],
   thermal: [0, 2],
   gale: [0, 2],
@@ -278,6 +299,7 @@ export const TUNING_GROUPS: [string, Group][] = [
   ["Structures", STRUCTURES],
   ["Water", WATER],
   ["Run", RUN],
+  ["Autopilot", AUTOPILOT],
   ["Ability looks", ABILITIES_FX],
   ["Audio", AUDIO],
 ];
