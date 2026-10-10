@@ -219,6 +219,18 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-11: Portal upgrade card hover contrast
+
+- `frontend/src/components/RunHud.css`: upgrade cards now switch their title,
+  description, ability/passive label and shortcut badge to dark theme colors
+  when hovered or focused with the keyboard. Explicitly pair the light
+  background with dark text so the shared button hover style stays readable.
+- Verification: frontend build and lint pass (build retains the non-fatal
+  bundle-size warning). In headless Firefox, rendered the real `UpgradePicker`
+  component and checked idle, pointer hover and Tab focus colors; inspected
+  the hover screenshot. The full portal transition was not replayed; no new
+  tests were added for this CSS-only fix.
+
 ### 2026-10-10: Rebase keyboard layouts onto profile and touch integration
 
 - Replayed keyboard-layout support onto local main at `ad462f1`. Resolved `input.ts` imports without restoring removed tilt steering, preserving touch controls and item shortcuts. Merged both sides of the CLAUDE.md architecture and follow-up entries.
