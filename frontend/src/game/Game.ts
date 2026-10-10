@@ -488,6 +488,30 @@ export class Game implements RunHost {
     return this.world.level;
   }
 
+  /** True once the land around the camera has arrived */
+  get landReady(): boolean {
+    return this.view.ready;
+  }
+
+  /**
+   * The view right now as a JPEG data URL, `width` pixels wide and cut to `aspect` (width / height)
+   * around the middle: map-select card art. Renders a frame first, since WebGL clears what it showed.
+   */
+  snapshot(width: number, aspect: number): string | null {
+    const source = this.renderer.domElement;
+    if (!source.width || !source.height) return null;
+    this.render();
+    const height = Math.round(width / aspect);
+    const crop = Math.min(source.height, source.width / aspect);
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    context.drawImage(source, 0, (source.height - crop) / 2, source.width, crop, 0, 0, width, height);
+    return canvas.toDataURL("image/jpeg", 0.85);
+  }
+
   /** A race or time trial on `seed`: Sky Isles, the race map */
   setSeed(seed: number) {
     if (this.world?.seed === seed && !this.world.level.run) return;
