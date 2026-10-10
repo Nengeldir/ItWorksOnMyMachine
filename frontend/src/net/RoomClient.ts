@@ -15,6 +15,8 @@ export interface RoomHandlers {
 export interface Identity {
   clientId: string;
   nickname: string;
+  /** Creating the room: fly this map (picked in the map select); an existing room keeps its own */
+  seed?: number;
 }
 
 /**
@@ -60,6 +62,7 @@ export class RoomClient {
       joined = await request<Joined>(this.url("join"), "POST", {
         client_id: this.identity.clientId,
         nickname: this.identity.nickname,
+        seed: this.identity.seed,
       });
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
@@ -138,8 +141,9 @@ export class RoomClient {
     return request(this.url("start"), "POST", { token: this.token });
   }
 
-  newMap(): Promise<void> {
-    return request(this.url("map"), "POST", { token: this.token });
+  /** Another map: the one picked in the map select, or (without a seed) a random one */
+  newMap(seed?: number): Promise<void> {
+    return request(this.url("map"), "POST", { token: this.token, seed });
   }
 
   finish(timeMs: number, ghost: GhostData): Promise<{ place: number; personal_best_ms: number }> {

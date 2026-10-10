@@ -234,7 +234,7 @@ export class RunController {
     const { course } = world;
     const finish = course.rings[course.rings.length - 1];
     const last = this.level >= RUN_LENGTH;
-    const color = last ? "#ffe9a0" : BIOMES[destination(this.seed, this.level, this.path)].portals.color;
+    const color = last ? "#ffe9a0" : BIOMES[destination(this.seed, this.path)].portals.color;
     this.portals = [new Portal(finish.position.clone().addScaledVector(finish.normal, 3), finish.normal, 15, color)];
     for (const portal of this.portals) this.group.add(portal.group);
     // Abilities start charged
@@ -368,7 +368,7 @@ export class RunController {
       return;
     }
     // The offer is drawn now, from this level, so building the next one early doesn't change it
-    this.through = { next: destination(this.seed, this.level, this.path), offers: offer(this.seed, this.level, this.picked), built: false };
+    this.through = { next: destination(this.seed, this.path), offers: offer(this.seed, this.level, this.picked), built: false };
     this.phase = "portal";
     this.phaseTime = 0;
     this.sparkled = false;
@@ -434,7 +434,7 @@ export class RunController {
     if (this.frozen || this.ended) return;
     const { flight } = this.host;
     const radius = this.portals[0]?.radius ?? 15;
-    const color = this.level >= RUN_LENGTH ? "#ffe9a0" : BIOMES[destination(this.seed, this.level, this.path)].portals.color;
+    const color = this.level >= RUN_LENGTH ? "#ffe9a0" : BIOMES[destination(this.seed, this.path)].portals.color;
     const position = flight.position.clone().addScaledVector(flight.forward, Math.max(radius * 3, flight.speed * 1.5));
     this.disposeLevel();
     const portal = new Portal(position, flight.forward, radius, color);

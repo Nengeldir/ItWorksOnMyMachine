@@ -32,7 +32,7 @@ import { ABILITY } from "./run/abilities";
 import { RunController, type RunEvents, type RunHost } from "./run/controller";
 import type { UpgradeId } from "./run/upgrades";
 import type { RunHud } from "./run/run";
-import { type Level, levelId, raceLevel } from "./world/biomes";
+import { type Level, levelId, seedLevel } from "./world/biomes";
 import type { WaterKind } from "./world/terrain/river";
 import { type WaterHit, World } from "./world/World";
 import { WorldView } from "./world/WorldView";
@@ -61,6 +61,7 @@ const QUALITY = [
   { pixelRatio: 2, particles: 1 },
 ] as const;
 const DRIFT_SPEED = 14; // m/s along the course, for the menu's camera
+const ATTRACT_KEEP = 2; // maps the menu's backdrop keeps built besides its own and the one on screen
 const MARKER_EDGE = 8; // px the ring marker keeps from the screen edge
 
 export type RaceState = "free" | "countdown" | "racing" | "finished";
@@ -121,7 +122,7 @@ export interface GameEvents {
 }
 
 export interface GameOptions {
-  /** A race or time trial on this seed (Sky Isles), unless `level` is given */
+  /** A race or time trial on the map this seed stands for, unless `level` is given */
   seed: number;
   level?: Level;
   /** Milliseconds; the server clock in rooms, so everyone starts together */
@@ -233,6 +234,12 @@ export class Game implements RunHost {
   private driftZ = 0;
   world!: World;
   view!: WorldView;
+  /**
+   * The menu's backdrop keeps maps it showed, parked (the map select goes back and forth, then back to
+   * the landing's own course, `home`, which is never let go); oldest first. Games keep none.
+   */
+  private readonly kept = new Map<string, { world: World; view: WorldView }>();
+  private home: string | null = null;
   /** The roguelike run, when this game is one (never in races) */
   private run: RunController | null = null;
   private frozen = false;
@@ -365,7 +372,7 @@ export class Game implements RunHost {
     this.whiteLight.className = "white-light";
     container.appendChild(this.whiteLight);
 
-    this.setLevel(options.level ?? raceLevel(options.seed));
+    this.setLevel(options.level ?? seedLevel(options.seed));
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
@@ -435,7 +442,7 @@ export class Game implements RunHost {
 
   /**
    * After the finale's white light: the run is over, the default sky map
-   * (Sky Isles on `seed`, the menu's map) is built under the white, the pilot
+   * (today's map on `seed`, the menu's) is built under the white, the pilot
    * flies it on autopilot with every control locked, and the white clears
    */
   victoryLap(seed: number) {
@@ -444,7 +451,7 @@ export class Game implements RunHost {
     this.autopiloting = true;
     if (document.pointerLockElement) document.exitPointerLock();
     this.freeze(false);
-    this.setLevel(raceLevel(seed));
+    this.setLevel(seedLevel(seed));
     this.whiteOut(1);
     this.clearWhiteFrom = this.elapsed;
   }
@@ -660,10 +667,10 @@ export class Game implements RunHost {
     return canvas.toDataURL("image/jpeg", 0.85);
   }
 
-  /** A race or time trial on `seed`: Sky Isles, the race map */
+  /** A race or time trial on `seed`: the map that seed stands for (`seedLevel`, any biome) */
   setSeed(seed: number) {
     if (this.world?.seed === seed && !this.world.level.run) return;
-    this.setLevel(raceLevel(seed));
+    this.setLevel(seedLevel(seed));
   }
 
   /** Builds the world for a level and puts you at the start, flying freely */
@@ -676,11 +683,31 @@ export class Game implements RunHost {
     }
     if (this.view) {
       this.scene.remove(this.view.group);
-      this.view.dispose();
+      if (this.attract) {
+        this.view.park();
+        this.kept.set(levelId(this.world.level.key), { world: this.world, view: this.view });
+      } else this.view.dispose();
     }
-    this.world = new World(level);
-    this.view = new WorldView(this.world, this.scene);
-    this.view.prepare(this.renderer);
+    const id = levelId(level.key);
+    const kept = this.attract ? this.kept.get(id) : undefined;
+    if (kept) {
+      this.kept.delete(id);
+      this.world = kept.world;
+      this.view = kept.view;
+      this.view.resume(this.scene);
+    } else {
+      this.world = new World(level);
+      this.view = new WorldView(this.world, this.scene);
+      this.view.prepare(this.renderer);
+    }
+    if (this.attract) {
+      this.home ??= id;
+      const others = [...this.kept.keys()].filter((key) => key !== this.home);
+      for (const key of others.slice(0, Math.max(0, others.length - ATTRACT_KEEP))) {
+        this.kept.get(key)!.view.dispose();
+        this.kept.delete(key);
+      }
+    }
     this.scene.add(this.view.group);
     // Compile the level's shaders now (behind the loading wait or the wormhole), not mid-flight;
     // compile() skips hidden objects, so the new land is hidden only afterwards
@@ -820,6 +847,8 @@ export class Game implements RunHost {
     this.gui?.destroy();
     this.run?.dispose();
     this.view.dispose();
+    this.kept.forEach(({ view }) => view.dispose());
+    this.kept.clear();
     this.live.forEach((p) => this.removePilot(p));
     this.ghosts.forEach((p) => this.removePilot(p));
     this.fx.dispose();

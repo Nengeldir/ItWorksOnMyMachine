@@ -135,9 +135,10 @@ def check_finish_time(time_ms: int, elapsed_ms: int):
 
 
 class Room:
-    def __init__(self, code: str, now: int | None = None):
+    def __init__(self, code: str, now: int | None = None, seed: int | None = None):
         self.code = code
-        self.seed = random_seed()
+        # The map: the one picked in the map select, or any
+        self.seed = seed if seed is not None else random_seed()
         self.phase = "lobby"  # lobby -> countdown -> racing -> lobby
         self.start_at: int | None = None
         self.race_id = 0
@@ -237,10 +238,11 @@ class Room:
         player.moved = True
         player.last_seen = now if now is not None else now_ms()
 
-    def new_map(self, now: int | None = None):
+    def new_map(self, now: int | None = None, seed: int | None = None):
+        """Another map: the one picked in the map select, or a random one"""
         if self.phase != "lobby":
             raise RoomError("the map can only change in the lobby")
-        self.seed = random_seed()
+        self.seed = seed if seed is not None else random_seed()
         self.results = []
         self.notify(now)
 
@@ -326,10 +328,11 @@ class RoomManager:
     def __init__(self):
         self.rooms: dict[str, Room] = {}
 
-    def get_or_create(self, code: str) -> Room:
+    def get_or_create(self, code: str, seed: int | None = None) -> Room:
+        """The room with this code; a new one flies `seed` (if given), an existing one keeps its map"""
         room = self.rooms.get(code)
         if room is None:
-            room = self.rooms[code] = Room(code)
+            room = self.rooms[code] = Room(code, seed=seed)
         return room
 
     def find(self, code: str, token: str) -> tuple[Room, Player] | None:

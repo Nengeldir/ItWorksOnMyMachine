@@ -124,29 +124,9 @@ export class WorldView {
     this.levelId = levelId(world.level.key);
     const palette = world.palette;
     const accent = new THREE.Color(palette.accent);
-
-    // One set of light uniforms for the sky and the rock: this biome's mood
     const sun = sunDirection(palette);
-    ATMOSPHERE.sunDirection.value.copy(sun);
-    ATMOSPHERE.sunColor.value.set(palette.sun);
-    ATMOSPHERE.mistColor.value.set(palette.mist);
-    ATMOSPHERE.mistDensity.value = palette.mistDensity;
-    const mist = world.biome.sky.mist;
-    ATMOSPHERE.mistMode.value = mist.mode === "valley" ? 1 : 0;
-    ATMOSPHERE.mistThickness.value = mist.mode === "valley" ? mist.thickness : 120;
-    ATMOSPHERE.horizon.value.set(palette.horizon);
-    ATMOSPHERE.zenith.value.set(palette.zenith);
-    ATMOSPHERE.clouds.value.set(palette.cloud);
-    ATMOSPHERE.night.value = palette.night;
-    ATMOSPHERE.aurora.value = palette.aurora ?? 0;
-    ATMOSPHERE.underglow.value.set(palette.underglow ?? "#000000");
     const underwater = world.biome.sky.underwater;
-    ATMOSPHERE.underwater.value = underwater ? 1 : 0;
-    if (underwater) ATMOSPHERE.surface.value = world.course.start.y + underwater.surface;
-
-    scene.background = new THREE.Color(palette.horizon);
-    const [fogNear, fogFar] = world.biome.sky.fog ?? [FOG_NEAR, FOG_FAR];
-    scene.fog = new THREE.Fog(palette.horizon, fogNear, fogFar);
+    this.light(scene);
     // The sky lights the shadows from above, the sea of clouds bounces light from below
     const hemi = new THREE.HemisphereLight(
       new THREE.Color(palette.horizon).lerp(new THREE.Color(palette.zenith), 0.25),
@@ -210,6 +190,55 @@ export class WorldView {
       this.land = new LandStreamer(world, this.group, material, this.flora, this.collider);
     }
 
+    this.startWorkers();
+  }
+
+  /** One set of light uniforms for the sky and the rock, the fog and the background: this biome's mood */
+  private light(scene: THREE.Scene) {
+    const { world } = this;
+    const palette = world.palette;
+    ATMOSPHERE.sunDirection.value.copy(sunDirection(palette));
+    ATMOSPHERE.sunColor.value.set(palette.sun);
+    ATMOSPHERE.mistColor.value.set(palette.mist);
+    ATMOSPHERE.mistDensity.value = palette.mistDensity;
+    const mist = world.biome.sky.mist;
+    ATMOSPHERE.mistMode.value = mist.mode === "valley" ? 1 : 0;
+    ATMOSPHERE.mistThickness.value = mist.mode === "valley" ? mist.thickness : 120;
+    ATMOSPHERE.horizon.value.set(palette.horizon);
+    ATMOSPHERE.zenith.value.set(palette.zenith);
+    ATMOSPHERE.clouds.value.set(palette.cloud);
+    ATMOSPHERE.night.value = palette.night;
+    ATMOSPHERE.aurora.value = palette.aurora ?? 0;
+    ATMOSPHERE.underglow.value.set(palette.underglow ?? "#000000");
+    const underwater = world.biome.sky.underwater;
+    ATMOSPHERE.underwater.value = underwater ? 1 : 0;
+    if (underwater) ATMOSPHERE.surface.value = world.course.start.y + underwater.surface;
+
+    scene.background = new THREE.Color(palette.horizon);
+    const [fogNear, fogFar] = world.biome.sky.fog ?? [FOG_NEAR, FOG_FAR];
+    scene.fog = new THREE.Fog(palette.horizon, fogNear, fogFar);
+  }
+
+  /**
+   * Set aside but kept built (the menu's backdrop keeps a few maps for its map select): the workers stop
+   * and what they were asked for is forgotten, the hidden meshes go; what is on screen stays
+   */
+  park() {
+    this.workers.forEach((w) => w.terminate());
+    this.workers.length = 0;
+    this.busy.length = 0;
+    for (const chunk of this.chunks) if (chunk.state === "pending") chunk.state = "idle";
+    this.land?.park();
+  }
+
+  /** Back on screen after `park`: its light again, and workers to stream on */
+  resume(scene: THREE.Scene) {
+    this.light(scene);
+    this.startWorkers();
+    this.streamDirty = true;
+  }
+
+  private startWorkers() {
     const count = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 4) - 1));
     for (let i = 0; i < count; i++) {
       const worker = new Worker(new URL("./mesher.worker.ts", import.meta.url), { type: "module" });

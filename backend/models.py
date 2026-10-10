@@ -46,10 +46,17 @@ class Ghost(BaseModel):
 class JoinRequest(BaseModel):
     client_id: ClientId
     nickname: Nickname = ""
+    # Creating the room: fly this map (picked in the map select). Joining one that exists: ignored
+    seed: Seed | None = None
 
 
 class TokenRequest(BaseModel):
     token: str
+
+
+class MapRequest(TokenRequest):
+    # The map picked in the map select; none picks one at random
+    seed: Seed | None = None
 
 
 class StateRequest(BaseModel):

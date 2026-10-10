@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Color, SRGBColorSpace } from "three";
-import { raceLevel } from "./game/world/biomes";
+import { seedLevel } from "./game/world/biomes";
 import type { Palette } from "./game/world/palette";
 
 // The UI's ink (text and primary buttons) for each map palette, picked by eye to sit with its sky.
@@ -31,7 +31,7 @@ export function applyUiTheme(palette: Palette) {
 /** Keeps the UI in the colors of the map with this seed */
 export function useUiTheme(seed: number | undefined) {
   useEffect(() => {
-    if (seed !== undefined) applyUiTheme(raceLevel(seed).palette);
+    if (seed !== undefined) applyUiTheme(seedLevel(seed).palette);
   }, [seed]);
 }
 
