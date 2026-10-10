@@ -239,6 +239,14 @@ gameplay change (rule 6): what crashes you changed, in races too.
   overhead view during headfirst, slide and wing crashes; with real flying
   poses, the drawn wing at a crash is a median 0.49 m clear of the rock, worst
   0.78 m into it for one frame. Not played with a mouse.
+- Merged `origin/main` (`dd61606`: pause on P; `8f5e3e5`: the more physical
+  flight model, taken as is, with `FLIGHT` keeping the `hit*` keys).
+  Conflicts: `flight.ts` (`FLIGHT`), `effects.ts` (kept the feathers),
+  `Hud.tsx` (pause panel plus "Gliding in…"), `GameScreen.tsx` (the HUD
+  shows while paused, otherwise hidden in portals, the finale and after),
+  `Game.ts` (pause before the autopilot and glide-in logic; no pointer lock
+  while paused or on autopilot). Rechecked after the merge: build, lint,
+  race hashes, the three crash kinds, pause; no console errors.
 
 ### 2026-10-10: Victory lap and the finish screen (Claude)
 

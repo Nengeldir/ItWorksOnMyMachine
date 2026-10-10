@@ -30,9 +30,9 @@ export class CameraRig {
   private desiredOffset(forward: Vector3, up: Vector3, speed: number): Vector3 {
     blendedUp.copy(WORLD_UP).lerp(up, 0.3).normalize();
     return desired
-      .copy(forward)
-      .multiplyScalar(-(CAMERA.distance + speed * CAMERA.distancePerSpeed))
-      .addScaledVector(blendedUp, CAMERA.height);
+        .copy(forward)
+        .multiplyScalar(-(CAMERA.distance + speed * CAMERA.distancePerSpeed))
+        .addScaledVector(blendedUp, CAMERA.height);
   }
 
   /** Jumps straight behind the pilot (after a respawn) */
@@ -43,13 +43,13 @@ export class CameraRig {
   }
 
   update(
-    dt: number,
-    position: Vector3,
-    forward: Vector3,
-    up: Vector3,
-    speed: number,
-    proximity: number,
-    clearance: ((x: number, y: number, z: number) => number) | null,
+      dt: number,
+      position: Vector3,
+      forward: Vector3,
+      up: Vector3,
+      speed: number,
+      proximity: number,
+      clearance: ((x: number, y: number, z: number) => number) | null,
   ) {
     this.time += dt;
     const k = 1 - Math.exp(-dt * CAMERA.stiffness);

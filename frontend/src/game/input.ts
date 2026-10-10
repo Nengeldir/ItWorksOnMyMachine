@@ -7,7 +7,14 @@ export interface ControlSettings {
 }
 
 /** One-off presses. dash and flap only do something in a roguelike run, with the upgrade */
-export type InputAction = "respawn" | "mute" | "barrelLeft" | "barrelRight" | "dash" | "flap";
+export type InputAction = "pause" | "respawn" | "mute" | "barrelLeft" | "barrelRight" | "dash" | "flap";
+
+/** KeyboardEvent.code bindings. Change these here; control hints use the same values. */
+export const KEY_BINDINGS = { pause: "KeyP" } as const;
+
+export function keyLabel(code: string): string {
+  return code.replace(/^(Key|Digit)/, "");
+}
 
 const DEAD_ZONE = 0.12;
 const DOUBLE_TAP_MS = 280;
@@ -25,7 +32,7 @@ function deadZone(value: number): number {
 
 function isTyping(event: KeyboardEvent): boolean {
   const target = event.target as HTMLElement | null;
-  return !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA");
+  return !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
 }
 
 /**
@@ -70,6 +77,18 @@ export class Input {
     }
   }
 
+  releasePointer() {
+    if (document.pointerLockElement === this.element) document.exitPointerLock();
+  }
+
+  /** Discard held controls and mouse motion when pausing or resuming. */
+  reset() {
+    this.keys.clear();
+    this.stickX = 0;
+    this.stickY = 0;
+    this.lastTap = { code: "", at: 0 };
+  }
+
   private onKeyDown = (event: KeyboardEvent) => {
     if (isTyping(event)) return;
     this.keys.add(event.code);
@@ -78,6 +97,11 @@ export class Input {
     const atGame = !target || target === document.body || target === this.element;
     if (atGame && event.code.startsWith("Arrow")) event.preventDefault();
     if (event.repeat) return;
+    if (event.code === KEY_BINDINGS.pause) {
+      event.preventDefault();
+      this.onAction?.("pause");
+      return;
+    }
     if (event.code === "KeyR") this.onAction?.("respawn");
     if (event.code === "KeyM") this.onAction?.("mute");
     // Barrel rolls: Q / E, or double-tap a roll key
@@ -125,7 +149,7 @@ export class Input {
 
   /** Is the hover button held? (F, or the gamepad's B / circle) */
   get hovering(): boolean {
-    return this.keys.has("KeyF") || !!this.padButtons[1];
+    return this.keys.has("KeyF") || this.padButtons[1];
   }
 
   private key(...codes: string[]): number {

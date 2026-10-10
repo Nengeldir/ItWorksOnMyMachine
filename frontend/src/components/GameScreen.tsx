@@ -305,8 +305,8 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
   return (
     <div className="game">
       <div ref={ref} className="game-view" />
-      {/* Nothing but the wormhole while passing through a portal */}
-      {hud && stage !== "pick" && stage !== "summary" && run?.phase !== "portal" && run?.phase !== "finale" && run?.phase !== "won" && <Hud hud={hud} />}
+      {/* Nothing but the wormhole while passing through a portal (but the pause panel) */}
+      {hud && (hud.paused || (stage !== "pick" && stage !== "summary" && run?.phase !== "portal" && run?.phase !== "finale" && run?.phase !== "won")) && <Hud hud={hud} />}
       {run && stage !== "intro" && stage !== "summary" && stage !== "pick" && run.phase !== "finale" && run.phase !== "won" && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
       {run?.phase === "finale" && (
         <div className="finale-skip">
@@ -344,7 +344,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun }: ScreenProps
         </aside>
       )}
 
-      {stage === "pick" && <UpgradePicker offers={offers} next={next} onPick={(id) => session.pick(id)} />}
+      {stage === "pick" && !hud?.paused && <UpgradePicker offers={offers} next={next} onPick={(id) => session.pick(id)} />}
 
       {stage === "summary" && summary && (
         <FinishScreen summary={summary} best={best} onAgain={() => session.again()} onNewRun={onNewRun} onMenu={onExit} />

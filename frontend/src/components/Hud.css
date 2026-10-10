@@ -49,6 +49,28 @@
   color: var(--good);
 }
 
+.hud-pause {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 1.6rem;
+  border-radius: 22px;
+  text-align: center;
+}
+
+.hud-pause strong {
+  font-size: 2rem;
+}
+
+.hud-pause small {
+  color: var(--ink-70);
+}
+
 .hud-crash {
   position: absolute;
   top: 34%;
