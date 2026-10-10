@@ -1,4 +1,7 @@
 import { Game, type HudState } from "../game/Game";
+import { dailySeed } from "../game/rng";
+import type { RunSummary } from "../game/run/run";
+import type { Upgrade, UpgradeId } from "../game/run/upgrades";
 import { trackFile } from "../game/music";
 import { BIOMES, type BiomeId, makeLevel, runLevel } from "../game/world/biomes";
 import type { Settings } from "../storage";
@@ -15,6 +18,10 @@ export interface ExploreState {
   /** The music file this world should play, and the one actually playing */
   track: string;
   playing: string | null;
+  speed: number;
+  offers: Upgrade[];
+  next: BiomeId | null;
+  summary: RunSummary | null;
 }
 
 /**
@@ -28,8 +35,10 @@ export class ExploreSession {
   private settings: Settings;
   private game: Game | null = null;
   private timer = 0;
+  readonly testMode: boolean;
 
-  constructor(biome: BiomeId, seed: number, settings: Settings) {
+  constructor(biome: BiomeId, seed: number, settings: Settings, testMode = false) {
+    this.testMode = testMode;
     this.seed = seed;
     this.settings = settings;
     this.store = new Store<ExploreState>({
@@ -39,6 +48,10 @@ export class ExploreSession {
       mood: runLevel(seed, 1, biome).key.mood,
       track: trackFile(biome),
       playing: null,
+      speed: 1,
+      offers: [],
+      next: null,
+      summary: null,
     });
   }
 
@@ -51,8 +64,10 @@ export class ExploreSession {
         clock: () => performance.now(),
         controls: this.settings,
         color: COLOR,
-        events: { hud: (hud) => this.store.set({ hud }) },
+        testMode: this.testMode,
+        events: { hud: (hud) => this.store.set({ hud }), testSpeed: (speed) => this.store.set({ speed }) },
       });
+      if (this.testMode) this.startTest(biome, mood);
     } catch (e) {
       console.error(e);
       this.store.set({ error: `The game couldn't start: ${(e as Error).message}` });
@@ -83,9 +98,49 @@ export class ExploreSession {
   show(biome: BiomeId, mood?: number) {
     const own = runLevel(this.seed, 1, biome).key.mood;
     const next = mood === undefined ? own : ((mood % BIOMES[biome].moods.length) + BIOMES[biome].moods.length) % BIOMES[biome].moods.length;
-    this.game?.setLevel(this.level(biome, next));
-    history.replaceState(null, "", `/?explore=${biome}&seed=${this.seed}`);
+    if (this.testMode) this.startTest(biome, next);
+    else this.game?.setLevel(this.level(biome, next));
+    this.updateUrl(biome);
     this.store.set({ biome, mood: next, track: trackFile(biome) });
+  }
+
+  private updateUrl(biome: BiomeId) {
+    const url = new URL(location.href);
+    url.searchParams.set(this.testMode ? "test" : "explore", biome);
+    url.searchParams.set("seed", String(this.seed));
+    history.replaceState(null, "", url.pathname + url.search + url.hash);
+  }
+
+  private startTest(biome: BiomeId, mood: number) {
+    this.store.set({ offers: [], next: null, summary: null });
+    this.game?.startRun(this.seed, {
+      offer: (offers, next) => this.store.set({ offers, next }),
+      arrived: (_level, current) => {
+        const mood = this.game!.world.level.key.mood;
+        this.store.set({ biome: current, mood, track: trackFile(current) });
+        this.updateUrl(current);
+      },
+      ended: (summary) => {
+        // Test results never enter RunSession's local best scores or the server.
+        this.store.set({ summary, offers: [], next: null });
+        this.game?.victoryLap(dailySeed());
+      },
+    }, this.level(biome, mood));
+  }
+
+  pick(id: UpgradeId) {
+    if (this.store.get().hud?.paused) return;
+    this.game?.pickUpgrade(id);
+    this.store.set({ offers: [], next: null });
+  }
+
+  again() {
+    const { biome, mood } = this.store.get();
+    this.show(biome, mood);
+  }
+
+  skip() {
+    this.game?.skipFinale();
   }
 
   /** The next (or, with -1, previous) world in the list */
@@ -101,6 +156,6 @@ export class ExploreSession {
   }
 
   static valid(biome: string): biome is BiomeId {
-    return biome in BIOMES;
+    return Object.hasOwn(BIOMES, biome);
   }
 }

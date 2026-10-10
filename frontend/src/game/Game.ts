@@ -1,3 +1,4 @@
+import { TestPlayback } from "./testPlayback";
 import { bindingLabel } from "./bindings";
 import * as THREE from "three";
 import type { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
@@ -103,6 +104,7 @@ export interface FinishResult {
 
 export interface GameEvents {
   hud(state: HudState): void;
+  testSpeed?(rate: number): void;
   raceStarted?(): void;
   finished?(result: FinishResult): void;
 }
@@ -118,6 +120,8 @@ export interface GameOptions {
   events: GameEvents;
   /** Set for a menu backdrop: no player input, no audio, flies itself */
   attract?: AttractMode;
+  /** Local sandbox shortcuts and playback controls, enabled only by ?test. */
+  testMode?: boolean;
 }
 
 /** Live state for the network: [x,y,z], [qx,qy,qz,qw], speed, checkpoints */
@@ -242,6 +246,7 @@ export class Game implements RunHost {
   private accumulator = 0;
   private lastFrame = 0;
   private elapsed = 0;
+  private readonly testPlayback?: TestPlayback;
   private lastHud = 0;
   private frame = 0;
   private readonly resizeObserver: ResizeObserver;
@@ -275,6 +280,19 @@ export class Game implements RunHost {
       if (action === "barrelLeft" || action === "barrelRight") this.barrelRoll(action === "barrelLeft" ? -1 : 1);
       if (action === "flap" && this.crashedAt === null && !this.glide.active) this.run?.ability(action);
     };
+    if (options.testMode) {
+      this.testPlayback = new TestPlayback(container.parentElement ?? container);
+      this.input.onTestAction = (action) => {
+        if (action === "speed") {
+          const rate = this.testPlayback!.toggle();
+          this.events.testSpeed?.(rate);
+        }
+        else if (action === "win") {
+          if (this.paused) this.togglePause();
+          this.run?.testWin();
+        } else if (!this.paused && this.crashedAt === null) this.run?.spawnTestPortal();
+      };
+    }
     if (!this.attract) {
       this.renderer.domElement.addEventListener("click", this.engage);
       // Audio may only start after a user gesture: take the first one, mouse or keyboard
@@ -356,10 +374,15 @@ export class Game implements RunHost {
   // --- the roguelike run (RunHost) ---------------------------------------------------
 
   /** Turns this game into a roguelike run: levels, upgrades, portals (never used for races) */
-  startRun(seed: number, events: RunEvents) {
+  startRun(seed: number, events: RunEvents, initial?: Level) {
     this.run?.dispose();
+    this.autopiloting = false;
+    this.clearWhiteFrom = null;
+    this.whiteOut(0);
+    if (this.paused) this.togglePause();
+    this.freeze(false);
     this.run = new RunController(seed, this, events);
-    this.run.start();
+    this.run.start(initial);
   }
 
   /**
@@ -715,6 +738,7 @@ export class Game implements RunHost {
     this.renderer.domElement.removeEventListener("click", this.engage);
     window.removeEventListener("keydown", this.startAudio);
     window.removeEventListener("pointerdown", this.startAudio);
+    this.testPlayback?.dispose();
     this.input.dispose();
     this.audio.dispose();
     this.gui?.destroy();
@@ -1168,7 +1192,8 @@ export class Game implements RunHost {
 
   private loop = (now: number) => {
     this.frame = requestAnimationFrame(this.loop);
-    const dt = this.lastFrame ? Math.min(0.1, (now - this.lastFrame) / 1000) : 0;
+    const realDt = this.lastFrame ? Math.min(0.1, (now - this.lastFrame) / 1000) : 0;
+    const dt = realDt * (this.testPlayback?.rate ?? 1);
     this.lastFrame = now;
     const t = this.clock();
 
@@ -1197,7 +1222,7 @@ export class Game implements RunHost {
     }
     this.elapsed += dt;
     fxTime.value = this.elapsed;
-    this.adaptQuality(dt);
+    this.adaptQuality(realDt);
 
     const selfFlying = this.attract === "chase" || this.autopiloting;
     this.input0 = selfFlying ? this.autopilot() : this.input.sample(dt);
