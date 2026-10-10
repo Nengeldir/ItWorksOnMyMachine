@@ -146,6 +146,13 @@ export class RelicFx {
     }
     this.boltTime+=dt;this.bolts.visible=this.boltTime<0.25;
     this.bolts.material.opacity=Math.max(0,1-this.boltTime/0.25) * ITEMS_FX.relics;
+    const tear=items.time("dragonTear");
+    if(tear>=0 && this.equipment.wearing("hand")!=="dragonTear")this.equipment.equip("dragonTear");
+    if(tear<0 && this.equipment.wearing("hand")==="dragonTear")this.equipment.unequip("hand");
+    if(tear>=0){
+      this.markers.add(this.avatar.group.position,flight.forward,1.5,0.45 * ITEMS_FX.relics,0.035,2,ICE);
+      this.avatar.stance.tuck=Math.max(this.avatar.stance.tuck,0.9);
+    }
     const kiteTime=items.time("stormKite");
     this.kite.visible=this.cord.visible=kiteTime>=0;
     if(kiteTime>=0){
