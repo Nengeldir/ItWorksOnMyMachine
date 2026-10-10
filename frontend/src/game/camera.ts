@@ -16,6 +16,7 @@ const DEGREES = Math.PI / 180;
 
 /** Third-person chase camera: trails behind, banks with you, widens with speed */
 export class CameraRig {
+  reducedMotion = false;
   readonly camera: PerspectiveCamera;
   private readonly offset = new Vector3(0, 3, 10);
   private readonly up = new Vector3(0, 1, 0);
@@ -46,7 +47,7 @@ export class CameraRig {
   snap(position: Vector3, forward: Vector3, up: Vector3, speed: number) {
     this.clearFraction = 1;
     this.punch = 0;
-    this.fov = CAMERA.fov + clamp((speed - 30) * CAMERA.fovPerSpeed, 0, CAMERA.fovMax);
+    this.fov = this.reducedMotion ? CAMERA.fov : CAMERA.fov + clamp((speed - 30) * CAMERA.fovPerSpeed, 0, CAMERA.fovMax);
     this.offset.copy(this.desiredOffset(forward, up, speed));
     this.up.copy(WORLD_UP);
     this.sight.set(0, 0, -1);
@@ -75,14 +76,14 @@ export class CameraRig {
     this.camera.position.copy(position).add(this.offset);
 
     // Shake when skimming the ground at speed
-    const shake = proximity * clamp(speed / 70, 0, 1.5) * CAMERA.shake;
+    const shake = (this.reducedMotion ? 0 : 1) * proximity * clamp(speed / 70, 0, 1.5) * CAMERA.shake;
     if (shake > 0) {
       this.camera.position.x += (Math.random() - 0.5) * shake;
       this.camera.position.y += (Math.random() - 0.5) * shake;
     }
     // A slow drift when gliding slowly, so the view breathes like in Sky
     const calm = clamp((45 - speed) / 25, 0, 1);
-    this.camera.position.y += Math.sin(this.time * 0.9) * 0.15 * calm;
+    if (!this.reducedMotion) this.camera.position.y += Math.sin(this.time * 0.9) * 0.15 * calm;
 
     // Walk the whole segment: a wall may sit between two clear endpoints.
     let fraction = 1;
@@ -180,10 +181,11 @@ export class CameraRig {
 
   /** A quick widening of the view, e.g. when flying through a gate */
   kick(degrees = CAMERA.ringPunch) {
-    this.punch = Math.max(this.punch, degrees);
+    if (!this.reducedMotion) this.punch = Math.max(this.punch, degrees);
   }
 
   private setFov(fov: number, dt: number) {
+    if (this.reducedMotion) { fov = CAMERA.fov; this.punch = 0; }
     this.fov += (fov - this.fov) * (1 - Math.exp(-dt * 3));
     this.punch *= Math.exp(-dt * 4);
     const total = Math.min(CAMERA.fov + CAMERA.fovMax, this.fov + this.punch);

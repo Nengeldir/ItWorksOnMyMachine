@@ -1,4 +1,5 @@
 import { useEffect, useEffectEvent, useRef } from "react";
+import { loadSettings, type Settings } from "../storage";
 import { type AttractMode, Game } from "../game/Game";
 
 const ART_ASPECT = 2.2; // map-select card art, width / height (CourseSelect.css draws it at about this shape)
@@ -9,12 +10,13 @@ const READY_POLL_MS = 400;
 interface MenuBackdropProps {
   seed: number;
   mode: AttractMode;
+  settings?: Settings;
   /** Gets a picture of each course once its land has loaded (map-select card art) */
   onSnapshot?: (seed: number, url: string) => void;
 }
 
 /** The live course behind the menu. Without WebGL the menu keeps its plain background. */
-const MenuBackdrop = ({ seed, mode, onSnapshot }: MenuBackdropProps) => {
+const MenuBackdrop = ({ seed, mode, onSnapshot, settings }: MenuBackdropProps) => {
   const container = useRef<HTMLDivElement>(null);
   const game = useRef<Game | null>(null);
   const shown = useRef(seed);
@@ -25,7 +27,7 @@ const MenuBackdrop = ({ seed, mode, onSnapshot }: MenuBackdropProps) => {
       game.current = new Game(container.current!, {
         seed: shown.current,
         clock: () => performance.now(),
-        controls: { invertPitch: false, mouseSensitivity: 1 },
+        controls: loadSettings(),
         color: "#ff5d73",
         events: { hud: () => {} },
         attract: mode,
@@ -58,6 +60,8 @@ const MenuBackdrop = ({ seed, mode, onSnapshot }: MenuBackdropProps) => {
     timer = window.setTimeout(check, READY_POLL_MS);
     return () => clearTimeout(timer);
   }, [seed]);
+
+  useEffect(() => { if (settings) game.current?.setControls(settings); }, [settings]);
 
   return <div ref={container} className="menu-backdrop" aria-hidden="true" />;
 };

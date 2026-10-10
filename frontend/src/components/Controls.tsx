@@ -1,52 +1,17 @@
 import type { Settings } from "../storage";
-import { KEY_BINDINGS, keyLabel } from "../game/input";
-
-interface ControlsProps {
-  settings: Settings;
-  onSettings: (settings: Settings) => void;
+import { bindingLabel } from "../game/bindings";
+import { useState } from "react";
+import SettingsPanel from "./SettingsPanel";
+export default function Controls({settings,onSettings}: {settings:Settings;onSettings:(settings:Settings)=>void}) {
+  const [open,setOpen]=useState(false);
+  const label = (action: Parameters<typeof bindingLabel>[1]) => bindingLabel(settings.bindings,action);
+  return <div className="controls"><ul className="keys">
+    <li>Pitch: {label("pitchDown")} / {label("pitchUp")}. Turn: {label("turnLeft")} / {label("turnRight")}.</li>
+    <li>{label("boost")} boost · {label("brake")} brake (gamepad RT / LT).</li>
+    <li>{label("barrelLeft")} / {label("barrelRight")} dodge 5 m (LB / RB).</li>
+    <li>{label("flap")} wingbeat · {label("hover")} hover (adventure).</li>
+    <li>{label("respawn")} respawn · {label("mute")} mute · {label("pause")} pause.</li>
+    <li>Steering banks up to 80°. Escape frees the mouse.</li>
+  </ul><button onClick={()=>setOpen(true)}>Settings</button>
+  {open && <SettingsPanel settings={settings} onSettings={onSettings} onClose={()=>setOpen(false)} />}</div>;
 }
-
-/** Control settings and a cheat sheet */
-const Controls = ({ settings, onSettings }: ControlsProps) => (
-  <div className="controls">
-    <ul className="keys">
-      <li>
-        <kbd>Mouse</kbd> or <kbd>WASD</kbd> / arrows or a gamepad stick: pitch and turn
-      </li>
-      <li><kbd>Shift</kbd> boost · <kbd>Space</kbd> brake (gamepad RT / LT). Release boost to recharge.</li>
-      <li>Adventure wingbeat: <kbd>C</kbd> / gamepad A.</li>
-      <li>Steering banks up to 80°. Dive for speed, pull up to trade it for height.</li>
-      <li>Skim the rock and trees for style points and a speed boost.</li>
-      <li>
-        <kbd>Q</kbd> / <kbd>E</kbd>: 5 m sideways dodge with a barrel roll
-      </li>
-      <li>
-        <kbd>R</kbd> respawn · <kbd>M</kbd> mute · <kbd>Esc</kbd> free the mouse
-      </li>
-      <li>
-        <kbd>{keyLabel(KEY_BINDINGS.pause)}</kbd> pause / resume
-      </li>
-    </ul>
-    <label className="check">
-      <input
-        type="checkbox"
-        checked={settings.invertPitch}
-        onChange={(e) => onSettings({ ...settings, invertPitch: e.target.checked })}
-      />
-      Invert pitch (mouse up and <kbd>W</kbd> pull up)
-    </label>
-    <label className="field">
-      <span>Mouse sensitivity {settings.mouseSensitivity.toFixed(1)}</span>
-      <input
-        type="range"
-        min={0.3}
-        max={3}
-        step={0.1}
-        value={settings.mouseSensitivity}
-        onChange={(e) => onSettings({ ...settings, mouseSensitivity: Number(e.target.value) })}
-      />
-    </label>
-  </div>
-);
-
-export default Controls;

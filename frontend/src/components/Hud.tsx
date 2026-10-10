@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { formatTime } from "../format";
 import type { HudState } from "../game/Game";
 import { FLIGHT } from "../game/flight";
-import { KEY_BINDINGS, keyLabel } from "../game/input";
+import { bindingLabel } from "../game/bindings";
+import type { Settings } from "../storage";
+import SettingsPanel from "./SettingsPanel";
 import "./Hud.css";
 
 const MOUSE_HINT_MS = 2500; // how long the mouse hint stays after the mouse stops
@@ -58,12 +60,14 @@ const Bar = ({ kind, label, value }: { kind: "boost" | "skim"; label: string; va
 );
 
 /** Speed, timer, rings and standings over the game view; style points only where they score (runs) */
-const Hud = ({ hud, showStyle = false }: { hud: HudState; showStyle?: boolean }) => {
+const Hud = ({ hud, settings, onSettings, showStyle = false }: { hud: HudState; settings: Settings; onSettings: (settings: Settings) => void; showStyle?: boolean }) => {
+  const [showSettings, setShowSettings] = useState(false);
   const racing = hud.raceState === "racing" || hud.raceState === "countdown";
   const go = hud.raceState === "racing" && hud.raceTimeMs !== null && hud.raceTimeMs < 1000;
   const mouseHint = useMouseHint(hud.locked);
   return (
     <div className="hud">
+      {hud.paused && showSettings && <SettingsPanel settings={{...settings, muted: hud.muted}} onSettings={onSettings} onClose={() => setShowSettings(false)} />}
       {hud.raceState !== "free" && (
         <div className="hud-race glass">
           <div className="hud-timer">{formatTime(hud.raceTimeMs ?? 0)}</div>
@@ -92,7 +96,8 @@ const Hud = ({ hud, showStyle = false }: { hud: HudState; showStyle?: boolean })
       {hud.paused && (
         <div className="hud-pause glass" role="status">
           <strong>Paused</strong>
-          <span>Press <kbd>{keyLabel(KEY_BINDINGS.pause)}</kbd> to resume</span>
+          <span>Press <kbd>{bindingLabel(settings.bindings, "pause")}</kbd> to resume</span>
+          <button onClick={() => setShowSettings(true)}>Settings</button>
           {racing && <small>The race clock keeps running</small>}
         </div>
       )}

@@ -1,3 +1,4 @@
+import { bindingLabel } from "./bindings";
 import * as THREE from "three";
 import type { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import type { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
@@ -308,6 +309,8 @@ export class Game implements RunHost {
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
+    this.setControls(options.controls);
+    this.audio.setPreferences(options.controls.musicVolume ?? 1, options.controls.effectsVolume ?? 1, options.controls.muted ?? false);
     this.resize();
     this.frame = requestAnimationFrame(this.loop);
 
@@ -561,7 +564,17 @@ export class Game implements RunHost {
   }
 
   setControls(controls: ControlSettings) {
+    const previous = this.input.settings;
     this.input.settings = controls;
+    this.input.reset();
+    this.rig.reducedMotion = !!controls.reducedMotion;
+    this.audio.setPreferences(controls.musicVolume ?? 1, controls.effectsVolume ?? 1,
+      controls.muted ?? false);
+    const mode = controls.quality ?? "auto";
+    if (previous.quality !== controls.quality || this.frame === 0) {
+      this.setQuality(mode === "low" ? 0 : mode === "medium" ? 1 : 2);
+      this.slowFrames = this.measured = 0;
+    }
   }
 
   /** No race: fly around, rings are just scenery */
@@ -1227,9 +1240,13 @@ export class Game implements RunHost {
         : this.raceState === "finished"
           ? this.finishMs
           : null;
+    const runHud = this.run?.hud() ?? null;
+    if (runHud) for (const ability of runHud.abilities) {
+      if (ability.id === "flap" || ability.id === "hover") ability.key = bindingLabel(this.input.settings.bindings, ability.id);
+    }
     return {
       seed: this.world.seed,
-      run: this.run ? this.run.hud() : null,
+      run: runHud,
       biomeName: this.world.biome.name,
       paletteName: this.world.palette.name,
       boostCharge: this.flight.boostCharge,
@@ -1417,7 +1434,7 @@ export class Game implements RunHost {
   /** Steps the quality down if frames keep taking too long (never back up, so it can't flicker) */
   private adaptQuality(dt: number) {
     this.measured += dt;
-    if (!FX.autoQuality || this.quality === 0 || this.measured < 5 || dt >= 0.1) return;
+    if ((this.input.settings.quality ?? "auto") !== "auto" || !FX.autoQuality || this.quality === 0 || this.measured < 5 || dt >= 0.1) return;
     this.slowFrames = dt > 1 / 40 ? this.slowFrames + dt : Math.max(0, this.slowFrames - dt * 0.5);
     if (this.slowFrames > 2.5) {
       this.slowFrames = 0;
