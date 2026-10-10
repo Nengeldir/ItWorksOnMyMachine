@@ -1,9 +1,11 @@
+import { IconArrowLeft, IconCheck, IconCopy } from "@tabler/icons-react";
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from "react";
 import type { Screen } from "../App";
 import { formatTime, ordinal } from "../format";
 import { RoomSession } from "../session/RoomSession";
 import { SoloSession } from "../session/SoloSession";
 import { type Settings, clientId } from "../storage";
+import { useUiTheme } from "../theme";
 import Controls from "./Controls";
 import Hud from "./Hud";
 import Leaderboard from "./Leaderboard";
@@ -51,8 +53,10 @@ interface ScreenProps {
 
 const TopBar = ({ title, onExit, children }: { title: string; onExit: () => void; children?: ReactNode }) => (
   <div className="topbar">
-    <button onClick={onExit}>← Menu</button>
-    <span className="topbar-title">{title}</span>
+    <button className="glass" onClick={onExit}>
+      <IconArrowLeft size={18} /> Menu
+    </button>
+    <span className="topbar-title glass">{title}</span>
     {children}
   </div>
 );
@@ -66,6 +70,7 @@ const SoloScreen = ({ seed, settings, onSettings, onExit }: ScreenProps & { seed
     session.store.subscribe,
     session.store.get,
   );
+  useUiTheme(seed);
 
   useHotkeys({
     Enter: () => stage !== "racing" && session.start(),
@@ -76,12 +81,20 @@ const SoloScreen = ({ seed, settings, onSettings, onExit }: ScreenProps & { seed
     <div className="game">
       <div ref={ref} className="game-view" />
       {hud && <Hud hud={hud} />}
-      <TopBar title={`Time trial · course #${seed}${hud ? ` · ${hud.paletteName}` : ""}`} onExit={onExit} />
-      {error && <div className="banner">{error}</div>}
+      <TopBar title={`Time trial · #${seed}${hud ? ` · ${hud.paletteName}` : ""}`} onExit={onExit} />
+      {error && <div className="banner glass">{error}</div>}
 
       {stage === "ready" && !error && (
-        <aside className="panel">
-          <h2>Course #{seed}</h2>
+        <aside className="panel glass">
+          <header className="panel-head">
+            <small>Time trial · #{seed}</small>
+            <h2>{hud ? `${hud.paletteName} isles` : `Course #${seed}`}</h2>
+            {hud && (
+              <div className="chips">
+                <span>{hud.totalCheckpoints} gates</span>
+              </div>
+            )}
+          </header>
           <p>
             Fly through all the rings, in order, as fast as you can. Warm up first if you like: the clock only starts
             when you do.
@@ -99,12 +112,15 @@ const SoloScreen = ({ seed, settings, onSettings, onExit }: ScreenProps & { seed
       )}
 
       {stage === "racing" && ghosts.length > 0 && hud?.raceState !== "finished" && (
-        <div className="ghost-note">Racing the ghosts of {ghosts.join(", ")}</div>
+        <div className="ghost-note glass">Racing the ghosts of {ghosts.join(", ")}</div>
       )}
 
       {stage === "results" && result && (
-        <aside className="panel results">
-          <h2>{formatTime(result.timeMs)}</h2>
+        <aside className="panel glass results">
+          <header className="panel-head">
+            <small>Finished · #{seed}</small>
+            <h2>{formatTime(result.timeMs)}</h2>
+          </header>
           {result.saving && <p>Saving your time…</p>}
           {result.error && <p className="error">{result.error}</p>}
           {result.rank !== undefined && (
@@ -139,6 +155,7 @@ const RoomScreen = ({ code, settings, onExit }: ScreenProps & { code: string }) 
     session.store.get,
   );
   const [copied, setCopied] = useState(false);
+  useUiTheme(hud?.seed);
   const me = room?.players.find((p) => p.id === selfId);
   const lobby = room?.phase === "lobby";
   const inviteLink = `${location.origin}/?room=${code}`;
@@ -160,19 +177,28 @@ const RoomScreen = ({ code, settings, onExit }: ScreenProps & { code: string }) 
       <div ref={ref} className="game-view" />
       {hud && <Hud hud={hud} />}
       <TopBar title={`Room ${code}${hud ? ` · course #${hud.seed} · ${hud.paletteName}` : ""}`} onExit={onExit}>
-        <span className={`connection ${connection}`}>{connection === "connected" ? "online" : connection}</span>
+        <span className={`connection glass ${connection}`}>
+          <span className="dot" />
+          {connection === "connected" ? "online" : connection}
+        </span>
       </TopBar>
 
       {(connection !== "connected" || message) && (
-        <div className="banner">{message ?? "Connecting to the room…"}</div>
+        <div className="banner glass">{message ?? "Connecting to the room…"}</div>
       )}
 
       {room && lobby && (
-        <aside className="panel">
-          <h2>Room {code}</h2>
+        <aside className="panel glass">
+          <header className="panel-head">
+            <small>Race room · {room.players.length} {room.players.length === 1 ? "pilot" : "pilots"}</small>
+            <h2>Room {code}</h2>
+          </header>
           <div className="invite">
             <input readOnly value={inviteLink} aria-label="Invite link" onFocus={(e) => e.target.select()} />
-            <button onClick={copyInvite}>{copied ? "Copied" : "Copy"}</button>
+            <button onClick={copyInvite}>
+              {copied ? <IconCheck size={18} /> : <IconCopy size={18} />}
+              {copied ? "Copied" : "Copy"}
+            </button>
           </div>
           <h3>Pilots</h3>
           <ul className="pilots">
@@ -211,12 +237,15 @@ const RoomScreen = ({ code, settings, onExit }: ScreenProps & { code: string }) 
       )}
 
       {room && !lobby && me && !me.racing && (
-        <div className="banner">Race in progress: you're in the next one. Fly around meanwhile.</div>
+        <div className="banner glass">Race in progress: you're in the next one. Fly around meanwhile.</div>
       )}
 
       {room && !lobby && me?.finish_ms != null && (
-        <aside className="panel results">
-          <h2>{formatTime(me.finish_ms)}</h2>
+        <aside className="panel glass results">
+          <header className="panel-head">
+            <small>Finished · Room {code}</small>
+            <h2>{formatTime(me.finish_ms)}</h2>
+          </header>
           {lastPlace !== null && (
             <p>
               You finished <strong>{ordinal(lastPlace)}</strong>. Waiting for the others…

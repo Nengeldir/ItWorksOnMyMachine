@@ -1,90 +1,328 @@
 .menu {
+  position: relative;
   min-height: 100vh;
-  padding: 3rem 1rem 4rem;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-  gap: 1rem;
-  max-width: 1100px;
-  margin: 0 auto;
-  align-content: start;
+  padding: 2.5rem 1rem 6.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
 }
 
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* The backdrop sits at z-index -1, which paints below the body's own background */
 body:has(.menu) {
-  background:
-    radial-gradient(ellipse at 20% 0%, rgba(255, 79, 154, 0.35), transparent 55%),
-    radial-gradient(ellipse at 90% 30%, rgba(0, 224, 255, 0.25), transparent 50%),
-    linear-gradient(180deg, #2a1a4a 0%, var(--bg) 70%);
+  background: transparent;
+}
+
+/* Only when the live backdrop couldn't start */
+body:has(.menu-backdrop:empty) {
+  background: linear-gradient(180deg, #5a4fc0 0%, #ffb894 100%);
   background-attachment: fixed;
 }
 
 .menu-title {
-  grid-column: 1 / -1;
   text-align: center;
-  margin-bottom: 1rem;
+  color: #fff;
+  margin-top: 3vh;
+  /* White on any sky, even the palest: a tight ink edge plus a soft glow */
+  text-shadow:
+    0 2px 2px color-mix(in srgb, var(--ink) 30%, transparent),
+    0 4px 28px color-mix(in srgb, var(--ink) 45%, transparent);
 }
 
 .menu-title h1 {
-  font-size: clamp(3rem, 9vw, 5.5rem);
-  font-weight: 900;
-  letter-spacing: -0.04em;
-  font-style: italic;
-}
-
-.menu-title h1 span {
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  padding-right: 0.1em;
+  font-size: clamp(3.5rem, 10vw, 6.5rem);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 1;
 }
 
 .menu-title p {
-  color: var(--muted);
-  font-size: 1.1rem;
-  margin: 0.5rem auto 0;
-  max-width: 34em;
+  margin: 0.6rem 0 0;
+  font-size: 1.15rem;
+  font-weight: 600;
 }
 
 .menu-card {
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
-  border-radius: var(--radius);
+  width: min(28rem, 100%);
+  border-radius: 28px;
   padding: 1.25rem;
   display: flex;
   flex-direction: column;
+  gap: 0.9rem;
+}
+
+.menu-card .primary {
+  min-height: 3.75rem;
+  font-size: 1.1rem;
+}
+
+.menu-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 4px;
+  border-radius: 16px;
+  background: var(--ink-06);
+}
+
+.menu-tabs button {
+  padding: 0.6rem;
+  border: none;
+  border-radius: 12px;
+  background: none;
+  color: var(--ink-70);
+}
+
+.menu-tabs button[aria-selected="true"] {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 2px 8px var(--ink-12);
+}
+
+.menu-course {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.9rem 1rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.menu-course div {
+  flex: 1 0 100%;
+  margin-bottom: 0.2rem;
+}
+
+.menu-course small {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-45);
+}
+
+.menu-course b {
+  font-size: 1.15rem;
+}
+
+.menu-course span {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 8px;
+  background: var(--ink-06);
+  font-variant-numeric: tabular-nums;
+}
+
+.menu-more {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.menu .menu-link {
+  padding: 0.3rem 0.4rem;
+  border: none;
+  background: none;
+  color: var(--ink-70);
+}
+
+.menu .menu-link:hover:not(:disabled) {
+  background: none;
+  color: var(--ink);
+}
+
+.menu-seed {
+  display: flex;
+  align-items: center;
+}
+
+.menu-seed input {
+  width: 6rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+}
+
+.menu-join {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.menu-join input {
+  flex: 1;
+  padding: 0.6rem 0.9rem;
+}
+
+.menu-join .primary {
+  min-height: 0;
+  padding: 0 1.3rem;
+  box-shadow: none;
+}
+
+.menu-hint {
+  margin: 0;
+  color: var(--ink-70);
+  font-size: 0.9rem;
+}
+
+.menu-best {
+  position: fixed;
+  left: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 1;
+  display: flex;
+  align-items: center;
   gap: 0.6rem;
-  backdrop-filter: blur(8px);
+  padding: 0.35rem;
+  border-radius: 18px;
 }
 
-.menu-card.highlight {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(0, 224, 255, 0.25);
+.menu-best.open {
+  padding-right: 0.6rem;
 }
 
-.menu-card h2 {
-  font-size: 1.3rem;
+.menu .menu-best-flag {
+  padding: 0;
+  border: none;
+  background: none;
 }
 
-.menu-card h3 {
-  font-size: 1rem;
-  margin-top: 0.6rem;
-  color: var(--muted);
+.menu-best-list {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
 }
 
-.menu-card .row input {
-  flex: 1;
-}
-
-.menu-card .row form {
-  flex: 1;
-  min-width: 0;
-}
-
-.menu-card button {
+.menu-best-list > b {
+  font-size: 0.82rem;
+  color: var(--ink-70);
+  margin-right: 0.3rem;
   white-space: nowrap;
 }
 
-.menu-card small {
-  opacity: 0.7;
+.menu-best-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.7rem 0.25rem 0.3rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+  font-weight: 600;
+}
+
+.menu-best-entry.me {
+  background: var(--ink-12);
+}
+
+.menu-best-entry i {
+  font-style: normal;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+  color: #fff;
+  background: var(--ink-45);
+}
+
+.menu-best-entry em {
+  font-style: normal;
   font-weight: 500;
+  color: var(--ink-70);
+  font-variant-numeric: tabular-nums;
+}
+
+.menu .menu-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.settings-button {
+  position: fixed;
+  top: 1.25rem;
+  right: 1.25rem;
+}
+
+.menu .menu-pilot {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  gap: 0.6rem;
+  padding: 0.35rem 1rem 0.35rem 0.35rem;
+  border-radius: 18px;
+  font-weight: 700;
+}
+
+.menu-badge {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--ink) 72%, #fff), var(--ink));
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--ink) 65%, #000);
+}
+
+.menu-popover {
+  position: fixed;
+  z-index: 2;
+  width: min(22rem, calc(100% - 2.5rem));
+  padding: 1rem 1.1rem;
+  border-radius: 22px;
+  background: var(--glass-strong);
+}
+
+.menu-popover header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.menu-popover h2 {
+  font-size: 1.05rem;
+}
+
+.menu-popover .menu-icon {
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  background: none;
+}
+
+.settings-panel {
+  top: 4.5rem;
+  right: 1.25rem;
+}
+
+.pilot-panel {
+  bottom: 5rem;
+  right: 1.25rem;
+}
+
+/* Narrow screens: an opened board stacks upwards from the flag, clear of the pilot button */
+@media (max-width: 899px) {
+  .menu-best.open {
+    flex-direction: column-reverse;
+    align-items: flex-start;
+    padding: 0.35rem 0.6rem 0.35rem 0.35rem;
+    border-radius: 22px;
+  }
+
+  .menu-best-list {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0.4rem 0 0 0.3rem;
+  }
 }
