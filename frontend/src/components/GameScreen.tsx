@@ -169,7 +169,7 @@ const SoloScreen = ({ seed, settings, onSettings, onExit, tutorial, onTutorialEn
       <TopBar title={`Time trial · #${seed}${hud ? ` · ${hud.paletteName}` : ""}`} onExit={onExit} controls={{ settings, onSettings, muted: !!hud?.muted }} />
       {error && <div className="banner glass">{error}</div>}
 
-      {coaching && <Coach onEnd={onTutorialEnd} />}
+      {coaching && <Coach onEnd={onTutorialEnd} observeInput={session.observeInput} />}
       {stage === "ready" && !error && !coaching && (
         <ReadyCard>
           <button className="primary start-cta" onClick={() => session.start()}>
@@ -260,7 +260,7 @@ const RoomScreen = ({ code, settings, onSettings, onExit, tutorial, onTutorialEn
         <div className="banner glass">{message ?? "Connecting to the room…"}</div>
       )}
 
-      {coaching && <Coach onEnd={onTutorialEnd} />}
+      {coaching && <Coach onEnd={onTutorialEnd} observeInput={session.observeInput} />}
       {room && lobby && !coaching && (
         <ReadyCard>
           <div className="row">
@@ -362,14 +362,21 @@ const ExploreScreen = ({ biome, seed, settings, onSettings, onExit, testMode = f
         </>}
         {testMode && <>
           <h3>Test mode · nothing saved</h3>
-          <ul className="debug-keys">
+          <div className="debug-row touch-only">
+            <button onClick={() => session.testAction("portal")}>Portal</button>
+            <button onClick={() => session.testAction("win")}>Victory</button>
+            <button onClick={() => session.testAction("speed")}>{speed === 1 ? "Half speed" : "Normal speed"}</button>
+          </div>
+          <ul className="debug-keys no-touch">
             <li><kbd>Shift+P</kbd> portal ahead</li>
             <li><kbd>Shift+O</kbd> victory</li>
             <li><kbd>Shift+S</kbd> {speed === 1 ? "half speed" : "normal speed"}</li>
           </ul>
         </>}
       </aside>}
-      {testMode && phase === "finale" && <div className="finale-skip"><kbd>Enter</kbd> skip</div>}
+      {testMode && phase === "finale" && <div className="finale-skip" onClick={() => session.skip()}>
+        <kbd>Enter</kbd> <span className="no-touch">skip</span><span className="touch-only">Skip</span>
+      </div>}
       {testMode && offers.length > 0 && !hud?.paused && <UpgradePicker offers={offers} next={next} onPick={(id) => session.pick(id)} />}
       {testMode && summary && <FinishScreen testMode summary={summary} best={null} onAgain={() => session.again()} onMenu={onExit} />}
     </div>
@@ -407,7 +414,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onT
     <div className="game">
       <div ref={ref} className="game-view" />
       {/* Nothing but the wormhole while passing through a portal */}
-      {hud && (hud.paused || (stage !== "pick" && stage !== "summary" && run?.phase !== "portal" && run?.phase !== "finale" && run?.phase !== "won")) && <Hud hud={hud} settings={settings} showStyle />}
+      {hud && (hud.paused || (stage !== "intro" && stage !== "pick" && stage !== "summary" && run?.phase !== "portal" && run?.phase !== "finale" && run?.phase !== "won")) && <Hud hud={hud} settings={settings} showStyle />}
       {run && stage !== "intro" && stage !== "summary" && stage !== "pick" && run.phase !== "finale" && run.phase !== "won" && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
       {run?.phase === "finale" && (
         <div className="finale-skip" onClick={() => session.skip()}>
@@ -415,7 +422,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onT
           <span className="touch-only">Skip</span>
         </div>
       )}
-      {coaching && <Coach onEnd={onTutorialEnd} />}
+      {coaching && <Coach onEnd={onTutorialEnd} observeInput={session.observeInput} />}
       {showTitle && arrived && <TitleCard level={arrived.level} length={run!.length} biome={arrived.biome} />}
       {stage !== "summary" && (
         <TopBar

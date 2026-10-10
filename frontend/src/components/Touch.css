@@ -11,6 +11,7 @@ html.touch .touch-only {
 }
 
 html.touch .no-touch,
+html.touch .coach-keys,
 html.touch kbd,
 html.touch .hud-hint,
 html.touch .run-abilities .key {
@@ -19,9 +20,12 @@ html.touch .run-abilities .key {
 
 /* No scrolling, pinching or long-press menus on the view: every touch is the game's */
 .game {
-  touch-action: none;
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+.game-canvas {
+  touch-action: none;
 }
 
 .game .panel,
@@ -39,6 +43,7 @@ html.touch .run-abilities .key {
 }
 
 html.touch .touch-controls {
+  z-index: 1;
   display: block;
 }
 
@@ -367,7 +372,7 @@ html.touch .finale-skip {
   }
 
   .run-score {
-    top: 2.9rem;
+    top: 3.4rem;
   }
 
   .run-compass {
@@ -379,6 +384,7 @@ html.touch .finale-skip {
   }
 
   .run-picker {
+    padding-top: 3.5rem;
     justify-content: flex-start;
     overflow-y: auto;
     touch-action: pan-y;
@@ -389,4 +395,126 @@ html.touch .finale-skip {
     overflow: auto;
     touch-action: pan-y;
   }
+}
+
+/* Keep menus and overlays above the non-interactive stick. */
+.game .topbar {
+  z-index: 3;
+}
+
+.game .panel, .game .ready-card, .game .coach,
+.game .run-picker, .game .run-finish, .game .finale-skip, .game .debug-panel {
+  z-index: 2;
+}
+
+html.touch .coach-step {
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.3rem 0.6rem;
+}
+
+.coach-touch {
+  flex-basis: 100%;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+@media (max-height: 520px) {
+  .coach {
+    top: 3.4rem;
+    padding: 0.6rem 1rem;
+    gap: 0.35rem;
+  }
+  .coach-step {
+    min-height: 1.6rem;
+  }
+  .touch-pad {
+    width: 9.5rem;
+    gap: 0.4rem;
+  }
+  .touch-button {
+    width: 3.5rem;
+    height: 3.5rem;
+  }
+  .touch-button.big {
+    width: 4.5rem;
+    height: 4.5rem;
+  }
+  .touch-button.small {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+  .run-picker h2 {
+    font-size: 1.6rem;
+  }
+  .run-picker .cards {
+    margin-top: 0;
+    gap: 0.6rem;
+  }
+  .run-picker .card {
+    width: min(14rem, 28vw);
+    min-height: 12rem;
+    padding: 0.6rem;
+  }
+  .run-picker .card .icon {
+    font-size: 1.8rem;
+  }
+  .run-picker .card strong {
+    font-size: 1rem;
+  }
+  .run-picker .card .text {
+    font-size: 0.8rem;
+  }
+  .run-score strong {
+    font-size: 1.8rem;
+    line-height: 1;
+  }
+  .run-chain {
+    font-size: 0.75rem;
+    line-height: 1.2;
+  }
+  .run-compass {
+    top: 6.5rem;
+  }
+  html.touch .run-abilities {
+    bottom: 0.5rem;
+    gap: 0.25rem;
+  }
+  html.touch .run-abilities > div {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+  html.touch .run-upgrades {
+    bottom: 3.5rem;
+  }
+
+}
+
+@media (orientation: portrait) and (pointer: coarse) {
+  .game .topbar {
+    z-index: 12;
+  }
+}
+
+/* Test actions stay above the left thumb area, clear of the central compass. */
+html.touch .debug-panel.test {
+  top: 4.5rem;
+  bottom: auto;
+  left: max(1rem, env(safe-area-inset-left));
+  right: auto;
+  max-width: min(16rem, calc(50% - 5rem));
+}
+
+html.touch .debug-row.touch-only {
+  display: flex;
+}
+
+@media (max-height: 520px) {
+  html.touch .debug-panel.test { top: 3.4rem; }
+}
+
+@media (min-height: 521px) {
+  html.touch .run-score { top: 4.5rem; }
+  html.touch .run-score strong { line-height: 1; }
+  html.touch .run-compass { top: 9rem; }
 }

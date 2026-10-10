@@ -1,6 +1,7 @@
 import { type LeaderboardEntry, finishRun, getGhosts, getLeaderboard, startRun } from "../api";
 import { type FinishResult, Game, type HudState } from "../game/Game";
 import type { Settings } from "../storage";
+import type { InputObserver } from "../game/input";
 import { Store } from "./store";
 
 const COUNTDOWN_MS = 3000;
@@ -85,6 +86,8 @@ export class SoloSession {
     this.settings = settings;
     this.game?.setControls(settings);
   }
+
+  observeInput = (observer: InputObserver): (() => void) => this.game?.observeInput(observer) ?? (() => {});
 
   engage() {
     this.game?.engage();

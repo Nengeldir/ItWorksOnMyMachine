@@ -17,7 +17,7 @@ import { GlideIn } from "./glidein";
 import { Equipment } from "./items/equip";
 import type { ItemId, ItemSlot } from "./items/models";
 import { type GhostData, GhostRecorder, type GhostRun, ghostSamples } from "./ghost";
-import { type ControlSettings, Input } from "./input";
+import { type ControlSettings, type InputObserver, type TestAction, Input, controlsBlocked } from "./input";
 import { FX_LIGHT, Kind, Particles, fx, fxTime } from "./particles";
 import { PilotFx } from "./pilotfx";
 import { INTERPOLATION_DELAY_MS, Pilot, type PilotSample } from "./pilots";
@@ -696,6 +696,19 @@ export class Game implements RunHost {
     this.avatar.setColor(color);
     this.fx.setColor(color);
     this.debris.setColor(color);
+  }
+
+  testAction(action: TestAction) {
+    if (controlsBlocked()) return;
+    this.input.reset();
+    this.input.onTestAction?.(action);
+  }
+
+  observeInput(observer: InputObserver): () => void {
+    return this.input.observe({
+      sample: (input) => { if (!this.paused) observer.sample?.(input); },
+      action: (action) => { if (!this.paused) observer.action?.(action); },
+    });
   }
 
   setControls(controls: ControlSettings) {
@@ -1468,7 +1481,7 @@ export class Game implements RunHost {
           ? this.finishMs
           : null;
     const runHud = this.run?.hud() ?? null;
-    let flap = false, hover = false;
+    let flap = false, hover = false, plunge = false, gale = false;
     if (runHud) for (const ability of runHud.abilities) {
       const bindings = this.input.settings.bindings;
       if (ability.id === "flap") ability.key = bindingLabel(bindings, "flap");
@@ -1478,8 +1491,10 @@ export class Game implements RunHost {
       else if (ability.id === "windShear") ability.key = `${bindingLabel(bindings, "barrelLeft")} / ${bindingLabel(bindings, "barrelRight")}`;
       flap ||= ability.id === "flap";
       hover ||= ability.id === "hoverStall";
+      plunge ||= ability.id === "plunge";
+      gale ||= ability.id === "galeForce";
     }
-    this.touch?.sync(this.paused, !this.autopiloting && !this.frozen, flap, hover);
+    this.touch?.sync(this.paused, !this.autopiloting && !this.frozen, flap, hover, plunge, gale);
     return {
       seed: this.world.seed,
       run: runHud,

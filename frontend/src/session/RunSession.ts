@@ -4,6 +4,7 @@ import { runOrder, type RunSummary } from "../game/run/run";
 import type { Upgrade, UpgradeId } from "../game/run/upgrades";
 import { type BiomeId, runLevel } from "../game/world/biomes";
 import type { Settings } from "../storage";
+import type { InputObserver } from "../game/input";
 import { Store } from "./store";
 
 const COLOR = "#ff5d73";
@@ -96,6 +97,8 @@ export class RunSession {
     this.settings = settings;
     this.game?.setControls(settings);
   }
+
+  observeInput = (observer: InputObserver): (() => void) => this.game?.observeInput(observer) ?? (() => {});
 
   engage() {
     this.game?.engage();

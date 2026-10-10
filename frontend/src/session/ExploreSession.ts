@@ -1,3 +1,4 @@
+import type { TestAction } from "../game/input";
 import { Game, type HudState } from "../game/Game";
 import { dailySeed } from "../game/rng";
 import type { RunSummary } from "../game/run/run";
@@ -139,6 +140,10 @@ export class ExploreSession {
   again() {
     const { biome, mood } = this.store.get();
     this.show(biome, mood);
+  }
+
+  testAction(action: TestAction) {
+    this.game?.testAction(action);
   }
 
   skip() {
