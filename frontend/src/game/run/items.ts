@@ -50,6 +50,8 @@ export const ITEM = {
   electroNear: 0.55,
   electroBonus: 120,
   electroRange: 35,
+  tearTime: 6,
+  tearThrust: 25,
   bag: 3, // items carried at once
   // Anemo Catcher: a bottled updraft
   updraftTime: 1.6, // seconds
@@ -73,7 +75,7 @@ export const ITEM = {
   fireWobble: 0.45, // how hard it yanks the controls about
 };
 
-export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether" | "mothCape" | "resonantChimes" | "crystalUpdraft" | "duskHourglass" | "electroPrism";
+export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether" | "mothCape" | "resonantChimes" | "crystalUpdraft" | "duskHourglass" | "electroPrism" | "dragonTear";
 
 /** How an item saved the pilot from a hit */
 export type ItemSave = "starflake";
@@ -121,12 +123,14 @@ export const RUN_ITEMS: readonly RunItemInfo[] = [
   { id: "crystalUpdraft", model: "crystalUpdraft", name: "Crystallized Updraft", icon: "🌪️", rarity: 1, charges: 1, description: "Drop a wind trampoline on the surface below. Dip toward it to bounce high into the sky." },
   { id: "duskHourglass", model: "duskHourglass", name: "Dusk-Weaver's Hourglass", icon: "⌛", rarity: 3, charges: 1, description: "For four seconds, scenery and the spirit manta move at a quarter pace while your flight stays normal." },
   { id: "electroPrism", model: "electroPrism", name: "Electro-Charged Prism", icon: "⚡", rarity: 2, charges: 1, description: "Near misses release chain lightning and score bonus points for twelve seconds." },
+  { id: "dragonTear", model: "dragonTear", name: "Tear of the Dragon", icon: "💧", rarity: 2, charges: 1, description: "Hold the use button to dive straight down, for up to six seconds. Release to regain normal flight." },
 ];
 
 export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.id === id)!;
 
 /** How long each item's effect lasts once used (seconds) */
 const DURATION: Record<RunItemId, () => number> = {
+  dragonTear: () => ITEM.tearTime,
   electroPrism: () => ITEM.electroTime,
   duskHourglass: () => ITEM.hourglassTime,
   crystalUpdraft: () => ITEM.padTime,
@@ -149,7 +153,7 @@ const DURATION: Record<RunItemId, () => number> = {
 };
 
 /** Effects that move the pilot: they end on a crash or a respawn */
-const FLIGHT_EFFECTS: RunItemId[] = ["anemoCatcher", "cometFirework", "silkRibbon", "aeroBoots", "stormKite", "windTether"];
+const FLIGHT_EFFECTS: RunItemId[] = ["anemoCatcher", "cometFirework", "silkRibbon", "aeroBoots", "stormKite", "windTether", "dragonTear"];
 
 /** A push along the path, fading out as the speed nears its own top speed */
 const push = (amount: number, top: number, speed: number) => amount * clamp((top - speed) / 15, 0, 1);
@@ -439,6 +443,11 @@ export class Items {
         }
       }
       if(!this.boltTargets.length)this.boltTargets.push(flight.position.clone().add(new THREE.Vector3(0,-Math.max(3,(1-proximity)*12),0)));
+    }
+    const tear=this.time("dragonTear");
+    if(tear>=0){
+      if((input.use ?? 0)<=0 && tear>0.05)this.active.delete("dragonTear");
+      else { mods.dive=1;mods.diveAngle=Math.PI/2;mods.thrust+=ITEM.tearThrust;mods.turn*=0.6; }
     }
     // ITEM RULES
     // Anemo Catcher: the bottled updraft lifts the path and holds the speed while it lasts

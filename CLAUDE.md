@@ -2954,7 +2954,7 @@ Status: **done** = mechanics, models and animations in the game.
 | 17 | Crystallized Updraft | A trampoline of wind dropped on a surface: bounce off it for a big vertical boost | done |
 | 18 | Dusk-Weaver's Hourglass | Slows time for the world around you while you move at normal speed | done |
 | 19 | Electro-Charged Prism | An electric aura: near misses throw chain lightning that scores bonus points | done |
-| 20 | Tear of the Dragon | A heavy teardrop: while held, a rapid dive-bomb straight down to low hoops | planned |
+| 20 | Tear of the Dragon | A heavy teardrop: while held, a rapid dive-bomb straight down to low hoops | done |
 
 ### Abilities (passive and active)
 
