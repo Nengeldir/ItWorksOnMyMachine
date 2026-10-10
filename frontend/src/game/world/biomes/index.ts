@@ -1,5 +1,6 @@
 import { hashToUnit, makeRng } from "../../rng";
 import { SKY_ISLES } from "./skyIsles";
+import { VERDANT } from "./verdant";
 import type { Biome, BiomeId, Level, LevelKey } from "./types";
 
 export type { Biome, BiomeId, Level, LevelKey } from "./types";
@@ -7,6 +8,7 @@ export { SKY_ISLES };
 
 export const BIOMES: Record<BiomeId, Biome> = {
   skyIsles: SKY_ISLES,
+  verdant: VERDANT,
 };
 
 /** Races and time trials: always Sky Isles, with the mood the seed has always picked */

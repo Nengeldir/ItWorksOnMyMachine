@@ -6,6 +6,9 @@ import { CrystalGates, type RingMode } from "./crystals";
 import { type ChunkMesh, CHUNK_SIZE, rockChunks } from "./mesher";
 import type { MeshRequest } from "./mesher.worker";
 import { levelId } from "./biomes";
+import type { Layers } from "./biomes/types";
+import { applyTerrainTuning, type TerrainUniforms, terrainMaterial } from "./terrain/material";
+import { LandStreamer, type NodeRequest, type NodeResult } from "./terrain/streamer";
 import { Tree } from "./trees";
 import { sunDirection } from "./palette";
 import type { World } from "./World";
@@ -19,6 +22,8 @@ const REQUESTS_PER_WORKER = 4;
 
 export type { RingMode };
 
+type ChunkRequestBody = { kind: "chunk"; key: number; ix: number; iy: number; iz: number };
+
 interface RockChunk {
   ix: number;
   iy: number;
@@ -30,7 +35,7 @@ interface RockChunk {
   trees: THREE.InstancedMesh | null;
 }
 
-type MeshResult = ChunkMesh & { level: string; key: number };
+type MeshResult = (ChunkMesh & { kind: "chunk"; level: string; key: number }) | (NodeResult & { kind: "node"; level: string });
 
 /** Moves a geometry's vertices a little, the same way for vertices that share a spot */
 function roughen(geometry: THREE.BufferGeometry, amount: number, salt: string) {
@@ -79,7 +84,11 @@ export class WorldView {
   ready = false;
   private readonly world: World;
   private readonly levelId: string;
-  private readonly chunks: RockChunk[];
+  /** The race map's chunks (Sky Isles) */
+  private readonly chunks: RockChunk[] = [];
+  /** Generator-v2 land, streamed with levels of detail */
+  private readonly land: LandStreamer | null = null;
+  private readonly terrainUniforms: TerrainUniforms | null = null;
   private readonly byKey = new Map<number, RockChunk>();
   private readonly workers: Worker[] = [];
   private readonly busy: number[] = [];
@@ -132,9 +141,9 @@ export class WorldView {
     this.sky = new THREE.Mesh(this.geometry(new THREE.SphereGeometry(4000, 32, 16)), this.material(skyMaterial()));
     this.sky.renderOrder = -2;
     this.group.add(this.sky);
-    const { cloudSea, puffs } = world.biome.sky;
+    const { cloudSea, puffs, puffsBelow, puffLift } = world.biome.sky;
     if (cloudSea) this.buildCloudSea(cloudSea.depth);
-    if (puffs > 0) this.buildClouds(puffs);
+    if (puffs > 0) this.buildClouds(puffs, puffsBelow, puffLift);
     this.gates = new CrystalGates(
       world.seed,
       world.course.rings,
@@ -144,21 +153,32 @@ export class WorldView {
     this.group.add(this.gates.group);
     this.setRings("free", 0);
 
-    this.chunks = rockChunks(world).map((c) => ({
-      ...c,
-      center: new THREE.Vector3((c.ix + 0.5) * CHUNK_SIZE, (c.iy + 0.5) * CHUNK_SIZE, (c.iz + 0.5) * CHUNK_SIZE),
-      state: "idle" as const,
-      mesh: null,
-      trees: null,
-    }));
-    for (const chunk of this.chunks) this.byKey.set(chunk.key, chunk);
+    const terrain = world.biome.terrain;
+    if (terrain.kind === "legacyIslands") {
+      this.chunks = rockChunks(world).map((c) => ({
+        ...c,
+        center: new THREE.Vector3((c.ix + 0.5) * CHUNK_SIZE, (c.iy + 0.5) * CHUNK_SIZE, (c.iz + 0.5) * CHUNK_SIZE),
+        state: "idle" as const,
+        mesh: null,
+        trees: null,
+      }));
+      for (const chunk of this.chunks) this.byKey.set(chunk.key, chunk);
+    } else {
+      const { material, uniforms } = terrainMaterial(terrain.layers);
+      this.material(material);
+      this.terrainUniforms = uniforms;
+      this.land = new LandStreamer(world, this.group, material);
+    }
 
     const count = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 4) - 1));
     for (let i = 0; i < count; i++) {
       const worker = new Worker(new URL("./mesher.worker.ts", import.meta.url), { type: "module" });
       worker.onmessage = (event: MessageEvent<MeshResult>) => {
         this.busy[i]--;
-        this.receive(event.data);
+        const result = event.data;
+        if (this.disposed || result.level !== this.levelId) return;
+        if (result.kind === "node") this.land?.receive(result);
+        else this.receive(result);
       };
       this.workers.push(worker);
       this.busy.push(0);
@@ -217,7 +237,7 @@ export class WorldView {
   }
 
   /** Puffy clouds drifting between the islands and the sea of clouds */
-  private buildClouds(count: number) {
+  private buildClouds(count: number, below: boolean, lift: number) {
     const { course, seed, palette } = this.world;
     const rng = makeRng(seed, "clouds");
     const geometry = this.geometry(new THREE.IcosahedronGeometry(1, 1));
@@ -230,10 +250,11 @@ export class WorldView {
     const rotation = new THREE.Quaternion();
     for (let i = 0; i < count; i++) {
       const z = range(rng, course.start.z - 400, course.endZ + 1200);
-      const low = rng() < 0.6;
+      // The race map draws the same numbers either way, so its clouds stay where they were
+      const low = rng() < 0.6 && below;
       const position = new THREE.Vector3(
         course.x(z) + range(rng, -800, 800),
-        course.y(z) + (low ? range(rng, -230, -150) : range(rng, 160, 380)),
+        course.y(z) + (low ? range(rng, -230, -150) : range(rng, 160, 380) + lift),
         z,
       );
       rotation.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, range(rng, 0, Math.PI));
@@ -246,6 +267,17 @@ export class WorldView {
   }
 
   // --- rock, streamed in from the workers -------------------------------------------
+
+  /** Posts a request to the least busy worker; false if they all have enough to do */
+  private dispatch = (request: ChunkRequestBody | NodeRequest): boolean => {
+    let worker = 0;
+    for (let i = 1; i < this.busy.length; i++) if (this.busy[i] < this.busy[worker]) worker = i;
+    if (this.busy[worker] >= REQUESTS_PER_WORKER) return false;
+    this.busy[worker]++;
+    const message: MeshRequest = { level: this.world.level.key, ...request };
+    this.workers[worker].postMessage(message);
+    return true;
+  };
 
   /** Asks the workers for the nearest missing chunks, drops far ones */
   private stream(at: THREE.Vector3) {
@@ -265,18 +297,14 @@ export class WorldView {
 
     wanted.sort((a, b) => a.d - b.d);
     for (const { chunk } of wanted) {
-      const worker = this.busy.indexOf(Math.min(...this.busy));
-      if (this.busy[worker] >= REQUESTS_PER_WORKER) break;
-      this.busy[worker]++;
+      if (!this.dispatch({ kind: "chunk", key: chunk.key, ix: chunk.ix, iy: chunk.iy, iz: chunk.iz })) break;
       chunk.state = "pending";
-      const request: MeshRequest = { level: this.world.level.key, key: chunk.key, ix: chunk.ix, iy: chunk.iy, iz: chunk.iz };
-      this.workers[worker].postMessage(request);
     }
   }
 
-  private receive(result: MeshResult) {
+  private receive(result: ChunkMesh & { key: number }) {
     const chunk = this.byKey.get(result.key);
-    if (this.disposed || result.level !== this.levelId || !chunk) return;
+    if (!chunk) return;
     chunk.state = "loaded";
     if (result.positions.length) {
       const geometry = new THREE.BufferGeometry();
@@ -347,7 +375,13 @@ export class WorldView {
 
   /** Per frame: stream rock around the camera, the sky follows it, the gates animate */
   update(camera: THREE.Camera, dt: number) {
-    this.stream(camera.position);
+    if (this.land) {
+      this.land.update(camera.position, this.dispatch);
+      this.ready = this.land.ready;
+      applyTerrainTuning(this.terrainUniforms!, (this.world.biome.terrain as { layers: Layers }).layers);
+    } else {
+      this.stream(camera.position);
+    }
     this.sky.position.copy(camera.position);
     this.gates.update(dt, camera);
   }
@@ -356,6 +390,7 @@ export class WorldView {
     this.disposed = true;
     this.workers.forEach((w) => w.terminate());
     for (const chunk of this.chunks) this.unload(chunk);
+    this.land?.dispose();
     this.instanced.forEach((m) => m.dispose());
     this.geometries.forEach((g) => g.dispose());
     this.materials.forEach((m) => m.dispose());

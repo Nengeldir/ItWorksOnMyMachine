@@ -1,0 +1,284 @@
+import * as THREE from "three";
+import { TERRAIN } from "../../tuning";
+import type { World } from "../World";
+import { NODE_SIZE, type TerrainMesh, nodeKey } from "./mesh";
+
+// Streams generator-v2 land around the camera as an octree of nodes: 384 m
+// nodes far away, split into 192 m and then 96 m nodes as you get close. Every
+// node has 16 cells a side, so the triangle count per node stays the same and
+// far land is coarse. A coarse node stays on screen until all of its finer
+// replacements have arrived (and the other way round when merging), so the land
+// never shows holes or two levels at once.
+
+export const LOD_LEVELS = 3;
+const ROOT_LOD = LOD_LEVELS - 1;
+
+export interface NodeRequest {
+  kind: "node";
+  key: number;
+  lod: number;
+  ix: number;
+  iy: number;
+  iz: number;
+}
+
+export type NodeResult = TerrainMesh & { key: number };
+
+interface Node {
+  lod: number;
+  ix: number;
+  iy: number;
+  iz: number;
+  key: number;
+  box: THREE.Box3;
+  parent: Node | null;
+  children: Node[] | null; // null until first needed
+  state: "idle" | "pending" | "loaded";
+  mesh: THREE.Mesh | null; // null when loaded but empty
+  shown: boolean;
+  desired: number; // the update stamp it was last wanted in
+}
+
+export class LandStreamer {
+  ready = false;
+  private readonly world: World;
+  private readonly group: THREE.Group;
+  private readonly material: THREE.Material;
+  private readonly roots: Node[] = [];
+  private readonly byKey = new Map<number, Node>();
+  private readonly ranges = new Map<number, [number, number] | null>();
+  private readonly lastUpdate = new THREE.Vector3(Infinity, 0, 0);
+  private stamp = 0;
+  private desired: Node[] = [];
+  private readonly wanted: { node: Node; d: number }[] = [];
+
+  constructor(world: World, group: THREE.Group, material: THREE.Material) {
+    this.world = world;
+    this.group = group;
+    this.material = material;
+    const field = world.land!;
+    const { course } = world;
+    const extent = field.ground?.spec.extent ?? 900;
+    const size = NODE_SIZE << ROOT_LOD;
+    // The land's footprint: the course from before the start to past the end, out to its extent either side
+    let xMin = Infinity;
+    let xMax = -Infinity;
+    for (let z = course.start.z - 600; z <= course.endZ + 900; z += 50) {
+      xMin = Math.min(xMin, course.x(z));
+      xMax = Math.max(xMax, course.x(z));
+    }
+    for (const s of field.shapes) {
+      xMin = Math.min(xMin, s.min.x + extent);
+      xMax = Math.max(xMax, s.max.x - extent);
+    }
+    const ix0 = Math.floor((xMin - extent) / size);
+    const ix1 = Math.floor((xMax + extent) / size);
+    const iz0 = Math.floor((course.start.z - 600) / size);
+    const iz1 = Math.floor((course.endZ + 900) / size);
+    for (let ix = ix0; ix <= ix1; ix++) {
+      for (let iz = iz0; iz <= iz1; iz++) {
+        const range = this.columnRange(ROOT_LOD, ix, iz);
+        if (!range) continue;
+        for (let iy = Math.floor(range[0] / size); iy <= Math.floor(range[1] / size); iy++) {
+          this.roots.push(this.node(ROOT_LOD, ix, iy, iz, null));
+        }
+      }
+    }
+  }
+
+  private node(lod: number, ix: number, iy: number, iz: number, parent: Node | null): Node {
+    const size = NODE_SIZE << lod;
+    const key = nodeKey(lod, ix, iy, iz);
+    const node: Node = {
+      lod,
+      ix,
+      iy,
+      iz,
+      key,
+      box: new THREE.Box3(new THREE.Vector3(ix * size, iy * size, iz * size), new THREE.Vector3((ix + 1) * size, (iy + 1) * size, (iz + 1) * size)),
+      parent,
+      children: null,
+      state: "idle",
+      mesh: null,
+      shown: false,
+      desired: -1,
+    };
+    this.byKey.set(key, node);
+    return node;
+  }
+
+  /** Land height range over a node column, cached (null: no land) */
+  private columnRange(lod: number, ix: number, iz: number): [number, number] | null {
+    const key = nodeKey(lod, ix, 0, iz);
+    let range = this.ranges.get(key);
+    if (range === undefined) {
+      const size = NODE_SIZE << lod;
+      range = this.world.land!.columnRange(ix * size, iz * size, (ix + 1) * size, (iz + 1) * size);
+      this.ranges.set(key, range);
+    }
+    return range;
+  }
+
+  private childrenOf(node: Node): Node[] {
+    if (!node.children) {
+      node.children = [];
+      const lod = node.lod - 1;
+      const size = NODE_SIZE << lod;
+      for (let dx = 0; dx < 2; dx++) {
+        for (let dz = 0; dz < 2; dz++) {
+          const ix = node.ix * 2 + dx;
+          const iz = node.iz * 2 + dz;
+          const range = this.columnRange(lod, ix, iz);
+          if (!range) continue;
+          for (let dy = 0; dy < 2; dy++) {
+            const iy = node.iy * 2 + dy;
+            if ((iy + 1) * size < range[0] || iy * size > range[1]) continue;
+            node.children.push(this.node(lod, ix, iy, iz, node));
+          }
+        }
+      }
+    }
+    return node.children;
+  }
+
+  /** Which nodes should be on screen from here, and which to ask the workers for next */
+  update(at: THREE.Vector3, request: (r: NodeRequest) => boolean) {
+    if (this.lastUpdate.distanceToSquared(at) > 8 * 8 || this.stamp === 0) {
+      this.lastUpdate.copy(at);
+      this.stamp++;
+      this.desired.length = 0;
+      for (const root of this.roots) this.visit(root, at);
+      for (const root of this.roots) this.pruneTree(root, false);
+      this.settle();
+    }
+
+    // Ask for missing nodes, nearest first
+    const wanted = this.wanted;
+    wanted.length = 0;
+    let missingNearby = false;
+    for (const node of this.desired) {
+      if (node.shown) continue;
+      const d = node.box.distanceToPoint(at);
+      if (d < TERRAIN.readyRadius) missingNearby = true;
+      if (node.state === "idle") wanted.push({ node, d: d + node.lod * 120 });
+    }
+    this.ready = !missingNearby;
+    wanted.sort((a, b) => a.d - b.d);
+    for (const { node } of wanted) {
+      if (!request({ kind: "node", key: node.key, lod: node.lod, ix: node.ix, iy: node.iy, iz: node.iz })) break;
+      node.state = "pending";
+    }
+  }
+
+  private visit(node: Node, at: THREE.Vector3) {
+    const d = node.box.distanceToPoint(at);
+    if (d > TERRAIN.viewDistance) return;
+    const split = node.lod === 2 ? TERRAIN.lodFar : TERRAIN.lodNear;
+    if (node.lod > 0 && d < split) {
+      for (const child of this.childrenOf(node)) this.visit(child, at);
+    } else {
+      node.desired = this.stamp;
+      this.desired.push(node);
+    }
+  }
+
+  receive(result: NodeResult) {
+    const node = this.byKey.get(result.key);
+    if (!node || node.state !== "pending") return;
+    node.state = "loaded";
+    if (result.positions.length) {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.BufferAttribute(result.positions, 3));
+      geometry.setAttribute("rock", new THREE.BufferAttribute(result.rock, 4, true));
+      geometry.setAttribute("cover", new THREE.BufferAttribute(result.cover, 4, true));
+      geometry.setAttribute("snow", new THREE.BufferAttribute(result.snow, 1));
+      geometry.computeBoundingSphere();
+      node.mesh = new THREE.Mesh(geometry, this.material);
+      node.mesh.matrixAutoUpdate = false;
+    }
+    this.settle();
+  }
+
+  /** Puts arrived nodes on screen once they cover their area, and takes off what they replace */
+  private settle() {
+    for (const node of this.desired) {
+      if (node.state !== "loaded" || node.shown) continue;
+      const shownAncestor = this.shownAncestor(node);
+      if (shownAncestor) {
+        // Splitting: wait until everything wanted under the coarse node has arrived
+        if (!this.allLoaded(shownAncestor)) continue;
+        this.showUnder(shownAncestor);
+        this.hide(shownAncestor);
+      } else {
+        this.show(node);
+        // Merging: the finer nodes it replaces go
+        if (node.children) for (const child of node.children) this.hideTree(child);
+      }
+    }
+  }
+
+  private shownAncestor(node: Node): Node | null {
+    for (let a = node.parent; a; a = a.parent) if (a.shown) return a;
+    return null;
+  }
+
+  /** Are all the nodes wanted under `node` loaded? */
+  private allLoaded(node: Node): boolean {
+    if (!node.children) return true;
+    for (const child of node.children) {
+      if (child.desired === this.stamp) {
+        if (child.state !== "loaded") return false;
+      } else if (!this.allLoaded(child)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private showUnder(node: Node) {
+    if (!node.children) return;
+    for (const child of node.children) {
+      if (child.desired === this.stamp) this.show(child);
+      else this.showUnder(child);
+    }
+  }
+
+  private show(node: Node) {
+    node.shown = true;
+    if (node.mesh) this.group.add(node.mesh);
+  }
+
+  private hide(node: Node) {
+    node.shown = false;
+    if (node.mesh) {
+      this.group.remove(node.mesh);
+      node.mesh.geometry.dispose();
+      node.mesh = null;
+    }
+    node.state = "idle";
+  }
+
+  private hideTree(node: Node) {
+    if (node.shown || node.state === "loaded") this.hide(node);
+    if (node.children) for (const child of node.children) this.hideTree(child);
+  }
+
+  /**
+   * Drops what is no longer wanted (left behind as you fly on). Keeps nodes
+   * that still stand in for wanted ones: coarse nodes waiting for their finer
+   * replacements, and fine nodes waiting for a coarse one (`covered`).
+   * Returns whether anything in this subtree is wanted.
+   */
+  private pruneTree(node: Node, covered: boolean): boolean {
+    const here = node.desired === this.stamp;
+    let wanted = here;
+    if (node.children) for (const child of node.children) wanted = this.pruneTree(child, covered || here) || wanted;
+    if (!wanted && !covered && (node.shown || node.state === "loaded")) this.hide(node);
+    return wanted;
+  }
+
+  dispose() {
+    for (const node of this.byKey.values()) if (node.mesh) node.mesh.geometry.dispose();
+    this.byKey.clear();
+  }
+}

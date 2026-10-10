@@ -223,7 +223,10 @@ export class Game {
 
     if (new URLSearchParams(location.search).has("tune")) void this.openTuning();
     // Lets browser tests drive the game in development
-    if (import.meta.env.DEV) Object.assign(window, { __game: this, __fxTime: fxTime, __tuning: Object.fromEntries(TUNING_GROUPS) });
+    if (import.meta.env.DEV) {
+      Object.assign(window, { __game: this, __fxTime: fxTime, __tuning: Object.fromEntries(TUNING_GROUPS) });
+      void import("./devtools").then(({ installDevtools }) => installDevtools());
+    }
   }
 
   // --- public API --------------------------------------------------------------

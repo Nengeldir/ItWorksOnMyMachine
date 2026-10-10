@@ -1,5 +1,7 @@
 // Console snippets for checking the game in a dev build (npm run dev).
-// Paste them into the browser console on http://localhost:5173/?seed=42.
+// Dev builds install both of these on window by themselves (game/devtools.ts,
+// which also has more camera poses); this file keeps a standalone copy and the
+// expected race-map hashes. Paste into the console on http://localhost:5173/?seed=42.
 // Automated or background tabs throttle requestAnimationFrame and timers, so
 // these drive the game by hand and yield through MessageChannel, which isn't
 // throttled.

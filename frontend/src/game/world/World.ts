@@ -1,8 +1,14 @@
 import { Vector3 } from "three";
-import { Course } from "./course";
+import { makeRng } from "../rng";
 import type { Biome, Level } from "./biomes";
+import { Course } from "./course";
 import { RockField } from "./islands";
 import type { Palette } from "./palette";
+import { TerrainField } from "./terrain/field";
+import { Ground } from "./terrain/ground";
+import { makeNoise } from "./terrain/noise";
+import { buildLand } from "./terrain/recipes";
+import type { Steps } from "./terrain/river";
 import { TreeIndex } from "./trees";
 
 // Distances beyond this don't matter for scoring, so lookups can stop there
@@ -10,15 +16,27 @@ export const PROXIMITY_RANGE = 12;
 /** Fall this far below the racing line and you're lost in the clouds */
 const ABYSS = 240;
 
-/** Everything a level decides: the line, the islands, the colors. No rendering. */
+/** Anything with a signed distance: the legacy islands or a generator-v2 field */
+export interface Rock {
+  distance(x: number, y: number, z: number): number;
+}
+
+/** Everything a level decides: the line, the land, the water, the colors. No rendering. */
 export class World {
   readonly level: Level;
   readonly biome: Biome;
   readonly seed: number;
   readonly course: Course;
-  readonly rock: RockField;
   readonly palette: Palette;
-  /** Trees grow on the island tops; chunks add them as they are meshed */
+  /** All the land, for collisions */
+  readonly rock: Rock;
+  /** The race map's islands (Sky Isles only) */
+  readonly legacy: RockField | null = null;
+  /** Generator-v2 land (every other biome) */
+  readonly land: TerrainField | null = null;
+  /** The stepped valley floor and its river, if the biome has one */
+  readonly steps: Steps | null = null;
+  /** Trees grow on the land; chunks add them as they are meshed */
   readonly trees = new TreeIndex(PROXIMITY_RANGE);
 
   constructor(level: Level) {
@@ -27,12 +45,26 @@ export class World {
     this.seed = level.seed;
     this.palette = level.palette;
     this.course = new Course(this.seed);
-    this.rock = new RockField(this.seed, this.course);
+    const terrain = this.biome.terrain;
+    if (terrain.kind === "legacyIslands") {
+      this.legacy = new RockField(this.seed, this.course);
+      this.rock = this.legacy;
+    } else {
+      const noise = makeNoise(this.seed, "land");
+      const ground = terrain.ground ? new Ground(this.course, terrain.ground, makeRng(this.seed, "ground"), noise) : null;
+      const field = new TerrainField(this.course, ground, terrain.groundSurface, noise);
+      buildLand({ course: this.course, field, ground, rng: makeRng(this.seed, "land"), noise }, terrain.land);
+      this.land = field;
+      this.rock = field;
+      this.steps = ground?.steps?.river ? ground.steps : null;
+    }
   }
 
-  /** Distance from a point to the nearest rock or tree (negative inside) */
+  /** Distance from a point to the nearest rock, tree or water surface (negative inside) */
   distance(x: number, y: number, z: number): number {
-    return Math.min(this.rock.distance(x, y, z), this.trees.distance(x, y, z));
+    let d = Math.min(this.rock.distance(x, y, z), this.trees.distance(x, y, z));
+    if (this.steps) d = Math.min(d, this.steps.waterDistance(x, y, z));
+    return d;
   }
 
   /** Below the islands, there is only the sea of clouds */

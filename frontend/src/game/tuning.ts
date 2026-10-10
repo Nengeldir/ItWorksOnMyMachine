@@ -71,7 +71,20 @@ export const CAMERA = {
   ringPunch: 4, // FOV kick when passing a gate (degrees)
 };
 
-const GROUPS = { ANIM, FX, RINGS, CAMERA } as const;
+/** Generator-v2 land: level of detail and the terrain shader. Looks only; collisions never change */
+export const TERRAIN = {
+  lodNear: 300, // metres: land closer than this is meshed at full detail (6 m)
+  lodFar: 700, // closer than this at half detail (12 m), further at quarter (24 m)
+  viewDistance: 1500,
+  readyRadius: 260, // the start waits until the land this close has arrived
+  snowLine: 0, // metres added to the biome's snow line
+  coverSlope: 0, // added to the slope where grass (moss, sand…) gives way to rock
+  texture: 1, // strength of the painted noise on cliffs
+  textureScale: 1,
+  glow: 1, // glowing cracks and spots
+};
+
+const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN } as const;
 const DEFAULTS = JSON.parse(JSON.stringify(GROUPS)) as typeof GROUPS;
 const STORAGE_KEY = "wingrace.tuning";
 
@@ -162,6 +175,14 @@ export const RANGES: Record<string, [number, number, number?]> = {
   fovMax: [0, 50],
   shake: [0, 0.5],
   ringPunch: [0, 15],
+  lodNear: [120, 600, 10],
+  lodFar: [300, 1400, 10],
+  viewDistance: [600, 2500, 10],
+  readyRadius: [100, 500, 10],
+  snowLine: [-300, 300],
+  coverSlope: [-0.4, 0.25],
+  texture: [0, 3],
+  textureScale: [0.2, 4],
 };
 
 export const TUNING_GROUPS: [string, Group][] = [
@@ -169,4 +190,5 @@ export const TUNING_GROUPS: [string, Group][] = [
   ["Trails & particles", FX],
   ["Crystal gates", RINGS],
   ["Camera", CAMERA],
+  ["Terrain", TERRAIN],
 ];

@@ -56,6 +56,9 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 ```
 
 - `/?seed=42` opens a time trial on seed 42. Add `&tune` for the tuning panel.
+- `/?explore=<biome>&seed=<n>` flies a run level of any biome freely (no
+  clock, nothing saved), e.g. `/?explore=verdant&seed=2` (Morning) or `&seed=3`
+  (Moonlit).
 - Races and time trials always fly **Sky Isles** (`raceLevel(seed)`). Its
   generator is frozen: recorded ghosts and leaderboards depend on every
   collision surface staying put. `docs/dev-snippets.js` has `__raceHashes()`,
@@ -85,7 +88,9 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/effects.ts` | Crash debris (instanced tetrahedra) |
 | `game/audio.ts` | Synthesized wind and event sounds |
 | `game/webgl.ts` | WebGL 2 availability check; `GameScreen` shows help if it's missing |
+| `game/devtools.ts` | Dev builds only: `__shot(view)` (freeze, stream the land around a fixed camera, render once) and `__raceHashes()` (the race map's determinism check) on `window` |
 | `game/math.ts` | `clamp`, `smoothstep`, `smin` (smooth minimum for distance fields) |
+| `game/world/terrain/` | Generator v2 (every biome but Sky Isles). `noise.ts`: seeded fbm, ridged multifractal, domain-warped ridges, terraces. `shapes.ts`: distance-field primitives with boxes, surface ids and grain (Island, NoiseIsland from 3D noise with tunnels, Mesa with ledges, Spire between two points, Slab, RockRing, Cap). `ground.ts`: the heightfield following the line (valley, hills, warped ridged mountains, terraces, crevasses, carved river channel, overhang noise on cliffs). `river.ts`: `Steps`, a valley floor stepping down in pools and falls, and the river in it (water distance for collisions). `field.ts`: `TerrainField`, ground + shapes as one field, `fill()` for whole blocks (same arithmetic as `distance()`). `recipes.ts`: gates and scenery from a biome's `LandRecipe`. `mesh.ts`: surface nets per LOD node, faces painted for the shader. `streamer.ts`: `LandStreamer`, the LOD octree (384/192/96 m nodes, 16 cells each). `material.ts`: the terrain shader |
 | `game/world/biomes/` | Biomes as data (`types.ts`: `Biome`, `Level`, `LevelKey`). `index.ts`: the registry, `raceLevel(seed)` (races and time trials: always Sky Isles) and `runLevel(runSeed, index, biome)` (roguelike levels, deterministic from the run seed and level number). `skyIsles.ts`: the race map, frozen |
 | `game/world/World.ts` | Everything a level decides: course, rock field, trees, palette; built from a `Level` (biome + seed + mood). `distance()` for collisions, `lost()` below the islands. No rendering |
 | `game/world/islands.ts` | `RockField`: the floating islands as one signed distance field (shapes melted with `smin`, roughened, a tube carved along the racing line) |
@@ -94,9 +99,9 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/world/course.ts` | The racing line (a descending curve in z) and the gates along it |
 | `game/world/palette.ts` | The `Palette` type: a lighting mood (colors, sun elevation and azimuth, night factor, mist, effect glow), and `sunDirection(palette)`. Each biome lists its moods |
 | `game/world/atmosphere.ts` | `ATMOSPHERE` light uniforms shared per biome; `atmospheric()` patches Lambert materials (sun-tinted haze matching the sky, valley mist, backlit rims, rock strata); `skyMaterial()` (gradient, HDR sun or moon disc and halo, painted clouds, twinkling stars at night) |
-| `game/world/WorldView.ts` | Meshes for a World, as its biome describes them: island chunks streamed from the workers, pines, the sea of clouds and cloud puffs, sky, gates. `ready` is false until the rock near you has arrived |
+| `game/world/WorldView.ts` | Meshes for a World, as its biome describes them: land streamed from the workers (Sky Isles' chunks, or a `LandStreamer` for v2 land), pines, the sea of clouds and cloud puffs, sky, gates. `ready` is false until the land near you has arrived |
 | `game/world/crystals.ts` | Crystal gates: instanced crystals (bob, spin, pass flare and burst in the shader), veil discs with the pass shockwave, light pillars over the next gate and the finish |
-| `session/` | Solo and room sessions wiring a `Game` to the network and UI |
+| `session/` | Solo, room and explore sessions wiring a `Game` to the network and UI. `ExploreSession`: free flight through any biome (`/?explore=verdant&seed=2`), nothing saved |
 | `net/` | Server clock sync and the room connection (SSE down, POST up) |
 | `components/` | React screens: menu, HUD, lobby, results, controls |
 
@@ -144,12 +149,58 @@ Frame rates measured in a background or automated browser tab are throttled
 and meaningless. Measure in a focused window.
 
 The automation tab is usually hidden, so `requestAnimationFrame` doesn't run
-and timers fire about once a second. `docs/dev-snippets.js` has `__shot(view)`,
-which freezes the loop, streams the land around a fixed camera (yielding
-through `MessageChannel`, which isn't throttled), and renders once, for
-reproducible screenshots.
+and timers fire about once a second. Dev builds put `__shot(view, ms)` on
+`window` (`game/devtools.ts`): it freezes the loop, streams the land around a
+fixed camera (yielding through `MessageChannel`, which isn't throttled) and
+renders once, for reproducible screenshots. Views: `0` behind the start, `1`
+above the start looking down the course, `{along, height, side, ahead}` along
+the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Milestone 2, terrain generator v2 (Claude)
+
+- **A composable distance field** (`world/terrain/`) for every biome except
+  Sky Isles. The ground is a heightfield that follows the racing line: a
+  valley floor under it, sides rising into rolling hills, domain-warped
+  ridged multifractal mountains further out, soft terraces on some
+  hillsides, optional crevasses and a fall-off into a sea of clouds. Its
+  distance is `(y - h) / sqrt(1 + |∇h|²)`, so proximity scoring works on
+  slopes; 3D noise on steep slopes carves overhangs. `Steps` makes the floor
+  step down in flat pools and falls (the line always flies over the edge of
+  each fall), and a river channel is carved into them (water, lava, ice or
+  glowing; its surface is solid in pools, but falls can be flown through).
+  Rock shapes melt into the ground with `smin`: arches, pillars, needles,
+  ridges to tunnel through, overhanging shelves, terraced mesas, noise islands
+  with tunnels, each roughened along its grain (lumpy, fluted, layered,
+  sharp). Collisions read the same field (`TerrainField.distance`); the mesher
+  samples whole blocks with the same arithmetic (`fill`, with per-column
+  caches), so meshes and collisions agree.
+- **LOD rings**: `LandStreamer` keeps an octree of 384, 192 and 96 m nodes,
+  each 16 cells a side (24, 12, 6 m voxels), split by distance
+  (`TERRAIN.lodNear`/`lodFar`). Coarse nodes overlap their neighbours by a
+  cell to hide cracks, and stay on screen until all their replacements have
+  arrived (and the other way round), so there are no holes or doubled land.
+  Workers mesh nodes in 2 to 15 ms. Verdant at High: about 140 draw calls and
+  180k triangles on screen. Sky Isles keeps its own chunk streaming: its
+  trees come from full-detail meshes and must not move.
+- **Terrain shader** (`terrain/material.ts`, on `atmospheric()`): every face
+  arrives flat-painted (rock with strata or streaks, cover color, wetness,
+  glow, snow height) and the shader blends cover, soil, rock, sand at the
+  water, dark wet rock and snow by the face's slope and height, with
+  triplanar painted noise on cliffs. Knobs in a new `TERRAIN` tuning group.
+- **Verdant Highlands** terrain (biome data; water, trees and mist come in
+  milestone 3), reachable through the new explore screen
+  (`/?explore=verdant&seed=2`). Puffs over grounded biomes float higher
+  (`sky.puffLift`) and never below the line (`sky.puffsBelow`).
+- **Dev tools** (`game/devtools.ts`): `__shot` and `__raceHashes` are
+  installed in dev builds. `__shot` reads `window.__game` when called: React's
+  strict mode builds a game and drops it first, and a helper bound to that one
+  renders nothing.
+- Fixed on the way: `flat` is a reserved word in GLSL ES 3.
+- Verified: `tsc`, lint and build pass; `__raceHashes()` unchanged; Verdant
+  looked at by day and night in Chrome (`docs/screenshots/m2-terrain-v2/`), no
+  console errors.
 
 ### 2026-10-10: Milestone 1, the biome format (Claude)
 
@@ -294,10 +345,17 @@ ported to the islands world:
 
 ## Next up
 
-**Resume here:** the roguelike milestones below. Milestone 1 (biome format) is
-done. Next is milestone 2, the terrain generator v2. A draft of new distance
-field primitives (mesas, spires between two points, caps, rings with AABBs,
-surface ids, grain) was written during planning; it will land with milestone 2.
+**Resume here:** the roguelike milestones below. Milestones 1 and 2 are done.
+Next is milestone 3: Verdant Highlands' systems (water on the river steps
+with falls, trees with impostors, GPU grass and flowers, fireflies, valley
+mist), then every other biome.
+
+- Mist is still the camera-relative haze from the islands: over grounded land
+  it washes everything below you out. It should pool on the valley floor.
+- The faceted cloud puffs look like dark discs at night; v2 biomes want soft
+  clouds.
+- Far ridged mountains are spiky at 24 m voxels; maybe smooth the ridges with
+  distance or lower `sharpness`.
 
 - Measure real frame times at High quality on an integrated GPU, in a focused
   window. If bloom is too costly, lower `COMPOSER_PIXEL_RATIO` or MSAA samples.
@@ -321,7 +379,7 @@ The first playable slice of the roguelike, in order. After each: commit to
 
 1. **Biome format** (done): `world/biomes/`, levels from (runSeed, level),
    Sky Isles ported with no visible change, World and WorldView take a biome.
-2. **Terrain generator v2**: a composable distance field (domain-warped ridged
+2. **Terrain generator v2** (done): a composable distance field (domain-warped ridged
    mountains, terraced mesas, carved river channels, overhangs, arches),
    meshing in workers with LOD rings, analytic deterministic collisions, a
    terrain shader blending grass, rock, snow and sand by slope and height

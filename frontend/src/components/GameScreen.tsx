@@ -2,6 +2,8 @@ import { type ReactNode, useEffect, useEffectEvent, useRef, useState, useSyncExt
 import type { Screen } from "../App";
 import { formatTime, ordinal } from "../format";
 import { webglAvailable } from "../game/webgl";
+import type { BiomeId } from "../game/world/biomes";
+import { ExploreSession } from "../session/ExploreSession";
 import { RoomSession } from "../session/RoomSession";
 import { SoloSession } from "../session/SoloSession";
 import { type Settings, clientId } from "../storage";
@@ -229,6 +231,22 @@ const RoomScreen = ({ code, settings, onExit }: ScreenProps & { code: string }) 
   );
 };
 
+// --- Explore ---------------------------------------------------------------------
+
+const ExploreScreen = ({ biome, seed, settings, onExit }: ScreenProps & { biome: BiomeId; seed: number }) => {
+  const [session] = useState(() => new ExploreSession(biome, seed, settings));
+  const ref = useMountedSession(session, settings);
+  const { hud, error } = useSyncExternalStore(session.store.subscribe, session.store.get);
+  return (
+    <div className="game">
+      <div ref={ref} className="game-view" />
+      {hud && <Hud hud={hud} />}
+      <TopBar title={`Explore · ${hud ? `${hud.biomeName} · ${hud.paletteName}` : ""} · #${seed}`} onExit={onExit} />
+      {error && <div className="banner">{error}</div>}
+    </div>
+  );
+};
+
 /** Shown instead of the game when the browser can't create a WebGL context */
 const NoWebGL = ({ onExit }: { onExit: () => void }) => (
   <div className="game">
@@ -262,6 +280,7 @@ const NoWebGL = ({ onExit }: { onExit: () => void }) => (
 
 const GameScreen = ({ screen, ...props }: ScreenProps & { screen: Exclude<Screen, { kind: "menu" }> }) => {
   if (!webglAvailable()) return <NoWebGL onExit={props.onExit} />;
+  if (screen.kind === "explore") return <ExploreScreen biome={screen.biome} seed={screen.seed} {...props} />;
   return screen.kind === "solo" ? (
     <SoloScreen seed={screen.seed} {...props} />
   ) : (
