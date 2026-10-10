@@ -73,12 +73,12 @@ test("overspeed is dissipated rather than clamped instantly", () => {
 });
 
 
-test("held steering never exceeds 50 degrees, turns continuously, and levels on release", () => {
+test("held steering never exceeds 75 degrees, turns continuously, and levels on release", () => {
   for (const dir of [-1,1]) {
     const f = make();
     for (let i=0;i<1200;i++) {
       f.step(1/120, {pitch:0, roll:dir}, 0);
-      assert.ok(Math.abs(f.bank) <= 50 * Math.PI/180 + 1e-10);
+      assert.ok(Math.abs(f.bank) <= 75 * Math.PI/180 + 1e-10);
       assert.ok(f.up.y > 0);
     }
     assert.ok(Math.abs(f.forward.x) > 0.1);

@@ -9,7 +9,7 @@ export const FLIGHT = {
   drag: 0.0013, // vertical terminal speed ≈ 87 m/s
   pitchRate: 2.4, // rad/s at full input
   rollRate: 4.2, // maximum bank response, rad/s
-  maxBank: 50, // degrees: steering cannot roll past this
+  maxBank: 75, // degrees: steering cannot roll past this
   dodgeDistance: 5, // metres along the unbanked right axis at activation
   dodgeDuration: 0.6,
   dodgeCooldown: 1, // seconds between starts

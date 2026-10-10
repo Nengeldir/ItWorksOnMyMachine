@@ -160,6 +160,14 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-10: Increase steering bank to 75°
+
+- Raised `FLIGHT.maxBank` from 50° to 75° so held steering can produce
+  tighter coordinated turns while retaining the bank limit and auto-level.
+- Updated the controls overlay, README and bank-limit regression expectation.
+- Verified: frontend build, lint and all 15 tests pass. No new browser
+  playtest; assessing the higher bank's feel remains in Next up.
+
 ### 2026-10-10: Bounded steering, sideways dodge and vertical camera continuity
 
 - `flight.ts`: A/D, mouse and stick now choose a bank target capped at 50°;

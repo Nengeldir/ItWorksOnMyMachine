@@ -55,9 +55,9 @@ docker compose up -d --build
 
 | Input                     | Action                                             |
 | :------------------------ | :------------------------------------------------- |
-| Mouse (click the view)    | Pitch and turn; bank is limited to 50°.       |
+| Mouse (click the view)    | Pitch and turn; bank is limited to 75°.       |
 | `W` `S` / `↑` `↓`         | Dive / pull up (flight-stick style)                |
-| `A` `D` / `←` `→`         | Turn left / right; maximum bank 50°.              |
+| `A` `D` / `←` `→`         | Turn left / right; maximum bank 75°.              |
 | `Q` `E` | 5 m sideways dodge + roll (gamepad: `LB` `RB`)  |
 | Gamepad left stick        | Pitch and turn. `Y` respawns.                      |
 | `R`                       | Respawn at the last ring                           |
@@ -101,7 +101,7 @@ held boost by 25% per stack; it no longer adds a separate dash action.
 The camera follows a blend of the nose and travel direction with restrained
 bank and FOV, and checks the whole player-to-camera segment for rock. Automatic
 and double-tap barrel rolls are disabled. A/D, the mouse and left stick target
-a bank of at most 50° and level smoothly on release. Pitch remains unrestricted.
+a bank of at most 75° and level smoothly on release. Pitch remains unrestricted.
 Q/E or LB/RB perform a 5 m sideways dodge over 0.6 s, with 1 s between starts.
 Dodge movement uses the unbanked right axis captured at activation, passes
 through normal collision checks, and leaves the forward heading unchanged.
