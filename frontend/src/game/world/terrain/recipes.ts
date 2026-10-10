@@ -6,7 +6,7 @@ import { type Course, TUBE_RADIUS } from "../course";
 import type { TerrainField } from "./field";
 import type { Ground } from "./ground";
 import type { Noise } from "./noise";
-import { Cap, Grain, Mesa, NoiseIsland, RockRing, type ShapeLook, Slab, Spire, UP, Volcano, tilted } from "./shapes";
+import { Bridge, Cap, Grain, Mesa, NoiseIsland, RockRing, type ShapeLook, Slab, Spire, UP, Volcano, tilted } from "./shapes";
 
 // Places a biome's rock shapes: something to thread at every gate, and scenery
 // around the line. Everything comes from the level's seeded streams, in a fixed
@@ -244,6 +244,32 @@ function buildFeature(ctx: LandContext, f: Feature) {
     const vz = p.z + side.z * s;
     const g = groundAt(ctx, x, vz, p.y - 300);
     field.add(new Volcano(x, vz, g - 30, g + f.rise, f.radius, { ...look, grain: Grain.Layered }));
+  } else if (f.kind === "bridges") {
+    const { course } = ctx;
+    const steps = ctx.ground?.steps;
+    if (!steps?.river) return;
+    for (const fall of steps.falls) {
+      if (fall.z < course.start.z + 150 || fall.z > course.endZ - 60) continue;
+      if (rng() > f.chance) continue;
+      // The arch must take the whole river, and the crown stay well under the racing line
+      const rise = 13;
+      const crown = rise + 6;
+      let z = NaN;
+      for (const back of [44, 58, 74, 92]) {
+        const at = fall.z - back;
+        const clear = course.y(at) - steps.pool(at).level - crown > TUBE_RADIUS + 7;
+        if (clear && steps.width(at) < 34 && steps.pool(at) === steps.pool(fall.z - 1)) {
+          z = at;
+          break;
+        }
+      }
+      if (Number.isNaN(z) || course.gates.some((g) => Math.abs(g - z) < 22)) continue;
+      const flow = new Vector3(steps.center(z + 4) - steps.center(z - 4), 0, 8).normalize();
+      const across = new Vector3(flow.z, 0, -flow.x);
+      const reach = steps.width(z) / 2 + 3.5;
+      const span = { half: reach + 22, width: f.width, crown, foot: steps.river.bank + 0.5, arch: [reach, rise] as [number, number], depth: steps.river.bed + 6 };
+      field.add(new Bridge(new Vector3(steps.center(z), steps.pool(z).level, z), across, span, { ...look, grain: Grain.Layered }));
+    }
   } else if (f.kind === "summit") {
     // One colossal spire, and a few lesser ones around it
     const { course } = ctx;

@@ -122,7 +122,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/run/` | The roguelike run. `run.ts`: run length, biome order from the run seed, portal destinations, scoring constants, `RunHud`. `upgrades.ts`: nine data-defined upgrades and the 3-of-N offer. `controller.ts`: `RunController` (levels, gates and chains, abilities as `FlightMods`, the portal transition: blur in, the next level built under the blur (`buildNext`), wormhole and upgrade pick while it streams, blur out with the palette cross-fade; HUD data). `finale.ts`: `Finale`, the last portal's cutscene (space under a world-fixed Milky Way with dust lanes and its core overhead, the camera's scripted pan beneath the pilot and back, then white light; Enter skips). `portal.ts`: the portal (ring, a flat disk like a window onto night, beam), the `Wormhole` (a camera-centred shell mapping the view onto an endless twisting tube of lensed stars and nebula with the exit glowing ahead, spirit motes, its own lights) and `screenSparkle`. Game's `veil(k)` (the `.portal-veil` DOM blur and sparkles) and `insideWormhole(on)` (hides the level: land, sky, soft particles, speed lines, ambient, gate effects) serve it |
 | `game/devtools.ts` | Dev builds only: `__shot(view)` (freeze, stream the land around a fixed camera, render once), `__raceHashes()` (the race map's determinism check), `__run(s)`, `__bench(q)` and `__crash(kind, after)` (flies into rock near the start and stops `after` s into the crash animation) on `window` |
 | `game/math.ts` | `clamp`, `smoothstep`, `smin` (smooth minimum for distance fields) |
-| `game/world/terrain/` | Generator v2 (every biome but Sky Isles). `noise.ts`: seeded fbm, ridged multifractal, domain-warped ridges, terraces. `shapes.ts`: distance-field primitives with boxes, surface ids and grain (Island, NoiseIsland from 3D noise with tunnels, Mesa with ledges, Spire between two points, Slab, RockRing, Cap). `ground.ts`: the heightfield following the line (valley, hills, warped ridged mountains, terraces, crevasses, carved river channel, overhang noise on cliffs). `river.ts`: `Steps`, a valley floor stepping down in pools and falls, and the river in it (water distance for collisions). `field.ts`: `TerrainField`, ground + shapes as one field, `fill()` for whole blocks (same arithmetic as `distance()`). `recipes.ts`: gates and scenery from a biome's `LandRecipe`. `mesh.ts`: surface nets per LOD node, faces painted for the shader. `streamer.ts`: `LandStreamer`, the LOD octree (384/192/96 m nodes, 16 cells each). `material.ts`: the terrain shader |
+| `game/world/terrain/` | Generator v2 (every biome but Sky Isles). `noise.ts`: seeded fbm, ridged multifractal, domain-warped ridges, terraces. `shapes.ts`: distance-field primitives with boxes, surface ids and grain (Island, NoiseIsland from 3D noise with tunnels, Mesa with ledges, Spire between two points, Slab, RockRing, Cap, Bridge: a humped stone bridge with one arch). `ground.ts`: the heightfield following the line (valley, hills, warped ridged mountains, terraces, crevasses, carved river channel, overhang noise on cliffs). `river.ts`: `Steps`, a valley floor stepping down in pools and falls, and the river in it (water distance for collisions). `field.ts`: `TerrainField`, ground + shapes as one field, `fill()` for whole blocks (same arithmetic as `distance()`). `recipes.ts`: gates and scenery from a biome's `LandRecipe`. `mesh.ts`: surface nets per LOD node, faces painted for the shader. `streamer.ts`: `LandStreamer`, the LOD octree (384/192/96 m nodes, 16 cells each). `material.ts`: the terrain shader |
 | `game/world/biomes/` | Biomes as data (`types.ts`: `Biome`, `Level`, `LevelKey`). `index.ts`: the registry, `raceLevel(seed)` (races and time trials: always Sky Isles) and `runLevel(runSeed, index, biome)` (roguelike levels, deterministic from the run seed and level number). `skyIsles.ts`: the race map, frozen |
 | `game/world/World.ts` | Everything a level decides: course, rock field, trees, palette; built from a `Level` (biome + seed + mood). `distance()` for collisions, `lost()` below the islands. No rendering |
 | `game/world/islands.ts` | `RockField`: the floating islands as one signed distance field (shapes melted with `smin`, roughened, a tube carved along the racing line) |
@@ -193,6 +193,33 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Structures, step 2: Verdant's stone bridges (Claude)
+
+Asked for: step 2 of the structures plan, the arched stone bridge over the
+river at a fall, as the first structure in the distance field.
+- **`Bridge`** (`terrain/shapes.ts`): a humped deck rising to a crown over
+  one arch, cut out of the block as an ellipse standing on the water. Part of
+  the land's distance field, so the stone drawn and the stone you hit are the
+  same surface. Chunky on purpose (deck 12 m wide, 6 m thick at the crown):
+  the land is meshed on a 6 m grid.
+- **Feature `bridges`** (`terrain/recipes.ts`, `biomes/types.ts`): for some
+  falls (`chance`), a bridge 44 to 92 m upstream, across the river's flow,
+  where the river is under 34 m wide, no gate is within 22 m and the crown
+  stays at least 18 m under the racing line. The arch spans the river plus
+  3.5 m each side and rises 13 m above the water: you fly over it on the
+  line, or dive under it. Listed last among the features, so the land's other
+  random draws are unchanged.
+- **Verdant**: surface 2, worked stone (pale courses, paved top, nothing
+  grows on it), and `{ kind: "bridges", chance: 0.8 }`. Two to four bridges a
+  level. A gameplay change in runs only (rule 6): new rock to hit near the
+  river; races are untouched.
+- Verified: build and lint pass; 23 frontend tests (new: on three levels,
+  every bridge's arch is open over the water, its crown is solid and it stays
+  out of the racing tube). In headless Chrome with `__shot`
+  (`/?explore=verdant`, seeds 2 Morning and 3 Moonlit): the bridge from
+  upstream, from the side, from under the arch and from the line; no console
+  errors (`docs/screenshots/structures-verdant/`). Not flown by hand.
 
 ### 2026-10-10: Structures, step 1: the format, and Verdant's first three (Claude)
 
@@ -1018,9 +1045,12 @@ ported to the islands world:
 
 ## Next up
 
-- **Structures, next steps** (plan: "Structures per biome"): step 2 is
-  Verdant's stone bridge over the river as a distance-field shape; then one
-  landmark and three scattered kinds per remaining biome. Open from step 1:
+- **Structures, next steps** (plan: "Structures per biome"): step 3 is one
+  landmark and three scattered kinds per remaining biome, in run order. Open
+  from step 2: the bridge reads as rough-hewn rock more than masonry (6 m
+  voxels, and its courses of stone are faint); it has no parapets or lanterns
+  (structures don't stand on rock shapes yet); fly under an arch by hand, and
+  check the ground's fillet doesn't close a narrow one. Open from step 1:
   fly into a tower, a lantern and a windmill's sails by hand; structures only
   stand on ground with no rock shape over the column (nothing yet on floating
   islands, mushroom caps or mesas, which Archipelago needs); impostors don't
@@ -1257,7 +1287,7 @@ that is drawn but never collides, kept well off the line.
 | Biome | Signature landmark (1 or 2 per level) | Scattered structures | Night |
 | :- | :- | :- | :- |
 | **Sky Isles** (frozen) | None | Small cairns, prayer-flag lines and stone lanterns on island tops, drawn only | Lanterns glow |
-| **Verdant Highlands** | Stone windmill on a hilltop (done); arched stone bridge over the river at a fall | Watchtowers (done), stone lanterns (done), shrine gates on terraces, cottages with round roofs near the pools | Warm windows, lanterns |
+| **Verdant Highlands** | Stone windmill on a hilltop (done); arched stone bridge over the river above a fall (done) | Watchtowers (done), stone lanterns (done), shrine gates on terraces, cottages with round roofs near the pools | Warm windows, lanterns |
 | **Glacier Peaks** | Mountain monastery on a ledge, gold roof caps and banners | Ice-bell pavilions, prayer-flag lines between ice shards, snowed-in stone huts, half-buried cairns | Bells and windows glow under the aurora |
 | **Sky Archipelago** | Floating temple on one big island: colonnade, dome, a broken stair into the void | Rope-and-plank bridges between islands, broken columns, wind chimes, moored cloth kites | Braziers along the colonnade |
 | **Coral Lagoon** | Lighthouse on a sea stack with a slow sweeping beam | Stilt huts and jetties on islets, sunken ruin columns in the shallows, small sailboats, shell-roof pavilions | Lighthouse beam, hut lanterns on the water |
@@ -1272,7 +1302,7 @@ the distance field, so the drawn stone and the collision match. Moving parts
 animate in the vertex shader and never move a collider.
 
 Order: (1) the format, proven with Verdant's watchtower, lantern and windmill
-(done); (2) Verdant's bridge, the first distance-field structure; (3) one
+(done); (2) Verdant's bridge, the first distance-field structure (done); (3) one
 landmark and three scattered kinds per remaining biome, in run order;
 (4) night lights, moving parts, and a day and night browser check per biome.
 

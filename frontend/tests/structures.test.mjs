@@ -54,3 +54,27 @@ test("structures stand in the same spots at every level of detail, clear of the 
     }
   }
 });
+
+test("bridges span the river with an arch to fly through, well under the racing line", async () => {
+  const { Bridge } = await import("../src/game/world/terrain/shapes.ts");
+  let total = 0;
+  for (const seed of [2, 3, 7]) {
+    const world = new World(runLevel(seed, 1, "verdant"));
+    const steps = world.steps;
+    const bridges = world.land.shapes.filter((s) => s instanceof Bridge);
+    total += bridges.length;
+    for (const b of bridges) {
+      const z = b.cz;
+      const x = steps.center(z);
+      const water = steps.pool(z).level;
+      assert.ok(world.land.distance(x, water + 4, z) > 2, "the arch is open over the water");
+      assert.ok(world.land.distance(x, water + 16, z) < 0, "the crown is solid");
+      // Nothing of it within reach of the racing tube (the shape's distance is a lower bound)
+      for (let cz = z - 40; cz <= z + 40; cz += 2) {
+        assert.ok(b.distance(world.course.x(cz), world.course.y(cz), cz) > 11 + 1, "a bridge crowds the racing line");
+      }
+    }
+  }
+  assert.ok(total >= 4, `only ${total} bridges over three levels`);
+  console.log("bridges over three levels:", total);
+});

@@ -65,6 +65,8 @@ export type Feature =
   | { kind: "islets"; count: number; radius: Range; lateral: Range; surface: number }
   | { kind: "rings"; count: number; radius: Range; lateral: Range; rise: Range; surface: number }
   | { kind: "volcano"; lateral: number; radius: number; rise: number; surface: number }
+  /** Humped stone bridges over the river, a little upstream of some falls (list them last: they are built around everything else) */
+  | { kind: "bridges"; chance: number; width: number; surface: number }
   | { kind: "summit"; along: number; lateral: number; radius: number; rise: number; surface: number };
 
 export interface LandRecipe {

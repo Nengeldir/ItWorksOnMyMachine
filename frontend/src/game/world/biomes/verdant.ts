@@ -86,6 +86,8 @@ export const VERDANT: Biome = {
       { rock: "#7d7466", rock2: "#6c6457", under: "#4f4a42", top: "#6fa53e", top2: "#a5b84f", snow: true },
       // 1: outcrops, pillars, arches
       { rock: "#8f8676", rock2: "#a39a88", bands: 5, streaks: 0.3, under: "#5a5348", top: "#79a848", top2: "#93b453", snow: true },
+      // 2: worked stone (bridges): courses of pale masonry, a paved top
+      { rock: "#d6ccb8", rock2: "#c4baa4", bands: 2.5, under: "#a59c89", top: "#cfc6b0", top2: "#bfb69f", snow: false, bare: true },
     ],
     layers: { dirt: "#6b5236", sand: "#c9b98a", snow: "#f4f7fa", snowLine: 190, topSlope: 0.72, texture: 1, glow: "#ffffff" },
     land: {
@@ -97,6 +99,7 @@ export const VERDANT: Biome = {
         { kind: "arches", count: 6, radius: [18, 30], lateral: [150, 400], surface: 1 },
         // Table mountains on the horizon, their sides stepped in ledges
         { kind: "mesas", count: 7, radius: [60, 120], rise: [120, 260], lateral: [520, 1000], step: 22, surface: 1 },
+        { kind: "bridges", chance: 0.8, width: 12, surface: 2 },
       ],
     },
   },
