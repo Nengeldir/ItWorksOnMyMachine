@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { Flight, FlightMods } from "../flight";
+import type { Flight, FlightInput, FlightMods } from "../flight";
 import { plainMods } from "../flight";
 import { clamp } from "../math";
 import type { Particles } from "../particles";
@@ -8,8 +8,9 @@ import { ATMOSPHERE } from "../world/atmosphere";
 import { BIOMES, type BiomeId, type Level, runLevel } from "../world/biomes";
 import type { World } from "../world/World";
 import type { WorldView } from "../world/WorldView";
+import { Abilities } from "./abilities";
 import { Finale } from "./finale";
-import { Portal, Wormhole, screenSparkle } from "./portal";
+import { Portal, Wormhole, WormholeCamera, screenSparkle } from "./portal";
 import {
   CHAIN_MAX,
   GATE_POINTS,
@@ -39,7 +40,6 @@ export interface RunHost {
   readonly camera: THREE.PerspectiveCamera;
   readonly world: World;
   readonly view: WorldView;
-  readonly hovering: boolean;
   /** Style points flown in this level so far */
   readonly style: number;
   setLevel(level: Level): void;
@@ -133,6 +133,7 @@ export class RunController {
   private readonly group = new THREE.Group();
   private readonly mods: FlightMods = plainMods();
   private readonly wormhole = new Wormhole();
+  private readonly orbit = new WormholeCamera();
   private level = 1;
   private readonly path: BiomeId[] = [];
   private readonly picked: UpgradeId[] = [];
@@ -151,7 +152,8 @@ export class RunController {
   private levelTime = 0;
   private phaseTime = 0;
   private stamina = 0;
-  private hoverFuel = 0;
+  /** The design list's abilities: their rules (their looks read them, game/abilities/) */
+  readonly abilities = new Abilities();
   private toast: RunHud["toast"] = null;
   private toastTime = 0;
   private toastId = 0;
@@ -176,6 +178,7 @@ export class RunController {
     this.events = events;
     host.scene.add(this.group, this.wormhole.group);
     this.skyNow = captureSky(host.scene);
+    this.abilities.setStats(this.stats);
   }
 
   /** Flight changes from upgrades and abilities, for this physics step */
@@ -193,12 +196,17 @@ export class RunController {
     return this.lastGate;
   }
 
+  /** Has gate `index` been flown through on this level? */
+  passedGate(index: number): boolean {
+    return this.passed.has(index);
+  }
+
   get frozen(): boolean {
     return this.phase === "portal" || this.phase === "pick" || this.phase === "finale" || this.phase === "won";
   }
 
-  start() {
-    this.loadLevel(runOrder(this.seed)[0]);
+  start(initial?: Level) {
+    this.loadLevel(initial?.biome.id ?? runOrder(this.seed)[0], initial);
   }
 
   /** Taking off from the intro: the title card plays from here */
@@ -210,10 +218,10 @@ export class RunController {
 
   // --- levels --------------------------------------------------------------------
 
-  private loadLevel(biome: BiomeId) {
+  private loadLevel(biome: BiomeId, initial?: Level) {
     this.disposeLevel();
     this.path.push(biome);
-    this.host.setLevel(runLevel(this.seed, this.level, biome));
+    this.host.setLevel(initial ?? runLevel(this.seed, this.level, biome));
     const world = this.host.world;
     this.passed.clear();
     this.lastGate = 0;
@@ -221,6 +229,7 @@ export class RunController {
     this.levelTime = 0;
     this.styleBanked = false;
     this.host.view.setRings("race", 0);
+    this.abilities.setLevel(world);
     // The portal stands at the last gate
     const { course } = world;
     const finish = course.rings[course.rings.length - 1];
@@ -230,7 +239,6 @@ export class RunController {
     for (const portal of this.portals) this.group.add(portal.group);
     // Abilities start charged
     this.stamina = 2 + this.stats.flap;
-    this.hoverFuel = this.hoverMax;
     this.phase = "arrive";
     this.phaseTime = 0;
     this.events.arrived?.(this.level, biome);
@@ -241,24 +249,24 @@ export class RunController {
     this.portals = [];
   }
 
-  private get hoverMax(): number {
-    return this.stats.hover > 0 ? 1 + 0.7 * this.stats.hover : 0;
-  }
-
   // --- the pilot's moves ----------------------------------------------------------
 
-  /** C / gamepad A: wingbeat, if the upgrade is present */
-  ability(action: "flap") {
-    if (this.frozen) return;
-    if (action === "flap" && this.stats.flap > 0 && this.stamina >= 1) {
-      this.stamina -= 1;
-      this.host.flight.flap(5 + this.stats.flap * 1.5, 0.1);
-      this.host.wingbeat();
+  /** C: wingbeat; X: plunge; G: Gale Force; F: hover-stall (each needs its upgrade) */
+  ability(action: "flap" | "plunge" | "burst" | "hover") {
+    if (this.frozen || (this.phase !== "explore" && this.phase !== "arrive")) return;
+    if (action === "flap") {
+      if (this.stats.flap > 0 && this.stamina >= 1 && this.abilities.hang < 0) {
+        this.stamina -= 1;
+        this.host.flight.flap(5 + this.stats.flap * 1.5, 0.1);
+        this.host.wingbeat();
+      }
+      return;
     }
+    if (this.abilities.press(action, this.host.flight) && action === "burst") this.host.stinger("dash");
   }
 
-  /** Per physics step, after the flight moved: gates and portals */
-  step(dt: number) {
+  /** Per physics step, after the flight moved: gates and portals. `proximity` 0..1, the input flown */
+  step(dt: number, proximity = 0, input: FlightInput = { pitch: 0, roll: 0 }) {
     const { flight, prevPosition } = this.host;
     // This step's flight changes, for the next one
     const m = this.mods;
@@ -269,13 +277,17 @@ export class RunController {
     m.glideLock = this.stats.glideLock > 0;
     m.boost = this.stats.dash * 0.25;
     m.hover = 0;
-    if (this.host.hovering && this.hoverFuel > 0 && this.stats.hover > 0) {
-      m.hover = 1;
-      this.hoverFuel = Math.max(0, this.hoverFuel - dt);
-    }
     m.lift = 0;
+    m.thrust = 0;
+    m.dive = 0;
+    m.hang = false;
     if (this.phase !== "explore" && this.phase !== "arrive") return;
     this.levelTime += dt;
+    this.abilities.step(dt, input, proximity, flight, m);
+    if (this.abilities.restore > 0) {
+      if (this.stats.flap > 0) this.stamina = Math.min(2 + this.stats.flap, this.stamina + this.abilities.restore);
+      this.abilities.restore = 0;
+    }
 
     // Gates: any gate passed scores; in a row without crashing, more and more
     const rings = this.host.world.course.rings;
@@ -286,13 +298,15 @@ export class RunController {
       const after = tmp.subVectors(flight.position, ring.position).dot(ring.normal);
       if (before >= 0 || after < 0) continue;
       tmp.lerpVectors(prevPosition, flight.position, before / (before - after));
-      if (tmp.distanceTo(ring.position) > ring.radius + 1 + this.stats.magnet) continue;
+      if (tmp.distanceTo(ring.position) > ring.radius + 1 + this.stats.magnet + this.abilities.widening(ring)) continue;
       this.passed.add(i);
       this.chain = Math.min(CHAIN_MAX, this.chain + 1);
       this.bestChain = Math.max(this.bestChain, this.chain);
       this.gates++;
       this.lastGate = Math.max(this.lastGate, i + 1);
       this.score += (GATE_POINTS + this.stats.gateBonus) * this.chain;
+      const strike = this.abilities.gate(i, this.chain);
+      if (strike > 0) this.notify("Plunge strike!", strike);
       // Every gate refills a wingbeat
       this.stamina = Math.min(2 + this.stats.flap, this.stamina + 1);
       let next = 0;
@@ -318,6 +332,7 @@ export class RunController {
   /** A crash breaks the gate chain. Flight resets the shared boost state. */
   crashed() {
     this.crashes++;
+    this.abilities.crashed();
     if (this.chain > 1) this.notify("Gate chain lost", 0);
     this.chain = 0;
   }
@@ -377,6 +392,7 @@ export class RunController {
     if (this.phase !== "pick" || !this.through) return;
     this.picked.push(id);
     this.stats = statsFor(this.picked);
+    this.abilities.setStats(this.stats);
     this.host.stinger("upgrade");
     if (!this.through.built) this.buildNext();
     this.phase = "portal";
@@ -387,6 +403,13 @@ export class RunController {
     this.unfrozen = false;
   }
 
+  /** Adds an upgrade right now, without a portal (dev tools: `__game.grant(id)`) */
+  grant(id: UpgradeId) {
+    this.picked.push(id);
+    this.stats = statsFor(this.picked);
+    this.abilities.setStats(this.stats);
+  }
+
   /** The last portal: out into space under the Milky Way, then white light */
   private startFinale() {
     this.phase = "finale";
@@ -395,6 +418,30 @@ export class RunController {
     this.host.freeze(true);
     this.finale = new Finale();
     this.host.scene.add(this.finale.group);
+  }
+
+  /** Test mode: replace the portal with one directly along the pilot's heading. */
+  spawnTestPortal() {
+    if (this.frozen || this.ended) return;
+    const { flight } = this.host;
+    const radius = this.portals[0]?.radius ?? 15;
+    const color = this.level >= RUN_LENGTH ? "#ffe9a0" : BIOMES[destination(this.seed, this.level, this.path)].portals.color;
+    const position = flight.position.clone().addScaledVector(flight.forward, Math.max(radius * 3, flight.speed * 1.5));
+    this.disposeLevel();
+    const portal = new Portal(position, flight.forward, radius, color);
+    this.portals.push(portal);
+    this.group.add(portal.group);
+  }
+
+  /** Test mode: show the real summary immediately, including this level's stats. */
+  testWin() {
+    if (!this.styleBanked) {
+      this.totalTime += this.levelTime;
+      this.totalStyle += this.host.style;
+      this.score += Math.round(this.host.style);
+      this.styleBanked = true;
+    }
+    this.finish();
   }
 
   /** Enter during the finale: straight to the white light */
@@ -427,7 +474,6 @@ export class RunController {
     const { camera, particles } = this.host;
     this.phaseTime += dt;
     if (this.toast && (this.toastTime -= dt) <= 0) this.toast = null;
-    if (!this.host.hovering) this.hoverFuel = Math.min(this.hoverMax, this.hoverFuel + dt * 0.35);
     if (this.stats.flap > 0) this.stamina = Math.min(2 + this.stats.flap, this.stamina + dt / 9);
     if (this.phase === "arrive" && this.phaseTime > 3) this.phase = "explore";
 
@@ -503,7 +549,11 @@ export class RunController {
         }
       }
     }
-    this.wormhole.place(camera, forward, inside, blend, this.host.pixelHeight);
+    // Inside, the camera circles the pilot, who flies on down the tube; it swings back to the chase view on the way out
+    const pilot = this.host.flight;
+    if (inside) this.orbit.update(dt, camera, pilot.position, pilot.forward, this.exiting ? ease(this.exitTime / BLUR_OUT) : 0);
+    else this.orbit.reset();
+    this.wormhole.place(camera, pilot.position, pilot.forward, inside, blend, this.host.pixelHeight);
     this.host.insideWormhole(inside);
     // From inside, the portal you came through is gone too
     this.group.visible = !inside;
@@ -565,7 +615,7 @@ export class RunController {
     }
     const abilities: RunHud["abilities"] = [];
     if (this.stats.flap > 0) abilities.push({ id: "flap", name: "Wingbeat", key: "C", charge: this.stamina / (2 + this.stats.flap), ready: this.stamina >= 1, count: Math.floor(this.stamina) });
-    if (this.stats.hover > 0) abilities.push({ id: "hover", name: "Hover", key: "F", charge: this.hoverFuel / Math.max(0.01, this.hoverMax), ready: this.hoverFuel > 0.05 });
+    abilities.push(...this.abilities.hud(this.host.flight));
     const objectives = [{ title: "Reach the portal", progress: compass ? `${compass.distance} m` : "", fraction: 0, done: false, failed: false }];
     return {
       seed: this.seed,

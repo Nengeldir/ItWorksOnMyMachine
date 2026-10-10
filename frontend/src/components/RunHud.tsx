@@ -92,14 +92,16 @@ export const FinishScreen = ({
   onAgain,
   onNewRun,
   onMenu,
+  testMode = false,
 }: {
   summary: RunSummary;
   best: number | null;
   onAgain: () => void;
-  onNewRun: () => void;
+  onNewRun?: () => void;
   onMenu: () => void;
+  testMode?: boolean;
 }) => {
-  const verdict =
+  const verdict = testMode ? "test result · not saved" :
     best === null || summary.score > best ? "a new best on this run" : summary.score === best ? "ties your best" : `your best: ${best.toLocaleString()}`;
   const stats: [string, string][] = [
     ["Flying time", formatTime(summary.timeMs)],
@@ -112,7 +114,7 @@ export const FinishScreen = ({
   return (
     <div className="run-finish">
       <section className="finish-card">
-        <small>Run #{summary.seed} · complete</small>
+        <small>{testMode ? "Test" : "Run"} #{summary.seed} · complete</small>
         <h2>Journey's end</h2>
         <div className="finish-score">
           <strong>{summary.score.toLocaleString()}</strong>
@@ -145,9 +147,9 @@ export const FinishScreen = ({
         <button className="primary" onClick={onAgain}>
           Fly it again <kbd>Enter</kbd>
         </button>
-        <button onClick={onNewRun}>
+        {onNewRun && <button onClick={onNewRun}>
           New run <kbd>N</kbd>
-        </button>
+        </button>}
         <button onClick={onMenu}>
           Return to menu <kbd>⌫</kbd>
         </button>

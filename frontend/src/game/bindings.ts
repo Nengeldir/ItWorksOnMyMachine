@@ -2,7 +2,7 @@ export const DEFAULT_BINDINGS = {
   pitchDown: ["KeyW", "ArrowUp"], pitchUp: ["KeyS", "ArrowDown"],
   turnLeft: ["KeyA", "ArrowLeft"], turnRight: ["KeyD", "ArrowRight"],
   boost: ["ShiftLeft", "ShiftRight"], brake: ["Space"],
-  barrelLeft: ["KeyQ"], barrelRight: ["KeyE"], flap: ["KeyC"], hover: ["KeyF"],
+  barrelLeft: ["KeyQ"], barrelRight: ["KeyE"], flap: ["KeyC"], hover: ["KeyF"], plunge: ["KeyX"], burst: ["KeyZ"],
   respawn: ["KeyR"], pause: ["KeyP"], mute: ["KeyM"],
 };
 export type BindingAction = keyof typeof DEFAULT_BINDINGS;
@@ -10,7 +10,7 @@ export type Bindings = Record<BindingAction, string[]>;
 export const ACTION_LABELS: Record<BindingAction, string> = {
   pitchDown: "Pitch down", pitchUp: "Pitch up", turnLeft: "Turn left", turnRight: "Turn right",
   boost: "Boost", brake: "Brake", barrelLeft: "Dodge left", barrelRight: "Dodge right",
-  flap: "Wingbeat", hover: "Hover", respawn: "Respawn", pause: "Pause / resume", mute: "Mute",
+  flap: "Wingbeat", hover: "Hover-Stall", plunge: "Plunging Attack", burst: "Gale Force", respawn: "Respawn", pause: "Pause / resume", mute: "Mute",
 };
 export const bindingActions = Object.keys(DEFAULT_BINDINGS) as BindingAction[];
 export function defaultBindings(): Bindings {

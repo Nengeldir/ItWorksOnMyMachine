@@ -64,7 +64,7 @@ const point = new THREE.Vector3();
 const paintColor = new THREE.Color();
 
 /** Collects painted primitives into one geometry with `color` and `glow` (what toonMaterial reads) */
-class Builder {
+export class Builder {
   private readonly parts: THREE.BufferGeometry[] = [];
 
   add(geometry: THREE.BufferGeometry, paint: Paint, glow = 0, at: Vec = [0, 0, 0], rot: Vec = [0, 0, 0], scale: Vec = [1, 1, 1]): this {
@@ -96,16 +96,16 @@ class Builder {
   }
 }
 
-const sphere = (r: number, w = 16, h = 12) => new THREE.SphereGeometry(r, w, h);
-const cyl = (top: number, bottom: number, h: number, n = 14, rows = 1) => new THREE.CylinderGeometry(top, bottom, h, n, rows);
-const lathe = (profile: [number, number][], n = 18) =>
+export const sphere = (r: number, w = 16, h = 12) => new THREE.SphereGeometry(r, w, h);
+export const cyl = (top: number, bottom: number, h: number, n = 14, rows = 1) => new THREE.CylinderGeometry(top, bottom, h, n, rows);
+export const lathe = (profile: [number, number][], n = 18) =>
   new THREE.LatheGeometry(
     profile.map(([r, y]) => new THREE.Vector2(r, y)),
     n,
   );
 
 /** A five-pointed star, extruded and bevelled, in the xy plane */
-function star(outer: number, inner: number, depth: number, points = 5): THREE.BufferGeometry {
+export function star(outer: number, inner: number, depth: number, points = 5): THREE.BufferGeometry {
   const shape = new THREE.Shape();
   for (let i = 0; i <= points * 2; i++) {
     const a = Math.PI / 2 + (i * Math.PI) / points;
@@ -118,7 +118,7 @@ function star(outer: number, inner: number, depth: number, points = 5): THREE.Bu
 }
 
 /** A leaf or feather shape along +y, with a little thickness */
-function leaf(length: number, width: number, depth = 0.008): THREE.BufferGeometry {
+export function leaf(length: number, width: number, depth = 0.008): THREE.BufferGeometry {
   const shape = new THREE.Shape();
   shape.moveTo(0, 0);
   shape.quadraticCurveTo(width, length * 0.4, 0, length);

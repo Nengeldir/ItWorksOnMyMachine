@@ -16,8 +16,9 @@ the last ring.
   Sky Isles, Verdant Highlands, then the Sunken Reef (a dive under the sea)
   and four of Glacier Peaks, Sky Archipelago, Coral Lagoon, Twilight Forest
   and Ember Wastes in an order the run's seed decides, and the Aurora Summit
-  last. Chain gates, skim for
-  style, and pick an upgrade at every portal (stronger boost, wingbeats, hover, glide lock and more).
+  last. Chain gates, skim for style, and pick an upgrade at every portal
+  (stronger boost, wingbeats, glide lock, and abilities like Hover-Stall,
+  Plunging Attack, Gale Force and a spirit manta to draft behind).
 
 Races and time trials always fly Sky Isles, so recorded ghosts and
 leaderboards stay valid; the other biomes are for the adventure.
@@ -69,7 +70,9 @@ docker compose up -d --build
 | Hold `Shift` / gamepad `RT` | Boost (all modes; release to recharge)          |
 | Hold `Space` / gamepad `LT` | Air brake (all modes; takes priority over boost) |
 | `C` / gamepad `A`         | Wingbeat (adventure, with the upgrade)             |
-| Hold `F` / gamepad `B`    | Hover (adventure, with the upgrade)                |
+| `F` / gamepad `B`         | Hover-Stall: stop and hover 2 s, steer to turn on the spot; again to launch early (adventure, with the ability) |
+| `X` / gamepad `X`         | Plunging Attack: a steep dive; a gate in it is a strike for bonus points; pull up to stop (adventure) |
+| `Z` / right stick click   | Gale Force, once charged by gates: a wind tunnel ahead that pushes you and widens its gates (adventure) |
 | `1` to `4`                | Choose an upgrade at a portal                      |
 | `Enter` in the finale     | Skip the cutscene                                  |
 | `Backspace` at the end    | Back to the menu from the finish screen            |
@@ -77,6 +80,9 @@ docker compose up -d --build
 | `N`                       | New map (in a room's lobby)                        |
 | `←` `→` / `A` `D`         | Switch course in the map select (`Esc` goes back)  |
 | `Esc`                     | Free the mouse                                     |
+| `Shift+P` in `?test`       | Spawn a usable portal ahead of the pilot            |
+| `Shift+O` in `?test`       | Show the victory screen (nothing saved)             |
+| `Shift+S` in `?test`       | Toggle the whole simulation and animations between ½× and 1× speed |
 
 Pitch can be inverted in the menu. Diving turns height into speed, climbing
 turns speed back into height. Flying within a few metres of rock or trees fills
@@ -130,6 +136,17 @@ a bank of at most 80° and level smoothly on release. Pitch remains unrestricted
 Release pitch after inverted flight to roll smoothly upright without changing
 the nose direction; recovery fades near vertical flight to avoid sudden flips.
 Q/E or LB/RB perform a 5 m sideways dodge over 0.6 s, with 1 s between starts.
+In an adventure, the Wind-Shear Dash ability makes it a 9 m blink (0.16 s, 0.8 s
+between starts).
+
+The adventure's abilities (picked at portals, adventure only; races never
+see them): Featherfalling (less sink and drag), Skim-Booster (skimming
+refills the boost), Cloud-Surfing (rivers of cloud along the line refill boost
+and wingbeats and push you), Plunging Attack, Wind-Shear Dash, Thermal Vision
+(gates and the portal glow through fog and rock), Slipstream Rider (a spirit
+manta to ride behind), Gale Force, Acrobatic Recovery (a clipped wingtip rolls
+away instead of crashing, every 4 s) and Hover-Stall. Their numbers are in the
+`?tune` panel under "Run abilities", their looks under "Ability looks".
 Dodge movement uses the unbanked right axis captured at activation, passes
 through normal collision checks, and leaves the forward heading unchanged.
 The roll animation follows the same physics timing, including for other players
@@ -211,6 +228,23 @@ other level. Fly any biome freely at
 `/?explore=<id>&seed=<n>` (ids: `verdant`, `glacier`, `archipelago`,
 `lagoon`, `twilight`, `ember`, `aurora`, `reef`).
 
+**Test mode:** open `/?test` (or `/?test=verdant&seed=2`), or add `&test` to
+any single-player URL: `/?explore=verdant&seed=2&test` tests that world,
+`/?seed=42&test` and `/?run=5&test` that seed (from Sky Isles). Rooms and the
+gallery ignore it. It flies a real adventure run (score, gate chain and the
+compass to the portal) with a small panel of the test shortcuts; world/light
+selectors and N/B/V switching stay in explore mode. Spawned portals use
+adventure's wormhole and upgrade picker; victory uses its finish screen and
+autopilot. Slow motion scales the shared physics/animation clock, including
+scenery shaders, particles, camera motion, transitions and animated UI overlays.
+Press `Shift+S` again to restore normal speed. The rate survives world changes
+and resets when you leave test mode. Test results are never saved.
+
+Test mode is included in the normal production build. Use the existing
+`docker compose up --build` and open `http://localhost:8080/?test` (or add
+`?test` to your deployed URL). No Dockerfile changes, build arguments,
+`VITE_ENABLE_DEBUG` flag, or debug Compose override are required.
+
 **Flight model** ([`frontend/src/game/flight.ts`](frontend/src/game/flight.ts)):
 an arcade, energy-based wingsuit. The nose points where you go, gravity along
 the flight path speeds you up or slows you down, drag caps the speed, and
@@ -269,6 +303,8 @@ doesn't fly the course itself.
 | `frontend/src/game/avatar.ts`          | The pilot's model and animation                          |
 | `frontend/src/game/death.ts`           | Crash animations: how a crash plays out (looks only)     |
 | `frontend/src/game/items/`             | Item models and animations; `/?gallery` shows them all   |
+| `frontend/src/game/run/abilities.ts`   | The adventure abilities' rules (run mode only)           |
+| `frontend/src/game/abilities/`         | The abilities' models and animations (looks only)        |
 | `frontend/src/game/tuning.ts`          | Every look-and-feel constant, for the `?tune` panel      |
 | `frontend/src/game/pilots.ts`          | Remote players and ghosts, with interpolation            |
 | `frontend/src/net/`                    | Server clock and the room connection (SSE + POST)        |
