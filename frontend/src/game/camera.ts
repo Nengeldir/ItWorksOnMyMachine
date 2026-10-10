@@ -13,6 +13,9 @@ const horizon = new Vector3();
 const cross = new Vector3();
 const transport = new Quaternion();
 const DEGREES = Math.PI / 180;
+/** Elevations (degrees) the fall camera tries, highest first, until one has a clear view */
+const FALL_ANGLES = [90, 50, 30, 12];
+const arc = new Vector3();
 
 /** Third-person chase camera: trails behind, banks with you, widens with speed */
 export class CameraRig {
@@ -128,25 +131,44 @@ export class CameraRig {
   fall(point: Vector3, dt: number, clearance: (x: number, y: number, z: number) => number) {
     this.focus.lerp(point, 1 - Math.exp(-dt * CAMERA.fallTrack));
     const k = 1 - Math.exp(-dt * CAMERA.fallSwing);
-    this.elevation += (CAMERA.fallAngle * DEGREES - this.elevation) * k;
+    // From above if the sky over the pilot is open; under an overhang, lower, so the
+    // camera doesn't end up pressed against the pilot
+    let target = CAMERA.fallAngle * DEGREES;
+    for (const angle of FALL_ANGLES) {
+      target = Math.min(CAMERA.fallAngle, angle) * DEGREES;
+      if (this.clearShare(target, CAMERA.fallDistance, clearance) >= 0.7) break;
+    }
+    this.elevation += (target - this.elevation) * k;
     this.range += (CAMERA.fallDistance - this.range) * k;
     const position = this.camera.position;
-    position.copy(this.focus).addScaledVector(this.heading, Math.cos(this.elevation) * this.range);
-    position.y += Math.sin(this.elevation) * this.range;
+    this.arcPoint(this.elevation, this.range, position);
 
     // Rock in the way (an overhang, a wall): come in towards the pilot until the view is clear
-    if (clearance(position.x, position.y, position.z) < 1.5) {
-      let clear = 0;
-      let blocked = 1;
-      for (let i = 0; i < 6; i++) {
-        const mid = (clear + blocked) / 2;
-        pulled.lerpVectors(this.focus, position, mid);
-        if (clearance(pulled.x, pulled.y, pulled.z) >= 1.5) clear = mid;
-        else blocked = mid;
-      }
-      position.lerpVectors(this.focus, position, clear);
-    }
+    const clear = this.clearShare(this.elevation, this.range, clearance);
+    if (clear < 1) position.lerpVectors(this.focus, position, clear);
     this.watch(this.focus, dt);
+  }
+
+  /** The point on the fall camera's arc at this elevation and distance */
+  private arcPoint(elevation: number, range: number, out: Vector3): Vector3 {
+    out.copy(this.focus).addScaledVector(this.heading, Math.cos(elevation) * range);
+    out.y += Math.sin(elevation) * range;
+    return out;
+  }
+
+  /** How much of the way out to that point on the arc the view stays clear of rock (1: all of it) */
+  private clearShare(elevation: number, range: number, clearance: (x: number, y: number, z: number) => number): number {
+    const far = this.arcPoint(elevation, range, arc);
+    if (clearance(far.x, far.y, far.z) >= 1.5) return 1;
+    let clear = 0;
+    let blocked = 1;
+    for (let i = 0; i < 6; i++) {
+      const mid = (clear + blocked) / 2;
+      pulled.lerpVectors(this.focus, far, mid);
+      if (clearance(pulled.x, pulled.y, pulled.z) >= 1.5) clear = mid;
+      else blocked = mid;
+    }
+    return clear;
   }
 
   /** After a crash: stay put and look at the wreck */

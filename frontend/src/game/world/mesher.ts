@@ -165,7 +165,7 @@ export function meshChunk(world: World, ix: number, iy: number, iz: number): Chu
   // grid's own vertices (`grid`): the race map's tree colliders must never move
   const grid = vertices.slice();
   const distance = (x: number, y: number, z: number) => world.legacy!.distance(x, y, z);
-  snapToSurface(vertices, used, distance, S);
+  snapToSurface(vertices, used, distance, { ox, oy, oz, size: S, cells: C });
   const cutter = new SurfaceCutter(distance);
 
   const positions: number[] = [];
@@ -212,7 +212,7 @@ export function meshChunk(world: World, ix: number, iy: number, iz: number): Chu
     if (world.course.distance(mx, my, mz) < TUBE_RADIUS + 3) color.lerp(palette.tunnel, 0.6);
     color.multiplyScalar(0.92 + 0.16 * jitter);
 
-    cutter.triangle(vertices[a], vertices[a + 1], vertices[a + 2], vertices[b], vertices[b + 1], vertices[b + 2], vertices[c], vertices[c + 1], vertices[c + 2]);
+    cutter.triangle(vertices[a], vertices[a + 1], vertices[a + 2], vertices[b], vertices[b + 1], vertices[b + 2], vertices[c], vertices[c + 1], vertices[c + 2], nx, ny, nz);
 
     // A pine now and then on flat grass, never in the way of the racing line
     if (up > 0.88 && !snowy && jitter < 0.08) {

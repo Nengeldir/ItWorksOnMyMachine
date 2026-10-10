@@ -96,7 +96,7 @@ export const GLACIER: Biome = {
       gates: { arch: 3, shards: 3, pillars: 2, overhang: 1, spur: 2 },
       gateSurface: 1,
       features: [
-        { kind: "shards", count: 70, radius: [5, 11], rise: [40, 150], lateral: [90, 420], tilt: 0.35, surface: 1 },
+        { kind: "shards", count: 70, radius: [6, 12], rise: [40, 150], lateral: [90, 420], tilt: 0.35, surface: 1 },
         { kind: "pillars", count: 25, radius: [10, 18], rise: [60, 200], lateral: [150, 500], surface: 2 },
         { kind: "boulders", count: 120, size: [2, 5], lateral: [20, 150], surface: 2 },
         { kind: "arches", count: 5, radius: [14, 26], lateral: [120, 380], surface: 1 },
