@@ -236,7 +236,7 @@ export class WaterView {
   constructor(world: World) {
     const terrain = world.biome.terrain;
     if (terrain.kind !== "v2") return;
-    if (world.seaLevel !== null && terrain.sea) this.buildSea(world, this.uniforms("water", terrain.sea.colors, world.palette.night, 0, 0));
+    if (world.hasSea && terrain.sea) this.buildSea(world, this.uniforms("water", terrain.sea.colors, world.palette.night, 0, 0));
     if (world.islandFalls.length && terrain.islandFalls) {
       this.buildIslandFalls(world.islandFalls, this.uniforms("water", terrain.islandFalls.colors, world.palette.night, 1, 1));
     }
@@ -345,7 +345,6 @@ export class WaterView {
 
   /** A sea: a grid over the whole level, with the depth over the ground (and the rock standing in it) per vertex */
   private buildSea(world: World, uniforms: Record<string, THREE.IUniform>) {
-    const sea = world.seaLevel!;
     const field = world.land!;
     const ground = field.ground;
     const { course } = world;
@@ -361,7 +360,11 @@ export class WaterView {
     const columns = Math.ceil((xMax + 1500 - x0) / step);
     const rows = Math.ceil((course.endZ + 1600 - z0) / step);
     // Rock standing in the water (stacks, islets): foam rings around them
-    const standing = field.shapes.filter((s) => s.min.y < sea + 2 && s.max.y > sea - 2);
+    const standing = field.shapes.filter((s) => {
+      const lo = world.seaAt(s.min.z)!;
+      const hi = world.seaAt(s.max.z)!;
+      return s.min.y < Math.max(lo, hi) + 2 && s.max.y > Math.min(lo, hi) - 2;
+    });
     const positions = new Float32Array((columns + 1) * (rows + 1) * 3);
     const depth = new Float32Array((columns + 1) * (rows + 1));
     for (let r = 0; r <= rows; r++) {
@@ -369,6 +372,7 @@ export class WaterView {
         const i = r * (columns + 1) + c;
         const x = x0 + c * step;
         const z = z0 + r * step;
+        const sea = world.seaAt(z)!;
         positions[i * 3] = x;
         positions[i * 3 + 1] = sea;
         positions[i * 3 + 2] = z;

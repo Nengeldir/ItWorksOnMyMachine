@@ -72,7 +72,7 @@ const beamFragment = /* glsl */ `
     float h = clamp(vHeight / height, 0.0, 1.0);
     float fade = (1.0 - h) * (1.0 - h);
     float flow = 0.75 + 0.25 * sin(vHeight * 0.05 - time * 3.0);
-    float soft = pow(clamp(vFacing, 0.0, 1.0), 1.5);
+    float soft = pow(clamp(vFacing, 0.0, 1.0), 1.5) * smoothstep(0.0, 60.0, vHeight);
     // Kept under the bloom threshold: a beam to steer by, not a glare
     gl_FragColor = vec4(color * soft * fade * flow * open * 0.5, 1.0);
     #include <colorspace_fragment>
@@ -95,7 +95,9 @@ export class Portal {
 
   constructor(position: THREE.Vector3, normal: THREE.Vector3, radius: number, color: string) {
     this.position = position.clone();
-    this.normal = normal.clone().normalize();
+    // Stands upright like a doorway: the course descends, but the ring must not lean back like a floor light
+    this.normal = normal.clone().setY(0).normalize();
+    if (this.normal.lengthSq() < 0.5) this.normal.set(0, 0, 1);
     this.radius = radius;
     this.open = true;
     this.openness = this.open ? 1 : 0;
@@ -137,7 +139,8 @@ export class Portal {
         side: THREE.DoubleSide,
       }),
     );
-    this.beam.position.copy(position);
+    // Rises from the top of the ring, not through the middle of the veil
+    this.beam.position.copy(position).y += radius * 1.05;
     this.beam.renderOrder = 6;
     this.group.add(this.beam);
     this.apply();

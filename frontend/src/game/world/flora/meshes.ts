@@ -78,11 +78,11 @@ function blob(radius: number, squash = 0.8, detail = 0): THREE.BufferGeometry {
   return g;
 }
 
-/** A cylinder between two points */
-export function limb(a: THREE.Vector3, b: THREE.Vector3, r0: number, r1: number, sides = 5): THREE.BufferGeometry {
+/** A cylinder between two points (`open`: without its end caps, for limbs whose ends are never seen) */
+export function limb(a: THREE.Vector3, b: THREE.Vector3, r0: number, r1: number, sides = 5, open = false): THREE.BufferGeometry {
   const dir = new THREE.Vector3().subVectors(b, a);
   const length = dir.length();
-  const g = new THREE.CylinderGeometry(r1, r0, length, sides, 1);
+  const g = new THREE.CylinderGeometry(r1, r0, length, sides, 1, open);
   g.translate(0, length / 2, 0);
   g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize()));
   g.translate(a.x, a.y, a.z);
@@ -297,6 +297,136 @@ function redwood(c: Colors): THREE.BufferGeometry[] {
   return parts;
 }
 
+/** Flat triangles seen from both sides (the plant material draws front faces only) */
+export function leaves(triangles: THREE.Vector3[][]): THREE.BufferGeometry {
+  const positions: number[] = [];
+  for (const [a, b, c] of triangles) positions.push(...a.toArray(), ...b.toArray(), ...c.toArray(), ...a.toArray(), ...c.toArray(), ...b.toArray());
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  return g;
+}
+
+// The reef's plants stand in their thousands (kelp forests, coral gardens), so
+// they are built lean: three-sided limbs without caps, one triangle per blade.
+
+/** Kelp: a clump of wavy stalks reaching for the surface, two broad blades at every joint */
+function kelp(c: Colors): THREE.BufferGeometry[] {
+  const parts: THREE.BufferGeometry[] = [];
+  const stalks = 3;
+  const joints = 5;
+  for (let i = 0; i < stalks; i++) {
+    const a = (i / stalks) * Math.PI * 2 + random();
+    const foot = v(Math.cos(a) * 0.3, 0, Math.sin(a) * 0.3);
+    const top = i === 0 ? 1 : rr(0.6, 0.92);
+    const wave = rr(0, 6.28);
+    const at = (t: number) => v(foot.x + Math.sin(t * 5 + wave) * 0.22 * t, top * t, foot.z + Math.cos(t * 4 + wave) * 0.22 * t);
+    const blades: THREE.Vector3[][] = [];
+    for (let k = 0; k < joints; k++) {
+      const t0 = k / joints;
+      const t1 = (k + 1) / joints;
+      parts.push(part(limb(at(t0), at(t1), 0.05 - t0 * 0.02, 0.05 - t1 * 0.02, 3, true), { color: c.trunk, shade: [1, 1], sway: [t0 * t0, t1 * t1] }));
+      // Blades off the joint, lifting with the water
+      for (const flip of [0, 2.6]) {
+        const turn = a + k * 2.4 + flip;
+        const out = v(Math.cos(turn), 0, Math.sin(turn));
+        const root = at(t1);
+        const reach = 0.8 - t1 * 0.25;
+        const edge = v(-out.z, 0, out.x).multiplyScalar(0.2);
+        const belly = root.clone().addScaledVector(out, reach * 0.4).add(v(0, 0.1, 0));
+        blades.push([root.clone().sub(edge.clone().multiplyScalar(0.25)), belly.add(edge), root.clone().addScaledVector(out, reach).add(v(0, 0.04, 0))]);
+      }
+    }
+    const sway: [number, number] = [0.15, top];
+    parts.push(part(leaves(blades), { color: i % 2 ? c.foliage : c.foliage2, shade: [0.7, 1.15], sway }));
+  }
+  return parts;
+}
+
+/** Staghorn coral: branches forking upwards, their tips aglow */
+function coral(c: Colors): THREE.BufferGeometry[] {
+  const parts: THREE.BufferGeometry[] = [];
+  const grow = (from: THREE.Vector3, dir: THREE.Vector3, length: number, radius: number, depth: number) => {
+    const to = from.clone().addScaledVector(dir, length);
+    parts.push(part(limb(from, to, radius, radius * 0.7, 4, true), { color: depth % 2 ? c.foliage2 : c.foliage, shade: [0.8, 1.1], sway: [0, 0] }));
+    if (depth === 0) {
+      parts.push(part(new THREE.TetrahedronGeometry(radius * 1.6, 0).translate(to.x, to.y, to.z), { color: c.trunk, shade: [1, 1], sway: [0, 0], glow: 0.9 }));
+      return;
+    }
+    const forks = depth === 2 ? 3 : 2;
+    const spin = random() * 6.28;
+    for (let i = 0; i < forks; i++) {
+      const a = spin + (i / forks) * Math.PI * 2;
+      const next = dir.clone().add(v(Math.cos(a) * 0.75, 0.25, Math.sin(a) * 0.75)).normalize();
+      grow(to, next, length * rr(0.62, 0.8), radius * 0.68, depth - 1);
+    }
+  };
+  parts.push(part(new THREE.ConeGeometry(0.3, 0.16, 5, 1, true).translate(0, 0.05, 0), { color: c.foliage, shade: [0.7, 0.9], sway: [0, 0] }));
+  grow(v(0, 0.05, 0), v(0.04, 1, 0.02).normalize(), 0.36, 0.11, 2);
+  return parts;
+}
+
+/** A sea fan: a flat lattice of ribs standing across the current */
+function seaFan(c: Colors): THREE.BufferGeometry[] {
+  const parts = [part(limb(v(0, 0, 0), v(0, 0.2, 0), 0.06, 0.045, 4, true), { color: c.trunk, sway: [0, 0.1] })];
+  const ribs = 7;
+  const web: THREE.Vector3[][] = [];
+  let last: THREE.Vector3 | null = null;
+  const hub = v(0, 0.2, 0);
+  for (let i = 0; i < ribs; i++) {
+    const a = ((i + 0.5) / ribs - 0.5) * 2.5;
+    const length = rr(0.62, 0.8) * (1 - Math.abs(a) * 0.12);
+    const tip = v(Math.sin(a) * length * 0.95, 0.2 + Math.cos(a) * length, 0);
+    parts.push(part(limb(hub, tip, 0.028, 0.012, 3, true), { color: c.foliage2, shade: [0.85, 1.15], sway: [0.1, 1] }));
+    if (last) web.push([hub, last, tip]);
+    last = tip;
+  }
+  parts.push(part(leaves(web), { color: c.foliage, shade: [0.65, 1.1], sway: [0.1, 1] }));
+  return parts;
+}
+
+/** An anemone: a stout foot and a crown of waving tentacles with glowing tips */
+function anemone(c: Colors): THREE.BufferGeometry[] {
+  const parts = [
+    part(new THREE.CylinderGeometry(0.42, 0.5, 0.4, 6, 1, true).translate(0, 0.2, 0), { color: c.trunk, shade: [0.7, 1.05], sway: [0, 0.1] }),
+    part(new THREE.ConeGeometry(0.42, 0.1, 6, 1, true).translate(0, 0.45, 0), { color: c.foliage2, shade: [0.9, 1.1], sway: [0.1, 0.15] }),
+  ];
+  for (let ring = 0; ring < 2; ring++) {
+    const count = ring ? 5 : 8;
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2 + ring * 0.4 + random() * 0.2;
+      const r = ring ? 0.18 : 0.36;
+      const reach = r + rr(0.3, 0.5);
+      const root = v(Math.cos(a) * r, 0.42, Math.sin(a) * r);
+      const tip = v(Math.cos(a) * reach, ring ? rr(0.85, 1) : rr(0.6, 0.85), Math.sin(a) * reach);
+      parts.push(part(limb(root, tip, 0.06, 0.03, 3, true), { color: c.foliage, shade: [0.75, 1.15], sway: [0.15, 1] }));
+      parts.push(part(new THREE.TetrahedronGeometry(0.07, 0).translate(tip.x, tip.y, tip.z), { color: c.foliage2, shade: [1, 1], sway: [1, 1], glow: 0.9 }));
+    }
+  }
+  return parts;
+}
+
+/** Tube sponges: a cluster of open chimneys, glowing faintly inside */
+function sponge(c: Colors): THREE.BufferGeometry[] {
+  const parts: THREE.BufferGeometry[] = [];
+  const spots = [
+    [0, 0, 1],
+    [0.5, 0.15, 0.72],
+    [-0.42, 0.3, 0.8],
+    [0.1, -0.52, 0.6],
+    [-0.4, -0.35, 0.45],
+  ];
+  spots.forEach(([x, z, top], i) => {
+    const r = 0.2 + top * 0.12;
+    const lean = v(x * 0.25, top, z * 0.25);
+    const tube = limb(v(x, 0, z), v(x, 0, z).add(lean), r * 0.75, r, 6, true);
+    parts.push(part(tube, { color: i % 2 ? c.foliage2 : c.foliage, shade: [0.65, 1.15], sway: [0, 0] }));
+    // The mouth, glowing a little
+    const mouth = new THREE.CircleGeometry(r * 0.95, 6).rotateX(-Math.PI / 2).translate(x + lean.x, top - 0.03, z + lean.z);
+    parts.push(part(mouth, { color: c.trunk, shade: [1, 1], sway: [0, 0], glow: 0.6 }));
+  });
+  return parts;
+}
+
 /** Builds a species' mesh in a biome's colors */
 export function speciesGeometry(spec: FloraSpecies, snow: THREE.Color): THREE.BufferGeometry {
   reseed(spec.id.length * 7919 + 17);
@@ -321,6 +451,11 @@ export function speciesGeometry(spec: FloraSpecies, snow: THREE.Color): THREE.Bu
     basalt: () => basalt(colors),
     boulder: () => boulder(colors),
     redwood: () => redwood(colors),
+    kelp: () => kelp(colors),
+    coral: () => coral(colors),
+    seaFan: () => seaFan(colors),
+    anemone: () => anemone(colors),
+    sponge: () => sponge(colors),
   };
   const parts = builders[spec.id]();
   const merged = mergeGeometries(parts)!;

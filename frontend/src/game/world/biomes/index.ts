@@ -4,6 +4,7 @@ import { AURORA } from "./aurora";
 import { EMBER } from "./ember";
 import { GLACIER } from "./glacier";
 import { LAGOON } from "./lagoon";
+import { REEF } from "./reef";
 import { SKY_ISLES } from "./skyIsles";
 import { TWILIGHT } from "./twilight";
 import { VERDANT } from "./verdant";
@@ -21,6 +22,7 @@ export const BIOMES: Record<BiomeId, Biome> = {
   twilight: TWILIGHT,
   ember: EMBER,
   aurora: AURORA,
+  reef: REEF,
 };
 
 /** Races and time trials: always Sky Isles, with the mood the seed has always picked */

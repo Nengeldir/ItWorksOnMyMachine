@@ -57,7 +57,9 @@ export interface RunHost {
   readonly pixelHeight: number;
   gateBurst(index: number): void;
   wingbeat(): void;
-  stinger(kind: "portal" | "upgrade" | "dash"): void;
+  stinger(kind: "portal" | "upgrade" | "dash" | "gate" | "finish"): void;
+  /** The portal's hum, louder the nearer you are: 0..1 */
+  portalHum(near: number): void;
 }
 
 export interface RunEvents {
@@ -311,6 +313,7 @@ export class RunController {
       while (this.passed.has(next)) next++;
       this.host.view.setRings("race", next);
       this.host.gateBurst(i);
+      this.host.stinger("gate");
     }
 
     for (const portal of this.portals) {
@@ -349,6 +352,7 @@ export class RunController {
     this.totalTime += this.levelTime;
     this.totalStyle += this.host.style;
     this.styleBanked = true;
+    this.host.stinger("finish");
     this.host.stinger("portal");
     if (this.level >= RUN_LENGTH) {
       this.startFinale();
@@ -555,6 +559,12 @@ export class RunController {
     this.group.visible = !inside;
     this.host.veil(veil);
     if (!inside) for (const p of this.portals) p.update(dt, particles, camera.position);
+    // The portal hums as you near it, and falls silent once you're through
+    let near = 0;
+    if (!inside && (this.phase === "explore" || this.phase === "arrive")) {
+      for (const p of this.portals) if (p.open) near = Math.max(near, clamp(1 - p.position.distanceTo(camera.position) / 500, 0, 1));
+    }
+    this.host.portalHum(near);
   }
 
   /** Mixes the sky from the biome we left to the one we arrived in (k = 0 … 1) */

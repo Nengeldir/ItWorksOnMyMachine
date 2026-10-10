@@ -16,7 +16,12 @@ export type SpeciesId =
   | "deadTree"
   | "basalt"
   | "boulder"
-  | "redwood";
+  | "redwood"
+  | "kelp"
+  | "coral"
+  | "seaFan"
+  | "anemone"
+  | "sponge";
 
 /**
  * How a plant collides, as shares of its height (y) and radius (r):
@@ -60,6 +65,12 @@ export const SPECIES: Record<SpeciesId, SpeciesInfo> = {
   basalt: { aspect: [0.45, 0.6], collider: { trunk: 0.85, top: 1, taper: 0.9, canopy: null, lean: 0 }, sway: 0, glows: false },
   boulder: { aspect: [1.1, 1.5], collider: { trunk: 0, top: 0, taper: 1, canopy: { y: 0.4, r: 0.85, h: 0.5 }, lean: 0 }, sway: 0, glows: false },
   redwood: { aspect: [0.15, 0.2], collider: { trunk: 0.35, top: 0.6, taper: 0.6, canopy: { y: 0.75, r: 0.9, h: 0.3 }, lean: 0 }, sway: 0.02, glows: false },
+  // Under the sea. Kelp sways a lot, so only the middle of the clump collides
+  kelp: { aspect: [0.16, 0.22], collider: { trunk: 0.35, top: 0.92, taper: 0.5, canopy: null, lean: 0 }, sway: 0.45, glows: false },
+  coral: { aspect: [0.6, 0.85], collider: { trunk: 0.22, top: 0.45, taper: 1, canopy: { y: 0.62, r: 0.78, h: 0.36 }, lean: 0 }, sway: 0, glows: true },
+  seaFan: { aspect: [0.5, 0.7], collider: { trunk: 0.12, top: 0.3, taper: 1, canopy: { y: 0.6, r: 0.6, h: 0.38 }, lean: 0 }, sway: 0.12, glows: false },
+  anemone: { aspect: [0.7, 0.95], collider: { trunk: 0.5, top: 0.5, taper: 1, canopy: { y: 0.6, r: 0.8, h: 0.38 }, lean: 0 }, sway: 0.22, glows: true },
+  sponge: { aspect: [0.45, 0.6], collider: { trunk: 0.75, top: 0.95, taper: 0.9, canopy: null, lean: 0 }, sway: 0, glows: true },
 };
 
 /** Floats per plant in the worker results: species, x, y, z, height, radius, yaw, variant */

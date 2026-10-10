@@ -126,14 +126,15 @@ export function placeFlora(world: World, box: Box, withTufts: boolean): { plants
   const anyShapes = field.shapes.filter((s) => s.max.x >= box.x0 && s.min.x <= box.x1 && s.max.z >= box.z0 && s.min.z <= box.z1 && s.max.y >= box.y0 - 2 && s.min.y <= box.y1);
   const shapesAt = (x: number, z: number) => anyShapes.some((s) => x >= s.min.x - 2 && x <= s.max.x + 2 && z >= s.min.z - 2 && z <= s.max.z + 2);
   const surfaceOk = (x: number, y: number, z: number, near: boolean) => !near || !surfaces[field.surfaceAt(x, y, z)]?.bare;
-  const sea = world.seaLevel;
   const inWater = (x: number, y: number, z: number) => {
+    const sea = world.seaAt(z);
     if (sea !== null && y < sea + 0.8) return true;
     if (!steps) return false;
     const lateral = Math.abs(x - steps.center(z)) - steps.width(z) / 2;
     return lateral < 1.5 && y < steps.level(z) + 1.5;
   };
   const nearWater = (x: number, y: number, z: number) => {
+    const sea = world.seaAt(z);
     if (sea !== null && y < sea + 4) return true;
     if (!steps) return false;
     const lateral = Math.abs(x - steps.center(z)) - steps.width(z) / 2;
@@ -190,6 +191,7 @@ export function placeFlora(world: World, box: Box, withTufts: boolean): { plants
     if (where?.above && (above < where.above[0] || above > where.above[1])) return null;
     const lateral = Math.abs(x - world.course.x(z));
     if (where?.lateral && (lateral < where.lateral[0] || lateral > where.lateral[1])) return null;
+    const sea = world.seaAt(z);
     const depth = sea !== null ? sea - y : -1;
     if (where?.water ? depth < where.water[0] || depth > where.water[1] : inWater(x, y, z)) return null;
     if (where?.wet !== undefined && where.wet !== nearWater(x, y, z)) return null;

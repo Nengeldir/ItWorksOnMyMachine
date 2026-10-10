@@ -466,11 +466,11 @@ const GalleryScreen = ({ onExit }: { onExit: () => void }) => {
 /** Shown instead of the game when the browser can't create a WebGL context */
 const NoWebGL = ({ onExit }: { onExit: () => void }) => (
   <div className="game">
-    <TopBar title="Wingrace" onExit={onExit} />
+    <TopBar title="Wind Rider" onExit={onExit} />
     <aside className="panel glass no-webgl">
       <h2>Your browser has 3D graphics turned off</h2>
       <p>
-        Wingrace needs WebGL 2, and this browser won't create a WebGL context. That's a browser setting, not a
+        Wind Rider needs WebGL 2, and this browser won't create a WebGL context. That's a browser setting, not a
         problem with the server. Usually one of these fixes it:
       </p>
       <ol>

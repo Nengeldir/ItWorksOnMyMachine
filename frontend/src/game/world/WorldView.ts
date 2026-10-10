@@ -13,10 +13,12 @@ import { LandStreamer, type NodeRequest, type NodeResult } from "./terrain/strea
 import { FloraView } from "./flora/view";
 import { WaterView } from "./water";
 import { SoftClouds } from "./clouds";
+import { LightShafts, SeaLife } from "./deep";
 import { Tree } from "./trees";
 import { sunDirection } from "./palette";
 import type { World } from "./World";
 import { reloadForNewBuild } from "../../staleBuild";
+import { DEEP } from "../tuning";
 
 export const VIEW_DISTANCE = 1400;
 const FOG_NEAR = 250;
@@ -97,6 +99,9 @@ export class WorldView {
   private readonly flora: FloraView | null = null;
   private readonly water: WaterView | null = null;
   private readonly softClouds: SoftClouds | null = null;
+  /** Under the sea: shafts of light from the surface, fish and jellyfish */
+  private readonly shafts: LightShafts | null = null;
+  private readonly seaLife: SeaLife | null = null;
   private readonly byKey = new Map<number, RockChunk>();
   /** The land on screen, as triangles: collisions with exactly what is drawn */
   readonly collider = new LandCollider();
@@ -134,9 +139,13 @@ export class WorldView {
     ATMOSPHERE.night.value = palette.night;
     ATMOSPHERE.aurora.value = palette.aurora ?? 0;
     ATMOSPHERE.underglow.value.set(palette.underglow ?? "#000000");
+    const underwater = world.biome.sky.underwater;
+    ATMOSPHERE.underwater.value = underwater ? 1 : 0;
+    if (underwater) ATMOSPHERE.surface.value = world.course.start.y + underwater.surface;
 
     scene.background = new THREE.Color(palette.horizon);
-    scene.fog = new THREE.Fog(palette.horizon, FOG_NEAR, FOG_FAR);
+    const [fogNear, fogFar] = world.biome.sky.fog ?? [FOG_NEAR, FOG_FAR];
+    scene.fog = new THREE.Fog(palette.horizon, fogNear, fogFar);
     // The sky lights the shadows from above, the sea of clouds bounces light from below
     const hemi = new THREE.HemisphereLight(
       new THREE.Color(palette.horizon).lerp(new THREE.Color(palette.zenith), 0.25),
@@ -164,6 +173,11 @@ export class WorldView {
       this.softClouds = new SoftClouds(world, puffs, puffLift, banks ?? 0);
       this.group.add(this.softClouds.mesh);
     }
+    if (underwater) {
+      this.shafts = new LightShafts();
+      this.seaLife = new SeaLife(world, underwater);
+      this.group.add(this.shafts.mesh, ...this.seaLife.meshes);
+    }
     this.gates = new CrystalGates(
       world.seed,
       world.course.rings,
@@ -188,7 +202,7 @@ export class WorldView {
       this.material(material);
       this.terrainUniforms = uniforms;
       if (world.biome.vegetation.kind === "flora") this.flora = new FloraView(world, this.group);
-      if (world.steps || world.seaLevel !== null || world.islandFalls.length) {
+      if (world.steps || world.hasSea || world.islandFalls.length) {
         this.water = new WaterView(world);
         this.group.add(this.water.group);
       }
@@ -430,6 +444,16 @@ export class WorldView {
   update(camera: THREE.Camera, dt: number) {
     const mist = this.world.biome.sky.mist;
     if (mist.mode === "valley") ATMOSPHERE.mistHeight.value = this.world.valleyFloor(camera.position.z) + mist.above;
+    const underwater = this.world.biome.sky.underwater;
+    if (underwater) {
+      // The surface stays the same height over the racing line all the way down; moonlight ripples less
+      const dim = 1 - this.world.palette.night * 0.5;
+      ATMOSPHERE.surface.value = this.world.course.y(camera.position.z) + underwater.surface;
+      ATMOSPHERE.caustics.value = DEEP.caustics * dim;
+      ATMOSPHERE.surfaceGlow.value = DEEP.surface;
+      this.shafts!.update(DEEP.shafts * dim);
+      this.seaLife!.update(DEEP.life);
+    }
     if (this.land) {
       this.land.update(camera.position, this.dispatch);
       this.ready = this.land.ready;
@@ -452,6 +476,8 @@ export class WorldView {
     this.flora?.dispose();
     this.water?.dispose();
     this.softClouds?.dispose();
+    this.shafts?.dispose();
+    this.seaLife?.dispose();
     this.instanced.forEach((m) => m.dispose());
     this.geometries.forEach((g) => g.dispose());
     this.materials.forEach((m) => m.dispose());

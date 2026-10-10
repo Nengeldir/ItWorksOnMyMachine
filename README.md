@@ -1,4 +1,4 @@
-# Wingrace
+# Wind Rider
 
 A Superflight-style wingsuit game for the browser, with multiplayer races.
 Every course is a field of low-poly floating islands generated from a seed:
@@ -13,9 +13,12 @@ the last ring.
   select (a course for each of Sky Isles' moods, a random one or any seed),
   against the ghosts of the fastest runs. Leaderboards per seed.
 - **Adventure:** a roguelike run through eight biomes linked by portals:
-  Sky Isles, Verdant Highlands, Glacier Peaks, Sky Archipelago, Coral Lagoon,
-  Twilight Forest, Ember Wastes and the Aurora Summit. Chain gates, skim for
-  style, and pick an upgrade at every portal (stronger boost, wingbeats, glide lock, and abilities like Hover-Stall, Plunging Attack, Gale Force and a spirit manta to draft behind).
+  Sky Isles, Verdant Highlands, then the Sunken Reef (a dive under the sea)
+  and four of Glacier Peaks, Sky Archipelago, Coral Lagoon, Twilight Forest
+  and Ember Wastes in an order the run's seed decides, and the Aurora Summit
+  last. Chain gates, skim for style, and pick an upgrade at every portal
+  (stronger boost, wingbeats, glide lock, and abilities like Hover-Stall,
+  Plunging Attack, Gale Force and a spirit manta to draft behind).
 
 Races and time trials always fly Sky Isles, so recorded ghosts and
 leaderboards stay valid; the other biomes are for the adventure.
@@ -217,9 +220,13 @@ shader that blends grass, rock, sand and snow by slope and height, and
 dressed with procedural trees (instanced, swaying, impostors far away),
 grass and flowers near you, stylized water (rivers, falls, seas, lava, ice,
 glowing ponds), soft clouds, valley mist, auroras and ambient particles
-(fireflies, snow, embers, spores). Fly any biome freely at
+(fireflies, snow, embers, spores, bubbles). The Sunken Reef lies under the
+sea ([`world/deep.ts`](frontend/src/game/world/deep.ts)): the sky is the
+water's surface seen from below, ripples of light run over the seabed, shafts
+of light slant down, fish school and jellyfish drift; you fly it like any
+other level. Fly any biome freely at
 `/?explore=<id>&seed=<n>` (ids: `verdant`, `glacier`, `archipelago`,
-`lagoon`, `twilight`, `ember`, `aurora`).
+`lagoon`, `twilight`, `ember`, `aurora`, `reef`).
 
 **Test mode:** open `/?test` (or `/?test=verdant&seed=2`), or add `&test` to
 any single-player URL: `/?explore=verdant&seed=2&test` tests that world,
@@ -290,7 +297,8 @@ doesn't fly the course itself.
 | `frontend/src/game/world/`             | Racing line, rock field, meshing workers, palettes, view |
 | `frontend/src/game/world/snap.ts`      | Snaps meshed land onto the distance field                |
 | `frontend/src/game/world/landCollider.ts` | Collisions with the land exactly as drawn             |
-| `frontend/src/game/world/structures/`  | Towers, lanterns and windmills in the adventure's biomes |
+| `frontend/src/game/world/structures/`  | Towers, lanterns, windmills and a shipwreck in the adventure's biomes |
+| `frontend/src/game/world/deep.ts`      | Under the sea: light shafts, schools of fish, jellyfish  |
 | `frontend/src/game/flight.ts`          | Flight model and the pilot's hitbox                      |
 | `frontend/src/game/avatar.ts`          | The pilot's model and animation                          |
 | `frontend/src/game/death.ts`           | Crash animations: how a crash plays out (looks only)     |

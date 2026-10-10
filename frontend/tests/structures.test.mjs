@@ -91,7 +91,7 @@ test("a shrine gate collides with its posts and lintel, and is open in between",
 });
 
 test("every run biome has a landmark and scattered structures, the same at every level of detail", () => {
-  for (const biome of ["glacier", "archipelago", "lagoon", "twilight", "ember", "aurora"]) {
+  for (const biome of ["glacier", "archipelago", "lagoon", "twilight", "ember", "aurora", "reef"]) {
     const world = new World(runLevel(5, 3, biome));
     const species = world.biome.vegetation.species.length;
     const kinds = world.biome.structures;
@@ -171,4 +171,42 @@ test("the Einstein bust is a rare landmark close to the racing line", () => {
   const near = find(6);
   assert.equal(near.length, 1);
   assert.ok(near[0] >= 25 && near[0] <= 140, `${near[0]} m from the line`);
+});
+
+test("a shipwreck collides with its hull and its mast, which leans back with the bow up", () => {
+  const h = 26;
+  // Yaw 0: the hull runs along x, bow towards +x
+  const wreck = new Plant(0, 0, 0, h, h, 0, STRUCTURE_INFO.shipwreck.collider);
+  assert.ok(wreck.distance(0.7 * h, 0.15 * h, 0) < 0, "inside the bow");
+  assert.ok(wreck.distance(-0.7 * h, 0.15 * h, 0) < 0, "inside the stern");
+  assert.ok(wreck.distance(-0.13 * h, 0.9 * h, 0) < 0, "the top of the mast, leaning aft");
+  assert.ok(wreck.distance(0.13 * h, 0.9 * h, 0) > 2, "ahead of the mast");
+  assert.ok(wreck.distance(0.5 * h, 0.6 * h, 0) > 4, "over the foredeck");
+  assert.ok(wreck.distance(0, 0.15 * h, 0.4 * h) > 3, "beside the hull");
+});
+
+test("every run dives to the Sunken Reef, and leaves one of the other middle biomes out", async () => {
+  const { runOrder, destination, RUN_LENGTH } = await import("../src/game/run/run.ts");
+  const middle = ["glacier", "archipelago", "lagoon", "twilight", "ember"];
+  const left = new Set();
+  const slots = new Set();
+  for (let seed = 1; seed <= 200; seed++) {
+    const order = runOrder(seed);
+    assert.equal(order.length, RUN_LENGTH);
+    assert.equal(new Set(order).size, RUN_LENGTH, "a biome comes twice");
+    assert.deepEqual([order[0], order[1], order[RUN_LENGTH - 1]], ["skyIsles", "verdant", "aurora"]);
+    assert.ok(order.includes("reef"));
+    const out = middle.filter((b) => !order.includes(b));
+    assert.equal(out.length, 1);
+    left.add(out[0]);
+    slots.add(order.indexOf("reef"));
+    // The portals lead along the same order
+    const path = [];
+    for (let level = 1; level <= RUN_LENGTH; level++) {
+      path.push(level === 1 ? order[0] : destination(seed, level - 1, path));
+    }
+    assert.deepEqual(path, order);
+  }
+  assert.equal(left.size, middle.length, "every middle biome sits out some runs");
+  assert.equal(slots.size, 5, "the reef comes at every place from third to seventh");
 });

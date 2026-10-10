@@ -114,7 +114,7 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
       ) : (
         <>
           <header className="menu-title">
-            <h1>Wingrace</h1>
+            <h1>Wind Rider</h1>
             <p>Race through floating islands</p>
           </header>
 

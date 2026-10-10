@@ -25,6 +25,7 @@ const TRACK_OF: Record<BiomeId, TrackId> = {
   aurora: "glacier", // until the finale gets a track of its own
   verdant: "verdant",
   lagoon: "verdant",
+  reef: "verdant", // the water of Dewdrop Stream suits the seabed until it gets a track of its own
   twilight: "twilight",
   ember: "ember",
 };

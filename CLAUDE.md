@@ -1,12 +1,12 @@
 # CLAUDE.md: read this first, every session
 
-This file is Claude's memory for Wingrace. Claude Code loads it automatically
+This file is Claude's memory for Wind Rider. Claude Code loads it automatically
 at the start of every session in this repository. Read all of it before
 touching code, and keep it true.
 
 ## The most important point: Genshin Impact and Sky (光遇)
 
-**Wingrace is a Genshin Impact and Sky: Children of the Light (光遇) styled
+**Wind Rider is a Genshin Impact and Sky: Children of the Light (光遇) styled
 game.** Every model, animation, effect, screen and piece of UI goes in that
 direction. When in doubt, ask "would this fit in Genshin or in Sky?", and if
 not, change it.
@@ -65,7 +65,7 @@ decides how things should look and feel.
 
 ## The project
 
-Wingrace is a browser wingsuit racer in the style of Superflight, with
+Wind Rider is a browser wingsuit racer in the style of Superflight, with
 multiplayer races. Every course is a seeded racing line through floating
 islands (same seed, same map) with crystal gates, pine forests and a sea of
 clouds below. Built for the VIScon
@@ -110,7 +110,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/avatar.ts` | The pilot: a cel-shaded chibi flyer built from primitives (merged per body part, vertex-colored), a procedural cape and scarf (`Cloth`), two-segment feathered wings, and all its animation: bank lead spring, barrel rolls, flapping driven by effort, bobbing, cloth ripples, limb reactions. Also `createLabel` and `glowTexture` |
 | `game/toon.ts` | Toon material (3-band gradient, rim light tinted by the biome's sun, self-lit `glow` vertex attribute for trims and wingtips) and the inverted-hull ink outline. `TOON_LIGHT` is set per biome |
 | `game/pilotfx.ts` | Per-pilot effects: wingtip and cape ribbons, light motes, downstroke puffs, barrel-roll star spiral. Shared by you, other players and ghosts |
-| `game/particles.ts` | One GPU particle system (ring buffer, physics in the vertex shader). Kinds: Glow, Star, Shard, Wisp. `fxTime` is the shared shader clock; `FX_LIGHT.boost` scales all glowing effects per biome |
+| `game/particles.ts` | One GPU particle system (ring buffer, physics in the vertex shader). Kinds: Glow, Star, Shard, Wisp, Firefly, Bubble. `fxTime` is the shared shader clock; `FX_LIGHT.boost` scales all glowing effects per biome |
 | `game/trail.ts` | Glowing additive ribbon (shader: soft edges, light pulses, fades near the camera) |
 | `game/speedlines.ts` | Wind streaks that hang in the air and rush past at speed |
 | `game/camera.ts` | Chase camera (`CAMERA` tuning): lag, partial horizon roll, FOV with speed, FOV kick on gates, shake when skimming; after a crash (`startFall`, `fall`) it arcs up over the pilot and looks down on the fall (`CAMERA.fall*`) |
@@ -128,11 +128,11 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/audio.ts` | Synthesized wind and event sounds, run stingers (portal, upgrade, dash; sidequest and item are unused for now), the wingbeat sample (`public/audio/sfx/wingbeat.mp3`, pitch-randomized, played on each of your downstrokes and on the Wingbeat ability) and the `MusicPlayer` |
 | `game/music.ts` | `MusicPlayer`: one looping track per biome from `public/audio/music/<biome>_<title>.mp3`, crossfaded on biome change (`TRACK_OF` maps biomes to tracks; similar biomes share one). Night dims and muffles the same track. Loaded lazily, decoded with Web Audio, no music if a file fails |
 | `game/webgl.ts` | WebGL 2 availability check; `GameScreen` shows help if it's missing |
-| `game/run/` | The roguelike run. `run.ts`: run length, biome order from the run seed, portal destinations, scoring constants, `RunHud`. `upgrades.ts`: seventeen data-defined upgrades (seven of the original, the design list's first ten abilities) and the 3-of-N offer. `abilities.ts`: `Abilities`, the ten abilities' rules (`ABILITY` constants, in `?tune` as "Run abilities", not saved): cooldowns, Gale Force's energy and tunnel, cloud lanes (`laneAt`), the spirit manta's path, the slipstream, Wind-Shear's dodge params; it answers each step with `FlightMods` and boost refills, and counts one-off moments (`cue`) for the looks. `controller.ts`: `RunController` (levels, gates and chains, abilities as `FlightMods`, the portal transition: blur in, the next level built under the blur (`buildNext`), wormhole and upgrade pick while it streams, blur out with the palette cross-fade; HUD data). `finale.ts`: `Finale`, the last portal's cutscene (space under a world-fixed Milky Way with dust lanes and its core overhead, the camera's scripted pan beneath the pilot and back, then white light; Enter skips). `portal.ts`: the portal (ring, a flat disk like a window onto night, beam), the `Wormhole` (a camera-centred shell mapping the view onto an endless twisting tube of lensed stars and nebula with the exit glowing ahead, spirit motes, its own lights) and `screenSparkle`. Game's `veil(k)` (the `.portal-veil` DOM blur and sparkles) and `insideWormhole(on)` (hides the level: land, sky, soft particles, speed lines, ambient, gate effects) serve it |
+| `game/run/` | The roguelike run. `run.ts`: run length, biome order from the run seed (Sky Isles, Verdant, then the Sunken Reef and four of the five other middle biomes shuffled, Aurora last), portal destinations, scoring constants, `RunHud`. `upgrades.ts`: seventeen data-defined upgrades (seven of the original, the design list's first ten abilities) and the 3-of-N offer. `abilities.ts`: `Abilities`, the ten abilities' rules (`ABILITY` constants, in `?tune` as "Run abilities", not saved): cooldowns, Gale Force's energy and tunnel, cloud lanes (`laneAt`), the spirit manta's path, the slipstream, Wind-Shear's dodge params; it answers each step with `FlightMods` and boost refills, and counts one-off moments (`cue`) for the looks. `controller.ts`: `RunController` (levels, gates and chains, abilities as `FlightMods`, the portal transition: blur in, the next level built under the blur (`buildNext`), wormhole and upgrade pick while it streams, blur out with the palette cross-fade; HUD data). `finale.ts`: `Finale`, the last portal's cutscene (space under a world-fixed Milky Way with dust lanes and its core overhead, the camera's scripted pan beneath the pilot and back, then white light; Enter skips). `portal.ts`: the portal (ring, a flat disk like a window onto night, beam), the `Wormhole` (a camera-centred shell mapping the view onto an endless twisting tube of lensed stars and nebula with the exit glowing ahead, spirit motes, its own lights) and `screenSparkle`. Game's `veil(k)` (the `.portal-veil` DOM blur and sparkles) and `insideWormhole(on)` (hides the level: land, sky, soft particles, speed lines, ambient, gate effects) serve it |
 | `game/devtools.ts` | Dev builds only: `__shot(view)` (freeze, stream the land around a fixed camera, render once), `__raceHashes()` (the race map's determinism check), `__run(s)`, `__bench(q)` and `__crash(kind, after)` (flies into rock near the start and stops `after` s into the crash animation) on `window` |
 | `game/math.ts` | `clamp`, `smoothstep`, `smin` (smooth minimum for distance fields) |
 | `game/world/terrain/` | Generator v2 (every biome but Sky Isles). `noise.ts`: seeded fbm, ridged multifractal, domain-warped ridges, terraces. `shapes.ts`: distance-field primitives (spires and rock rings never thinner than `MIN_RADIUS`, 4.5 m, what the 6 m meshing grid always holds) with boxes, surface ids and grain (Island, NoiseIsland from 3D noise with tunnels, Mesa with ledges, Spire between two points, Slab, RockRing, Cap, Bridge: a humped stone bridge with one arch). `ground.ts`: the heightfield following the line (valley, hills, warped ridged mountains, terraces, crevasses, carved river channel, overhang noise on cliffs). `river.ts`: `Steps`, a valley floor stepping down in pools and falls, and the river in it (water distance for collisions). `field.ts`: `TerrainField`, ground + shapes as one field, `fill()` for whole blocks (same arithmetic as `distance()`). `recipes.ts`: gates and scenery from a biome's `LandRecipe`. `mesh.ts`: surface nets per LOD node, faces painted for the shader. `streamer.ts`: `LandStreamer`, the LOD octree (384/192/96 m nodes, 16 cells each). `material.ts`: the terrain shader |
-| `game/world/biomes/` | Biomes as data (`types.ts`: `Biome`, `Level`, `LevelKey`). `index.ts`: the registry, `raceLevel(seed)` (races and time trials: always Sky Isles) and `runLevel(runSeed, index, biome)` (roguelike levels, deterministic from the run seed and level number). `skyIsles.ts`: the race map, frozen |
+| `game/world/biomes/` | Biomes as data (`types.ts`: `Biome`, `Level`, `LevelKey`). `index.ts`: the registry, `raceLevel(seed)` (races and time trials: always Sky Isles) and `runLevel(runSeed, index, biome)` (roguelike levels, deterministic from the run seed and level number). `skyIsles.ts`: the race map, frozen. `reef.ts`: Sunken Reef, the level under the sea (`SkySpec.underwater`) |
 | `game/world/World.ts` | Everything a level decides: course, rock field, trees, palette; built from a `Level` (biome + seed + mood). `distance()` (rock, trees, water) for proximity, the camera and the fallback collisions; `otherDistance()` is everything but the rock (the rock collides as drawn, see `landCollider.ts`); `lost()` below the islands. No rendering |
 | `game/world/islands.ts` | `RockField`: the floating islands as one signed distance field (shapes melted with `smin`, roughened, a tube carved along the racing line) |
 | `game/world/mesher.ts`, `mesher.worker.ts` | Cuts chunks of the rock field into flat-shaded meshes in Web Workers, and places trees (from the grid's own vertices, so the race map's tree colliders never move; `treeSink` stretches a trunk down to snapped rock, drawn only). Workers rebuild the World from a `LevelKey` |
@@ -140,10 +140,11 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/world/landCollider.ts` | `LandCollider`: collisions with exactly the land drawn. Every land mesh on screen (Sky Isles chunks, shown v2 nodes, added and removed with them) as triangles in a lazily built grid per mesh; exact tests: ball, segment (sweeps between steps), convex quad (separating axes) and signed `nearest` (the crash tumble). Rock that is in the field but not drawn (thinner than the 6 m grid) is never hit |
 | `game/world/trees.ts` | Tree colliders and their lookup index. `Plant` is the collider of generator-v2 plants and structures: a tapered trunk, an optional canopy ellipsoid, an optional upright disc (a windmill's sails) an optional gate (two posts and a bar, open in between) and an optional hall (a long box: the ETH building's wings) |
 | `game/world/flora/` | Generator-v2 vegetation: `species.ts` (sizes, colliders), `meshes.ts` (models from primitives), `placement.ts` (`placeFlora`, run in the mesher workers: structures first, then plants keeping clear of them, then grass), `view.ts` (`FloraView`: one instanced pool per kind, impostor atlas, grass), `pool.ts` |
-| `game/world/structures/` | Built things (20 kinds: towers, lanterns, windmills, a monastery, a lighthouse, shrine gates…) riding the flora pipeline as extra kinds after a biome's species. `kinds.ts`: `StructureId`, `STRUCTURE_INFO` (collider, footprint, plinth depth, spinning parts), `kindInfo(biome, kind)`. `models.ts`: `structureGeometry` (1 m tall, true proportions, vertex color / sway / glow / spin). A biome lists them in `Biome.structures` (`StructureSpec`: spacing, chance, height, colors, `landmark` for one per stretch of the course, `where` site rules: above, lateral, wet, `water` depth, forest, hilltop, `on` ground or rock, facing the line). Species plus structures must fit the impostor atlas (16). Run biomes only; they collide |
+| `game/world/structures/` | Built things (21 kinds: towers, lanterns, windmills, a monastery, a lighthouse, shrine gates…) riding the flora pipeline as extra kinds after a biome's species. `kinds.ts`: `StructureId`, `STRUCTURE_INFO` (collider, footprint, plinth depth, spinning parts), `kindInfo(biome, kind)`. `models.ts`: `structureGeometry` (1 m tall, true proportions, vertex color / sway / glow / spin). A biome lists them in `Biome.structures` (`StructureSpec`: spacing, chance, height, colors, `landmark` for one per stretch of the course, `where` site rules: above, lateral, wet, `water` depth, forest, hilltop, `on` ground or rock, facing the line). Species plus structures must fit the impostor atlas (16). Run biomes only; they collide |
 | `game/world/course.ts` | The racing line (a descending curve in z) and the gates along it |
 | `game/world/palette.ts` | The `Palette` type: a lighting mood (colors, sun elevation and azimuth, night factor, mist, effect glow), and `sunDirection(palette)`. Each biome lists its moods |
-| `game/world/atmosphere.ts` | `ATMOSPHERE` light uniforms shared per biome; `atmospheric()` patches Lambert materials (sun-tinted haze matching the sky, valley mist, backlit rims, rock strata); `skyMaterial()` (gradient, HDR sun or moon disc and halo, painted clouds, twinkling stars at night) |
+| `game/world/atmosphere.ts` | `ATMOSPHERE` light uniforms shared per biome; `atmospheric()` patches Lambert materials (sun-tinted haze matching the sky, valley mist, backlit rims, rock strata); `skyMaterial()` (gradient, HDR sun or moon disc and halo, painted clouds, twinkling stars at night). Under the sea (`ATMOSPHERE.underwater`, set from `SkySpec.underwater`): `atmospheric()` adds caustics, and the sky is the water's surface seen from below (`ATMOSPHERE.surface`) |
+| `game/world/deep.ts` | Under the sea, looks only: `LightShafts` (shafts of light from the surface, a world-fixed grid of them round the camera) and `SeaLife` (schools of fish, jellyfish), each one instanced draw call animated in the vertex shader. `DEEP` in `tuning.ts` |
 | `game/world/WorldView.ts` | Meshes for a World, as its biome describes them: land streamed from the workers (Sky Isles' chunks, or a `LandStreamer` for v2 land), pines, the sea of clouds and cloud puffs, sky, gates. `ready` is false until the land near you has arrived. `collider` (a `LandCollider`) holds the land on screen; `covers(x, y, z)` says whether the land at a point is on screen (or there is none), else collisions there fall back to the distance field |
 | `game/world/crystals.ts` | Crystal gates: instanced crystals (bob, spin, pass flare and burst in the shader), veil discs with the pass shockwave, light pillars over the next gate and the finish |
 | `session/` | Solo, room, explore and run sessions wiring a `Game` to the network and UI. `ExploreSession`: free flight through any biome (`/?explore=verdant&seed=2`), nothing saved; `?test` reuses it with a RunController for real portals/upgrades and unsaved victory previews, showing only test shortcuts rather than biome/light controls. `RunSession`: a roguelike run (`/?run=<seed>`), best score per run seed in localStorage |
@@ -214,6 +215,17 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-10: Merged `main` (Sunken Reef, Lagoon sea, portal rework, Wind Rider) into `Pengyue` (Claude)
+
+For PR #30. Conflicts, both sides kept: `audio.ts` has the abilities'
+`whoosh`/`glide`/`ability` and main's `sweep`/`portalHum`; `tuning.ts` has
+`AUTOPILOT`, `ABILITIES_FX` and main's `DEEP`; README and this file merged
+by hand (run order with the Reef, abilities in the upgrade blurb).
+Verified: build and lint pass, 48 frontend tests (Node 22.14 with a
+`module.register` resolver). In Chrome: `?test=reef&seed=2` flies the Reef
+with the test panel and run HUD; Shift+P, Shift+S, Shift+O, a granted
+ability and a portal into the picker work; no console errors.
 
 ### 2026-10-10: Autopilot on the racing line, orbiting camera in the wormhole (Claude)
 
@@ -467,6 +479,132 @@ debug panel works as intended.
   `flight-realism`, `input`). The debug test imports missing `debugMode.ts`;
   those unrelated files were left intact. Backend unchanged. Real gamepad,
   audible mix and focused-window performance were not tested.
+
+### 2026-10-10: Renamed the game to Wind Rider (Claude)
+
+Asked for: change the game's name to "Wind Rider".
+- Visible name changed in `README.md`, `frontend/index.html` (title), the menu heading, the game's top bar and WebGL help text, and the dev console message. This file now says Wind Rider too.
+- **Left as `wingrace`** on purpose: localStorage keys (`wingrace.settings`, `.client`, `.runs`, `.tuning...`, `wingrace:stale-reload`) so players keep settings and best scores, and shader program cache keys (internal).
+- Not verified in a browser; no build or lint run yet.
+
+### 2026-10-10: Sunken Reef, an underwater biome (Claude)
+
+Asked for: an underwater world; it could replace one of the worlds already
+seen (with different lighting) in adventure mode.
+- **New biome `reef`, "Sunken Reef"** (`world/biomes/reef.ts`), two moods:
+  Sunlit shallows and Moonlit deep. A valley in the seabed between reef
+  walls: coral arches, table corals (the giant mushrooms' shapes in coral),
+  reef pillars, brain-coral domes, terraced reef mesas, trenches. You fly it
+  like any other level: the flight model is untouched (rule 6), the water
+  only changes what you see.
+- **In the run** (`run/run.ts`): still eight levels. The reef is in every
+  run; it takes the place of one of the five middle biomes (Glacier,
+  Archipelago, Lagoon, Twilight, Ember), which sits out that run. Which one,
+  and where the reef comes (third to seventh), is drawn from the run seed.
+  The first four middle biomes of a run seed are in the same order as
+  before; best scores saved per run seed were flown on the old order.
+- **The underwater look** (`SkySpec.underwater`, `SkySpec.fog`; data, so
+  another biome can use it):
+  - `skyMaterial()` shows the water's surface from below instead of a sky:
+    a real plane `surface` metres over the racing line (it follows the line
+    down), rippling, bright inside Snell's window overhead with the sun a
+    blaze through it, mirroring the deep outside it, lost in the haze
+    towards the horizon.
+  - `atmospheric()` adds caustics (ripples of light cast along the sun's
+    rays) to the land, plants and structures, fading with distance.
+    Skipped by a uniform branch everywhere else, so other biomes cost and
+    look the same.
+  - `world/deep.ts` (new): `LightShafts` (one instanced draw call: a shaft
+    per 64 m cell of the world in a 7 × 7 patch round the camera, turned to
+    face it in the vertex shader) and `SeaLife` (schools of fish circling,
+    jellyfish pulsing and drifting; two instanced draw calls, all motion in
+    the vertex shader, placed from the level seed in open water). No
+    colliders: you fly through them.
+  - Fog from 30 to 640 m instead of 250 to 1300, and the mood's mist as
+    deeper blue gathering towards the seabed.
+- **Plants** (`flora/species.ts`, `flora/meshes.ts`): kelp (forests), staghorn
+  coral in two colors, sea fans, anemones, tube sponges; seagrass with glowing
+  blooms. Built lean (three-sided limbs without caps: `limb(..., open)`).
+- **Structures**: new `shipwreck` (a galleon bow up on a reef mound, lit stern
+  windows and lantern, torn sails that sway, a spilled chest of gold) as the
+  landmark; its collider is a hall along the hull plus the mast leaning back
+  with the pitch (`WRECK_PITCH`). Drowned columns, shrine gates, guardian
+  statues and stone lanterns are the existing models in new colors.
+- **Particles**: new `Kind.Bubble` (a rim and a glint; the firefly branches
+  of the particle shader now test `kind < 4.5` too) and the ambient kind
+  `bubbles`, rising from the seabed.
+- **Tuning**: new `DEEP` group ("Underwater" in `?tune`): `caustics`,
+  `shafts`, `surface`, `life`.
+- Music: the reef plays Dewdrop Stream (`TRACK_OF`), until it has its own.
+- Dev: `__shot` and `__run` hide the explore debug panel too.
+- **Found on the way**: the first version drew 2.2 million triangles (Verdant:
+  0.6 million); kelp and anemones were to blame. After slimming the meshes
+  and thinning the kelp: 0.8 million.
+- Verified: build and lint pass; 33 frontend tests (new: the wreck's
+  collider; every run has the reef, eight different biomes, each middle
+  biome sits out some runs, portals follow the order; `reef` added to the
+  landmark and level-of-detail test). `__raceHashes()` matches
+  `docs/dev-snippets.js` for seeds 1, 7 and 42 (mesh, trees, dist, rings).
+  In headless Chrome on a real GPU (Intel UHD, `/?explore=reef&seed=2`):
+  both moods from the start, a coral arch, a table-coral gate in flight, the
+  surface from below, both wrecks; Sky Isles seed 42 still looks as before;
+  no console errors but the missing backend's 502
+  (`docs/screenshots/reef/`). `__bench` there, 1280 × 720: Medium GPU 8 ms
+  (Verdant 6), High GPU 12 ms (Verdant 13).
+- Not verified: not flown by hand and not seen in motion (fish, jellyfish,
+  kelp sway, shafts and bubbles were only seen in still frames; bubbles are
+  hard to make out in them). Not reached through a portal in a real run.
+  Frame times not measured in a focused window. Backend untouched.
+
+### 2026-10-10: Coral Lagoon's sea follows the racing line (Claude)
+
+Reported: the water is below the world border, so the structures standing in
+it are never seen.
+- **Cause**: the sea was one flat plane at the last gate's height (-24 m),
+  but the line drops about 480 m over a level. Most of the flight the water
+  was 100 to 500 m below you, and `World.lost` ends the flight 240 m under
+  the line. The sandy floor (`ground.level`) was flat for the same reason.
+- **Fix**: `World.seaAt(z)` replaces `seaLevel`: the line's height, averaged
+  over ±200 m so it doesn't undulate, plus the biome's `sea.level`. The sea
+  mesh, collisions, skim spray, beaches, plant and structure sites, stacks'
+  wave-cut notches, islets and valley mist all read it per z. Lagoon's ground
+  now follows the line (`level: null`, `depth: 36`) instead of a flat floor.
+  A gameplay change in runs (rule 6): you now fly 24 m over water all level.
+  Races (Sky Isles, no sea) are untouched.
+- Verified: lint and 31 frontend tests pass. `tsc` reports only the `reef`
+  biome missing from `music.ts` and `biomes/index.ts`; that was there before
+  this change. **Not looked at in a browser**: check `/?explore=lagoon&seed=1`
+  (water slope, depth over the floor, structures in sight, sea stacks'
+  notches, lighthouse sites needing `water: [-40, -1]`).
+
+- Checked later, with the Sunken Reef in the tree (same pull request): `tsc`,
+  lint, the build and 33 frontend tests pass. In headless Chrome
+  (`/?explore=lagoon&seed=1`, Tropical noon): the sea is 23 to 25 m under the
+  line at z = 0, 1100 and 2200, and in sight from the start and mid-level,
+  with stacks and islets standing in it; no console errors. Still not
+  looked at: the structures in the water, the notches, the night mood, and
+  flying it by hand.
+
+### 2026-10-10: Portal ring upright, portal audio (Claude)
+
+- **Ring**: the portal took the course's tangent as its normal, which points
+  down with the descent, so the ring leaned back like a floor light. `Portal`
+  now flattens the normal to horizontal (`run/portal.ts`), so ring, veil and
+  crossing test stand upright. Run mode only; races are untouched.
+- **Audio**: entering a portal now plays a rising whoosh plus a louder,
+  longer chord with a low drone (`GameAudio.stinger("portal")`). New
+  `GameAudio.portalHum(near)`: a drone that swells and rises in pitch within
+  500 m of an open portal and goes silent in the wormhole. Wired through
+  `RunHost.portalHum` and `Game.portalHum`; `RunController` calls it per frame.
+- **Run sounds**: runs never called the race's `audio.ring()` and
+  `audio.finish()` (only `checkRing` does), so gates and portals were silent.
+  `RunHost.stinger` now also takes `"gate"` (chime per gate) and `"finish"`
+  (fanfare on entering a portal).
+- **Beam**: the portal's light beam started at the veil's centre, a hollow tube
+  with a hard base through the veil. It now rises from the top of the ring and
+  fades in over its first 60 m.
+- Verified: build and lint pass. Not heard or seen in a browser; the ring tilt
+  was inferred from the code (the normal's y), so check it by eye.
 
 ### 2026-10-10: Collisions with the land exactly as drawn (Claude)
 
@@ -1646,6 +1784,17 @@ ported to the islands world:
   browser automation verified behavior, timing and layout, not
   focused-window performance or audio.
 
+- **Sunken Reef follow-ups**: fly it by hand and watch it move (fish,
+  jellyfish, kelp, shafts, bubbles); reach it through a portal in a real
+  run; measure in a focused window. Ideas not built: the pilot's own trail
+  as bubbles and a muffled wind under water (both shared code: `pilotfx.ts`,
+  `audio.ts`); caustics on the pilot (the toon material isn't
+  `atmospheric()`); a quality level for caustics (their cost wasn't
+  measured on its own; `DEEP.caustics = 0` hides them but still pays for
+  them); impostors get no caustics; rays or turtles; its own music
+  track; the wreck often lies on a slope with one end buried; brain-coral
+  domes under about 6 m mesh as flat patches (the 6 m grid).
+
 - Playtest the settings dead zone with a real gamepad and listen to the separate
   audio levels; check mouse sensitivity 2× across different devices.
 
@@ -1809,7 +1958,7 @@ shader; no backend API changes; no deleting branches or force-pushing.
 
 ## Roadmap
 
-The long-term direction: turn Wingrace from a single-map racer into a
+The long-term direction: turn Wind Rider from a single-map racer into a
 **roguelike flying adventure across procedurally generated biomes**, while
 keeping races and time trials on top of the same world generator.
 Everything has to be aesthetically excellent: a coherent painted look
@@ -1979,6 +2128,7 @@ modules, never a fork of the renderer.
 | 5 | **Coral Lagoon** | Sea stacks, shallow turquoise water, sandbars, coral arches, palm groves | Bright tropical noon, caustics (Lagoon) | Sea spray when skimming water, flying fish, gull flocks | Skim the water for a combo; race the manta through the arches |
 | 6 | **Twilight Forest** | Giant mushroom and redwood forest, roots forming tunnels, glowing ponds | Blue hour, bioluminescence (Nightshade) | Fireflies, glowing spores reacting to your wingbeats, light trails brighter | Relight the lanterns; follow the spirit fox |
 | 7 | **Ember Wastes** | Volcanic ridges, lava rivers, obsidian spires, ash plumes | Red-orange, underlit by lava, dark sky | Embers rising on thermals, heat haze, sparks off obsidian | Ride the thermals to the caldera; outrun the eruption |
+| + | **Sunken Reef** (built; in every run in place of one of 3 to 7) | A valley in the seabed: coral arches, table corals, reef pillars, kelp forests, a shipwreck, a drowned shrine | The water's surface overhead, caustics, light shafts; sunlit shallows or a moonlit deep | Schools of fish, jellyfish, bubbles, plankton | None yet |
 | 8 | **Aurora Summit** (finale) | A spire above the clouds, ring of ancient crystal gates | Night, aurora, stars, moon glare | Aurora ribbons, starfall, every gate a light pillar | The final ascent: a gauntlet of every gate type |
 
 ### Structures per biome
