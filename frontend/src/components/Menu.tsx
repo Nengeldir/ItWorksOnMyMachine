@@ -4,7 +4,7 @@ import { type LeaderboardEntry, type User, getLeaderboard } from "../api";
 import type { Screen } from "../App";
 import { randomRoomCode, untilTomorrow } from "../format";
 import { dailyRunSeed, dailySeed, randomSeed } from "../game/rng";
-import { MAPS, seedLevel } from "../game/world/biomes";
+import { MAPS, seedLevel, zenSeed } from "../game/world/biomes";
 import { Course } from "../game/world/course";
 import { bestRun } from "../session/RunSession";
 import { type Settings, clientId } from "../storage";
@@ -40,7 +40,13 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
     const { biome, palette } = seedLevel(dailyRun);
     return { map: biome.name, mood: palette.name };
   }, [dailyRun]);
-  const [tab, setTab] = useState<"solo" | "friends" | "adventure">(joinCode ? "friends" : "solo");
+  // Zen: today's course's map for ever (or the next seed's, if that's Sky Isles)
+  const zenDaily = useMemo(() => zenSeed(daily), [daily]);
+  const zen = useMemo(() => {
+    const { biome, palette } = seedLevel(zenDaily);
+    return { map: biome.name, mood: palette.name };
+  }, [zenDaily]);
+  const [tab, setTab] = useState<"solo" | "friends" | "adventure" | "zen">(joinCode ? "friends" : "solo");
   const [code, setCode] = useState(joinCode ?? "");
   const [board, setBoard] = useState<LeaderboardEntry[]>([]);
   const best = useMemo(() => bestRun(dailyRun), [dailyRun]);
@@ -87,10 +93,11 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
       if (e.key !== "Enter" || e.target !== document.body || picking) return;
       if (tab === "solo") go({ kind: "solo", seed: daily });
       else if (tab === "adventure") go({ kind: "run", seed: dailyRun });
+      else if (tab === "zen") go({ kind: "zen", seed: zenDaily });
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [daily, dailyRun, tab, picking, go]);
+  }, [daily, dailyRun, zenDaily, tab, picking, go]);
 
   const joinRoom = (e: FormEvent) => {
     e.preventDefault();
@@ -135,10 +142,12 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
                 ? { kind: "solo", seed }
                 : picking === "run"
                   ? { kind: "run", seed }
-                  : { kind: "room", code: randomRoomCode(), seed },
+                  : picking === "zen"
+                    ? { kind: "zen", seed }
+                    : { kind: "room", code: randomRoomCode(), seed },
             )
           }
-          action={picking === "solo" ? "Fly" : picking === "run" ? "Start the run" : "Create the room"}
+          action={picking === "solo" ? "Fly" : picking === "run" ? "Start the run" : picking === "zen" ? "Start flying" : "Create the room"}
           onBack={closePicker}
         />
       ) : (
@@ -159,6 +168,9 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
               <button role="tab" aria-selected={tab === "adventure"} onClick={() => setTab("adventure")}>
                 Adventure
               </button>
+              <button role="tab" aria-selected={tab === "zen"} onClick={() => setTab("zen")}>
+                Zen
+              </button>
             </div>
 
             {tab === "solo" ? (
@@ -178,6 +190,29 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
                 <div className="menu-more">
                   <button className="menu-link" onClick={() => setPicking("solo")}>
                     <IconMap size={18} /> Choose a course
+                  </button>
+                </div>
+              </>
+            ) : tab === "zen" ? (
+              <>
+                <div className="menu-course">
+                  <div>
+                    <small>Today's Zen · #{zenDaily}</small>
+                    <b>{zen.map}</b>
+                  </div>
+                  <span>{zen.mood}</span>
+                  <span>Endless</span>
+                  <span>No clock</span>
+                </div>
+                <button className="primary" onClick={() => go({ kind: "zen", seed: zenDaily })}>
+                  Start flying <kbd>Enter</kbd>
+                </button>
+                <div className="menu-more">
+                  <button className="menu-link" onClick={() => setPicking("zen")}>
+                    <IconMap size={18} /> Choose a map
+                  </button>
+                  <button className="menu-link" onClick={() => go({ kind: "zen", seed: zenSeed(randomSeed()) })}>
+                    <IconDice5 size={18} /> Random map
                   </button>
                 </div>
               </>

@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { hash3, hashToUnit, makeRng, range } from "../rng";
 import { ATMOSPHERE, atmospheric, skyMaterial } from "./atmosphere";
+import { BLOCK } from "./course";
 import { CrystalGates, type RingMode } from "./crystals";
 import { LandCollider } from "./landCollider";
 import { type ChunkMesh, CHUNK_SIZE, VOXEL, chunkKey, rockChunks } from "./mesher";
@@ -18,7 +19,7 @@ import { Tree } from "./trees";
 import { sunDirection } from "./palette";
 import type { World } from "./World";
 import { reloadForNewBuild } from "../../staleBuild";
-import { DEEP } from "../tuning";
+import { DEEP, TERRAIN } from "../tuning";
 
 export const VIEW_DISTANCE = 1400;
 const FOG_NEAR = 250;
@@ -26,6 +27,17 @@ const FOG_FAR = 1300;
 /** The game waits until the rock this close to the camera is on screen */
 const READY_RADIUS = 260;
 const REQUESTS_PER_WORKER = 4;
+/** Endless: scenery is kept this far past the view distance, ahead and behind */
+const SCENERY_MARGIN = 300;
+
+/** One block of an endless line's scenery */
+interface BlockScenery {
+  group: THREE.Group;
+  water: WaterView;
+  clouds: SoftClouds | null;
+  life: SeaLife | null;
+  cloudSea: THREE.BufferGeometry | null;
+}
 
 export type { RingMode };
 
@@ -102,6 +114,9 @@ export class WorldView {
   /** Under the sea: shafts of light from the surface, fish and jellyfish */
   private readonly shafts: LightShafts | null = null;
   private readonly seaLife: SeaLife | null = null;
+  /** Endless (Zen): water, clouds, the cloud sea and sea life, made a block at a time around the camera */
+  private readonly blocks = new Map<number, BlockScenery>();
+  private cloudSeaMaterial: THREE.Material | null = null;
   private readonly byKey = new Map<number, RockChunk>();
   /** The land on screen, as triangles: collisions with exactly what is drawn */
   readonly collider = new LandCollider();
@@ -147,17 +162,21 @@ export class WorldView {
     this.sky.renderOrder = -2;
     this.group.add(this.sky);
     const { cloudSea, puffs, puffsBelow, puffLift, banks } = world.biome.sky;
-    if (cloudSea) this.buildCloudSea(cloudSea.depth);
+    // An endless line's water, clouds and sea life come a block at a time (`scenery`)
+    if (cloudSea && !world.endless) this.group.add(new THREE.Mesh(this.cloudSeaGeometry(cloudSea.depth, null), this.cloudSeaLook()));
     if (world.biome.terrain.kind === "legacyIslands") {
       if (puffs > 0) this.buildClouds(puffs, puffsBelow, puffLift);
-    } else if (puffs > 0 || banks) {
+    } else if ((puffs > 0 || banks) && !world.endless) {
       this.softClouds = new SoftClouds(world, puffs, puffLift, banks ?? 0);
       this.group.add(this.softClouds.mesh);
     }
     if (underwater) {
       this.shafts = new LightShafts();
-      this.seaLife = new SeaLife(world, underwater);
-      this.group.add(this.shafts.mesh, ...this.seaLife.meshes);
+      this.group.add(this.shafts.mesh);
+      if (!world.endless) {
+        this.seaLife = new SeaLife(world, underwater);
+        this.group.add(...this.seaLife.meshes);
+      }
     }
     this.gates = new CrystalGates(
       world.seed,
@@ -183,12 +202,14 @@ export class WorldView {
       this.material(material);
       this.terrainUniforms = uniforms;
       if (world.biome.vegetation.kind === "flora") this.flora = new FloraView(world, this.group);
-      if (world.steps || world.hasSea || world.islandFalls.length) {
+      if (!world.endless && (world.steps || world.hasSea || world.islandFalls.length)) {
         this.water = new WaterView(world);
         this.group.add(this.water.group);
       }
       this.land = new LandStreamer(world, this.group, material, this.flora, this.collider);
     }
+    // All the scenery around the start at once, so the level's shaders are compiled with it
+    if (world.endless) this.scenery(world.course.start.z, true);
 
     this.startWorkers();
   }
@@ -268,13 +289,17 @@ export class WorldView {
 
   // --- clouds ------------------------------------------------------------------
 
-  /** A lumpy, faceted floor of clouds far below the islands, sloping down with the course */
-  private buildCloudSea(depth: number) {
+  /**
+   * A lumpy, faceted floor of clouds far below the islands, sloping down with the course: over the
+   * whole level, or one block of an endless line (rows on one grid from z = 0, so blocks meet)
+   */
+  private cloudSeaGeometry(depth: number, block: number | null): THREE.BufferGeometry {
     const { course, palette } = this.world;
     const step = 50;
     const columns = 80;
-    const z0 = course.start.z - 1500;
-    const rows = Math.ceil((course.endZ + 2000 - z0) / step);
+    const z0 = block === null ? course.start.z - 1500 : 0;
+    const first = block === null ? 0 : Math.floor((block * BLOCK) / step);
+    const rows = block === null ? Math.ceil((course.endZ + 2000 - z0) / step) : Math.floor(((block + 1) * BLOCK) / step);
     const point = (row: number, column: number) => {
       const z = z0 + row * step;
       const bump = (hash3(row, column, 11) - 0.5) * 14;
@@ -284,7 +309,7 @@ export class WorldView {
     const colors: number[] = [];
     const base = new THREE.Color(palette.cloud);
     const color = new THREE.Color();
-    for (let r = 0; r < rows; r++) {
+    for (let r = first; r < rows; r++) {
       for (let c = 0; c < columns; c++) {
         for (const tri of [
           [point(r, c), point(r + 1, c), point(r + 1, c + 1)],
@@ -298,13 +323,68 @@ export class WorldView {
         }
       }
     }
-    const geometry = this.geometry(new THREE.BufferGeometry());
+    const geometry = new THREE.BufferGeometry();
+    if (block === null) this.geometry(geometry);
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
     geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
     geometry.computeVertexNormals();
-    const material = new THREE.MeshLambertMaterial({ vertexColors: true });
-    material.emissive.set(palette.cloud).multiplyScalar(0.35);
-    this.group.add(new THREE.Mesh(geometry, this.material(material)));
+    return geometry;
+  }
+
+  private cloudSeaLook(): THREE.Material {
+    if (!this.cloudSeaMaterial) {
+      const material = new THREE.MeshLambertMaterial({ vertexColors: true });
+      material.emissive.set(this.world.palette.cloud).multiplyScalar(0.35);
+      this.cloudSeaMaterial = this.material(material);
+    }
+    return this.cloudSeaMaterial;
+  }
+
+  /**
+   * Endless: makes sure the land around z is made, keeps the scenery of the blocks within sight and
+   * lets the others go. `all`: makes every missing block now (when the level is built), else at
+   * most one a frame, the nearest first
+   */
+  private scenery(z: number, all = false) {
+    const reach = TERRAIN.viewDistance + SCENERY_MARGIN;
+    this.world.ensure(z - reach, z + reach);
+    const first = Math.floor((z - reach) / BLOCK);
+    const last = Math.floor((z + reach) / BLOCK);
+    for (const [b, scenery] of this.blocks) {
+      if (b >= first - 1 && b <= last + 1) continue;
+      this.group.remove(scenery.group);
+      scenery.water?.dispose();
+      scenery.clouds?.dispose();
+      scenery.life?.dispose();
+      scenery.cloudSea?.dispose();
+      this.blocks.delete(b);
+    }
+    for (;;) {
+      let next: number | null = null;
+      for (let b = first; b <= last; b++) {
+        if (this.blocks.has(b)) continue;
+        if (next === null || Math.abs((b + 0.5) * BLOCK - z) < Math.abs((next + 0.5) * BLOCK - z)) next = b;
+      }
+      if (next === null) return;
+      this.makeScenery(next);
+      if (!all) return;
+    }
+  }
+
+  private makeScenery(b: number) {
+    const { world } = this;
+    const sky = world.biome.sky;
+    const group = new THREE.Group();
+    const water = new WaterView(world, b);
+    group.add(water.group);
+    const clouds = sky.puffs > 0 || sky.banks ? new SoftClouds(world, sky.puffs, sky.puffLift, sky.banks ?? 0, b) : null;
+    if (clouds) group.add(clouds.mesh);
+    const life = sky.underwater ? new SeaLife(world, sky.underwater, b) : null;
+    if (life) group.add(...life.meshes);
+    const cloudSea = sky.cloudSea ? this.cloudSeaGeometry(sky.cloudSea.depth, b) : null;
+    if (cloudSea) group.add(new THREE.Mesh(cloudSea, this.cloudSeaLook()));
+    this.group.add(group);
+    this.blocks.set(b, { group, water, clouds, life, cloudSea });
   }
 
   /** Puffy clouds drifting between the islands and the sea of clouds */
@@ -485,7 +565,12 @@ export class WorldView {
       ATMOSPHERE.caustics.value = DEEP.caustics * dim;
       ATMOSPHERE.surfaceGlow.value = DEEP.surface;
       this.shafts!.update(DEEP.shafts * dim);
-      this.seaLife!.update(DEEP.life);
+      this.seaLife?.update(DEEP.life);
+      for (const { life } of this.blocks.values()) life?.update(DEEP.life);
+    }
+    if (this.world.endless) {
+      this.scenery(camera.position.z);
+      for (const { water } of this.blocks.values()) water.update();
     }
     if (this.land) {
       this.land.update(camera.position, this.dispatch, velocity);
@@ -511,6 +596,13 @@ export class WorldView {
     this.softClouds?.dispose();
     this.shafts?.dispose();
     this.seaLife?.dispose();
+    for (const { water, clouds, life, cloudSea } of this.blocks.values()) {
+      water.dispose();
+      clouds?.dispose();
+      life?.dispose();
+      cloudSea?.dispose();
+    }
+    this.blocks.clear();
     this.instanced.forEach((m) => m.dispose());
     this.geometries.forEach((g) => g.dispose());
     this.materials.forEach((m) => m.dispose());

@@ -43,12 +43,14 @@ export class Ground {
   private readonly flatLevel: number;
   private readonly mountainReach: number;
 
-  constructor(course: Course, spec: GroundSpec, rng: Rng, noise: Noise) {
+  /** `blockRng`: an endless line's steps come a block at a time, from each block's own stream */
+  constructor(course: Course, spec: GroundSpec, rng: Rng, noise: Noise, blockRng: ((block: number) => Rng) | null = null) {
     this.course = course;
-    this.spec = spec;
+    // A flat floor needs the line's lowest point: an endless line has none, so its floor follows the line
+    this.spec = course.endless && spec.level !== null ? { ...spec, level: null } : spec;
     this.noise = noise;
-    this.steps = spec.steps ? new Steps(course, spec.steps, spec.river, rng, noise) : null;
-    this.flatLevel = spec.level === null ? 0 : course.y(course.endZ) + spec.level;
+    this.steps = spec.steps ? new Steps(course, spec.steps, spec.river, rng, noise, blockRng) : null;
+    this.flatLevel = this.spec.level === null ? 0 : course.y(course.endZ) + this.spec.level;
     this.mountainReach = spec.mountains ? spec.mountains.from - 120 : Infinity;
   }
 

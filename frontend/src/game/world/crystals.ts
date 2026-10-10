@@ -270,6 +270,8 @@ export class CrystalGates {
     this.states = rings.map(() => ({ visible: 1, highlight: 0, passedAt: -1e3 }));
     this.facing = rings.map((r) => r.normal.clone());
     this.gateUniform = rings.map((r) => new THREE.Vector4(1, 0, -1e3, r.finish ? 1 : 0));
+    // The shaders' array has at least one entry: an endless line has no gates, and an empty array can't be uploaded
+    if (!this.gateUniform.length) this.gateUniform.push(new THREE.Vector4(0, 0, -1e3, 0));
     const defines = { GATE_COUNT: Math.max(1, rings.length) };
     const shared = {
       gates: { value: this.gateUniform },

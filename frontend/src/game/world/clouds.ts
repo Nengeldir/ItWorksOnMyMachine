@@ -1,6 +1,7 @@
 import * as THREE from "three";
-import { makeRng, range } from "../rng";
+import { type Rng, makeRng, range } from "../rng";
 import { ATMOSPHERE } from "./atmosphere";
+import { BLOCK } from "./course";
 import type { World } from "./World";
 
 // Soft clouds for the generator-v2 biomes: each cloud a cluster of puffs drawn
@@ -70,12 +71,28 @@ const fragmentShader = /* glsl */ `
   }
 `;
 
+/** Metres of z a level's clouds are spread over, and its banks across the line */
+const CLOUD_SPREAD = 4160;
+const BANK_SPREAD = 1980;
+
+/** A count spread over `spread` metres, for one block of an endless line: its share, rounded at random */
+export function blockShare(rng: Rng, count: number, spread: number): number {
+  const expected = (count * BLOCK) / spread;
+  return Math.floor(expected) + (rng() < expected % 1 ? 1 : 0);
+}
+
 export class SoftClouds {
   readonly mesh: THREE.Mesh;
 
-  constructor(world: World, count: number, lift: number, banks: number) {
+  /** A level's clouds; or, given `block`, that block of an endless line's share of them */
+  constructor(world: World, count: number, lift: number, banks: number, block: number | null = null) {
     const { course, seed, palette } = world;
-    const rng = makeRng(seed, "soft clouds");
+    const rng = makeRng(seed, block === null ? "soft clouds" : `soft clouds/${block}`);
+    if (block !== null) {
+      count = blockShare(rng, count, CLOUD_SPREAD);
+      banks = blockShare(rng, banks, BANK_SPREAD);
+    }
+    const along = (from: number, to: number) => (block === null ? range(rng, from, to) : range(rng, block * BLOCK, (block + 1) * BLOCK));
     const puffs: number[] = [];
     const shades: number[] = [];
     const cloud = (cx: number, cy: number, cz: number, width: number, height: number, n: number) => {
@@ -88,13 +105,13 @@ export class SoftClouds {
       }
     };
     for (let i = 0; i < count; i++) {
-      const z = range(rng, course.start.z - 500, course.endZ + 1300);
+      const z = along(course.start.z - 500, course.endZ + 1300);
       const width = range(rng, 110, 260);
       cloud(course.x(z) + range(rng, -900, 900), course.y(z) + range(rng, 160, 380) + lift, z, width, width * range(rng, 0.3, 0.45), 6 + Math.floor(rng() * 6));
     }
     // Banks across the racing line: fly straight through them
     for (let i = 0; i < banks; i++) {
-      const z = range(rng, course.start.z + 200, course.endZ - 100);
+      const z = along(course.start.z + 200, course.endZ - 100);
       const width = range(rng, 120, 200);
       cloud(course.x(z) + range(rng, -40, 40), course.y(z) - width * 0.12, z, width, width * 0.35, 10);
     }

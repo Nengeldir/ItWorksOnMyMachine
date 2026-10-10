@@ -112,6 +112,7 @@ export const TERRAIN = {
   lodHysteresis: 48, // extra distance before merging fine detail again
   cacheMiB: 48, // bounded cache of hidden terrain (estimated CPU + GPU buffers)
   viewDistance: 1500,
+  coneBehind: 2.5, // Zen: land behind you counts this much further away (coarser, and asked for last)
   readyRadius: 260, // the start waits until the land this close has arrived
   uploadsPerFrame: 4, // arrived land meshes taken in per frame once you're flying (smooths frame times)
   snowLine: 0, // metres added to the biome's snow line
@@ -343,6 +344,7 @@ export const RANGES: Record<string, [number, number, number?]> = {
   lodNear: [120, 600, 10],
   lodFar: [300, 1400, 10],
   viewDistance: [600, 2500, 10],
+  coneBehind: [1, 4, 0.1],
   readyRadius: [100, 500, 10],
   uploadsPerFrame: [1, 16, 1],
   snowLine: [-300, 300],

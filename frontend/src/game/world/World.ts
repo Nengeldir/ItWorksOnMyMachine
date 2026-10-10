@@ -1,14 +1,14 @@
 import { Vector3 } from "three";
-import { makeRng, range } from "../rng";
+import { type Rng, makeRng, range } from "../rng";
 import type { Biome, Level } from "./biomes";
-import { Course } from "./course";
+import { BLOCK, Course } from "./course";
 import { RockField } from "./islands";
 import type { Palette } from "./palette";
-import { TerrainField } from "./terrain/field";
+import { GROW_MARGIN, TerrainField } from "./terrain/field";
 import { Ground } from "./terrain/ground";
 import { makeNoise } from "./terrain/noise";
-import { buildLand } from "./terrain/recipes";
-import { NoiseIsland } from "./terrain/shapes";
+import { type LandContext, buildLand, buildLandBlock } from "./terrain/recipes";
+import { NoiseIsland, type Shape } from "./terrain/shapes";
 import type { Steps, WaterKind } from "./terrain/river";
 import { TreeIndex } from "./trees";
 
@@ -20,6 +20,9 @@ const SEA_STEP = 8;
 const SEA_PAD = 1700;
 const START_AIM_LIFT = 4; // metres above the first ring's centre the start aims at, for the sink on the way
 const START_CLEARANCE = 3; // metres of air the aimed start needs all the way to the first ring
+/** Shapes of block b are ordered from (b + ORDER_OFFSET) · ORDER_SPAN, so blocks made in any order blend alike */
+const ORDER_OFFSET = 100_000;
+const ORDER_SPAN = 100_000;
 
 export interface WaterHit {
   distance: number;
@@ -67,32 +70,95 @@ export class World {
   readonly trees = new TreeIndex(PROXIMITY_RANGE);
   /** Which way pilots face on the start line */
   readonly startDirection: Vector3;
+  /**
+   * Endless (Zen; generator-v2 land only): the line, its land and its water go on for ever, made a
+   * block at a time around whatever is asked for (`ensure`), each block from its own seeded streams
+   */
+  readonly endless: boolean;
+  private landContext: LandContext | null = null;
+  private seaLevel = 0;
+  private madeFrom = 0; // blocks made, madeFrom..madeTo (none while madeTo < madeFrom)
+  private madeTo = -1;
+  private making = false;
 
   constructor(level: Level) {
     this.level = level;
     this.biome = level.biome;
     this.seed = level.seed;
     this.palette = level.palette;
-    this.course = new Course(this.seed);
     const terrain = this.biome.terrain;
+    this.endless = !!level.key.endless && terrain.kind !== "legacyIslands";
+    this.course = new Course(this.seed, this.endless);
     if (terrain.kind === "legacyIslands") {
       this.legacy = new RockField(this.seed, this.course);
       this.rock = this.legacy;
     } else {
       const noise = makeNoise(this.seed, "land");
-      const ground = terrain.ground ? new Ground(this.course, terrain.ground, makeRng(this.seed, "ground"), noise) : null;
+      const steps = this.endless ? (b: number) => makeRng(this.seed, `steps/${b}`) : null;
+      const ground = terrain.ground ? new Ground(this.course, terrain.ground, makeRng(this.seed, "ground"), noise, steps) : null;
       const field = new TerrainField(this.course, ground, terrain.groundSurface, noise);
       if (terrain.sea) {
         this.hasSea = true;
-        this.seaTable = this.buildSeaTable(terrain.sea.level);
+        this.seaLevel = terrain.sea.level;
+        if (!this.endless) this.seaTable = this.buildSeaTable(terrain.sea.level);
       }
-      buildLand({ course: this.course, field, ground, rng: makeRng(this.seed, "land"), noise, seaAt: this.hasSea ? (z) => this.seaAt(z) : null }, terrain.land);
       this.land = field;
       this.rock = field;
       this.steps = ground?.steps?.river ? ground.steps : null;
-      if (terrain.islandFalls) this.findIslandFalls(terrain.islandFalls.chance);
+      const context: LandContext = { course: this.course, field, ground, rng: makeRng(this.seed, "land"), noise, seaAt: this.hasSea ? (z) => this.seaAt(z) : null };
+      if (this.endless) {
+        this.landContext = context;
+        field.grow = (z0, z1) => this.ensure(z0, z1);
+        this.ensure(this.course.start.z, this.course.start.z);
+      } else {
+        buildLand(context, terrain.land);
+        if (terrain.islandFalls) this.findIslandFalls(terrain.islandFalls.chance, field.shapes, makeRng(this.seed, "island falls"));
+      }
     }
     this.startDirection = this.startHeading();
+  }
+
+  /**
+   * Endless: makes the land around z0..z1 (GROW_MARGIN either side), and every block between it and
+   * what is already made. Every thread makes the same blocks, whichever it asks for first.
+   */
+  ensure(z0: number, z1: number) {
+    const context = this.landContext;
+    if (!context || this.making) return;
+    const from = Math.floor((z0 - GROW_MARGIN) / BLOCK);
+    const to = Math.floor((z1 + GROW_MARGIN) / BLOCK);
+    if (from >= this.madeFrom && to <= this.madeTo) return;
+    this.making = true;
+    try {
+      if (this.madeTo < this.madeFrom) {
+        this.madeFrom = from;
+        this.madeTo = from - 1;
+      }
+      while (this.madeTo < to) this.makeBlock(++this.madeTo);
+      while (this.madeFrom > from) this.makeBlock(--this.madeFrom);
+      context.field.madeFrom = this.madeFrom * BLOCK;
+      context.field.madeTo = (this.madeTo + 1) * BLOCK;
+    } finally {
+      this.making = false;
+    }
+  }
+
+  /** Endless: z of the land made so far, [from, to) */
+  get made(): [number, number] {
+    return [this.madeFrom * BLOCK, (this.madeTo + 1) * BLOCK];
+  }
+
+  /** Endless: block b's land, from the block's own streams */
+  private makeBlock(b: number) {
+    const context = this.landContext!;
+    const terrain = this.biome.terrain;
+    if (terrain.kind === "legacyIslands") return;
+    const { field } = context;
+    const first = field.shapes.length;
+    field.nextOrder = (b + ORDER_OFFSET) * ORDER_SPAN;
+    buildLandBlock({ ...context, rng: makeRng(this.seed, `land/${b}`) }, terrain.land, b);
+    const falls = terrain.islandFalls;
+    if (falls) this.findIslandFalls(falls.chance, field.shapes.slice(first), makeRng(this.seed, `island falls/${b}`));
   }
 
   /**
@@ -114,8 +180,14 @@ export class World {
 
   /** The sea's surface height at z, or null if there is no sea */
   seaAt(z: number): number | null {
+    if (!this.hasSea) return null;
     const table = this.seaTable;
-    if (!table) return null;
+    if (!table) {
+      // Endless: no table, the same average worked out where it's asked for
+      let sum = 0;
+      for (let k = -5; k <= 5; k++) sum += this.course.y(z + k * 40);
+      return sum / 11 + this.seaLevel;
+    }
     const f = Math.min(Math.max((z - this.course.start.z + SEA_PAD) / SEA_STEP, 0), table.length - 1.001);
     const i = Math.floor(f);
     return table[i] + (table[i + 1] - table[i]) * (f - i);
@@ -124,6 +196,7 @@ export class World {
   /** Flying straight off the start goes through the first ring, unless rock is in the way: then follow the line */
   private startHeading(): Vector3 {
     const { start, rings, startDirection } = this.course;
+    if (!rings.length) return startDirection.clone();
     const aim = rings[0].position.clone().add(new Vector3(0, START_AIM_LIFT, 0)).sub(start);
     const point = new Vector3();
     for (let t = 0; t <= 1; t += 0.02) {
@@ -133,11 +206,10 @@ export class World {
     return aim.normalize();
   }
 
-  /** Finds a rim to pour from on some of the big floating islands */
-  private findIslandFalls(chance: number) {
-    const rng = makeRng(this.seed, "island falls");
+  /** Finds a rim to pour from on some of the big floating islands among `shapes` */
+  private findIslandFalls(chance: number, shapes: Shape[], rng: Rng) {
     const field = this.land!;
-    for (const shape of field.shapes) {
+    for (const shape of shapes) {
       if (!(shape instanceof NoiseIsland) || shape.anchor.size < 24) continue;
       const roll = rng();
       const angle = range(rng, 0, Math.PI * 2);
@@ -222,7 +294,7 @@ export class World {
   /** Where to put a pilot who has passed `checkpoints` rings */
   spawnPoint(checkpoints: number): { position: Vector3; direction: Vector3 } {
     const { rings, start } = this.course;
-    if (checkpoints <= 0) {
+    if (checkpoints <= 0 || !rings.length) {
       return { position: start.clone(), direction: this.startDirection.clone() };
     }
     const ring = rings[Math.min(checkpoints, rings.length) - 1];

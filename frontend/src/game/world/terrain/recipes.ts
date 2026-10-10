@@ -2,7 +2,7 @@ import { Vector3 } from "three";
 import { clamp } from "../../math";
 import { type Rng, range } from "../../rng";
 import type { Feature, GateKind, LandRecipe } from "../biomes/types";
-import { type Course, TUBE_RADIUS } from "../course";
+import { BLOCK, type Course, TUBE_RADIUS } from "../course";
 import type { TerrainField } from "./field";
 import type { Ground } from "./ground";
 import type { Noise } from "./noise";
@@ -58,13 +58,56 @@ function weighted<K extends string>(rng: Rng, weights: Partial<Record<K, number>
   return entries[entries.length - 1][0];
 }
 
+/**
+ * Where features go: the whole course (`share` null), or one block of an endless line, which gets
+ * `share` of each feature's count (the share of a course that block's length is)
+ */
+interface Span {
+  z0: number;
+  z1: number;
+  share: number | null;
+  block: number;
+}
+
+const WHOLE: Span = { z0: 0, z1: 0, share: null, block: 0 };
+/** Metres of z a course's features are scattered over (from 300 m before the start to 300 m past the end) */
+const COURSE_SPREAD = 2960;
+/** A course's one-off features (a volcano, a summit) come about once per this many metres of an endless line */
+const ONE_OFF_EVERY = 2400;
+
 export function buildLand(ctx: LandContext, recipe: LandRecipe) {
   const { course, rng } = ctx;
   for (const z of course.gates) {
     frame(course, z);
     buildGate(ctx, weighted(rng, recipe.gates), z, { surface: recipe.gateSurface }, recipe);
   }
-  for (const feature of recipe.features) buildFeature(ctx, feature);
+  for (const feature of recipe.features) buildFeature(ctx, feature, WHOLE);
+}
+
+/**
+ * An endless line's block `b`: its gates and its share of every feature, from `ctx.rng`, which is
+ * the block's own stream. Every block is the same whichever order they are built in.
+ */
+export function buildLandBlock(ctx: LandContext, recipe: LandRecipe, b: number) {
+  const { course, rng } = ctx;
+  for (const z of course.gatesIn(b)) {
+    frame(course, z);
+    buildGate(ctx, weighted(rng, recipe.gates), z, { surface: recipe.gateSurface }, recipe);
+  }
+  const span: Span = { z0: b * BLOCK, z1: (b + 1) * BLOCK, share: BLOCK / COURSE_SPREAD, block: b };
+  for (const feature of recipe.features) buildFeature(ctx, feature, span);
+}
+
+/** How many of a feature to place: all of them on a course, a block's share (rounded at random) on an endless line */
+function countIn(ctx: LandContext, span: Span, count: number): number {
+  if (span.share === null) return count;
+  const expected = count * span.share;
+  return Math.floor(expected) + (ctx.rng() < expected % 1 ? 1 : 0);
+}
+
+/** A course's one-off feature: on an endless line, whether this block has one */
+function oneOffIn(ctx: LandContext, span: Span): boolean {
+  return span.share === null || ctx.rng() < BLOCK / ONE_OFF_EVERY;
 }
 
 /** A spire, notched by the waves where it stands in the sea */
@@ -163,28 +206,28 @@ function buildGate(ctx: LandContext, kind: GateKind, z: number, look: ShapeLook,
   }
 }
 
-/** A spot near the line: z along the course, then sideways by a lateral range either side */
-function scatter(ctx: LandContext, lateral: [number, number], spread = 300): { x: number; z: number; s: number } {
+/** A spot near the line: z along the course (or the block), then sideways by a lateral range either side */
+function scatter(ctx: LandContext, span: Span, lateral: [number, number], spread = 300): { x: number; z: number; s: number } {
   const { course, rng } = ctx;
-  const z = range(rng, course.start.z - spread, course.endZ + spread);
+  const z = span.share === null ? range(rng, course.start.z - spread, course.endZ + spread) : range(rng, span.z0, span.z1);
   frame(course, z);
   const s = (rng() < 0.5 ? -1 : 1) * range(rng, lateral[0], lateral[1]);
   return { x: p.x + side.x * s, z: p.z + side.z * s, s };
 }
 
-function buildFeature(ctx: LandContext, f: Feature) {
+function buildFeature(ctx: LandContext, f: Feature, span: Span) {
   const { field, rng } = ctx;
   const look = { surface: f.surface };
   if (f.kind === "pillars") {
-    for (let i = 0; i < f.count; i++) {
-      const { x, z } = scatter(ctx, f.lateral);
+    for (let i = 0, n = countIn(ctx, span, f.count); i < n; i++) {
+      const { x, z } = scatter(ctx, span, f.lateral);
       const g = groundAt(ctx, x, z, p.y - 200);
       const r0 = range(rng, f.radius[0], f.radius[1]);
       field.add(column(ctx, new Vector3(x, g - 10, z), new Vector3(x + range(rng, -3, 3), g + range(rng, f.rise[0], f.rise[1]), z + range(rng, -3, 3)), r0, r0 * range(rng, 0.5, 0.85), { ...look, grain: Grain.Fluted }));
     }
   } else if (f.kind === "shards") {
-    for (let i = 0; i < f.count; i++) {
-      const { x, z } = scatter(ctx, f.lateral);
+    for (let i = 0, n = countIn(ctx, span, f.count); i < n; i++) {
+      const { x, z } = scatter(ctx, span, f.lateral);
       const g = groundAt(ctx, x, z, p.y - 160);
       const r0 = range(rng, f.radius[0], f.radius[1]);
       const tip = new Vector3(x, g - 6, z).addScaledVector(tilted(range(rng, 0, f.tilt), range(rng, 0, Math.PI * 2)), range(rng, f.rise[0], f.rise[1]));
@@ -192,8 +235,8 @@ function buildFeature(ctx: LandContext, f: Feature) {
     }
   } else if (f.kind === "trunks") {
     // Giant trees: a fluted trunk with a crown of leafy blobs at the top
-    for (let i = 0; i < f.count; i++) {
-      const { x, z } = scatter(ctx, f.lateral);
+    for (let i = 0, n = countIn(ctx, span, f.count); i < n; i++) {
+      const { x, z } = scatter(ctx, span, f.lateral);
       const g = groundAt(ctx, x, z, p.y - 160);
       const r = range(rng, f.radius[0], f.radius[1]);
       const top = new Vector3(x + range(rng, -4, 4), g + range(rng, f.rise[0], f.rise[1]), z + range(rng, -4, 4));
@@ -206,8 +249,8 @@ function buildFeature(ctx: LandContext, f: Feature) {
       }
     }
   } else if (f.kind === "mushrooms") {
-    for (let i = 0; i < f.count; i++) {
-      const { x, z } = scatter(ctx, f.lateral);
+    for (let i = 0, n = countIn(ctx, span, f.count); i < n; i++) {
+      const { x, z } = scatter(ctx, span, f.lateral);
       const g = groundAt(ctx, x, z, p.y - 160);
       const cap = range(rng, f.cap[0], f.cap[1]);
       const r0 = cap * range(rng, 0.14, 0.2);
@@ -218,8 +261,8 @@ function buildFeature(ctx: LandContext, f: Feature) {
   } else if (f.kind === "islets") {
     // Low sandy islands just breaking the sea's surface
     if (!ctx.seaAt) return;
-    for (let i = 0; i < f.count; i++) {
-      const { x, z } = scatter(ctx, f.lateral);
+    for (let i = 0, n = countIn(ctx, span, f.count); i < n; i++) {
+      const { x, z } = scatter(ctx, span, f.lateral);
       const sea = ctx.seaAt(z)!;
       const r = range(rng, f.radius[0], f.radius[1]);
       const h = range(rng, 6, 10);
@@ -229,15 +272,16 @@ function buildFeature(ctx: LandContext, f: Feature) {
     }
   } else if (f.kind === "rings") {
     // Floating rings of crystal or stone, tilted every way
-    for (let i = 0; i < f.count; i++) {
-      const { x, z } = scatter(ctx, f.lateral);
+    for (let i = 0, n = countIn(ctx, span, f.count); i < n; i++) {
+      const { x, z } = scatter(ctx, span, f.lateral);
       const radius = range(rng, f.radius[0], f.radius[1]);
       const axis = tilted(range(rng, 1.1, 1.57), range(rng, 0, Math.PI * 2));
       field.add(new RockRing(new Vector3(x, ctx.course.y(z) + range(rng, f.rise[0], f.rise[1]), z), axis, radius, radius * range(rng, 0.09, 0.14), { ...look, grain: Grain.Sharp }));
     }
   } else if (f.kind === "volcano") {
     const { course } = ctx;
-    const z = range(rng, course.start.z + 500, course.endZ - 300);
+    if (!oneOffIn(ctx, span)) return;
+    const z = span.share === null ? range(rng, course.start.z + 500, course.endZ - 300) : range(rng, span.z0, span.z1);
     frame(course, z);
     const s = (rng() < 0.5 ? -1 : 1) * f.lateral;
     const x = p.x + side.x * s;
@@ -248,7 +292,9 @@ function buildFeature(ctx: LandContext, f: Feature) {
     const { course } = ctx;
     const steps = ctx.ground?.steps;
     if (!steps?.river) return;
-    for (const fall of steps.falls) {
+    const falls = span.share === null ? steps.falls : steps.section(span.block).falls;
+    const gates = span.share === null ? course.gates : [-1, 0, 1].flatMap((k) => course.gatesIn(span.block + k));
+    for (const fall of falls) {
       if (fall.z < course.start.z + 150 || fall.z > course.endZ - 60) continue;
       if (rng() > f.chance) continue;
       // The arch must take the whole river, and the crown stay well under the racing line
@@ -263,7 +309,7 @@ function buildFeature(ctx: LandContext, f: Feature) {
           break;
         }
       }
-      if (Number.isNaN(z) || course.gates.some((g) => Math.abs(g - z) < 22)) continue;
+      if (Number.isNaN(z) || gates.some((g) => Math.abs(g - z) < 22)) continue;
       const flow = new Vector3(steps.center(z + 4) - steps.center(z - 4), 0, 8).normalize();
       const across = new Vector3(flow.z, 0, -flow.x);
       const reach = steps.width(z) / 2 + 3.5;
@@ -273,7 +319,8 @@ function buildFeature(ctx: LandContext, f: Feature) {
   } else if (f.kind === "summit") {
     // One colossal spire, and a few lesser ones around it
     const { course } = ctx;
-    const z = course.start.z + (course.endZ - course.start.z) * f.along;
+    if (!oneOffIn(ctx, span)) return;
+    const z = span.share === null ? course.start.z + (course.endZ - course.start.z) * f.along : range(rng, span.z0, span.z1);
     frame(course, z);
     const s = (rng() < 0.5 ? -1 : 1) * f.lateral;
     const x = p.x + side.x * s;
@@ -289,8 +336,8 @@ function buildFeature(ctx: LandContext, f: Feature) {
       field.add(new Spire(new Vector3(bx, groundAt(ctx, bx, bz, g) - 10, bz), new Vector3(bx, p.y + f.rise * range(rng, 0.3, 0.6), bz), r, r * 0.2, { ...look, grain: Grain.Fluted }));
     }
   } else if (f.kind === "boulders") {
-    for (let i = 0; i < f.count; i++) {
-      const { x, z } = scatter(ctx, f.lateral, 150);
+    for (let i = 0, n = countIn(ctx, span, f.count); i < n; i++) {
+      const { x, z } = scatter(ctx, span, f.lateral, 150);
       const g = groundAt(ctx, x, z, p.y - 100);
       const r = range(rng, f.size[0], f.size[1]);
       const yaw = range(rng, 0, Math.PI * 2);
@@ -299,16 +346,16 @@ function buildFeature(ctx: LandContext, f: Feature) {
       field.add(new Slab(new Vector3(x, g + r * 0.15, z), [a, UP.clone(), c], [r * range(rng, 1, 1.5), r * range(rng, 0.6, 0.9), r], { ...look, roughness: r * 0.18 }));
     }
   } else if (f.kind === "arches") {
-    for (let i = 0; i < f.count; i++) {
-      const { x, z } = scatter(ctx, f.lateral);
+    for (let i = 0, n = countIn(ctx, span, f.count); i < n; i++) {
+      const { x, z } = scatter(ctx, span, f.lateral);
       const g = groundAt(ctx, x, z, p.y - 100);
       const radius = range(rng, f.radius[0], f.radius[1]);
       const yaw = range(rng, 0, Math.PI);
       field.add(new RockRing(new Vector3(x, g + radius * 0.25, z), new Vector3(Math.cos(yaw), 0, Math.sin(yaw)), radius, radius * range(rng, 0.22, 0.32), { ...look, grain: Grain.Layered }));
     }
   } else if (f.kind === "mesas") {
-    for (let i = 0; i < f.count; i++) {
-      const { x, z } = scatter(ctx, f.lateral);
+    for (let i = 0, n = countIn(ctx, span, f.count); i < n; i++) {
+      const { x, z } = scatter(ctx, span, f.lateral);
       const g = groundAt(ctx, x, z, p.y - 200);
       const r = range(rng, f.radius[0], f.radius[1]);
       field.add(
@@ -316,8 +363,8 @@ function buildFeature(ctx: LandContext, f: Feature) {
       );
     }
   } else if (f.kind === "islands") {
-    for (let i = 0; i < f.count; i++) {
-      const { x, z } = scatter(ctx, f.lateral);
+    for (let i = 0, n = countIn(ctx, span, f.count); i < n; i++) {
+      const { x, z } = scatter(ctx, span, f.lateral);
       const size = range(rng, f.size[0], f.size[1]);
       const y = ctx.course.y(z) + range(rng, f.rise[0], f.rise[1]);
       const holes = [];
