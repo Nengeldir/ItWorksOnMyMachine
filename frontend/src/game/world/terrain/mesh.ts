@@ -149,7 +149,9 @@ export function meshNode(world: World, lod: number, ix: number, iy: number, iz: 
   // Full detail (the land you can touch): vertices onto the surface collisions use
   // and faces cut where they still stray from it (ridges, lips, creases)
   const distance = (x: number, y: number, z: number) => field.distance(x, y, z);
-  if (lod === 0) snapToSurface(vertices, used, distance, S);
+  // The grid's own vertices: each face keeps the way it faced there (see SurfaceCutter.triangle)
+  const grid = lod === 0 ? vertices.slice() : vertices;
+  if (lod === 0) snapToSurface(vertices, used, distance, { ox, oy, oz, size: S, cells: C });
   const cutter = lod === 0 ? new SurfaceCutter(distance) : null;
 
   const positions: number[] = [];
@@ -254,7 +256,15 @@ export function meshNode(world: World, lod: number, ix: number, iy: number, iz: 
     const cx = vertices[c];
     const cy = vertices[c + 1];
     const cz = vertices[c + 2];
-    if (cutter) cutter.triangle(ax, ay, az, bx, by, bz, cx, cy, cz);
+    if (cutter) {
+      const ux = grid[b] - grid[a];
+      const uy = grid[b + 1] - grid[a + 1];
+      const uz = grid[b + 2] - grid[a + 2];
+      const vx = grid[c] - grid[a];
+      const vy = grid[c + 1] - grid[a + 1];
+      const vz = grid[c + 2] - grid[a + 2];
+      cutter.triangle(ax, ay, az, bx, by, bz, cx, cy, cz, uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx);
+    }
     else emit(ax, ay, az, bx, by, bz, cx, cy, cz);
   };
 

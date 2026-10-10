@@ -3,7 +3,8 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { hash3, hashToUnit, makeRng, range } from "../rng";
 import { ATMOSPHERE, atmospheric, skyMaterial } from "./atmosphere";
 import { CrystalGates, type RingMode } from "./crystals";
-import { type ChunkMesh, CHUNK_SIZE, rockChunks } from "./mesher";
+import { LandCollider } from "./landCollider";
+import { type ChunkMesh, CHUNK_SIZE, VOXEL, chunkKey, rockChunks } from "./mesher";
 import type { MeshRequest } from "./mesher.worker";
 import { levelId } from "./biomes";
 import type { Layers } from "./biomes/types";
@@ -97,6 +98,8 @@ export class WorldView {
   private readonly water: WaterView | null = null;
   private readonly softClouds: SoftClouds | null = null;
   private readonly byKey = new Map<number, RockChunk>();
+  /** The land on screen, as triangles: collisions with exactly what is drawn */
+  readonly collider = new LandCollider();
   private readonly workers: Worker[] = [];
   private readonly busy: number[] = [];
   private readonly rockMaterial: THREE.MeshLambertMaterial;
@@ -189,7 +192,7 @@ export class WorldView {
         this.water = new WaterView(world);
         this.group.add(this.water.group);
       }
-      this.land = new LandStreamer(world, this.group, material, this.flora);
+      this.land = new LandStreamer(world, this.group, material, this.flora, this.collider);
     }
 
     const count = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 4) - 1));
@@ -346,6 +349,7 @@ export class WorldView {
       chunk.mesh = new THREE.Mesh(geometry, this.rockMaterial);
       chunk.mesh.matrixAutoUpdate = false;
       this.group.add(chunk.mesh);
+      this.collider.add(chunk.key, result.positions, VOXEL);
     }
 
     const trees: Tree[] = [];
@@ -380,7 +384,18 @@ export class WorldView {
     }
   }
 
+  /**
+   * Is the land at this point on screen (or is there none to show)? Until it
+   * is, collisions there fall back to the distance field
+   */
+  covers(x: number, y: number, z: number): boolean {
+    if (this.land) return this.land.covers(x, y, z);
+    const chunk = this.byKey.get(chunkKey(Math.floor(x / CHUNK_SIZE), Math.floor(y / CHUNK_SIZE), Math.floor(z / CHUNK_SIZE)));
+    return !chunk || chunk.state === "loaded";
+  }
+
   private unload(chunk: RockChunk) {
+    this.collider.remove(chunk.key);
     if (chunk.mesh) {
       this.group.remove(chunk.mesh);
       chunk.mesh.geometry.dispose();
@@ -433,6 +448,7 @@ export class WorldView {
     this.workers.forEach((w) => w.terminate());
     for (const chunk of this.chunks) this.unload(chunk);
     this.land?.dispose();
+    this.collider.clear();
     this.flora?.dispose();
     this.water?.dispose();
     this.softClouds?.dispose();
