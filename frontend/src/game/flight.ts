@@ -267,6 +267,12 @@ export class Flight {
     this.right.set(1, 0, 0).applyQuaternion(this.quaternion);
   }
 
+  /** Run item energy: refill and allow held boost to restart after exhaustion. */
+  refillBoost(amount: number) {
+    this.boostCharge = clamp(this.boostCharge + amount,0,1);
+    if(this.boostCharge>0) this.exhausted=false;
+  }
+
   /** A wingbeat (run mode): a burst of speed and the nose lifted a little */
   flap(speed: number, pitch: number) {
     this.speed += speed;
