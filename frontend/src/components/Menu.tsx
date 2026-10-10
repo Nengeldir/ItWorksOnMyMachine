@@ -169,6 +169,11 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
                 New random run
               </button>
               {bestRun(daily) !== null && <span className="menu-hint">Your best today: {bestRun(daily)!.toLocaleString()}</span>}
+              {import.meta.env.DEV && (
+                <button className="menu-link" onClick={() => go({ kind: "explore", biome: "skyIsles", seed: 1 })}>
+                  Debug: explore worlds
+                </button>
+              )}
             </div>
           </>
         ) : (

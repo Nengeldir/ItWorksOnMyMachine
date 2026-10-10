@@ -48,11 +48,11 @@ export interface RoomInfo {
   server_time: number;
 }
 
-/** Positions of everyone in the room: [id, x, y, z, qx, qy, qz, qw, speed, checkpoints, t] */
+/** Positions of everyone in the room: [id, x, y, z, qx, qy, qz, qw, speed, checkpoints, t, boost, brake, dodge] */
 export interface Snapshot {
   type: "snap";
   t: number;
-  players: [string, number, number, number, number, number, number, number, number, number, number][];
+  players: [string, number, number, number, number, number, number, number, number, number, number, number?, number?, number?][];
 }
 
 export interface Joined {
@@ -74,7 +74,7 @@ export class ApiError extends Error {
 export async function request<T>(endpoint: string, method: "GET" | "POST" = "GET", body?: unknown): Promise<T> {
   const response = await fetch(endpoint, {
     method,
-    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    headers: { "X-Flight-Rules": "speed-control-v3", ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) {

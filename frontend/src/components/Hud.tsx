@@ -1,5 +1,6 @@
 import { formatTime } from "../format";
 import type { HudState } from "../game/Game";
+import { KEY_BINDINGS, keyLabel } from "../game/input";
 import "./Hud.css";
 
 /** Speed, timer, rings, style and standings over the game view */
@@ -19,13 +20,13 @@ const Hud = ({ hud }: { hud: HudState }) => {
         </div>
       )}
 
-      {hud.countdown !== null && hud.countdown > 0 && (
+      {!hud.paused && hud.countdown !== null && hud.countdown > 0 && (
         <div className="hud-big glass" key={hud.countdown}>
           {hud.countdown}
         </div>
       )}
-      {go && <div className="hud-big glass go">GO!</div>}
-      {hud.crashed && (
+      {!hud.paused && go && <div className="hud-big glass go">GO!</div>}
+      {!hud.paused && hud.crashed && (
         <div className="hud-crash glass">
           Crashed!
           <small>
@@ -33,7 +34,14 @@ const Hud = ({ hud }: { hud: HudState }) => {
           </small>
         </div>
       )}
-      {hud.loading && hud.raceState === "free" && <div className="hud-loading glass">Building islands…</div>}
+      {hud.paused && (
+        <div className="hud-pause glass" role="status">
+          <strong>Paused</strong>
+          <span>Press <kbd>{keyLabel(KEY_BINDINGS.pause)}</kbd> to resume</span>
+          {racing && <small>The race clock keeps running</small>}
+        </div>
+      )}
+      {!hud.paused && hud.loading && hud.raceState === "free" && <div className="hud-loading glass">Gliding in while the land loads…</div>}
 
       {hud.standings.length > 1 && (
         <ol className="hud-standings glass">
@@ -50,6 +58,11 @@ const Hud = ({ hud }: { hud: HudState }) => {
       )}
 
       <div className={`hud-flight glass ${hud.crashed ? "crashed" : ""}`}>
+        <div className="hud-boost" aria-label={`Boost reserve ${Math.round(hud.boostCharge * 100)} percent`}>
+          <span>{hud.braking ? "Braking" : hud.boosting ? "Boosting" : hud.boostCharge < 0.999 ? "Recharging" : "Ready"}</span>
+          <progress aria-label="Boost reserve" max={1} value={hud.boostCharge} />
+          <span className="hud-boost-keys">Shift · boost / Space · brake</span>
+        </div>
         <div className="hud-speed">
           <strong>{hud.speedKmh}</strong> km/h
         </div>
@@ -64,7 +77,7 @@ const Hud = ({ hud }: { hud: HudState }) => {
         </div>
       </div>
 
-      {!hud.locked && (
+      {!hud.locked && !hud.paused && (
         <div className="hud-hint glass">
           {racing ? "Click to steer with the mouse" : "Click the view to steer with the mouse · keys and gamepads work anytime"}
         </div>

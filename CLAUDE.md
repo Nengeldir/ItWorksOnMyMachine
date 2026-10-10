@@ -4,6 +4,32 @@ This file is Claude's memory for Wingrace. Claude Code loads it automatically
 at the start of every session in this repository. Read all of it before
 touching code, and keep it true.
 
+## The most important point: Genshin Impact and Sky (光遇)
+
+**Wingrace is a Genshin Impact and Sky: Children of the Light (光遇) styled
+game.** Every model, animation, effect, screen and piece of UI goes in that
+direction. When in doubt, ask "would this fit in Genshin or in Sky?", and if
+not, change it.
+
+- **Models:** cel-shaded (`toonMaterial`, three light bands, rim light, ink
+  outlines), chibi-to-anime proportions, soft rounded silhouettes, readable
+  shapes, warm saturated colors with gold trims, capes, scarves and feathers.
+  No realistic or gritty assets, no photo textures.
+- **Animation:** floaty, graceful and expressive, like Sky's gliding and
+  Genshin's wind glider: springy leans, flowing cloth, wingbeats with
+  anticipation and follow-through, cute reactions (dizzy stars, squash and
+  stretch). Even failure (crashes) stays gentle and charming, and ends in
+  light, not gore.
+- **Aesthetics:** painted skies, light motes and glowing particles, bloom on
+  the things that matter, golden-hour and moonlit moods, vast and peaceful
+  spaces (Sky's Isle of Dawn, Genshin's Teyvat vistas). Light and color guide
+  the player.
+- **UI:** soft glass panels, rounded shapes, gentle motion; elegant, never
+  cluttered.
+
+Everything below (rules, performance, determinism) still applies; this
+decides how things should look and feel.
+
 ## Rules for working on this project
 
 1. **Read this file first.** Before planning or editing, read this file, then
@@ -56,6 +82,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 ```
 
 - `/?seed=42` opens a time trial on seed 42. Add `&tune` for the tuning panel.
+- `/?gallery` shows every item model and the pilot's item animations.
 - `/?explore=<biome>&seed=<n>` flies a run level of any biome freely (no
   clock, nothing saved), e.g. `/?explore=verdant&seed=2` (Morning) or `&seed=3`
   (Moonlit).
@@ -73,29 +100,34 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | Path | What it does |
 | :--- | :--- |
 | `game/Game.ts` | The game: frame loop, fixed 120 Hz physics steps, race state, ring checks, HUD data, effects wiring (gate bursts, skim spray, gate motes), rendering with optional bloom, adaptive quality, the `?tune` panel |
-| `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only. `FlightMods` (run upgrades: drag, sink, stall, proximity boost, dash boost, thermal lift, hover, glide lock) are only ever passed in run mode; `flap()` is a run ability |
+| `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only. `touching()` is the pilot's hitbox (`FLIGHT.hit*`): a ball for the body and a rectangle per wing, tilted up at a dihedral, fixed in the flight frame (never the animated pose), sampled against the distance field with early-outs. `FlightMods` (run upgrades: drag, sink, stall, proximity boost, dash boost, thermal lift, hover, glide lock) are only ever passed in run mode; `flap()` is a run ability |
 | `game/avatar.ts` | The pilot: a cel-shaded chibi flyer built from primitives (merged per body part, vertex-colored), a procedural cape and scarf (`Cloth`), two-segment feathered wings, and all its animation: bank lead spring, barrel rolls, flapping driven by effort, bobbing, cloth ripples, limb reactions. Also `createLabel` and `glowTexture` |
 | `game/toon.ts` | Toon material (3-band gradient, rim light tinted by the biome's sun, self-lit `glow` vertex attribute for trims and wingtips) and the inverted-hull ink outline. `TOON_LIGHT` is set per biome |
 | `game/pilotfx.ts` | Per-pilot effects: wingtip and cape ribbons, light motes, downstroke puffs, barrel-roll star spiral. Shared by you, other players and ghosts |
 | `game/particles.ts` | One GPU particle system (ring buffer, physics in the vertex shader). Kinds: Glow, Star, Shard, Wisp. `fxTime` is the shared shader clock; `FX_LIGHT.boost` scales all glowing effects per biome |
 | `game/trail.ts` | Glowing additive ribbon (shader: soft edges, light pulses, fades near the camera) |
 | `game/speedlines.ts` | Wind streaks that hang in the air and rush past at speed |
-| `game/camera.ts` | Chase camera (`CAMERA` tuning): lag, partial horizon roll, FOV with speed, FOV kick on gates, shake when skimming |
+| `game/camera.ts` | Chase camera (`CAMERA` tuning): lag, partial horizon roll, FOV with speed, FOV kick on gates, shake when skimming; after a crash (`startFall`, `fall`) it arcs up over the pilot and looks down on the fall (`CAMERA.fall*`) |
 | `game/tuning.ts` | `ANIM`, `FX`, `RINGS`, `CAMERA`: every look constant, slider ranges, localStorage persistence |
 | `game/input.ts` | Keyboard, pointer-lock mouse and gamepad, merged into pitch and roll, plus actions (respawn, mute, barrel rolls) |
 | `game/pilots.ts` | Remote players and ghosts: interpolated samples driving an `Avatar` and `PilotFx` |
 | `game/ghost.ts` | Recording and decoding ghost runs (15 Hz) |
-| `game/effects.ts` | Crash debris (instanced tetrahedra) |
-| `game/audio.ts` | Synthesized wind and event sounds, run stingers (portal, upgrade, dash; sidequest and item are unused for now) and the wingbeat whoosh |
+| `game/glidein.ts` | `GlideIn`: while the land near you is loading (free flight, runs, explore; never races), the pilot glides in on rails instead of hanging frozen: no input, no physics step, no scoring; at most 70 m and never within 30 m of the next gate, slowing before rock; control comes back at `START_SPEED` when the land is ready, and a run's level clock keeps running meanwhile |
+| `game/items/` | Items, models and animations only (what they do comes later). `models.ts`: `ITEMS` (id, name, kind, slot) and `buildItem(id)`: the giant firework (worn on the back like a jetpack, with `fireworkFlame`), three candies, the golden feather, two helmets, five fruits, all primitives painted per vertex with the toon material and ink. `equip.ts`: `Equipment` (pull an item out with a sparkle; the firework from the hand over the shoulder onto the back, helmets drop onto the head, hand items are held up; `use()` eats; `setThrust()` lights the firework) and `ItemDisplay` (a floating pickup). `gallery.ts`: the `/?gallery` scene. `Game.equip/unequip/useItem/thrust` drive it on your pilot; `Avatar.slots` and `Avatar.armPose` are the hooks |
+| `game/death.ts` | Crash animations, looks only: `classifyCrash` picks headfirst (into a wall: bounce and tumble), slide (glancing ground: roll down the slope), wing (a wing clipped: spin down) or fall (below the islands); `DeathFall` is a small rigid-body tumble (impulses at contact points: balls for head, hips and feet, five points per wing from the live pose via `Avatar.wingPoints`) kept out of the rock by the distance field. The avatar plays `die(kind)`, the camera `follow`s, the body dissolves into light at `DISSOLVE_AT`, all inside `RESPAWN_DELAY` |
+| `game/effects.ts` | Crash debris: feathers knocked loose that flutter down (instanced) |
+| `game/audio.ts` | Synthesized wind and event sounds, run stingers (portal, upgrade, dash; sidequest and item are unused for now), the wingbeat sample (`public/audio/sfx/wingbeat.mp3`, pitch-randomized, played on each of your downstrokes and on the Wingbeat ability) and the `MusicPlayer` |
+| `game/music.ts` | `MusicPlayer`: one looping track per biome from `public/audio/music/<biome>_<title>.mp3`, crossfaded on biome change (`TRACK_OF` maps biomes to tracks; similar biomes share one). Night dims and muffles the same track. Loaded lazily, decoded with Web Audio, no music if a file fails |
 | `game/webgl.ts` | WebGL 2 availability check; `GameScreen` shows help if it's missing |
-| `game/run/` | The roguelike run. `run.ts`: run length, biome order from the run seed, portal destinations, scoring constants, `RunHud`. `upgrades.ts`: nine data-defined upgrades and the 3-of-N offer. `controller.ts`: `RunController` (levels, gates and chains, abilities as `FlightMods`, the portal, upgrade pick, tunnel and palette cross-fade, HUD data). `portal.ts`: portal (ring, swirling veil, beam) and the tunnel |
-| `game/devtools.ts` | Dev builds only: `__shot(view)` (freeze, stream the land around a fixed camera, render once) and `__raceHashes()` (the race map's determinism check) on `window` |
+| `game/run/` | The roguelike run. `run.ts`: run length, biome order from the run seed, portal destinations, scoring constants, `RunHud`. `upgrades.ts`: nine data-defined upgrades and the 3-of-N offer. `controller.ts`: `RunController` (levels, gates and chains, abilities as `FlightMods`, the portal transition: blur in, the next level built under the blur (`buildNext`), wormhole and upgrade pick while it streams, blur out with the palette cross-fade; HUD data). `finale.ts`: `Finale`, the last portal's cutscene (space under a world-fixed Milky Way with dust lanes and its core overhead, the camera's scripted pan beneath the pilot and back, then white light; Enter skips). `portal.ts`: the portal (ring, a flat disk like a window onto night, beam), the `Wormhole` (a camera-centred shell mapping the view onto an endless twisting tube of lensed stars and nebula with the exit glowing ahead, spirit motes, its own lights) and `screenSparkle`. Game's `veil(k)` (the `.portal-veil` DOM blur and sparkles) and `insideWormhole(on)` (hides the level: land, sky, soft particles, speed lines, ambient, gate effects) serve it |
+| `game/devtools.ts` | Dev builds only: `__shot(view)` (freeze, stream the land around a fixed camera, render once), `__raceHashes()` (the race map's determinism check), `__run(s)`, `__bench(q)` and `__crash(kind, after)` (flies into rock near the start and stops `after` s into the crash animation) on `window` |
 | `game/math.ts` | `clamp`, `smoothstep`, `smin` (smooth minimum for distance fields) |
 | `game/world/terrain/` | Generator v2 (every biome but Sky Isles). `noise.ts`: seeded fbm, ridged multifractal, domain-warped ridges, terraces. `shapes.ts`: distance-field primitives with boxes, surface ids and grain (Island, NoiseIsland from 3D noise with tunnels, Mesa with ledges, Spire between two points, Slab, RockRing, Cap). `ground.ts`: the heightfield following the line (valley, hills, warped ridged mountains, terraces, crevasses, carved river channel, overhang noise on cliffs). `river.ts`: `Steps`, a valley floor stepping down in pools and falls, and the river in it (water distance for collisions). `field.ts`: `TerrainField`, ground + shapes as one field, `fill()` for whole blocks (same arithmetic as `distance()`). `recipes.ts`: gates and scenery from a biome's `LandRecipe`. `mesh.ts`: surface nets per LOD node, faces painted for the shader. `streamer.ts`: `LandStreamer`, the LOD octree (384/192/96 m nodes, 16 cells each). `material.ts`: the terrain shader |
 | `game/world/biomes/` | Biomes as data (`types.ts`: `Biome`, `Level`, `LevelKey`). `index.ts`: the registry, `raceLevel(seed)` (races and time trials: always Sky Isles) and `runLevel(runSeed, index, biome)` (roguelike levels, deterministic from the run seed and level number). `skyIsles.ts`: the race map, frozen |
 | `game/world/World.ts` | Everything a level decides: course, rock field, trees, palette; built from a `Level` (biome + seed + mood). `distance()` for collisions, `lost()` below the islands. No rendering |
 | `game/world/islands.ts` | `RockField`: the floating islands as one signed distance field (shapes melted with `smin`, roughened, a tube carved along the racing line) |
-| `game/world/mesher.ts`, `mesher.worker.ts` | Cuts chunks of the rock field into flat-shaded meshes in Web Workers, and places trees. Workers rebuild the World from a `LevelKey` |
+| `game/world/mesher.ts`, `mesher.worker.ts` | Cuts chunks of the rock field into flat-shaded meshes in Web Workers, and places trees (from the grid's own vertices, so the race map's tree colliders never move; `treeSink` stretches a trunk down to snapped rock, drawn only). Workers rebuild the World from a `LevelKey` |
+| `game/world/snap.ts` | Makes the land drawn match the land you hit: `snapToSurface` moves surface-nets vertices onto the field's zero surface (Newton steps), `SurfaceCutter` splits faces whose edges or middles still stray more than 0.5 m (crack-free: an edge's split depends only on its ends). Used by both meshers (v2 at full detail only) |
 | `game/world/trees.ts` | Tree colliders and their lookup index |
 | `game/world/course.ts` | The racing line (a descending curve in z) and the gates along it |
 | `game/world/palette.ts` | The `Palette` type: a lighting mood (colors, sun elevation and azimuth, night factor, mist, effect glow), and `sunDirection(palette)`. Each biome lists its moods |
@@ -104,6 +136,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/world/crystals.ts` | Crystal gates: instanced crystals (bob, spin, pass flare and burst in the shader), veil discs with the pass shockwave, light pillars over the next gate and the finish |
 | `session/` | Solo, room, explore and run sessions wiring a `Game` to the network and UI. `ExploreSession`: free flight through any biome (`/?explore=verdant&seed=2`), nothing saved. `RunSession`: a roguelike run (`/?run=<seed>`), best score per run seed in localStorage |
 | `net/` | Server clock sync and the room connection (SSE down, POST up) |
+| `staleBuild.ts` | After a redeploy, an open tab's lazy chunks (bloom, `?tune`) and mesher worker are 404s: `reloadForNewBuild` reloads the page once (at most every 30 s, production only) |
 | `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, controls, and the run's HUD, title card and upgrade picker (`RunHud.tsx`). The menu's live course behind the glass is `MenuBackdrop` (a `Game` in `drift` attract mode); today's best folds into a flag (`TodaysBest`). `GameScreen`'s `Panel` folds to its heading and main buttons on narrow screens |
 | `theme.ts` | The UI's colors per map: `useUiTheme(seed)` sets `--ink` (picked per palette name, else derived from the sky) and `--tint` (the horizon); every other shade comes from those two with `color-mix()` |
 | `media.ts` | `useMediaToggle(query)`: an open/closed toggle that starts open where a media query matches and follows the screen when it changes |
@@ -190,19 +223,425 @@ in-game UI isn't settled and misclicks should be judged on the new one.
   heading (`course.startDirection`, the line 120 m ahead). Rock, rings and
   trees are untouched, but race starts now face a little differently, so
   times from before and after aren't strictly comparable. Hands-off flights
-  from the start on Sky Isles seeds 1 to 60: through the first ring 16 → 48
-  times, median time to a crash 5.7 → 9.1 s, and no seed does worse.
+  from the start on Sky Isles seeds 1 to 60, re-measured with main's newer
+  flight model and body-and-wings hitbox: through the first ring 13 → 48
+  times, median time to a crash 5.6 → 8.6 s, and no seed does worse.
 - **Merging main:** `Menu.tsx` uses `raceLevel(daily).palette` and keeps the
   Adventure tab; `Game.hud` reads the avatar's position; `startHeading()` runs
   at the end of the `World(level)` constructor and works on both the legacy
   islands and v2 land.
+- **Merging main again** (`30f2d85`: pause, boost, the new flight model and
+  hitbox, the victory lap, the stale-build reload): while paused the HUD hides
+  GO and the crash note, which keeps its "Back to ring N" line; the boost
+  meter sits in the flight panel, which still dims while crashed; `Game.hud`
+  reports speed 0 while crashed, next to the new boost and pause fields.
 - Verified: `npm run build` and `npm run lint` pass. `__raceHashes()` matches
   `docs/dev-snippets.js` for seeds 1, 7 and 42 (trees, dist, rings). In
   headless Chromium (software GL), after the merge: panels folded on a 390 px
   phone and open at 1440 px, the marker inside the screen with the ring off to
   every side, the crash HUD, the midnight switch (fake clock) and the
-  start-heading simulation. Not checked: a real GPU window, touch input, and the run mode
-  with these changes.
+  start-heading simulation. After the second merge: build, lint and the 20
+  frontend tests pass (`npm test` needs Node 22 or newer; run with the build
+  image's Node 24), and the crash HUD, the ring marker and the folding panels
+  were checked again. Not checked: a real GPU window, touch input, and the run
+  mode with these changes.
+
+### 2026-10-10: Rebase Pengyue's newest work onto main
+
+- Replayed the ten new feature commits from `origin/Pengyue` (`fec0aee`)
+  onto `main` (`f532f3e`) on `pengyue-rebase`. Older biome work was already
+  integrated in main; main's flight/pause/music commits were not replayed.
+  The shared Pengyue branch was left unchanged.
+- Resolved conflicts in crash/dodge animation, camera, flight hitboxes,
+  loading fly-ins, portal/finale HUD, pause behavior, item gallery and docs.
+  Kept 80° banking, upright recovery, boost/brake, 5 m dodges, stable camera
+  orientation, fixed boost UI and biome audio. Removed obsolete dash effects
+  and restored the explore biome import. Synced camera velocity interpolation
+  during fly-in and handover.
+- New body/wing collision rules use `speed-control-v3` in frontend and backend;
+  v2 results remain stored but are excluded from current rankings. Deploy both
+  together. Added tests for hitbox orientation, crash-camera respawn, glide-in
+  handover and preservation/exclusion of v2 scores.
+- Verified build, lint, 20 frontend tests and 22 backend tests. Browser smoke
+  check: Verdant Morning/Moonlit, loading fly-in, pause overlay, crash state and
+  item-gallery page load. Full portal/finale and two-client/gamepad playtests
+  remain outstanding. The explore debug panel overlaps the HUD at narrow widths.
+
+### 2026-10-10: Crash camera from above, pilot hitbox, land matching its collisions (Claude)
+
+Asked for: after a crash the camera changes to a view from the top to see
+the fall; collisions that don't visibly clip into the terrain, with the
+player's hitbox a small ball for the body and two small rectangles for the
+wings (a little clip is fine if it isn't obvious); then a check that the
+terrain's hitbox matches what's drawn, and a fix if not. A deliberate
+gameplay change (rule 6): what crashes you changed, in races too.
+- **Hitbox** (`flight.ts` `touching()`, used by `Game.step`): replaces the
+  0.7 m point test at the hips. A 0.5 m ball 0.4 m ahead of the hips (covers
+  the head), and per wing a 0.9 m × 1.75 m rectangle from 0.35 to 2.1 m out,
+  tilted up 0.15 rad like the wings mid-stroke, sampled 4 × 3. Skipped when
+  the field at the hips is beyond its reach, a wing skipped when its middle
+  is beyond its corners, so it costs one extra field sample a step in open
+  air. Fixed in the flight frame: animation never changes what you hit.
+  Proximity scoring still measures from the hips (unchanged). A wing hit
+  plays the "wing" crash on that side; the crash normal and debris come
+  from the contact point.
+- **Tumble** (`death.ts`): rigid-body contacts with impulses and Coulomb
+  friction at balls for head, hips and feet and five points per wing taken
+  from the live pose each frame (`Avatar.wingPoints`, a new `trail` marker
+  at the last primary's tip), substepped at 120 Hz. A wingtip catching a
+  slope now spins the body. Measured over seven crashes on Sky Isles: no
+  ball ever inside its radius of the rock, wing points ≥ 0.03 m off it.
+- **Camera** (`camera.ts`): `startFall` at the crash, then `fall`: arcs up
+  on the chase view's side to 11 m at 70° above the horizon (`CAMERA.
+  fallDistance`, `fallAngle`, `fallSwing`, `fallTrack`) and looks down,
+  trailing the body slightly so the drop reads; pulled in out of rock and
+  trees. Replaces `follow`.
+- **Land vs collisions** (new `world/snap.ts`): measured first. Drawn land
+  was off the collision field by a mean 0.65 m (Verdant) to 1 m (Sky Isles),
+  p95 2.3 to 3 m, worst ±10 m (surface nets on a 6 m grid put vertices at
+  linear edge crossings, and 6 m faces cut across ridges and creases). Now
+  vertices are snapped onto the surface, and faces that still stray more
+  than 0.5 m are cut (crack-free). After: vertices mean 0.06 to 0.08 m;
+  face centres mean 0.35 m, p95 1.15 m on Sky Isles (was 1.16 / 3.03 m).
+  Sky Isles' trees and colors still come from the grid's vertices, so
+  `__raceHashes()` keeps trees, dist and rings; only mesh changed (new
+  values in `docs/dev-snippets.js`). Trees whose rock moved down get their
+  drawn trunk stretched to it (`treeSink`), never their collider.
+- Cost: about 4.4× the rock triangles on Sky Isles (sampled), a full-detail
+  v2 node meshes in about 29 ms instead of about 22 ms (main thread, dev
+  build). Not measured in a focused window.
+- Verified: build and lint pass; race hashes as above. In Chrome (Sky Isles
+  seed 42, `__crash` and scripted approaches with a 15 to 30 m run-up): the
+  overhead view during headfirst, slide and wing crashes; with real flying
+  poses, the drawn wing at a crash is a median 0.49 m clear of the rock, worst
+  0.78 m into it for one frame. Not played with a mouse.
+
+### 2026-10-10: Victory lap and the finish screen (Claude)
+
+Asked for: after the finale's white light, the player is back in the
+default sky map on autopilot, unable to control anything, under a
+translucent finish screen with the stats and buttons on the side for the
+next actions (return to menu, start again).
+- `Game.victoryLap(seed)` (called by `RunSession` when the run ends): ends
+  the run controller, builds Sky Isles on the daily seed (the menu's map)
+  under the white, and sets `autopiloting`: the racing-line autopilot flies
+  (respawning at the course's end, like the menu's chase), every input and
+  action is ignored except mute, the pointer is released and clicking the
+  view no longer locks it. The white clears over 2.2 s once the map is
+  ready (or after 4 s).
+- The run now counts flying time (the level clocks), gates, crashes, best
+  chain and style for `RunSummary`.
+- `FinishScreen` (`RunHud.tsx`): a translucent glass card on the left (run
+  seed, "Journey's end", score with new best / ties / your best, six stats,
+  the biomes flown, upgrade icons) and the actions on the right edge: Fly it
+  again (`Enter`), New run (`N`), Return to menu (`Backspace`). The pilot
+  flies on between them. It fades in once the white has mostly cleared. The
+  HUD and top bar are hidden.
+- Verified: build and lint pass; race hashes unchanged. In Chrome: run 7
+  through one portal to Verdant, then the forced finale, the victory lap on
+  Sky Isles (seed 24675), the finish screen; held W, R and Q did nothing on
+  autopilot; Fly it again restarted the run; no console errors.
+
+### 2026-10-10: The finale cutscene (Claude)
+
+Asked for: the last portal (to victory) plays a cutscene that slowly pans
+beneath the player, isometric, showing the Milky Way now present above the
+player floating in empty space, then pans back to the default camera and
+fades out into white light.
+- `run/finale.ts`: at level 8 the portal starts `Finale` instead of the
+  summary. The screen blurs and sparkles as for any portal (0.5 s); under
+  the blur the land and its sky are hidden and the pilot floats in space.
+  The sky is a world-fixed shell: the Milky Way's band arching overhead
+  (core near the zenith, warm; pink and blue nebulae; dark dust lanes),
+  pixel-sized stars, denser in the band; lit from the core and starlight.
+  The camera takes over from the chase view: it pans (spherical path around
+  the pilot) to 11 m beneath and to the side, looking up past the pilot at
+  the galaxy (1.5 to 7 s), holds with a slow drift (to 10 s), pans back to
+  the chase pose (13.5 s) and the view fades into warm white light (16 s).
+  Motes drift around the pilot. `Enter` skips to the white light.
+- New run phase `finale`; HUDs are hidden; Game's `whiteOut(k)` is the
+  white overlay. The run is scored before the cutscene, as before.
+- For now the summary panel then shows over the white (step 8 replaces it).
+- Verified: build and lint pass. In Chrome (run 7 with `__game.run.level =
+  8` and `__portal`): the blur in, the galaxy from beneath the pilot at
+  7.5 s, the return and the white fade at 14.9 s, the summary at the end;
+  no console errors.
+
+### 2026-10-10: The next biome loads during the portal (Claude)
+
+Asked for: load the next map during each portal transition, to save time.
+- `RunController.buildNext()` builds the next level as soon as the screen
+  is fully blurred on the way in (0.53 s after the portal), before the
+  upgrade picker shows; the land streams while the player chooses. The pick
+  no longer builds anything, so the way out usually starts the frame after
+  the choice. The level doesn't depend on the upgrade, so nothing changes.
+- The offer is now drawn when the portal is entered (from the same level
+  number as before), so the upgrades offered are unchanged (checked: run 7
+  level 1 still offers Showoff, Daredevil, Wingbeat).
+- `Game.setLevel` compiles shaders before hiding the new land in the
+  wormhole (`renderer.compile` skips hidden objects).
+- Verified: build and lint pass. In Chrome (run 7): Verdant is built while
+  the picker is up, its land became ready during the pick, and the exit
+  began one frame after picking; no console errors.
+
+### 2026-10-10: Portal transitions: blur, sparkle, the wormhole (Claude)
+
+Asked for: transition screens through portals that feel authentic and
+exotic: the screen blurs and sparkles; the portal is just a flat disk from
+outside; inside, a dark wormhole with spirit-like sparkles everywhere and
+sides like Interstellar's contorted space, vast and peaceful like sleeping
+under the night sky.
+- **The portal** (`portal.ts`): the disk now looks like a window onto deep
+  night (stars swirling into the middle) inside a softer swirling rim. No
+  tunnel geometry exists outside.
+- **Going in**: star sparkles thrown across the view, the screen blurs and
+  brightens with drifting CSS sparkles (`.portal-veil`, backdrop-filter,
+  0.5 s); under the blur the level is hidden and the wormhole appears; the
+  blur clears (0.8 s) and the upgrade picker fades in.
+- **The wormhole** (`Wormhole`): a shell around the camera, drawn first and
+  writing no depth (the pilot draws over it, lit by the wormhole's own
+  moonlight and the exit's glow). Each view direction maps onto an endless
+  tube (`depth = log((1 + cos θ) / (1 - cos θ))`) that twists with depth:
+  three layers of pixel-sized stars, stretched along the travel near the far
+  end, faint nebula bands bent around the tube, the exit glowing far ahead
+  in a lensed ring, darker behind. 1100 spirits (moonlight, pale gold, rose
+  motes) float on slow paths all around and drift past. Dark and calm.
+- **Going out**: once the next land is ready (or after 8 s; the glide-in
+  then covers the rest), the screen blurs again, the wormhole is swapped
+  for the new biome, and the blur clears over `RUN.tunnelFade` while the sky
+  cross-fades. The HUD stays hidden for the whole transition.
+- Upgrade picker restyled for the dark: light text, translucent blurred
+  cards (its text was dark on dark before).
+- Dev: `__portal(after)` flies into the current level's portal and stops
+  `after` s past the crossing.
+- Verified: build and lint pass. In Chrome (run 7, Sky Isles → Verdant):
+  the portal from outside, the blur in, the wormhole with the picker, the
+  blur out, the arrival (the 8 s exit cap was hit in the throttled tab and
+  the glide-in took over); no console errors. GPU cost of the shell
+  (full-screen fbm) not measured in a focused window.
+
+### 2026-10-10: Item models and animations (Claude)
+
+Asked for: models (and animations, no mechanics yet) for a giant firework
+carried on the back as a jetpack, candies, feathers, helmets and fruits.
+- **`game/items/`**: 12 items built from primitives in the pilot's style
+  (toon material, ink outline, glow on gold and gems): Giant firework
+  (striped rocket longer than the pilot, star-tipped nose, fins, straps,
+  fuse; a flickering additive flame with sparks), Berry candy, Swirl
+  lollipop, Star candy (with a face), Golden feather (self-lit, Sky's winged
+  light), Aviator cap (with goggles), Winged helm, Apple, Peach, Grapes,
+  Cherries, Starfruit.
+- **Animations** (`Equipment`): pulling the firework out of the inventory
+  (it pops into the raised hand with a sparkle, swings over the shoulder in
+  an arc and settles onto the back with a bounce), its thrust flame,
+  helmets popping up and dropping onto the head, hand items held up and
+  eaten (`use()`: to the mouth, a nibble, gone in light), putting away.
+  `ItemDisplay`: a floating pickup (bob, turn, halo, sparkles). The avatar
+  got `slots` (back, head, hand) and `armPose` (the right arm's override).
+- **`/?gallery`**: every item with its name, buttons to put each on the
+  pilot, eat, light the firework, put away; a demo loop until you click.
+- In the game, `Game.equip(id)`, `useItem()`, `thrust(k)` and
+  `unequip(slot)` (e.g. `__game.equip("firework")` in a dev console). Looks
+  only: no flight or scoring change.
+- Verified: build and lint pass. In Chrome: the gallery (all 12 models), the
+  firework pull-out mid-swing and on the back with its flame, the helm on the
+  head, the held apple; no console errors.
+
+### 2026-10-10: Art direction made explicit (Claude)
+
+Asked for: state as the most important point that the game is Genshin
+Impact and Sky (光遇) oriented. New first section, "The most important
+point", with what that means for models, animation, aesthetics and UI. Docs
+only.
+
+### 2026-10-10: Glide in while the land loads (Claude)
+
+Asked for: instead of freezing the pilot until the map has loaded, fly
+forward a bit, avoiding collisions, and give control only once it has
+loaded; the mechanism must not be exploitable. A deliberate gameplay change
+(rule 6), outside races only.
+- `Game.loop`: when the land isn't ready in free flight (`raceState`
+  "free": time-trial warm-up, explore, runs, the menu's chase), `glideIn`
+  runs instead of the physics step; the first ready frame calls `handOver`.
+  Frozen states (a run's start panel, the tunnel) still hold the pilot.
+- Not exploitable, by construction: input is ignored (abilities too), the
+  flight model never runs (no crash, proximity, style, gates, portal, ghost
+  recording), the glide is capped at 70 m and stops 30 m short of the next
+  gate ahead, it slows and stops before rock, control is handed back at
+  `START_SPEED` whatever the speed before, and `RunController.wait` keeps a
+  run's level clock (par bonus) running. Races keep their countdown, so the
+  race clock and ghosts are untouched. (The client is not authoritative
+  anyway: the server's timing checks remain the only real guard.)
+- The HUD label now reads "Gliding in while the land loads…".
+- Verified: build and lint pass. In Chrome, Verdant seed 2 and Glacier seed 1
+  from a fresh load: the pilot glides 70 m at 18 m/s, hovers until the land
+  is ready, then flies on at 32 m/s under control, no crash; no console errors.
+
+### 2026-10-10: Crash animations (Claude)
+
+Asked for: a death animation per kind of crash, keeping the particles.
+- **`death.ts`**: at the crash, the surface normal (from the distance
+  field, sampled at the last step outside the rock) and the flight
+  direction pick the kind: **headfirst** (bounces back off the wall,
+  tumbles head over heels; a squash on impact and a ring of "seeing stars"),
+  **slide** (keeps sliding along the slope and rolls down it, kicking up
+  dust), **wing** (a wing clipped the rock: thrown off balance into a flat
+  spin, the hit wing bent), **fall** (below the islands: a slow tumble).
+  `DeathFall` simulates the body (gravity, drag, bouncing and rolling on the
+  distance field) and the avatar's `die()` pose flails, then goes limp, with
+  wings crumpling and the cloth whipping. At 1.1 s the body shrinks into a
+  burst of light; the respawn still comes at `RESPAWN_DELAY` (1.4 s).
+- The pilot no longer vanishes on a crash. The crash burst is smaller (the
+  body stays visible), debris are now feathers that flutter down, and the
+  camera follows the tumble from 7 to 15 m, kept out of the rock.
+- Looks only: the crash test, the respawn delay, the respawn point and the
+  scoring are unchanged.
+- Verified: build and lint pass. In Chrome (Sky Isles seed 42, `__crash`):
+  headfirst, slide and wing each play out and are classified as aimed in most
+  test spots; no console errors. Not played with a mouse in a focused window.
+
+### 2026-10-10: Stale builds after a rebuild (Claude)
+
+Reported: after a rebuild the game sometimes didn't load (blank page,
+localhost "not connecting") until the browser cache was cleared.
+- `Pengyue` was missing `main`'s Caddy fix (`e1b63df`): `index.html` was
+  cached heuristically, so browsers kept asking for the previous build's
+  hashed JS, and the SPA fallback answered with HTML. Merged `main`:
+  `index.html` is now `no-cache`, and a missing `/assets/*` file is a 404.
+- A tab left open across a rebuild still failed: the bloom chunk, the
+  `?tune` panel and the mesher worker of the old build are gone, so bloom
+  threw and the land never arrived. New `staleBuild.ts` reloads the page
+  once when one of them fails to load (`vite:preloadError`, the bloom and
+  lil-gui imports, `worker.onerror` in `WorldView`), at most once every 30 s
+  so a really missing file can't cause a reload loop.
+- Port 8080 is Colima's forward of the Docker port, IPv4 only (`::1` refuses).
+  Browsers fall back to 127.0.0.1, so this isn't the cause.
+- Verified: build and lint pass. In a test container from the new image:
+  `/` and `/explore` return `no-cache`, hashed assets return `immutable`, and
+  a missing asset returns 404. The reload itself wasn't triggered in a browser.
+
+### 2026-10-10: Rebase speed controls onto current main
+
+- Rebased onto `e20b112`, preserving pause controls, biome music, wingbeat
+  samples and explore debug mode while resolving overlapping input/audio/docs.
+- Kept one input reset implementation, retained the pause action, and made
+  disconnected gamepad hover return false. Extended input coverage for the
+  pause key, repeats and reset alongside held speed controls.
+- Verified frontend build, lint and 17 tests; backend 22 tests pass. Browser
+  integration and real-gamepad/two-client playtests remain outstanding.
+
+### 2026-10-10: Upright recovery and 80° steering bank
+
+- `flight.ts`: raised the bank cap to 80°. The unbanked pitch frame now
+  gradually rolls toward world-up when pitch is released, fixing the case
+  where a half loop leaves the pilot stuck on its back despite zero bank.
+  Recovery preserves the nose direction, is rate-limited, and fades at the
+  vertical poles. Held pitch still allows deliberate loops.
+- Updated README and controls text. Added regression coverage for half loops
+  in both directions at 30/60/120 Hz and neutral recovery at both poles.
+- Verified frontend build, lint and all 17 tests. No browser playtest this
+  session; upright recovery feel remains part of the Next up playtest.
+
+### 2026-10-10: Increase steering bank to 75°
+
+- Raised `FLIGHT.maxBank` from 50° to 75° so held steering can produce
+  tighter coordinated turns while retaining the bank limit and auto-level.
+- Updated the controls overlay, README and bank-limit regression expectation.
+- Verified: frontend build, lint and all 15 tests pass. No new browser
+  playtest; assessing the higher bank's feel remains in Next up.
+
+### 2026-10-10: Bounded steering, sideways dodge and vertical camera continuity
+
+- `flight.ts`: A/D, mouse and stick now choose a bank target capped at 50°;
+  release levels the wings. Pitch uses the unbanked frame and remains unrestricted.
+  Q/E and LB/RB trigger a 5 m dodge over 0.6 s, with a 1 s start-to-start cooldown.
+  Its smooth displacement is integrated in the fixed step before collision/gate
+  checks; dodge never changes the base orientation. Respawn clears dodge state.
+- `avatar.ts`, `Game.ts`, `tuning.ts`: visual roll follows physics dodge progress;
+  removed cosmetic corkscrew displacement and extra visual bank. Removed obsolete
+  auto-roll/time/radius knobs; dodge timing and distance belong to `FLIGHT`.
+- `camera.ts`: transport the previous view/up frame through vertical flight,
+  suppress horizon correction near the poles, and bound recovery away from them.
+- `Hud.tsx`, `Hud.css`: fixed panel/status/bar dimensions, stable key hint line,
+  Ready/Boosting/Recharging/Braking labels, and moved the mouse hint above the panel.
+- Room snapshots and ghosts carry signed dodge progress. Older ghost formats
+  remain readable; v2 result filtering preserves legacy and v1 scores separately.
+  Frontend and backend must deploy together.
+- Verification: 15 frontend tests and 22 backend tests pass, including exact
+  dodge displacement at multiple speeds/timesteps, steering limits, cooldown,
+  reset, and camera continuity over loops in both directions at 30/60/144 fps.
+  Production build and lint pass. In the live browser preview, Ready, Boosting,
+  Braking and Recharging retain the same 245 x 50 px boost block; the mouse hint
+  no longer overlaps it. Real-gamepad and two-client visual playtesting remain
+  outstanding; loop continuity is covered by numeric camera tests.
+
+
+### 2026-10-10: Biome music and the wingbeat sample (Claude)
+
+Asked for: an audio controller for the generated ElevenLabs tracks, files moved
+out of the repo root into a sensible place.
+
+- **Files** moved to `frontend/public/audio/`: `music/sky-isles_soaring-above-the-clouds.mp3`,
+  `music/glacier_blue-shadows-over-cold-peaks.mp3`, `music/verdant_dewdrop-stream.mp3`,
+  `music/twilight_blue-hour-fireflies.mp3`, `music/ember_red-orange-embers.mp3`,
+  `sfx/wingbeat.mp3`.
+- **`music.ts`** (new): `MusicPlayer` crossfades between tracks when the biome
+  changes. Mapping: Sky Isles and Archipelago share the Sky Isles track;
+  Glacier and Aurora Summit share the Glacier track (until the finale gets
+  its own); Verdant and Lagoon share Dewdrop Stream; Twilight and Ember have
+  their own. A biome change that keeps the track doesn't restart it. Night
+  (`palette.night`) lowers the volume and rolls off the highs of the same track.
+- **`audio.ts`**: owns the player, remembers the biome until the first user
+  gesture starts audio, plays the wingbeat sample (random pitch ±8%) on your
+  downstrokes (quiet, scaled by effort) and for the Wingbeat ability (loud).
+  Falls back to the synthesized whoosh if the sample hasn't loaded.
+- **`Game.ts`**: `setLevel` calls `audio.setBiome`; your avatar's
+  `onDownstroke` also plays the flap (not for the menu backdrop, which has
+  no audio).
+- **`tuning.ts`**: new `AUDIO` group in `?tune`: `music`, `sfx`, `crossfade`,
+  `nightDim`, `nightMuffle`.
+- **Explore debug mode** (`ExploreSession.ts`, `GameScreen.tsx`, `App.tsx`,
+  `Menu.tsx`): open `/?explore` (or `/?explore=ember&seed=7`; in dev builds
+  also "Debug: explore worlds" on the Adventure tab). A panel lists every
+  world and its lighting moods; click, or press **N** next world, **B**
+  previous, **V** next light. Switching rebuilds the level in place (no
+  reload) and the URL follows. The panel shows the music file the world should
+  play and the one actually playing, so a mismatch is visible at a glance.
+  `/?explore` with no or an unknown biome starts in Sky Isles.
+- Looks and sounds only: no gameplay code touched.
+- Verified: `npm run build` and `npm run lint` pass. **Not run in a
+  browser**: the debug panel, level switching, crossfades, loop points and mix
+  levels against the wind are unchecked. A reported "world and music don't
+  match" was not reproduced or diagnosed yet; the panel is there to find it.
+- Branch `audio-music`, cut from `main`.
+
+### 2026-10-10: Speed controls (`speed-control`)
+
+- Consolidated the two speed integrations in `flight.ts`; gravity, drag,
+  proximity and adventure modifiers now participate in one integration.
+- Universal held Shift/RT boost (2.5 s reserve, release to recharge) and
+  Space/LT brake (priority over boost, drag tapers near 22 m/s). Wingbeat
+  moved to C/A; Gale boost strengthens the universal boost by 25% per stack.
+- `input.ts`, `Game.ts`: reset held controls/motion at respawn, clear stale
+  gamepad state, ignore unfocused input and remove double-tap stunt triggers.
+- `camera.ts`, `tuning.ts`: interpolated heading and travel direction,
+  restrained horizon/FOV, bounded boost feedback, segment obstruction checks
+  and eased camera extension. New tuning storage namespace keeps old camera
+  overrides from masking the defaults.
+- `avatar.ts`, `pilotfx.ts`, `trail.ts`, `audio.ts`: swept boost/spread brake
+  poses, brightened/lengthened boost trails, brake wisps, wind feedback and
+  fresh animation history on respawn. Fixed trail sampling so sub-0.8 m
+  movement per frame accumulates instead of repeatedly replacing one point.
+- HUD charge meter and control hints; updated adventure intro and upgrades.
+- `pilots.ts`, `ghost.ts`, room/API state and backend validation carry explicit
+  boost/brake intensity. Old eight-field ghosts remain readable.
+- Backend store preserves old scores/ghosts as `legacy`, filters all current
+  results by `speed-control-v1`, and rejects outdated gameplay POSTs with a
+  reload message. Deploy frontend and backend together.
+- Verified: production build and lint pass; 11 frontend regression tests and
+  21 backend tests pass. Browser visual playtesting
+  was blocked by unavailable Chrome, an in-app webview timeout, and a stalled
+  Safari control call; no visual or gamepad playtest is claimed.
 
 ### 2026-10-10: Merged main's menu and UI redesign (Claude)
 
@@ -588,7 +1027,51 @@ ported to the islands world:
 
 ## Next up
 
-**Resume here:** the five roguelike milestones are done. What's open:
+- Play through the integrated portal/finale and victory lap; check multiplayer
+  and gamepad controls. Make the explore debug panel usable at narrow widths
+  without covering the HUD.
+
+- **Hitbox and land follow-ups**: features thinner than the 6 m grid (thin
+  needles, sharp spikes) still collide where nothing is drawn (snapping
+  leaves those vertices; p99 at face centres is about 2 m). Coarse v2 nodes
+  (12 m and up) aren't snapped. The extra rock triangles (about 4×) want a
+  frame-time check in a focused window; `SurfaceCutter`'s tolerance (0.5 m)
+  is the knob. Remote pilots don't use the hitbox (they never crash).
+- `__crash` teleports the pilot 5 m from the rock: the crash often comes in
+  the first frame, before the avatar's pose has updated, so that frame's wing
+  points are stale. Harmless in play.
+
+**Resume here:** the five roguelike milestones are done, and so are the
+crash animations, the glide-in, items (models only), portal wormholes, the
+finale and the finish screen. What's open:
+
+- **Items need mechanics**: the giant firework's boost (`Game.thrust` only
+  lights the flame), candies and fruit (`useItem` only plays the animation),
+  helmets, pickups placed in levels (`ItemDisplay` is ready), an inventory
+  UI. Mechanics go through `FlightMods` in run mode only.
+- **Measure in a focused window** the new full-screen shaders: the wormhole
+  shell and the finale's Milky Way (fbm per pixel), and the hitch of
+  `buildNext` under the portal blur (hidden, but it stalls the CSS veil for
+  a frame).
+- Remote pilots and ghosts don't play crash animations (they have no crash
+  events); the glide-in doesn't apply in races (the countdown starts even if
+  the land is still loading).
+- The finale can only be reached by flying all eight levels (dev:
+  `__game.run.level = 8` then `__portal()`). Not watched end to end in a
+  real run.
+
+- **Music follow-ups**: listen in a browser and set the mix (music vs wind,
+  `AUDIO` in `?tune`); check the loop points; the menu backdrop is silent (no
+  menu music yet); Aurora Summit needs its own finale track; the portal tunnel
+  and results screen could use stingers; the music doesn't duck under fast wind.
+  The tracks are ~2.9 MB each, so consider lowering the bitrate if load time matters.
+
+- Playtest `speed-control` with keyboard, mouse and gamepad: boost into a
+  banked turn, brake before a narrow gate, low-speed recovery, inverted flight,
+  respawn and two-player effects. Tune reserve/drag/camera in `?tune`; assess
+  camera-segment query cost in a focused window at Medium and High quality.
+- Check speed-control poses/trails in day and night biomes, including with
+  bloom disabled; visual verification remains outstanding.
 
 - **Measure in a focused window**: `__bench(2/1/0)` after `__shot(0)` in a
   dev build. Bloom at High was 30 to 70 ms of GPU on an M2 in a hidden tab

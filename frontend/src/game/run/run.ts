@@ -35,7 +35,7 @@ export function destination(runSeed: number, level: number, path: readonly Biome
   return runOrder(runSeed).find((b) => b !== "aurora" && !path.includes(b)) ?? "aurora";
 }
 
-export type RunPhase = "arrive" | "explore" | "portal" | "pick" | "won";
+export type RunPhase = "arrive" | "explore" | "portal" | "pick" | "finale" | "won";
 
 export interface Objective {
   title: string;
@@ -70,4 +70,11 @@ export interface RunSummary {
   levels: number;
   path: BiomeId[];
   upgrades: UpgradeId[];
+  /** Flying time over all levels (the level clocks), in milliseconds */
+  timeMs: number;
+  gates: number;
+  crashes: number;
+  bestChain: number;
+  /** Style points, all levels together */
+  style: number;
 }

@@ -42,6 +42,7 @@ export class PilotFx {
   private readonly velocity = new THREE.Vector3();
   private readonly center = new THREE.Vector3();
   private moving = true;
+  private brakeDebt = 0;
 
   constructor(avatar: Avatar, color: string, particles: Particles | null, options: PilotFxOptions = {}) {
     this.avatar = avatar;
@@ -72,6 +73,7 @@ export class PilotFx {
 
   reset() {
     this.trails.forEach((t) => t.reset());
+    this.debtL = this.debtR = this.spiralDebt = this.brakeDebt = 0;
   }
 
   hide() {
@@ -90,12 +92,14 @@ export class PilotFx {
     avatar.group.getWorldPosition(this.center);
 
     const barrel = avatar.barrelProgress >= 0 ? Math.sin(Math.PI * avatar.barrelProgress) : 0;
-    const wingOpacity = THREE.MathUtils.clamp(0.18 + (speed - 30) / 45 + proximity * 0.5 + barrel * 0.6, 0, 0.95);
-    this.trails[0].push(tipL, span);
-    this.trails[1].push(tipR, span);
+    const wingOpacity = THREE.MathUtils.clamp(0.18 + (speed - 30) / 45 + proximity * 0.5 + barrel * 0.6 + avatar.boost * 0.3 - avatar.brake * 0.2, 0, 0.95);
+    const lengthScale = 1 + avatar.boost * 0.45 - avatar.brake * 0.35;
+    for (const trail of this.trails) trail.glowScale = 1 + avatar.boost * FX.boostTrailGlow;
+    this.trails[0].push(tipL, span, lengthScale);
+    this.trails[1].push(tipR, span, lengthScale);
     this.trails[0].opacity = wingOpacity * (this.ghost ? 0.6 : 1);
     this.trails[1].opacity = wingOpacity * (this.ghost ? 0.6 : 1);
-    this.trails[2].push(cape, span);
+    this.trails[2].push(cape, span, lengthScale);
     this.trails[2].opacity = FX.bodyTrail
       ? THREE.MathUtils.clamp(0.12 + (speed - 25) / 70 + proximity * 0.3, 0, 0.6) * (this.ghost ? 0.4 : 1)
       : 0;
@@ -103,9 +107,15 @@ export class PilotFx {
     const particles = this.particles;
     if (!particles || dt <= 0 || !moving) return;
     const budget = particles.budget * this.share;
+    this.brakeDebt += dt * FX.brakeWisps * avatar.brake * budget;
+    for (; this.brakeDebt >= 1; this.brakeDebt--) {
+      particles.emit(Math.random() < 0.5 ? tipL : tipR,
+        vel.copy(velocity).multiplyScalar(0.12),
+        fx(0.35, 0.7, this.head, Kind.Wisp, 0, 2, 0.5));
+    }
 
     // Light motes shed from the wingtips: more with speed, a sky-like drift upwards
-    const rate = (10 + speed * 0.9) * FX.sparkles * budget * (1 + proximity);
+    const rate = (10 + speed * 0.9) * FX.sparkles * budget * (1 + proximity + avatar.boost);
     this.debtL += rate * dt;
     this.debtR += rate * dt;
     for (; this.debtL >= 1; this.debtL--) this.mote(tipL);

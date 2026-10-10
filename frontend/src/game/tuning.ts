@@ -5,13 +5,11 @@
 
 /** How the pilot moves on top of the flight model: rolls, flaps, bobbing, cloth */
 export const ANIM = {
-  bankLead: 0.55, // extra visual bank, as a share of the roll rate (rad per rad/s)
+  boostSweep: 0.25,
+  brakeSweep: 0.7,
+  bankLead: 0.55, // limb/pelvis lean response to the bank rate
   bankSpring: 14, // stiffness of the lean spring; lower = floatier
   bankDamping: 0.42, // 1 = no overshoot, lower = a little wobble after a turn
-  autoBarrel: true, // snapping hard into a turn throws a full barrel roll
-  barrelTime: 0.7, // seconds for one barrel roll
-  barrelRadius: 0.9, // metres the pilot corkscrews around the flight path
-  barrelCooldown: 1.1,
   flapRate: 1.6, // flaps per second while gliding slowly
   flapBoost: 2.6, // extra flaps per second when climbing, turning or rolling
   flapAngle: 0.5, // radians of wing travel at full effort
@@ -27,6 +25,8 @@ export const ANIM = {
 
 /** Trails, particles, wind and screen effects */
 export const FX = {
+  boostTrailGlow: 0.45,
+  brakeWisps: 24, // particles/second at full brake
   trailLength: 1, // multiplier on ribbon length
   trailWidth: 1,
   trailGlow: 1, // brightness of the ribbons
@@ -65,12 +65,21 @@ export const CAMERA = {
   height: 2.6,
   lookAhead: 14,
   stiffness: 7, // how tightly it follows
-  rollFollow: 0.55, // share of the pilot's bank the horizon follows
+  rollFollow: 0.18, // share of the pilot's bank the horizon follows
   fov: 70,
-  fovPerSpeed: 0.42, // extra degrees per m/s above 30
-  fovMax: 30,
-  shake: 0.12, // when skimming the ground at speed
-  ringPunch: 4, // FOV kick when passing a gate (degrees)
+  fovPerSpeed: 0.25, // extra degrees per m/s above 30
+  fovMax: 18,
+  shake: 0.03, // when skimming the ground at speed
+  boostFov: 4,
+  boostDistance: 1.2,
+  pathFollow: 0.6,
+  horizonRecovery: 1.5, // max camera roll correction in rad/s away from vertical
+  ringPunch: 3, // FOV kick when passing a gate (degrees)
+  // After a crash the camera arcs up over the pilot and looks down on the fall
+  fallDistance: 11, // metres from the pilot once overhead…
+  fallAngle: 70, // …at this many degrees above the horizon
+  fallSwing: 3.2, // how fast it arcs up
+  fallTrack: 7, // how tightly it keeps up with the falling body
 };
 
 /** Generator-v2 land: level of detail and the terrain shader. Looks only; collisions never change */
@@ -108,9 +117,18 @@ export const RUN = {
   toasts: true, // pop-ups for points and run events
 };
 
-const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, WATER, RUN } as const;
+/** Music and sound levels */
+export const AUDIO = {
+  music: 0.45, // volume of the background music
+  sfx: 1, // volume of the wingbeat samples
+  crossfade: 3, // seconds to blend into the next biome's track
+  nightDim: 0.25, // how much quieter the music gets at night
+  nightMuffle: 0.55, // how much the highs are rolled off at night
+};
+
+const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, WATER, RUN, AUDIO } as const;
 const DEFAULTS = JSON.parse(JSON.stringify(GROUPS)) as typeof GROUPS;
-const STORAGE_KEY = "wingrace.tuning";
+const STORAGE_KEY = "wingrace.tuning.speed-control-v1";
 
 type Group = Record<string, number | boolean>;
 
@@ -150,12 +168,17 @@ export function resetTuning() {
 
 /** Slider ranges for the ?tune panel; anything missing gets a range from its default */
 export const RANGES: Record<string, [number, number, number?]> = {
+  boostSweep: [0, 0.6],
+  brakeSweep: [0, 1.2],
+  boostTrailGlow: [0, 2],
+  brakeWisps: [0, 60],
+  boostFov: [0, 8],
+  boostDistance: [0, 3],
+  pathFollow: [0, 0.8],
+  horizonRecovery: [0.1, 3],
   bankLead: [0, 1.5],
   bankSpring: [2, 40],
   bankDamping: [0.1, 1],
-  barrelTime: [0.3, 1.5],
-  barrelRadius: [0, 3],
-  barrelCooldown: [0.2, 3],
   flapRate: [0, 4],
   flapBoost: [0, 6],
   flapAngle: [0, 1.2],
@@ -201,6 +224,10 @@ export const RANGES: Record<string, [number, number, number?]> = {
   fovMax: [0, 50],
   shake: [0, 0.5],
   ringPunch: [0, 15],
+  fallDistance: [5, 30],
+  fallAngle: [20, 85],
+  fallSwing: [0.5, 10],
+  fallTrack: [1, 20],
   lodNear: [120, 600, 10],
   lodFar: [300, 1400, 10],
   viewDistance: [600, 2500, 10],
@@ -216,6 +243,11 @@ export const RANGES: Record<string, [number, number, number?]> = {
   tunnelFade: [0.3, 4],
   compass: [0.5, 2],
   grassDistance: [40, 300, 5],
+  music: [0, 1],
+  sfx: [0, 2],
+  crossfade: [0.5, 10],
+  nightDim: [0, 0.6],
+  nightMuffle: [0, 1],
 };
 
 export const TUNING_GROUPS: [string, Group][] = [
@@ -227,4 +259,5 @@ export const TUNING_GROUPS: [string, Group][] = [
   ["Plants", FLORA],
   ["Water", WATER],
   ["Run", RUN],
+  ["Audio", AUDIO],
 ];

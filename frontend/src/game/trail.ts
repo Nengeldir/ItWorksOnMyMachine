@@ -62,6 +62,8 @@ export class Trail {
   private readonly positions: Float32Array;
   private readonly width: number;
   private readonly spacing: number;
+  private readonly anchor = new THREE.Vector3();
+  glowScale = 1;
 
   constructor(color: string, options: TrailOptions = {}) {
     this.width = options.width ?? 0.14;
@@ -121,14 +123,15 @@ export class Trail {
   }
 
   /** Adds the wingtip's current position; `side` is the direction the ribbon spans */
-  push(point: THREE.Vector3, side: THREE.Vector3) {
+  push(point: THREE.Vector3, side: THREE.Vector3, lengthScale = 1) {
     const last = this.points[0];
-    const step = MIN_STEP * this.spacing * FX.trailLength;
-    if (last && last.distanceToSquared(point) < step * step) {
+    const step = MIN_STEP * this.spacing * FX.trailLength * lengthScale;
+    if (last && this.anchor.distanceToSquared(point) < step * step) {
       // Keep the newest end glued to the wingtip
       last.copy(point);
       this.sides[0].copy(side);
     } else {
+      this.anchor.copy(point);
       // Reuse the dropped vector instead of allocating
       const recycled = this.points.length >= LENGTH ? this.points.pop()! : new THREE.Vector3();
       const recycledSide = this.sides.length >= LENGTH ? this.sides.pop()! : new THREE.Vector3();
@@ -161,7 +164,7 @@ export class Trail {
 
   set opacity(value: number) {
     this.mesh.material.uniforms.opacity.value = value;
-    this.mesh.material.uniforms.glow.value = FX.trailGlow * FX_LIGHT.boost.value;
+    this.mesh.material.uniforms.glow.value = FX.trailGlow * FX_LIGHT.boost.value * this.glowScale;
     this.mesh.visible = value > 0.01 && FX.trailGlow > 0 && this.points.length > 1;
   }
 

@@ -9,6 +9,7 @@ from urllib.parse import unquote
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
+from fastapi.responses import JSONResponse
 from fastapi.concurrency import run_in_threadpool
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
@@ -51,6 +52,16 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan, docs_url="/api/docs", openapi_url="/api/openapi.json")
+
+
+@app.middleware("http")
+async def require_flight_rules(request: Request, call_next):
+    path = request.url.path
+    gameplay = path.startswith("/api/rooms/") or path.startswith("/api/runs/")
+    if request.method == "POST" and gameplay and not path.endswith("/leave"):
+        if request.headers.get("X-Flight-Rules") != "speed-control-v3":
+            return JSONResponse(status_code=409, content={"detail": "Flight controls have changed. Reload the game to continue."})
+    return await call_next(request)
 
 
 def clean_name(name: str) -> str:
@@ -151,7 +162,7 @@ async def room_stream(found: Annotated[tuple[Room, Player], Depends(stream_playe
 @app.post("/api/rooms/{code}/state", status_code=status.HTTP_204_NO_CONTENT)
 async def post_state(code: str, body: StateRequest):
     room, player = room_player(code, body.token)
-    room.update_state(player, body.t, body.p, body.q, body.v, body.cp)
+    room.update_state(player, body.t, body.p, body.q, body.v, body.cp, boost=body.boost, brake=body.brake, dodge=body.dodge)
 
 
 @app.post("/api/rooms/{code}/start", status_code=status.HTTP_204_NO_CONTENT)

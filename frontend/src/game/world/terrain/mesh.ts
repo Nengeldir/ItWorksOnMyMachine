@@ -2,6 +2,7 @@ import { Color } from "three";
 import { clamp, smoothstep } from "../../math";
 import { hash3 } from "../../rng";
 import type { Surface } from "../biomes/types";
+import { SurfaceCutter, snapToSurface } from "../snap";
 import type { World } from "../World";
 
 // Surface nets for generator-v2 land, at any level of detail. A node of LOD n
@@ -109,6 +110,7 @@ export function meshNode(world: World, lod: number, ix: number, iy: number, iz: 
 
   // One vertex per crossed cell, at the average of where its edges cross the surface
   const vertices = new Float32Array(C * C * C * 3);
+  const used: number[] = [];
   const values = new Float32Array(8);
   for (let k = 0; k < C; k++) {
     for (let j = 0; j < C; j++) {
@@ -140,9 +142,15 @@ export function meshNode(world: World, lod: number, ix: number, iy: number, iz: 
         vertices[v] = ox + (i + sx / count) * S;
         vertices[v + 1] = oy + (j + sy / count) * S;
         vertices[v + 2] = oz + (k + sz / count) * S;
+        used.push(v);
       }
     }
   }
+  // Full detail (the land you can touch): vertices onto the surface collisions use
+  // and faces cut where they still stray from it (ridges, lips, creases)
+  const distance = (x: number, y: number, z: number) => field.distance(x, y, z);
+  if (lod === 0) snapToSurface(vertices, used, distance, S);
+  const cutter = lod === 0 ? new SurfaceCutter(distance) : null;
 
   const positions: number[] = [];
   const rockOut: number[] = [];
@@ -160,6 +168,21 @@ export function meshNode(world: World, lod: number, ix: number, iy: number, iz: 
   const cover = new Color();
   const cell = (i: number, j: number, k: number) => (i + C * (j + C * k)) * 3;
   const byte = (x: number) => Math.round(clamp(x, 0, 1) * 255);
+  // The paint of the face being written (every piece of a cut face gets the same)
+  const rgba = [0, 0, 0, 0, 0, 0, 0, 0];
+  let snowHeight = 0;
+  const corner = (x: number, y: number, z: number) => {
+    positions.push(x, y, z);
+    rockOut.push(rgba[0], rgba[1], rgba[2], rgba[3]);
+    coverOut.push(rgba[4], rgba[5], rgba[6], rgba[7]);
+    snowOut.push(snowHeight);
+  };
+  const emit = (ax: number, ay: number, az: number, bx: number, by: number, bz: number, cx: number, cy: number, cz: number) => {
+    corner(ax, ay, az);
+    corner(bx, by, bz);
+    corner(cx, cy, cz);
+  };
+  if (cutter) cutter.emit = emit;
 
   const triangle = (a: number, b: number, c: number) => {
     const ax = vertices[a];
@@ -216,21 +239,23 @@ export function meshNode(world: World, lod: number, ix: number, iy: number, iz: 
     let glow = 0;
     if (s.glow) glow = smoothstep(1 - s.glow, 1, 0.5 + 0.5 * noise(mx * 0.11, mz * 0.11 + my * 0.07)) * (0.6 + 0.4 * jitter);
 
-    const snow = s.snow ? above + (jitter - 0.5) * 24 : -1e4;
-    const r0 = byte(rock.r);
-    const r1 = byte(rock.g);
-    const r2 = byte(rock.b);
-    const r3 = byte(glow);
-    const c0 = byte(cover.r);
-    const c1 = byte(cover.g);
-    const c2 = byte(cover.b);
-    const c3 = byte(wet);
-    for (const v of [a, b, c]) {
-      positions.push(vertices[v], vertices[v + 1], vertices[v + 2]);
-      rockOut.push(r0, r1, r2, r3);
-      coverOut.push(c0, c1, c2, c3);
-      snowOut.push(snow);
-    }
+    snowHeight = s.snow ? above + (jitter - 0.5) * 24 : -1e4;
+    rgba[0] = byte(rock.r);
+    rgba[1] = byte(rock.g);
+    rgba[2] = byte(rock.b);
+    rgba[3] = byte(glow);
+    rgba[4] = byte(cover.r);
+    rgba[5] = byte(cover.g);
+    rgba[6] = byte(cover.b);
+    rgba[7] = byte(wet);
+    const bx = vertices[b];
+    const by = vertices[b + 1];
+    const bz = vertices[b + 2];
+    const cx = vertices[c];
+    const cy = vertices[c + 1];
+    const cz = vertices[c + 2];
+    if (cutter) cutter.triangle(ax, ay, az, bx, by, bz, cx, cy, cz);
+    else emit(ax, ay, az, bx, by, bz, cx, cy, cz);
   };
 
   const quad = (a: number, b: number, c: number, d: number) => {

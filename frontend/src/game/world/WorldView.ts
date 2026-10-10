@@ -15,6 +15,7 @@ import { SoftClouds } from "./clouds";
 import { Tree } from "./trees";
 import { sunDirection } from "./palette";
 import type { World } from "./World";
+import { reloadForNewBuild } from "../../staleBuild";
 
 export const VIEW_DISTANCE = 1400;
 const FOG_NEAR = 250;
@@ -201,6 +202,8 @@ export class WorldView {
         if (result.kind === "node") this.land?.receive(result);
         else this.receive(result);
       };
+      // Fires when the worker's script can't be loaded, e.g. it belongs to an older build
+      worker.onerror = (event) => reloadForNewBuild(event.message || "mesher worker failed to load");
       this.workers.push(worker);
       this.busy.push(0);
     }
@@ -362,9 +365,11 @@ export class WorldView {
       trees.forEach((tree, i) => {
         const spin = hash3(Math.floor(tree.x * 10), Math.floor(tree.z * 10), 1);
         rotation.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, spin * Math.PI * 2);
+        // Drawn from the rock up to the collider's top: a tree whose rock was snapped lower reaches down to it
+        const sink = result.treeSink[i] ?? 0;
         mesh.setMatrixAt(
           i,
-          matrix.compose(position.set(tree.x, tree.ground, tree.z), rotation, scale.set(tree.radius, tree.height, tree.radius)),
+          matrix.compose(position.set(tree.x, tree.ground - sink, tree.z), rotation, scale.set(tree.radius, tree.height + sink, tree.radius)),
         );
         const shade = 0.82 + 0.3 * hash3(Math.floor(tree.x * 10), Math.floor(tree.z * 10), 2);
         mesh.setColorAt(i, color.setRGB(shade, shade * (0.97 + 0.06 * spin), shade));
