@@ -73,7 +73,8 @@ const Hud = ({ hud, settings, showStyle = false }: { hud: HudState; settings: Se
       {hud.paused && (
         <div className="hud-pause glass" role="status">
           <strong>Paused</strong>
-          <span>Press <kbd>{bindingLabel(settings.bindings, "pause")}</kbd> to resume</span>
+          <span className="no-touch">Press <kbd>{bindingLabel(settings.bindings, "pause")}</kbd> to resume</span>
+          <span className="touch-only">Tap Resume to fly on</span>
           {racing && <small>The race clock keeps running</small>}
         </div>
       )}

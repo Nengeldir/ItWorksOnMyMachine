@@ -23,6 +23,7 @@ import SettingsPanel from "./SettingsPanel";
 import Hud from "./Hud";
 import Leaderboard from "./Leaderboard";
 import "./GameScreen.css";
+import "./Touch.css";
 
 interface Mountable {
   mount(container: HTMLElement): void;
@@ -409,8 +410,9 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onT
       {hud && (hud.paused || (stage !== "pick" && stage !== "summary" && run?.phase !== "portal" && run?.phase !== "finale" && run?.phase !== "won")) && <Hud hud={hud} settings={settings} showStyle />}
       {run && stage !== "intro" && stage !== "summary" && stage !== "pick" && run.phase !== "finale" && run.phase !== "won" && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
       {run?.phase === "finale" && (
-        <div className="finale-skip">
-          <kbd>Enter</kbd> skip
+        <div className="finale-skip" onClick={() => session.skip()}>
+          <kbd>Enter</kbd> <span className="no-touch">skip</span>
+          <span className="touch-only">Skip</span>
         </div>
       )}
       {coaching && <Coach onEnd={onTutorialEnd} />}

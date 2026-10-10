@@ -66,3 +66,37 @@ test("held controls, repeat handling, focus loss and gamepad disconnect", () => 
     else delete globalThis.navigator;
   }
 });
+
+test("touch stick and buttons, and tilt angles from the direction of gravity", async () => {
+  const { tiltAngles } = await import("../src/game/tilt.ts");
+  const win = new EventTarget(), doc = new EventTarget();
+  doc.body = win; doc.hasFocus = () => true;
+  globalThis.window = win; globalThis.document = doc;
+  const input = new Input({}, {invertPitch:false, mouseSensitivity:1});
+  try {
+    input.touchX = 0.5; input.touchY = -1; input.touchBoost = true;
+    assert.deepEqual(input.sample(0), {pitch:-1, roll:0.5, boost:1, brake:0}, "thumb up dives, like a stick pushed forward");
+    input.settings.invertTouch = true;
+    assert.equal(input.sample(0).pitch, 1);
+    input.reset();
+    assert.deepEqual(input.sample(0), {pitch:0, roll:0, boost:0, brake:0});
+  } finally {
+    input.dispose(); delete globalThis.window; delete globalThis.document;
+  }
+
+  const deg = radians => radians * 180 / Math.PI, out = {roll:0, lean:0};
+  const near = (a, b, what) => assert.ok(Math.abs(a - b) < 1e-6, `${what}: ${a} vs ${b}`);
+  // Portrait, flat on a table, then stood upright
+  tiltAngles(0, 0, 0, out); near(deg(out.lean), 0, "flat"); near(deg(out.roll), 0, "flat roll");
+  tiltAngles(90, 0, 0, out); near(deg(out.lean), 90, "upright");
+  // Landscape (turned anticlockwise, angle 90), leaning back 50° from flat: no roll
+  tiltAngles(0, -50, 90, out); near(deg(out.lean), 50, "landscape lean"); near(deg(out.roll), 0, "landscape roll");
+  // ...then its right edge dipped: beta is the wheel there, and turns right
+  tiltAngles(20, -50, 90, out); assert.ok(out.roll > 0.1, "right edge down turns right");
+  tiltAngles(-20, -50, 90, out); assert.ok(out.roll < -0.1);
+  // The other landscape mirrors both sensor axes; the screen's own angles agree
+  tiltAngles(0, 50, 270, out); near(deg(out.lean), 50, "other landscape lean");
+  tiltAngles(-20, 50, 270, out); assert.ok(out.roll > 0.1, "other landscape, right edge down");
+  // Past upright (gamma flips sign and beta jumps by 180 there): the lean carries on smoothly
+  tiltAngles(180, 80, 90, out); near(deg(out.lean), 100, "past upright");
+});

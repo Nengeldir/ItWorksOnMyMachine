@@ -12,6 +12,7 @@ export default function Controls({settings,onSettings}: {settings:Settings;onSet
     <li>Adventure abilities: {label("flap")} wingbeat · {label("hover")} hover-stall · {label("plunge")} plunge · {label("burst")} Gale Force.</li>
     <li>{label("respawn")} respawn · {label("mute")} mute · {label("pause")} pause.</li>
     <li>Steering banks up to 80°. Escape frees the mouse.</li>
+    <li>Touch screens: drag anywhere to steer, or turn on Tilt and steer by tilting; buttons for the rest.</li>
   </ul><button onClick={()=>setOpen(true)}>Settings</button>
   {open && <SettingsPanel settings={settings} onSettings={onSettings} onClose={()=>setOpen(false)} />}</div>;
 }

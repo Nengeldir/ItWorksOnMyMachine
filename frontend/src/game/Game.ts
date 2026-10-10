@@ -11,6 +11,7 @@ import { Avatar } from "./avatar";
 import { CameraRig } from "./camera";
 import { DISSOLVE_AT, type DeathKind, DeathFall, classifyCrash, fieldNormal } from "./death";
 import { Debris } from "./effects";
+import { TouchControls } from "./touch";
 import { FLIGHT, Flight, type FlightInput, type HitPart, hitboxWorld, touching } from "./flight";
 import { GlideIn } from "./glidein";
 import { Equipment } from "./items/equip";
@@ -269,6 +270,8 @@ export class Game implements RunHost {
   private frame = 0;
   private readonly resizeObserver: ResizeObserver;
   private gui: { destroy(): void } | null = null;
+  /** The on-screen stick and buttons of phones and tablets */
+  private touch: TouchControls | null = null;
 
   constructor(container: HTMLElement, options: GameOptions) {
     this.container = container;
@@ -312,6 +315,7 @@ export class Game implements RunHost {
       };
     }
     if (!this.attract) {
+      this.touch = new TouchControls(container, this.renderer.domElement, this.input);
       this.renderer.domElement.addEventListener("click", this.engage);
       // Audio may only start after a user gesture: take the first one, mouse or keyboard
       window.addEventListener("keydown", this.startAudio, { once: true });
@@ -374,9 +378,10 @@ export class Game implements RunHost {
   // --- public API --------------------------------------------------------------
 
   /** Call from a click: locks the mouse and starts audio (browsers need a gesture for both) */
-  engage = () => {
+  engage = (event?: Event) => {
     if (this.paused) return;
-    if (!this.autopiloting) this.input.lockPointer();
+    // A finger has no pointer to lock
+    if (!this.autopiloting && (event as PointerEvent | undefined)?.pointerType !== "touch") this.input.lockPointer();
     this.audio.start();
   };
 
@@ -786,6 +791,7 @@ export class Game implements RunHost {
     window.removeEventListener("keydown", this.startAudio);
     window.removeEventListener("pointerdown", this.startAudio);
     this.testPlayback?.dispose();
+    this.touch?.dispose();
     this.input.dispose();
     this.audio.dispose();
     this.gui?.destroy();
@@ -1462,6 +1468,7 @@ export class Game implements RunHost {
           ? this.finishMs
           : null;
     const runHud = this.run?.hud() ?? null;
+    let flap = false, hover = false;
     if (runHud) for (const ability of runHud.abilities) {
       const bindings = this.input.settings.bindings;
       if (ability.id === "flap") ability.key = bindingLabel(bindings, "flap");
@@ -1469,7 +1476,10 @@ export class Game implements RunHost {
       else if (ability.id === "plunge") ability.key = bindingLabel(bindings, "plunge");
       else if (ability.id === "galeForce") ability.key = bindingLabel(bindings, "burst");
       else if (ability.id === "windShear") ability.key = `${bindingLabel(bindings, "barrelLeft")} / ${bindingLabel(bindings, "barrelRight")}`;
+      flap ||= ability.id === "flap";
+      hover ||= ability.id === "hoverStall";
     }
+    this.touch?.sync(this.paused, !this.autopiloting && !this.frozen, flap, hover);
     return {
       seed: this.world.seed,
       run: runHud,
