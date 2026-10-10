@@ -239,6 +239,9 @@
   font-weight: 900;
   font-style: italic;
   margin: 0.1em 0;
+  -webkit-text-stroke: 0.65px rgba(255, 238, 192, 0.85);
+  paint-order: stroke fill;
+  text-shadow: 0 0 7px rgba(255, 225, 154, 0.45), 0 2px 12px rgba(0, 0, 0, 0.7);
 }
 
 .run-title p {

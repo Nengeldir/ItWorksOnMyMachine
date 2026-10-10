@@ -61,6 +61,10 @@ docker compose up -d --build
 
 ## How to Play
 
+Adventure waits on an unscored autopilot preview until **Take off** or **Enter**.
+Taking control resets to the first level’s start with a fresh clock; preview
+flight never advances the run. Map-title lettering has a thin warm glowing outline.
+
 | Input                     | Action                                             |
 | :------------------------ | :------------------------------------------------- |
 | Mouse (click the view)    | Pitch and turn; bank is limited to 80°.       |

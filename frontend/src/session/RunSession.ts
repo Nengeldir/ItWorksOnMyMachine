@@ -79,7 +79,7 @@ export class RunSession {
         arrived: (level, biome) => this.store.set({ arrived: { level, biome, at: performance.now() } }),
         ended: (summary) => this.ended(summary),
       });
-      // Hold still on the start line until take-off
+      // An unscored autopilot preview until Take off or Enter
       if (this.store.get().stage === "intro") this.game.holdRun(true);
     } catch (e) {
       console.error(e);

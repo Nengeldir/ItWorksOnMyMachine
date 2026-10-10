@@ -206,9 +206,10 @@ export class Game implements RunHost {
   /** White light over everything (the end of a run's finale) */
   private readonly whiteLight: HTMLDivElement;
   private white = 0;
-  /** After a run: the pilot flies the default map by itself and the player controls nothing */
+  /** Opening preview or victory lap: the pilot flies by itself with flight controls locked. */
   private autopiloting = false;
-  /** Flies the racing line on rails while nobody plays (the chase backdrop, the victory lap) */
+  private introAutopilot = false;
+  /** Flies the racing line on rails while nobody plays (the chase backdrop, opening preview and victory lap) */
   private readonly rails = new Autopilot();
   /** When the white light after the finale began to clear (null: not clearing) */
   private clearWhiteFrom: number | null = null;
@@ -305,7 +306,7 @@ export class Game implements RunHost {
       }
       if (this.paused && action !== "mute") return;
       if (action === "mute") this.audio.toggleMute();
-      // On autopilot after a run, nothing else answers
+      // During an opening preview or victory lap, nothing else answers
       if (this.autopiloting) return;
       if (action === "respawn") this.respawnNow();
       if (action === "barrelLeft" || action === "barrelRight") this.barrelRoll(action === "barrelLeft" ? -1 : 1);
@@ -432,6 +433,7 @@ export class Game implements RunHost {
   startRun(seed: number, events: RunEvents, initial?: Level) {
     this.run?.dispose();
     this.autopiloting = false;
+    this.introAutopilot = false;
     this.clearWhiteFrom = null;
     this.whiteOut(0);
     if (this.paused) this.togglePause();
@@ -448,6 +450,7 @@ export class Game implements RunHost {
   victoryLap(seed: number) {
     this.run?.dispose();
     this.run = null;
+    this.introAutopilot = false;
     this.autopiloting = true;
     if (document.pointerLockElement) document.exitPointerLock();
     this.freeze(false);
@@ -456,12 +459,20 @@ export class Game implements RunHost {
     this.clearWhiteFrom = this.elapsed;
   }
 
-  /** Holds the pilot on the start line until the player takes off */
+  /** An unscored rail preview until Take off; player control always begins at the start. */
   holdRun(hold: boolean) {
     if (this.paused) this.togglePause();
-    this.freeze(hold);
+    this.introAutopilot = hold;
+    this.autopiloting = hold;
+    this.input.reset();
+    if (hold) {
+      this.input.releasePointer();
+      this.view.setRings("free", 0);
+    }
+    this.freeze(false);
     if (!hold) {
       this.respawn(0);
+      this.view.setRings("race", 0);
       this.run?.takeOff();
     }
   }
@@ -1406,7 +1417,7 @@ export class Game implements RunHost {
     // Outside races, the land around you must be on screen before you fly: no flying into
     // invisible rock. Until it is, the pilot glides in on rails, without control (glidein.ts)
     const loading = !this.view.ready && this.raceState === "free" && this.attract !== "drift";
-    // Held still: a run's start line, the tunnel between biomes
+    // Held still inside the tunnel between biomes
     const waiting = this.frozen;
     if (waiting || loading || this.raceState === "countdown") this.flight.releaseControls();
     if (this.crashedAt !== null) {
@@ -1499,7 +1510,7 @@ export class Game implements RunHost {
     const camera = this.rig.camera;
     camera.updateMatrixWorld();
     this.view.update(camera, dt, crashed ? undefined : this.flight.velocity);
-    this.run?.frame(dt);
+    if (!this.introAutopilot) this.run?.frame(dt);
     if (!this.inWormhole) {
       this.gateMotes(dt);
       this.gateGlints(dt);
