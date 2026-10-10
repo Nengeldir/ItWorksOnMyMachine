@@ -75,6 +75,11 @@ export const CAMERA = {
   pathFollow: 0.6,
   horizonRecovery: 1.5, // max camera roll correction in rad/s away from vertical
   ringPunch: 3, // FOV kick when passing a gate (degrees)
+  // After a crash the camera arcs up over the pilot and looks down on the fall
+  fallDistance: 11, // metres from the pilot once overhead…
+  fallAngle: 70, // …at this many degrees above the horizon
+  fallSwing: 3.2, // how fast it arcs up
+  fallTrack: 7, // how tightly it keeps up with the falling body
 };
 
 /** Generator-v2 land: level of detail and the terrain shader. Looks only; collisions never change */
@@ -219,6 +224,10 @@ export const RANGES: Record<string, [number, number, number?]> = {
   fovMax: [0, 50],
   shake: [0, 0.5],
   ringPunch: [0, 15],
+  fallDistance: [5, 30],
+  fallAngle: [20, 85],
+  fallSwing: [0.5, 10],
+  fallTrack: [1, 20],
   lodNear: [120, 600, 10],
   lodFar: [300, 1400, 10],
   viewDistance: [600, 2500, 10],
