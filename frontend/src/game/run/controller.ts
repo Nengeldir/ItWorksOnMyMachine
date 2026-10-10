@@ -620,6 +620,7 @@ export class RunController {
     return {
       seed: this.seed,
       level: this.level,
+      checkpoint: this.checkpoint,
       length: RUN_LENGTH,
       biome: world.biome.name,
       mood: world.palette.name,
