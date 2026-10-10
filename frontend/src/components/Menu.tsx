@@ -1,5 +1,5 @@
 import { IconSettings, IconUser, IconX } from "@tabler/icons-react";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { type LeaderboardEntry, type User, getLeaderboard } from "../api";
 import type { Screen } from "../App";
 import { randomRoomCode } from "../format";
@@ -31,8 +31,8 @@ function untilTomorrow(): string {
 }
 
 const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
-  const [daily] = useState(() => dailySeed());
-  const [course] = useState(() => ({ palette: paletteFor(daily).name, gates: new Course(daily).rings.length }));
+  const [daily, setDaily] = useState(() => dailySeed());
+  const course = useMemo(() => ({ palette: paletteFor(daily).name, gates: new Course(daily).rings.length }), [daily]);
   const [tab, setTab] = useState<"solo" | "friends">(joinCode ? "friends" : "solo");
   const [code, setCode] = useState(joinCode ?? "");
   const [seedText, setSeedText] = useState("");
@@ -48,7 +48,11 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
   }, [daily]);
 
   useEffect(() => {
-    const timer = setInterval(() => setCountdown(untilTomorrow()), 1000);
+    // Past UTC midnight the countdown starts over, and today's course becomes the new one
+    const timer = setInterval(() => {
+      setCountdown(untilTomorrow());
+      setDaily(dailySeed());
+    }, 1000);
     return () => clearInterval(timer);
   }, []);
 
