@@ -21,6 +21,8 @@ export interface ControlSettings {
   pilotStyle?: 1 | 2;
   /** Adventure: hide item and treasure pickups, keep only crystals */
   crystalsOnly?: boolean;
+  /** Lesson mode: its key (the `lesson` binding) covers the screen with a blank document */
+  lessonMode?: boolean;
 }
 
 /** URL test mode only: Shift+P, Shift+O, Shift+S, Shift+I */
@@ -30,7 +32,7 @@ export type TestAction = "portal" | "win" | "speed" | "item";
  * One-off presses. Wingbeat, hover-stall, plunge, Gale Force, Resonance, Ascension and the stances need
  * their adventure upgrades; items (use, next) need something in the bag
  */
-export type InputAction = "pause" | "respawn" | "mute" | "barrelLeft" | "barrelRight" | "flap" | "hover" | "plunge" | "burst" | "resonance" | "ascend" | "stance" | "useItem" | "nextItem";
+export type InputAction = "pause" | "respawn" | "mute" | "barrelLeft" | "barrelRight" | "flap" | "hover" | "plunge" | "burst" | "resonance" | "ascend" | "stance" | "useItem" | "nextItem" | "charm";
 
 export interface InputObserver {
   sample?: (input: FlightInput) => void;
@@ -40,7 +42,7 @@ export interface InputObserver {
 export function controlsBlocked(): boolean {
   return !!document.querySelector?.("dialog[open]");
 }
-const ACTIONS: InputAction[] = ["pause", "respawn", "mute", "barrelLeft", "barrelRight", "flap", "hover", "plunge", "burst", "resonance", "ascend", "stance", "useItem", "nextItem"];
+const ACTIONS: InputAction[] = ["pause", "respawn", "mute", "barrelLeft", "barrelRight", "flap", "hover", "plunge", "burst", "resonance", "ascend", "stance", "useItem", "nextItem", "charm"];
 /** The mouse wheel cycles items at most this often (ms): one notch of a free-spinning wheel is many events */
 const WHEEL_GAP = 160;
 
@@ -252,7 +254,8 @@ export class Input {
 
     let boost = this.touchBoost ? 1 : this.key("boost");
     let brake = this.touchBrake ? 1 : this.key("brake");
-    let use = Math.max(this.key("useItem"), this.mouseUse ? 1 : 0);
+    // Held: the use key, the right mouse button, or the charm key (a held charm relic, e.g. the Dragon Tear)
+    let use = Math.max(this.key("useItem"), this.key("charm"), this.mouseUse ? 1 : 0);
     const pad = navigator.getGamepads?.().find((p) => p?.connected);
     if (pad) {
       roll += deadZone(pad.axes[0] ?? 0, this.settings.deadZone);
@@ -264,7 +267,7 @@ export class Input {
       if (pressed[5] && !this.padButtons[5]) this.dispatchAction("barrelRight");
       // In adventure: A flaps, B hover-stalls, X plunges, the right stick's click is Gale Force,
       // the left stick's click sings (Resonance), d-pad up ascends, d-pad down changes stance,
-      // d-pad right uses the item and d-pad left picks the next one.
+      // d-pad right uses the item and d-pad left picks the next one, Back / Select the charm.
       // Triggers control speed in every mode.
       if (pressed[0] && !this.padButtons[0]) this.dispatchAction("flap");
       if (pressed[1] && !this.padButtons[1]) this.dispatchAction("hover");
@@ -275,6 +278,8 @@ export class Input {
       if (pressed[13] && !this.padButtons[13]) this.dispatchAction("stance");
       if (pressed[15] && !this.padButtons[15]) this.dispatchAction("useItem");
       if (pressed[14] && !this.padButtons[14]) this.dispatchAction("nextItem");
+      // Back / Select: the charm (the keepsake carried on adventures)
+      if (pressed[8] && !this.padButtons[8]) this.dispatchAction("charm");
       if (pressed[15]) use = 1;
       boost = Math.max(boost, deadZone(pad.buttons[7]?.value ?? 0));
       brake = Math.max(brake, deadZone(pad.buttons[6]?.value ?? 0));

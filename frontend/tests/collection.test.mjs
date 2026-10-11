@@ -92,7 +92,7 @@ test("only manifest-bearing adventures collect; crashes keep claims and portal p
   const world=new World(runLevel(7,1,"verdant")), rewards=Array.from({length:6},(_,i)=>reward("uncommon",i));
   const host={scene:new Scene(),flight:new Flight(),prevPosition:new Vector3(),camera:new PerspectiveCamera(),world,
     view:{setRings:()=>{}},style:0,particles:{budget:1,emit:()=>{}},setLevel:()=>{},
-    freeze:()=>{},veil:()=>{},insideWormhole:()=>{},whiteOut:()=>{},stinger:()=>{},portalHum:()=>{},pixelHeight:720};
+    freeze:()=>{},veil:()=>{},insideWormhole:()=>{},whiteOut:()=>{},stinger:()=>{},portalHum:()=>{},treasure:()=>{},pixelHeight:720};
   const unsaved=new RunController(7,host,{}); unsaved.start(world.level);
   assert.equal(unsaved.collection,null,"the test/explore controller has no persistent pickups"); unsaved.dispose();
   const found=[];

@@ -2,6 +2,7 @@ import { makeRng } from "../rng";
 import { type BiomeId, MAPS, seedMap } from "../world/biomes/index";
 import type { ItemsHud } from "./items";
 import type { UpgradeId } from "./upgrades";
+import type { BindingAction } from "../bindings";
 
 // The shape of a roguelike run: which biome comes when, and how it scores.
 // A run is RUN_LENGTH levels, each on a different map: it starts on the map
@@ -72,7 +73,10 @@ export interface RunHud {
   upgrades: UpgradeId[];
   /** The bag of items, and the effects under way */
   items: ItemsHud;
-  toast: { text: string; points: number; id: number } | null;
+  /** The keepsake carried as the charm, if any */
+  charm: { id: string; name: string; state: "ready" | "used" | "burning" | "strapping" | "passive"; left: number } | null;
+  /** A pop-up: `action` names the key it reminds you of, `rarity` colors it (an item picked up) */
+  toast: { text: string; points: number; id: number; action?: BindingAction; rarity?: number } | null;
 }
 
 /** A finished run */

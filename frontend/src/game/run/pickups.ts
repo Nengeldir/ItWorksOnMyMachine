@@ -10,14 +10,20 @@ export const PICKUP = {
   spacing: 125,
   radius: 3.2,
   clearance: 5,
+  // Rarer items float further above the land (each step about 1.6 times the last)
   commonHeight: 8,
   uncommonHeight: 13,
-  rareHeight: 20,
-  legendaryHeight: 29,
+  rareHeight: 21,
+  legendaryHeight: 34,
   attempts: 32,
 };
 export const pickupHeight = (rarity: number) => [PICKUP.commonHeight, PICKUP.uncommonHeight, PICKUP.rareHeight, PICKUP.legendaryHeight][rarity];
-const WEIGHT = [6, 3, 1.2, 0.35];
+/**
+ * Each rarity is three times harder to find than the one before (67.5 / 22.5 / 7.5 / 2.5 % of
+ * pickups, like the treasures on the server). The weight of one item is its rarity's share split
+ * among the items of that rarity a pilot can find
+ */
+const RARITY_ODDS = [27, 9, 3, 1];
 /** Where a pickup needs air: itself, wing room to both sides, above and below, and the way in and out */
 export const APPROACH = [[0,0,0],[-4,0,0],[4,0,0],[0,-2,0],[0,2,0],[0,0,-9],[0,0,9]];
 export interface Pickup {
@@ -40,12 +46,15 @@ export function pickupClear(world: ItemWorld, position: Vector3): boolean {
 
 export function placePickups(world: ItemWorld, catalog: readonly RunItemInfo[]): Pickup[] {
   if (!world.rock) return [];
+  if (!catalog.length) return [];
   const rng = makeRng(world.seed, "adventure island pickups");
   const result: Pickup[] = [];
-  const total = catalog.reduce((sum, item) => sum + WEIGHT[item.rarity], 0);
+  const perRarity = [0, 1, 2, 3].map((rarity) => catalog.filter((item) => item.rarity === rarity).length);
+  const weight = (item: RunItemInfo) => RARITY_ODDS[item.rarity] / perRarity[item.rarity];
+  const total = catalog.reduce((sum, item) => sum + weight(item), 0);
   for (let section = world.course.start.z + 110; section < world.course.endZ - 80; section += Math.max(20,PICKUP.spacing)) {
     let roll = rng() * total;
-    const item = catalog.find(item => (roll -= WEIGHT[item.rarity]) < 0) ?? catalog[0];
+    const item = catalog.find(item => (roll -= weight(item)) < 0) ?? catalog[0];
     for (let attempt = 0; attempt < PICKUP.attempts; attempt++) {
       const z = section + range(rng, -30, 30);
       const line = world.course.pointAt(z);

@@ -5,6 +5,8 @@
 import type { AbilitySound2 } from "./abilities/fx2";
 import type { ItemSound } from "./items/fx";
 import { MusicPlayer } from "./music";
+import type { Voice } from "./collection/abilities";
+import { Synth, chime, voice } from "./collection/sounds";
 import { AUDIO } from "./tuning";
 import type { BiomeId } from "./world/biomes/types";
 
@@ -27,6 +29,8 @@ export class GameAudio {
   private paused = false;
   private boosting = false;
   private hum: { gain: GainNode; oscillators: OscillatorNode[] } | null = null;
+  /** The collection's signature sounds (pets' calls, rare cosmetics, keepsakes), through the effects mixer */
+  private synth: Synth | null = null;
 
   get isMuted(): boolean {
     return this.muted;
@@ -55,6 +59,8 @@ export class GameAudio {
       last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02;
       data[i] = last * 3.5;
     }
+
+    this.synth = new Synth(ctx, this.effects, this.noise);
 
     // Wind: louder and brighter with speed
     this.windFilter = ctx.createBiquadFilter();
@@ -210,8 +216,13 @@ export class GameAudio {
   }
 
   /** Short musical cues for the roguelike run */
-  stinger(kind: "portal" | "upgrade" | "quest" | "item" | "dash") {
-    if (kind === "item") {
+  stinger(kind: "portal" | "upgrade" | "quest" | "item" | "dash" | "orb") {
+    if (kind === "orb") {
+      // A warm, round gulp of light: a soft swell and a rising pair of notes
+      this.glide(260, 520, 0.25, "sine", 0.12);
+      this.tone(784, 0.3, "sine", 0.06, 0.08);
+      this.tone(1175, 0.35, "triangle", 0.04, 0.14);
+    } else if (kind === "item") {
       this.tone(1175, 0.18, "triangle", 0.16);
       this.tone(1568, 0.22, "triangle", 0.12, 0.05);
     } else if (kind === "quest") {
@@ -438,7 +449,35 @@ export class GameAudio {
         this.whoosh(6000, 1500, 0.5, 0.5, "highpass");
         [2637, 2093, 1760, 1319].forEach((f, i) => this.tone(f, 0.35, "triangle", 0.06, i * 0.035));
         break;
+      case "fuse":
+        // The giant firework is pulled out and its fuse hisses while it's strapped on
+        if (this.synth) voice(this.synth, "fuse");
+        break;
+      case "ignite":
+        // It catches: a roaring whoosh and a low thump
+        this.whoosh(150, 1800, 1.1, 0.7, "lowpass");
+        this.glide(120, 60, 0.6, "sine", 0.35);
+        this.synth?.crackle(12, 0.8, 0.05);
+        break;
+      case "douse":
+        // Taken off: the flame gutters out
+        this.whoosh(1600, 200, 0.6, 0.35, "lowpass");
+        this.tone(330, 0.3, "sine", 0.05, 0.1);
+        break;
+      case "eat":
+        if (this.synth) voice(this.synth, "crunch");
+        break;
     }
+  }
+
+  /** A collectible's signature: a pet's call, a cape's shimmer, a keepsake's motif (`level` scales it) */
+  voice(v: Voice, level = 1) {
+    if (this.synth && !this.paused) voice(this.synth, v, level);
+  }
+
+  /** A persistent treasure or crystal collected: brighter and longer the rarer it is (0..3) */
+  treasure(rarity: number) {
+    if (this.synth) chime(this.synth, `treasure${Math.max(0, Math.min(3, rarity))}` as "treasure0");
   }
 
   /** A humming drone that swells as you near a portal (`near` 0..1, 0 = silent) */
@@ -486,6 +525,7 @@ export class GameAudio {
   dispose() {
     void this.ctx?.close();
     this.ctx = null;
+    this.synth = null;
     this.hum = null;
     this.music = null;
   }
