@@ -4,7 +4,7 @@ import { type LeaderboardEntry, type User, getLeaderboard } from "../api";
 import type { Screen } from "../App";
 import { randomRoomCode, untilTomorrow } from "../format";
 import { dailyRunSeed, dailySeed, randomSeed } from "../game/rng";
-import { MAPS, seedLevel, zenSeed } from "../game/world/biomes";
+import { MAPS, seedLevel } from "../game/world/biomes";
 import { Course } from "../game/world/course";
 import { bestRun } from "../session/RunSession";
 import { type Settings, clientId } from "../storage";
@@ -40,12 +40,11 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
     const { biome, palette } = seedLevel(dailyRun);
     return { map: biome.name, mood: palette.name };
   }, [dailyRun]);
-  // Zen: today's course's map for ever (or the next seed's, if that's Sky Isles)
-  const zenDaily = useMemo(() => zenSeed(daily), [daily]);
+  // Zen: today's course's map, as an open world
   const zen = useMemo(() => {
-    const { biome, palette } = seedLevel(zenDaily);
+    const { biome, palette } = seedLevel(daily);
     return { map: biome.name, mood: palette.name };
-  }, [zenDaily]);
+  }, [daily]);
   const [tab, setTab] = useState<"solo" | "friends" | "adventure" | "zen">(joinCode ? "friends" : "solo");
   const [code, setCode] = useState(joinCode ?? "");
   const [board, setBoard] = useState<LeaderboardEntry[]>([]);
@@ -93,11 +92,11 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
       if (e.key !== "Enter" || e.target !== document.body || picking) return;
       if (tab === "solo") go({ kind: "solo", seed: daily });
       else if (tab === "adventure") go({ kind: "run", seed: dailyRun });
-      else if (tab === "zen") go({ kind: "zen", seed: zenDaily });
+      else if (tab === "zen") go({ kind: "zen", seed: daily });
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [daily, dailyRun, zenDaily, tab, picking, go]);
+  }, [daily, dailyRun, tab, picking, go]);
 
   const joinRoom = (e: FormEvent) => {
     e.preventDefault();
@@ -197,21 +196,21 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
               <>
                 <div className="menu-course">
                   <div>
-                    <small>Today's Zen · #{zenDaily}</small>
+                    <small>Today's Zen · #{daily}</small>
                     <b>{zen.map}</b>
                   </div>
                   <span>{zen.mood}</span>
                   <span>Endless</span>
                   <span>No clock</span>
                 </div>
-                <button className="primary" onClick={() => go({ kind: "zen", seed: zenDaily })}>
+                <button className="primary" onClick={() => go({ kind: "zen", seed: daily })}>
                   Start flying <kbd>Enter</kbd>
                 </button>
                 <div className="menu-more">
                   <button className="menu-link" onClick={() => setPicking("zen")}>
                     <IconMap size={18} /> Choose a map
                   </button>
-                  <button className="menu-link" onClick={() => go({ kind: "zen", seed: zenSeed(randomSeed()) })}>
+                  <button className="menu-link" onClick={() => go({ kind: "zen", seed: randomSeed() })}>
                     <IconDice5 size={18} /> Random map
                   </button>
                 </div>

@@ -250,6 +250,8 @@ export interface Biome {
   readonly sky: SkySpec;
   readonly particles: ParticleStyle;
   readonly portals: PortalSpec;
+  /** The terrain and vegetation in a mood's colors (`makeLevel` applies it), for maps whose moods recolor the land */
+  readonly recolor?: (palette: Palette) => Pick<Biome, "terrain" | "vegetation">;
 }
 
 /** Everything that decides a level, small enough to post to the mesher workers */

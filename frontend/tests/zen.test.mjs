@@ -4,7 +4,7 @@ import { World } from '../src/game/world/World.ts';
 import { makeLevel } from '../src/game/world/biomes/index.ts';
 import { CELL } from '../src/game/world/open.ts';
 import { meshNode, NODE_SIZE } from '../src/game/world/terrain/mesh.ts';
-import { seedMap, zenLevel, zenSeed } from '../src/game/world/biomes/index.ts';
+import { seedMap, zenLevel } from '../src/game/world/biomes/index.ts';
 import { screenFromSearch, urlFor } from '../src/route.ts';
 
 // Zen's open world: no line, land every way, made a cell at a time. Every thread (the main one
@@ -159,13 +159,15 @@ test('the streamer plants land around you every way, digs it up behind, and load
   land.dispose();
 });
 
-test('Zen has a URL and a map for every seed, never Sky Isles', () => {
+test('Zen has a URL and flies the map a seed stands for, Sky Isles too', () => {
   assert.deepEqual(screenFromSearch('?zen=5', true), { kind: 'zen', seed: 5 });
   assert.equal(urlFor({ kind: 'zen', seed: 5 }), '/?zen=5');
-  // 16 is Sky Isles' showcase seed: its Zen is the next seed's map
+  // 16 is Sky Isles' showcase seed: an open world like any other map
   assert.equal(seedMap(16).biome, 'skyIsles');
-  assert.ok(zenSeed(16) > 16 && seedMap(zenSeed(16)).biome !== 'skyIsles');
-  assert.equal(zenSeed(5), 5);
+  const sky = new World(zenLevel(16));
+  assert.equal(sky.open, true);
+  sky.ensure(5_000, 5_000, 5_000, 5_000);
+  assert.ok(sky.land.columnRange(4_000, 4_000, 6_000, 6_000), 'islands far off the start');
   const level = zenLevel(5);
   assert.equal(level.key.open, true);
   assert.equal(level.biome.id, 'verdant');

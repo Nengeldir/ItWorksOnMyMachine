@@ -44,30 +44,10 @@ export function seedLevel(seed: number): Level {
   return makeLevel({ biome, seed, mood, runSeed: 0, index: 0 });
 }
 
-/** The maps Zen can fly: all but Sky Isles, whose frozen generator has no open world */
-export const ZEN_MAPS: BiomeId[] = MAPS.filter((biome) => biome !== "skyIsles");
-
-/** Zen's seed for a seed: itself, or the next one whose map isn't Sky Isles (so every seed has a Zen map) */
-export function zenSeed(seed: number): number {
-  let zen = seed;
-  while (seedMap(zen).biome === "skyIsles") zen++;
-  return zen;
-}
-
-/** Zen: the map `zenSeed(seed)` stands for, as an open world going on every way */
+/** Zen: the map the seed stands for, as an open world going on every way */
 export function zenLevel(seed: number): Level {
-  const zen = zenSeed(seed);
-  const { biome, mood } = seedMap(zen);
-  return makeLevel({ biome, seed: zen, mood, runSeed: 0, index: 0, open: true });
-}
-
-/**
- * Sky Isles on a seed, with the mood that seed picks: the old race map, whose generator stays frozen
- * (`__raceHashes()` checks it on seeds 1, 7 and 42)
- */
-export function skyIslesLevel(seed: number): Level {
-  const mood = Math.floor(makeRng(seed, "palette")() * SKY_ISLES.moods.length);
-  return makeLevel({ biome: "skyIsles", seed, mood, runSeed: 0, index: 0 });
+  const { biome, mood } = seedMap(seed);
+  return makeLevel({ biome, seed, mood, runSeed: 0, index: 0, open: true });
 }
 
 const SEED_SEARCH = 10_000; // a seed for a given biome turns up in about as many tries as there are maps
@@ -96,12 +76,14 @@ export function featuredSeed(biome: BiomeId): number {
 
 /** Rebuilds a level from its key (the mesher workers get keys, not levels) */
 export function makeLevel(key: LevelKey): Level {
-  const biome = BIOMES[key.biome];
+  const base = BIOMES[key.biome];
+  const palette = base.moods[key.mood % base.moods.length];
+  const biome = base.recolor ? { ...base, ...base.recolor(palette) } : base;
   return {
     key,
     biome,
     seed: key.seed,
-    palette: biome.moods[key.mood % biome.moods.length],
+    palette,
     run: key.runSeed ? { seed: key.runSeed, index: key.index } : null,
   };
 }

@@ -8,7 +8,7 @@ export type Screen =
   | { kind: "explore"; biome: BiomeId; seed: number }
   | { kind: "test"; biome: BiomeId; seed: number }
   | { kind: "run"; seed: number }
-  // Endless free flight in one map (any but Sky Isles: see `zenSeed`)
+  // Endless free flight in one map (an open world)
   | { kind: "zen"; seed: number }
   | { kind: "gallery" };
 

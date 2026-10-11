@@ -5,9 +5,6 @@ import { RUN_ITEMS, type RunItemId } from "./run/items";
 import { pickupClear } from "./run/pickups";
 import { plainMods } from "./flight";
 import { fxTime } from "./particles";
-import { skyIslesLevel } from "./world/biomes/index";
-import { meshChunk, rockChunks } from "./world/mesher";
-import { World } from "./world/World";
 
 // Development helpers on `window` (dev builds only), for looking at the game
 // from the console or from browser automation. Automated or background tabs
@@ -308,53 +305,6 @@ export function installDevtools(itemPreview: string | null = null) {
     return { phase: r.phase, crossed: crossed !== null };
   };
 
-  Object.assign(window, { __itemShot: itemShot, __shot: shot, __raceHashes: raceHashes, __run: run, __bench: bench, __crash: crash, __portal: portal });
+  Object.assign(window, { __itemShot: itemShot, __shot: shot, __run: run, __bench: bench, __crash: crash, __portal: portal });
 }
 
-/**
- * Hashes the race map (Sky Isles) of seeds 1, 7 and 42: rock meshes and colors
- * (mesh), tree colliders (trees), 4000 collision distances (dist) and the rings.
- * trees, dist and rings must never change, or recorded ghosts stop matching
- * their maps; mesh may change when the looks do. Expected values are in
- * docs/dev-snippets.js.
- */
-export function raceHashes() {
-  const fnv = (h: number, array: Float32Array) => {
-    const u = new Uint32Array(array.buffer, array.byteOffset, array.length);
-    for (let i = 0; i < u.length; i++) {
-      h ^= u[i];
-      h = Math.imul(h, 16777619) >>> 0;
-    }
-    return h;
-  };
-  const out: Record<number, Record<string, string>> = {};
-  for (const seed of [1, 7, 42]) {
-    const w = new World(skyIslesLevel(seed));
-    const chunks = rockChunks(w).sort((a, b) => a.key - b.key);
-    let mesh = 2166136261;
-    let trees = 2166136261;
-    const step = Math.max(1, Math.floor(chunks.length / 120));
-    for (let i = 0; i < chunks.length; i += step) {
-      const c = chunks[i];
-      const m = meshChunk(w, c.ix, c.iy, c.iz);
-      mesh = fnv(mesh, m.positions);
-      mesh = fnv(mesh, m.colors);
-      mesh = fnv(mesh, m.trees);
-      trees = fnv(trees, m.trees);
-    }
-    const d = new Float32Array(4000);
-    for (let i = 0; i < 4000; i++) {
-      const p = w.course.pointAt((i * 0.61) % 2300);
-      d[i] = w.distance(p.x + ((i * 37) % 200) - 100, p.y + ((i * 13) % 120) - 60, p.z);
-    }
-    const rings = new Float32Array(w.course.rings.flatMap((r) => [r.position.x, r.position.y, r.position.z, r.normal.x, r.normal.y, r.normal.z, r.radius]));
-    out[seed] = {
-      mesh: mesh.toString(16),
-      trees: trees.toString(16),
-      dist: fnv(2166136261, d).toString(16),
-      rings: fnv(2166136261, rings).toString(16),
-      palette: w.palette.name,
-    };
-  }
-  return out;
-}

@@ -3,7 +3,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { type LeaderboardEntry, getLeaderboard } from "../api";
 import { formatTime } from "../format";
 import { randomSeed } from "../game/rng";
-import { type BiomeId, MAPS, ZEN_MAPS, featuredSeed, seedLevel, zenSeed } from "../game/world/biomes";
+import { type BiomeId, MAPS, featuredSeed, seedLevel } from "../game/world/biomes";
 import { keyboardBinding } from "../game/bindings";
 import { Course } from "../game/world/course";
 import { bestRun } from "../session/RunSession";
@@ -16,7 +16,7 @@ const MAX_SEED = 2 ** 31;
 /**
  * What the map select is for. Every mode shows the same cards (today's, one per map, a random one) and
  * picking one plays exactly that map: a time trial on it, a run that starts on it, a room that races it,
- * endless free flight in it (Zen, which has every map but Sky Isles: its seeds are `zenSeed`s).
+ * endless free flight in it (Zen).
  */
 export type MapSelectMode = "solo" | "run" | "room" | "zen";
 
@@ -31,10 +31,10 @@ type Card = { kind: "daily"; seed: number } | { kind: "featured"; seed: number }
 
 let featured: number[] | null = null;
 
-/** One course for each map: the lowest seed that stands for it (Zen: every map but Sky Isles) */
-function featuredSeeds(mode: MapSelectMode): number[] {
+/** One course for each map: the lowest seed that stands for it */
+function featuredSeeds(): number[] {
   featured ??= MAPS.map(featuredSeed);
-  return mode === "zen" ? featured.filter((_, i) => ZEN_MAPS.includes(MAPS[i])) : featured;
+  return featured;
 }
 
 interface CourseInfo {
@@ -101,23 +101,21 @@ interface MapSelectProps {
 const MapSelect = ({ mode, daily, countdown, art = {}, onPreview, live, onPick, action, onBack }: MapSelectProps) => {
   const words = WORDS[mode];
   const zen = mode === "zen";
-  // Zen has no Sky Isles: any seed becomes its Zen seed
-  const own = (seed: number) => (zen ? zenSeed(seed) : seed);
   const [rolled, setRolled] = useState<number | null>(null);
   const [seedText, setSeedText] = useState("");
   const cards = useMemo<Card[]>(
     () => [
-      { kind: "daily", seed: zen ? zenSeed(daily) : daily },
-      ...featuredSeeds(mode).map((seed): Card => ({ kind: "featured", seed })),
+      { kind: "daily", seed: daily },
+      ...featuredSeeds().map((seed): Card => ({ kind: "featured", seed })),
       { kind: "random", seed: rolled },
     ],
-    [daily, rolled, mode, zen],
+    [daily, rolled],
   );
   const [index, setIndex] = useState(0);
   const [boards, setBoards] = useState<Record<number, LeaderboardEntry[]>>({});
   const card = cards[index];
   const step = (by: number) => setIndex((i) => (i + by + cards.length) % cards.length);
-  const pick = () => onPick(card.seed ?? own(randomSeed()));
+  const pick = () => onPick(card.seed ?? randomSeed());
 
   useEffect(() => {
     const seed = card.seed;
@@ -152,7 +150,7 @@ const MapSelect = ({ mode, daily, countdown, art = {}, onPreview, live, onPick, 
   });
 
   const roll = () => {
-    const seed = own(randomSeed());
+    const seed = randomSeed();
     setRolled(seed);
     setSeedText(String(seed));
   };
@@ -161,7 +159,7 @@ const MapSelect = ({ mode, daily, countdown, art = {}, onPreview, live, onPick, 
     const digits = text.replace(/\D/g, "");
     setSeedText(digits);
     const seed = Number(digits);
-    if (digits && seed >= 1 && seed < MAX_SEED) setRolled(own(seed));
+    if (digits && seed >= 1 && seed < MAX_SEED) setRolled(seed);
   };
 
   const pickTyped = (e: FormEvent) => {
@@ -224,7 +222,7 @@ const MapSelect = ({ mode, daily, countdown, art = {}, onPreview, live, onPick, 
               </form>
             )}
             {card.seed !== null &&
-              (mode === "run" ? <RunBest seed={card.seed} /> : zen ? <p className="course-empty">No clock, no score: the valley goes on for ever.</p> : <Board entries={boards[card.seed]} />)}
+              (mode === "run" ? <RunBest seed={card.seed} /> : zen ? <p className="course-empty">No clock, no score: the land goes on every way.</p> : <Board entries={boards[card.seed]} />)}
           </div>
         </article>
         {side(1)}

@@ -101,10 +101,8 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
   A run starts on its own seed's map and flies eight different maps
   (`runOrder`). Every mode picks its map in the same map select
   (`MapSelect`): rooms send the seed to the backend.
-  Sky Isles' generator stays frozen: `docs/dev-snippets.js` has
-  `__raceHashes()`, which must keep returning the hashes listed there for
-  trees, distances and rings (on `skyIslesLevel(seed)`). The other biomes are
-  still being worked on, so their seeds' maps can change; nothing is live.
+  All nine maps are built the same way (generator v2) and none is frozen:
+  nothing is live, so any seed's map may still change.
 - In dev, `window.__game`, `window.__fxTime` and `window.__tuning` are exposed
   for poking at the game from the console.
 - Node 22+ works locally (the VM uses 24). Python 3.14 on the VM.
@@ -146,12 +144,12 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/run/items.ts`, `game/run/pickups.ts` | The three-slot adventure bag, all twenty consumable/gadget rules, bonus gates/energy, seeded terrain pickups and swept collection. `PICKUP` controls spacing, wing clearance and rarity heights. |
 | `game/world/itemClearance.ts` | Adventure-only pickup groves shared by flora and legacy mesher workers; frozen race levels bypass them. |
 | `game/run/` | The roguelike run. `run.ts`: run length, the run's eight maps (`runOrder`: the run seed's own map first, then seven of the other eight shuffled by the seed), portal destinations (`destination`: the first map of the order not flown yet), scoring constants, `RunHud`. `START_LIVES` (3). `upgrades.ts`: twenty-eight data-defined upgrades (seven of the original, Spare feather for a life, the design list's twenty abilities) and the 3-of-N offer. `abilities.ts`: `Abilities`, the twenty abilities' rules (`ABILITY` constants, in `?tune` as "Run abilities", not saved): cooldowns, Gale Force's energy and tunnel, cloud lanes (`laneAt`), the spirit manta's path, the slipstream, Wind-Shear's dodge params, Resonance's turned gates (`attuned`, `gateNormal`), the ley line's chain, the stances' multipliers, Draft-Weaving's tornado and the saves (`save`, `saved`: Acrobatic Recovery or the tornado), Ascension, the Echo-Trail's ribbon samples and wind ring; it answers each step with `FlightMods` and boost refills, and counts one-off moments (`cue`) for the looks. `controller.ts`: `RunController` (levels, gates and chains, lives: a crash costs one and the last one's crash ends the run in phase `lost`, abilities as `FlightMods`, the portal transition: blur in, the next level built under the blur (`buildNext`), wormhole and upgrade pick while it streams, blur out with the palette cross-fade; HUD data). `finale.ts`: `Finale`, the last portal's cutscene (space under a world-fixed Milky Way with dust lanes and its core overhead, the camera's scripted pan beneath the pilot and back, then white light; Enter skips). `portal.ts`: the portal (ring, a flat disk like a window onto night, beam), the `Wormhole` (a camera-centred shell mapping the view onto an endless twisting tube of lensed stars and nebula with the exit glowing ahead, spirit motes, its own lights) and `screenSparkle`. Game's `veil(k)` (the `.portal-veil` DOM blur and sparkles) and `insideWormhole(on)` (hides the level: land, sky, soft particles, speed lines, ambient, gate effects) serve it |
-| `game/devtools.ts` | Dev builds only: `__shot(view)` (freeze, stream the land around a fixed camera, render once), `__raceHashes()` (the race map's determinism check), `__run(s)`, `__bench(q)` and `__crash(kind, after)` (flies into rock near the start and stops `after` s into the crash animation), and `__itemShot(id)` / `itemShot=` for frozen item or pickup previews on `window` |
+| `game/devtools.ts` | Dev builds only: `__shot(view)` (freeze, stream the land around a fixed camera, render once), `__run(s)`, `__bench(q)` and `__crash(kind, after)` (flies into rock near the start and stops `after` s into the crash animation), and `__itemShot(id)` / `itemShot=` for frozen item or pickup previews on `window` |
 | `game/math.ts` | `clamp`, `smoothstep`, `smin` (smooth minimum for distance fields) |
-| `game/world/terrain/` | Generator v2 (every biome but Sky Isles). `noise.ts`: seeded fbm, ridged multifractal, domain-warped ridges, terraces. `shapes.ts`: distance-field primitives (spires and rock rings never thinner than `MIN_RADIUS`, 4.5 m, what the 6 m meshing grid always holds) with boxes, surface ids and grain (Island, NoiseIsland from 3D noise with tunnels, Mesa with ledges, Spire between two points, Slab, RockRing, Cap, Bridge: a humped stone bridge with one arch). `ground.ts`: the heightfield following the line (valley, hills, warped ridged mountains, terraces, crevasses, carved river channel, overhang noise on cliffs); in an open world the same, measured from a network of valleys every way, a river along each. `river.ts`: `Steps`, a valley floor stepping down in pools and falls, and the river in it (water distance for collisions). `field.ts`: `TerrainField`, ground + shapes as one field, `fill()` for whole blocks (same arithmetic as `distance()`). `recipes.ts`: gates and scenery from a biome's `LandRecipe`. `mesh.ts`: surface nets per LOD node, faces painted for the shader. `streamer.ts`: `LandStreamer`, the LOD octree (384/192/96 m nodes, 16 cells each), with 48 m merge hysteresis and a bounded 48 MiB hidden-mesh cache (estimated CPU + GPU buffers, at most 256 entries). `material.ts`: the terrain shader |
-| `game/world/biomes/` | Biomes as data (`types.ts`: `Biome`, `Level`, `LevelKey`). `index.ts`: the registry, `MAPS` (the pool every mode shares), `seedMap(seed)` / `seedLevel(seed)` (the map a seed stands for, in every mode), `runLevel(runSeed, index, biome)` (roguelike levels: a seed from the run seed and level number that stands for that biome), `featuredSeed(biome)` (its showcase course) and `skyIslesLevel(seed)` (Sky Isles on any seed, for the frozen-map check). `skyIsles.ts`: the race map, frozen. `reef.ts`: Sunken Reef, the level under the sea (`SkySpec.underwater`) |
+| `game/world/terrain/` | Generator v2 (every biome). `noise.ts`: seeded fbm, ridged multifractal, domain-warped ridges, terraces. `shapes.ts`: distance-field primitives (spires and rock rings never thinner than `MIN_RADIUS`, 4.5 m, what the 6 m meshing grid always holds) with boxes, surface ids and grain (Island, NoiseIsland from 3D noise with tunnels, Mesa with ledges, Spire between two points, Slab, RockRing, Cap, Bridge: a humped stone bridge with one arch). `ground.ts`: the heightfield following the line (valley, hills, warped ridged mountains, terraces, crevasses, carved river channel, overhang noise on cliffs); in an open world the same, measured from a network of valleys every way, a river along each. `river.ts`: `Steps`, a valley floor stepping down in pools and falls, and the river in it (water distance for collisions). `field.ts`: `TerrainField`, ground + shapes as one field, `fill()` for whole blocks (same arithmetic as `distance()`). `recipes.ts`: gates and scenery from a biome's `LandRecipe`. `mesh.ts`: surface nets per LOD node, faces painted for the shader. `streamer.ts`: `LandStreamer`, the LOD octree (384/192/96 m nodes, 16 cells each), with 48 m merge hysteresis and a bounded 48 MiB hidden-mesh cache (estimated CPU + GPU buffers, at most 256 entries). `material.ts`: the terrain shader |
+| `game/world/biomes/` | Biomes as data (`types.ts`: `Biome`, `Level`, `LevelKey`). `index.ts`: the registry, `MAPS` (the pool every mode shares), `seedMap(seed)` / `seedLevel(seed)` (the map a seed stands for, in every mode), `runLevel(runSeed, index, biome)` (roguelike levels: a seed from the run seed and level number that stands for that biome), `featuredSeed(biome)` (its showcase course), `zenLevel(seed)`; `makeLevel` applies a biome's `recolor` (the land in the mood's colors). `skyIsles.ts`: pine-crowned islands, its land recolored per mood. `reef.ts`: Sunken Reef, the level under the sea (`SkySpec.underwater`) |
 | `game/world/World.ts` | Everything a level decides: course, rock field, trees, palette; built from a `Level` (biome + seed + mood). `distance()` (rock, trees, water) for proximity, the camera and the fallback collisions; `otherDistance()` is everything but the rock (the rock collides as drawn, see `landCollider.ts`); `lost()` below the islands. No rendering. Open world (Zen): land made a cell at a time around what is asked for (`ensure`), each cell from its own streams, the furthest let go past 120 cells (`trim`); rivers and lakes at one level (`openWater`) |
-| `game/world/islands.ts` | `RockField`: the floating islands as one signed distance field (shapes melted with `smin`, roughened, a tube carved along the racing line) |
+| `game/world/islands.ts` | The old Sky Isles generator (`RockField`), unused since Sky Isles moved to generator v2 (2026-10-11); delete with `mesher.ts`'s chunk path and the `legacyIslands`/`legacyPines` branches when convenient |
 | `game/world/mesher.ts`, `mesher.worker.ts` | Cuts chunks of the rock field into flat-shaded meshes in Web Workers, and places trees (from the grid's own vertices, so the race map's tree colliders never move; `treeSink` stretches a trunk down to snapped rock, drawn only). Workers rebuild the World from a `LevelKey` |
 | `game/world/meshCleanup.ts` | Worker-side exact-welded component cleanup for both meshers: discard small closed thin shells, shorten narrow tips with per-face winding checks, subdivide compact stones once and retain their bounds. Open/non-manifold edges and a one-cell chunk collar are protected. Flat material attributes follow source faces. `MESH_CLEANUP` source constants in tuning.ts require worker reload; no per-frame work |
 | `game/world/landCollider.ts` | `LandCollider`: collisions with exactly the land drawn. Every land mesh on screen (Sky Isles chunks, shown v2 nodes, added and removed with them) as triangles in a lazily built grid per mesh; exact tests: ball, segment (sweeps between steps), convex quad (separating axes) and signed `nearest` (the crash tumble). Rock that is in the field but not drawn (thinner than the 6 m grid) is never hit |
@@ -191,9 +189,8 @@ Players never collide, so the server only relays positions.
   triangles on screen, plus sweeps so nothing slips through between steps),
   and with trees, water and the sea by their distance fields. Where the land
   isn't on screen yet, the rock's distance field stands in. Proximity, skim
-  spray, the camera and the glide-in still read the distance field. The race
-  map's field (`__raceHashes()` dist) never changes; only what you crash on
-  follows the mesh.
+  spray, the camera and the glide-in still read the distance field; what you
+  crash on follows the mesh.
 - **Rendering:** `Game.loop` interpolates between physics states, animates
   the avatar on top, updates effects, then renders. High quality uses an
   `EffectComposer` (RenderPass → UnrealBloomPass → OutputPass) with HDR
@@ -232,9 +229,21 @@ and timers fire about once a second. Dev builds put `__shot(view, ms)` on
 fixed camera (yielding through `MessageChannel`, which isn't throttled) and
 renders once, for reproducible screenshots. Views: `0` behind the start, `1`
 above the start looking down the course, `{along, height, side, ahead}` along
-the course. `__raceHashes()` checks the race map hasn't moved.
+the course.
 
 ## Change log
+
+### 2026-10-11: Sky Isles on the shared generator (Claude)
+
+It was the one map on the old frozen generator (a leftover from when it was
+the only race map), so Zen skipped it and it had no grass or structures.
+Now generator v2 like the rest: pine-crowned islands, rock tunnels at the
+gates, lanterns and prayer poles; its six moods recolor rock, grass and
+pines (`Biome.recolor`, applied in `makeLevel`). Zen flies every map
+(`ZEN_MAPS`/`zenSeed` gone); the freeze check (`__raceHashes`,
+`skyIslesLevel`, its tests) is gone; the old generator is unused. Verified:
+tsc, lint, build, 133 tests; Autumn time trial and Starlight Zen in the
+browser.
 
 ### 2026-10-11: Zen, one map for ever (Claude)
 

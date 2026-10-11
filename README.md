@@ -25,7 +25,7 @@ the last ring.
 - **Zen:** one map that never ends, every way: valleys, rivers, mountains
   and islands made around you as you fly, wherever you go; no gates, no
   clock, no score, nothing saved. A crash puts you back in the air close to
-  where you tumbled. Every map but Sky Isles (its race generator is frozen).
+  where you tumbled. Every map.
 
 All modes share one pool of maps: a seed stands for one of the nine
 biomes, its layout and its light, the same in a time trial, a room and an
