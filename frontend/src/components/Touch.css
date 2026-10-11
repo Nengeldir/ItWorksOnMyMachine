@@ -183,6 +183,19 @@ html.touch .run-upgrades {
   left: max(1rem, env(safe-area-inset-left));
 }
 
+/* So do the bag and the charm: they move to the left, without their key hints (the Item and Charm buttons
+   are the keys here) */
+html.touch .run-items {
+  right: auto;
+  left: max(1rem, env(safe-area-inset-left));
+  bottom: 7.4rem;
+  align-items: flex-start;
+}
+html.touch .run-items-bag { flex-direction: row-reverse; }
+html.touch .run-items-bag .keys,
+html.touch .run-charm .label { display: none; }
+html.touch .run-charm { grid-template-columns: 1fr; padding: 0.35rem 0.6rem; max-width: 10rem; }
+
 /* The finale's skip is a button here; with a keyboard it stays a quiet hint */
 html.touch .finale-skip {
   pointer-events: auto;
@@ -461,7 +474,14 @@ html.touch .coach-step {
   html.touch .run-upgrades {
     bottom: 3.5rem;
   }
-
+  /* Short screens: the bag and charm as small chips above the ability meters */
+  html.touch .run-items {
+    bottom: 6.2rem;
+    gap: 0.25rem;
+  }
+  html.touch .run-items-bag .name,
+  html.touch .run-charm .state { display: none; }
+  html.touch .run-charm { font-size: 0.68rem; }
 }
 
 @media (orientation: portrait) {

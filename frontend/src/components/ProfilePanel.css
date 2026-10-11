@@ -393,10 +393,15 @@
   .journal-detail { grid-row: 2; }
 }
 
-/* Phones held sideways: little height */
+/* Phones held sideways: little height, so the header folds up and the figure shrinks */
 @media (max-height: 520px) {
-  .minifigure { height: 160px; }
-  .collection-preview { height: 130px; }
+  .profile-dialog.sheet { padding: 0.7rem 1rem; max-height: calc(100dvh - 0.6rem); gap: 0.5rem; overflow: auto; }
+  .profile-dialog .sheet-head h2 { font-size: 1.2rem; }
+  .journal-intro, .journal-saved, .journal-foot p:first-child { display: none; }
+  .journal-figure { display: grid; grid-template-columns: 7.5rem 1fr; align-items: center; gap: 0.5rem; padding: 0.3rem; }
+  .minifigure { height: 140px; }
+  .collection-preview { height: 120px; }
+  .journal-grid { max-height: 240px; }
 }
 
 /* --- In flight: the profile pill and the collection notice --------------------------------------- */

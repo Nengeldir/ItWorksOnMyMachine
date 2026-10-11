@@ -67,3 +67,9 @@
   .pilot-hero { position: static; display: grid; grid-template-columns: 140px 1fr; text-align: left; align-items: center; }
   .pilot-hero .minifigure { height: 190px; grid-row: span 4; }
 }
+
+@media (max-height: 520px) {
+  .hall-dialog { padding: .7rem 1rem; max-height: calc(100dvh - .6rem); }
+  .hall-header h2 { margin: 0 0 .2rem; font-size: 1.2rem; }
+  .pilot-hero .minifigure { height: 170px; }
+}
