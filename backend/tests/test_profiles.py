@@ -1,3 +1,4 @@
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
@@ -5,16 +6,28 @@ from fastapi.testclient import TestClient
 
 from app import app
 from models import User
-from profiles import BY_KEY, CATALOG, DEFAULT_EQUIPPED, STARTERS, Profiles, level_progress, reward_plan
+from profiles import BY_KEY, CATALOG, MIN_LEVEL_SECONDS, STARTERS, Profiles, level_progress, reward_plan
 from store import Store
+
+
+class Clock:
+    """A clock the tests move by hand (adventures check how long they have been flown)"""
+
+    def __init__(self):
+        self.now = time.time()
+
+    def __call__(self):
+        return self.now
 
 
 def test_profile_survives_restart_and_claim_retry(tmp_path):
     path = str(tmp_path / "profile.db")
     user = User(id="pilot", name="Pilot")
     store = Store(path)
-    profiles = Profiles(store)
+    clock = Clock()
+    profiles = Profiles(store, clock)
     adventure = profiles.start(user, 42)
+    clock.now += 8 * MIN_LEVEL_SECONDS
     reward = next(r for r in adventure["rewards"] if r["kind"] in ("cape", "hat", "shoes", "wings", "pet"))
     first = profiles.claim(user, adventure["token"], [reward["id"], reward["id"], "1:c0"])
     assert len(first["accepted"]) == 2
@@ -45,22 +58,26 @@ def test_atomic_claims_and_parallel_retries():
     assert profiles.get(user)["crystals"] == 3
 
 
-def test_duplicate_conversion_and_item_stacks():
-    profiles = Profiles(Store(":memory:"))
+def test_duplicates_of_every_kind_become_crystals():
+    clock = Clock()
+    profiles = Profiles(Store(":memory:"), clock)
     user = User(id="collector", name="Pilot")
     first = profiles.start(user, 42)
     second = profiles.start(user, 42)
+    clock.now += 8 * MIN_LEVEL_SECONDS
     cosmetic = next(r for r in first["rewards"] if r["kind"] in ("cape", "hat", "shoes", "wings", "pet"))
     item = next(r for r in first["rewards"] if r["kind"] == "item")
     ids = [cosmetic["id"], item["id"]]
     profiles.claim(user, first["token"], ids)
     duplicate = profiles.claim(user, second["token"], ids)
     profile = duplicate["profile"]
+    # Keepsakes are unique like cosmetics now: a second one is a duplicate message and crystals
     assert profile["inventory"][cosmetic["key"]] == 1
-    assert profile["inventory"][item["key"]] == 2
+    assert profile["inventory"][item["key"]] == 1
     assert duplicate["crystals"] > 0
     assert profile["xp"] == 2 * (cosmetic["xp"] + item["xp"])
-    assert sum(a["duplicate"] for a in duplicate["accepted"]) == 1
+    assert sum(a["duplicate"] for a in duplicate["accepted"]) == 2
+    assert all(a["crystals"] > 0 and a["rarity"] in ("common", "uncommon", "rare", "legendary") for a in duplicate["accepted"])
 
 
 def test_xp_boundaries_multiple_levels_and_cap():
@@ -70,11 +87,17 @@ def test_xp_boundaries_multiple_levels_and_cap():
     assert level_progress(245) == (3, 0, 200)
     assert level_progress(450) == (4, 5, 265)
     assert level_progress(10**9) == (100, 0, 0)
-    profiles = Profiles(Store(":memory:"))
+    clock = Clock()
+    profiles = Profiles(Store(":memory:"), clock)
     user = User(id="level", name="Pilot")
     journey = profiles.start(user, 42)
-    result = profiles.claim(user, journey["token"], [r["id"] for r in journey["rewards"]])
-    assert result["levels"] > 1
+    clock.now += 8 * MIN_LEVEL_SECONDS
+    ids = [r["id"] for r in journey["rewards"]]
+    result = None
+    for i in range(0, len(ids), 24):
+        result = profiles.claim(user, journey["token"], ids[i:i + 24])
+    # Claimed in batches of 24 (the request's limit): the whole plan lifts a newcomer several levels
+    assert result["profile"]["level"] > 2
     assert result["profile"]["level_xp"] < result["profile"]["next_level_xp"]
 
 
@@ -87,10 +110,11 @@ def test_plan_is_seeded_balanced_and_catalog_complete():
     assert len(treasures) == 4800
     counts = {rarity: sum(r["rarity"] == rarity for r in treasures) / len(treasures)
               for rarity in ("common", "uncommon", "rare", "legendary")}
-    assert .46 < counts["common"] < .54
-    assert .28 < counts["uncommon"] < .36
-    assert .12 < counts["rare"] < .18
-    assert .02 < counts["legendary"] < .04
+    # Each rarity three times rarer than the one before: 67.5 / 22.5 / 7.5 / 2.5 %
+    assert .63 < counts["common"] < .72
+    assert .19 < counts["uncommon"] < .26
+    assert .055 < counts["rare"] < .095
+    assert .014 < counts["legendary"] < .036
     assert {r["key"] for r in treasures} == set(BY_KEY) - set(STARTERS)
     assert len({r["id"] for r in reward_plan(42)}) == 192
 
@@ -152,7 +176,7 @@ def test_legacy_profiles_gain_wings_without_losing_pets_or_progress():
            "inventory": {"pet:none": 1, "pet:dragon": 1, "cape:aurora": 1},
            "equipped": {"cape": "aurora", "hat": "none", "shoes": "classic", "pet": "dragon"}}
     with store.db:
-        store.db.execute("INSERT INTO profiles VALUES (?, ?)", (user.id, json.dumps(old)))
+        store.db.execute("INSERT INTO profiles (user_id, data) VALUES (?, ?)", (user.id, json.dumps(old)))
     saved = profiles.get(user)
     assert saved["xp"] == 245 and saved["crystals"] == 19
     assert "pet:none" not in saved["inventory"] and "pet:none" not in BY_KEY
@@ -165,7 +189,8 @@ def test_legacy_profiles_gain_wings_without_losing_pets_or_progress():
     token = profiles.start(user, 7)["token"]
     profiles.claim(user, token, ["1:c0"])
     raw = json.loads(store.db.execute("SELECT data FROM profiles WHERE user_id = ?", (user.id,)).fetchone()["data"])
-    assert raw["version"] == 2 and "pet:none" not in raw["inventory"]
+    assert raw["version"] == 3 and "pet:none" not in raw["inventory"]
+    assert saved["equipped"]["charm"] == "none" and saved["stats"]["adventures"] == 0
 
 
 def test_old_adventure_plans_are_pruned(monkeypatch):

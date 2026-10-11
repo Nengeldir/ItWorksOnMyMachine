@@ -2,19 +2,22 @@ import asyncio
 import os
 import re
 import secrets
+import time
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from typing import Annotated
 from urllib.parse import unquote
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.concurrency import run_in_threadpool
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from models import (
     AdventureStartRequest,
+    BuyRequest,
     ClientId,
     EquipRequest,
     FinishRequest,
@@ -24,12 +27,15 @@ from models import (
     MapRequest,
     PickupClaimRequest,
     Me,
+    PetNameRequest,
     RunFinishRequest,
+    RunReportRequest,
     RunFinishResponse,
     RunStartRequest,
     RunStartResponse,
     Seed,
     StateRequest,
+    StyleRequest,
     TokenRequest,
     User,
 )
@@ -98,6 +104,37 @@ def extract_user(request: Request, client_id: str = "", nickname: str = "") -> U
     return User(id="guest", name="Guest")
 
 
+class RateLimit:
+    """At most `count` writes per `seconds` for one pilot (or address): a brake on scripted farming"""
+
+    def __init__(self, count: int, seconds: float):
+        self.count = count
+        self.seconds = seconds
+        self.hits: dict[str, deque[float]] = defaultdict(deque)
+
+    def check(self, key: str):
+        now = time.monotonic()
+        hits = self.hits[key]
+        while hits and now - hits[0] > self.seconds:
+            hits.popleft()
+        if len(hits) >= self.count:
+            raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Slow down a little and try again in a moment")
+        hits.append(now)
+        if len(self.hits) > 50_000:
+            self.hits.clear()
+
+
+LIMITS = {
+    "claim": RateLimit(90, 60), "start": RateLimit(12, 60), "report": RateLimit(12, 60),
+    "equip": RateLimit(60, 60), "shop": RateLimit(30, 60), "spin": RateLimit(6, 60),
+}
+
+
+def limited(kind: str, user: User):
+    LIMITS[kind].check(user.id)
+    return user
+
+
 def room_code(code: str) -> str:
     code = code.upper()
     if not ROOM_CODE.fullmatch(code):
@@ -134,25 +171,76 @@ def get_profile(request: Request, client_id: ClientId, nickname: str = ""):
     return profiles.get(extract_user(request, client_id, nickname))
 
 
+def profile_call(kind: str, request: Request, body, action):
+    """Runs a profile write for the requesting pilot: rate limited, rule breaks as 400, limits as 429"""
+    user = limited(kind, extract_user(request, body.client_id, body.nickname))
+    try:
+        return action(user)
+    except PermissionError as error:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, str(error))
+    except ValueError as error:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error))
+
+
 @app.post("/api/profile/adventures")
 def start_adventure(body: AdventureStartRequest, request: Request):
-    return profiles.start(extract_user(request, body.client_id, body.nickname), body.seed)
+    return profile_call("start", request, body, lambda user: profiles.start(user, body.seed))
 
 
 @app.post("/api/profile/claim")
 def claim_pickups(body: PickupClaimRequest, request: Request):
-    try:
-        return profiles.claim(extract_user(request, body.client_id, body.nickname), body.token, body.pickups)
-    except ValueError as error:
-        raise HTTPException(400, str(error))
+    return profile_call("claim", request, body, lambda user: profiles.claim(user, body.token, body.pickups))
+
+
+@app.post("/api/profile/runs")
+def report_run(body: RunReportRequest, request: Request):
+    """A finished (or abandoned) adventure: gates become XP and the score crystals, once per adventure"""
+    result = body.model_dump(include={"score", "levels", "completed", "gates", "time_ms", "crashes"})
+    return profile_call("report", request, body, lambda user: profiles.report(user, body.token, result))
 
 
 @app.post("/api/profile/equip")
 def equip_cosmetic(body: EquipRequest, request: Request):
-    try:
-        return profiles.equip(extract_user(request, body.client_id, body.nickname), body.slot, body.asset)
-    except ValueError as error:
-        raise HTTPException(400, str(error))
+    return profile_call("equip", request, body, lambda user: profiles.equip(user, body.slot, body.asset))
+
+
+@app.post("/api/profile/pets")
+def name_pet(body: PetNameRequest, request: Request):
+    return profile_call("equip", request, body, lambda user: profiles.name_pet(user, body.pet, body.name))
+
+
+@app.post("/api/profile/style")
+def set_style(body: StyleRequest, request: Request):
+    return profile_call("equip", request, body, lambda user: profiles.set_style(user, body.style))
+
+
+@app.get("/api/shop")
+def get_shop(request: Request, client_id: ClientId, nickname: str = ""):
+    return profiles.shop(extract_user(request, client_id, nickname))
+
+
+@app.post("/api/shop/buy")
+def buy(body: BuyRequest, request: Request):
+    return profile_call("shop", request, body, lambda user: profiles.buy(user, body.key))
+
+
+@app.post("/api/shop/spin")
+def spin(body: JoinRequest, request: Request):
+    return profile_call("spin", request, body, lambda user: profiles.spin(user))
+
+
+@app.get("/api/players")
+def players(limit: Annotated[int, Query(ge=1, le=100)] = 50):
+    """The public leaderboard of pilots, by experience"""
+    return profiles.players(limit)
+
+
+@app.get("/api/players/{public_id}")
+def player(public_id: Annotated[str, Path(pattern=r"^[0-9a-f]{16}$")]):
+    found = profiles.player(public_id)
+    if found is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such pilot")
+    return found
 
 
 # --- Race rooms ---------------------------------------------------------------
@@ -245,7 +333,9 @@ async def finish_race(code: str, body: FinishRequest):
         raise room_error(e)
     # SQLite and the ghost's JSON run in a worker thread, so the room relay doesn't stall
     best = await run_in_threadpool(store.add_run, room.seed, player.user_id, player.name, body.time_ms, body.ghost)
-    return {"place": place, "personal_best_ms": best}
+    finisher = User(id=player.user_id, name=player.name, verified=not player.user_id.startswith("guest"))
+    xp = await run_in_threadpool(profiles.race_finished, finisher, body.time_ms, body.gates)
+    return {"place": place, "personal_best_ms": best, "xp": xp}
 
 
 @app.post("/api/rooms/{code}/leave", status_code=status.HTTP_204_NO_CONTENT)
@@ -287,10 +377,12 @@ async def finish_run(body: RunFinishRequest, request: Request):
 
     user = extract_user(request, body.client_id, body.nickname)
     best = await run_in_threadpool(store.add_run, seed, user.id, user.name, body.time_ms, body.ghost)
+    xp = await run_in_threadpool(profiles.race_finished, user, body.time_ms, body.gates)
     return RunFinishResponse(
         rank=await run_in_threadpool(store.rank, seed, body.time_ms, user.id),
         personal_best_ms=best,
         leaderboard=await run_in_threadpool(store.leaderboard, seed, 10, user.id),
+        xp=xp,
     )
 
 
