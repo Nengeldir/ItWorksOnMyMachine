@@ -3,6 +3,7 @@ import type { Avatar } from "./avatar";
 import { Kind, type Particles, fx } from "./particles";
 import { Trail } from "./trail";
 import { FX } from "./tuning";
+import { smoothstep } from "./math";
 
 const tipL = new THREE.Vector3();
 const tipR = new THREE.Vector3();
@@ -15,6 +16,7 @@ const down = new THREE.Vector3();
 const jitter = new THREE.Vector3();
 /** Sky's light: warm white; the player's color only tints it (FX.lightTint) */
 const WARM = new THREE.Color("#fff1cf");
+const WISP = new THREE.Color("#ffffff");
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
@@ -22,6 +24,8 @@ export interface PilotFxOptions {
   /** Share of the particle effects this pilot gets (others' pilots get fewer than yours) */
   share?: number;
   ghost?: boolean;
+  /** Soft (alpha-blended) particles for the cloud wisps; only your own pilot gets them */
+  soft?: Particles;
 }
 
 /**
@@ -33,6 +37,7 @@ export class PilotFx {
   readonly trails: Trail[];
   private readonly avatar: Avatar;
   private readonly particles: Particles | null;
+  private readonly soft: Particles | null;
   private readonly share: number;
   private readonly ghost: boolean;
   private readonly head = new THREE.Color();
@@ -45,10 +50,13 @@ export class PilotFx {
   private readonly center = new THREE.Vector3();
   private moving = true;
   private brakeDebt = 0;
+  private wispDebt = 0;
+  private wispSide = false;
 
   constructor(avatar: Avatar, color: string, particles: Particles | null, options: PilotFxOptions = {}) {
     this.avatar = avatar;
     this.particles = particles;
+    this.soft = options.soft ?? null;
     this.share = options.share ?? 1;
     this.ghost = !!options.ghost;
     this.trails = [
@@ -75,7 +83,7 @@ export class PilotFx {
 
   reset() {
     this.trails.forEach((t) => t.reset());
-    this.debtL = this.debtR = this.spiralDebt = this.brakeDebt = 0;
+    this.debtL = this.debtR = this.spiralDebt = this.brakeDebt = this.wispDebt = 0;
   }
 
   hide() {
@@ -114,6 +122,20 @@ export class PilotFx {
       particles.emit(Math.random() < 0.5 ? tipL : tipR,
         vel.copy(velocity).multiplyScalar(0.12),
         fx(0.35, 0.7, this.head, Kind.Wisp, 0, 2, 0.5));
+    }
+
+    // Cloud wisps: at speed the wingtips tear soft puffs of cloud that hang in the air behind you
+    if (this.soft && FX.wisps > 0) {
+      this.wispDebt += smoothstep(FX.wispsFrom, FX.wispsFrom + 30, speed) * 14 * FX.wisps * budget * dt;
+      for (; this.wispDebt >= 1; this.wispDebt--) {
+        const tip = this.wispSide ? tipL : tipR;
+        this.wispSide = !this.wispSide;
+        this.soft.emit(
+          at.copy(tip).addScaledVector(velocity, -0.02),
+          vel.copy(velocity).multiplyScalar(0.04).add(jitter.set(rand(-0.6, 0.6), rand(-0.3, 0.5), rand(-0.6, 0.6))),
+          fx(rand(1.2, 2.2), rand(1.4, 2.6), WISP, Kind.Glow, -0.1, 2.5, 0.35),
+        );
+      }
     }
 
     // Light motes shed from the wingtips: few and large, drifting up slowly like Sky's winged light

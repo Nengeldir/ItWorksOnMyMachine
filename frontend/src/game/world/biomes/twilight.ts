@@ -133,6 +133,7 @@ export const TWILIGHT: Biome = {
   sky: { cloudSea: null, puffs: 30, puffsBelow: false, puffLift: 320, mist: { mode: "valley", above: 12, thickness: 30 } },
   particles: {
     ambient: [
+      { kind: "dust", rate: 7, colors: ["#fff1cf", "#ffe4b0"], night: 0.4 },
       { kind: "fireflies", rate: 30, colors: ["#c8ff7a", "#7af0ff"], night: 2 },
       { kind: "spores", rate: 22, colors: ["#7af0ff", "#d080ff"] },
     ],

@@ -441,6 +441,9 @@ export class Avatar {
    * wide on slow, deep beats (the gliding stances)
    */
   readonly stance = { tuck: 0, hover: 0, cast: 0, surf: 0, climb: 0, sing: 0, flare: 0, falcon: 0, butterfly: 0 };
+  /** The light of the glowing parts (the eyes, the cape's marks, the wings' edges): boost and gate passes make them flare */
+  readonly pulse = { value: 0 };
+  private glowKick = 0;
   /** How far each wing (left, right) is folded in during a crash, to keep it out of rock it is wedged against (0..1) */
   private readonly folded = [0, 0];
   /** A crash playing out: the body flails, then goes limp (Game moves `group`) */
@@ -450,9 +453,10 @@ export class Avatar {
     this.ghost = !!options.ghost;
     this.tones = tonesFor(color);
     const ghost = this.ghost;
-    const skinMat = this.material(toonMaterial({ ghost }));
-    const clothMat = this.material(toonMaterial({ ghost, side: THREE.DoubleSide, rim: 0.3 }));
-    const wingMat = this.material(toonMaterial({ ghost, side: THREE.DoubleSide, rim: 0.3, rimColor: "#ffffff" }));
+    const pulse = this.pulse;
+    const skinMat = this.material(toonMaterial({ ghost, pulse }));
+    const clothMat = this.material(toonMaterial({ ghost, side: THREE.DoubleSide, rim: 0.3, pulse }));
+    const wingMat = this.material(toonMaterial({ ghost, side: THREE.DoubleSide, rim: 0.3, rimColor: "#ffffff", pulse }));
     const ink = ghost ? null : this.material(outlineMaterial(0.012, undefined, { tint: true }));
 
     this.group.add(this.rig);
@@ -766,6 +770,11 @@ export class Avatar {
     return out.setFromMatrixColumn(this.rig.matrixWorld, 1).normalize();
   }
 
+  /** The glowing parts flare up (a gate passed), then settle over a second */
+  flare() {
+    this.glowKick = 1;
+  }
+
   /** A wingbeat on demand (a run's flap ability): the wings at full effort for a moment */
   beat() {
     this.effort = 1;
@@ -927,6 +936,10 @@ export class Avatar {
     this.pony[0].rotation.set(-1.25 + this.pitchRate * 0.1 + sway * 0.5, 0, -turn * 0.4 + sway);
     this.pony[1].rotation.set(0.25 + sway * 0.4, 0, sway * 1.2);
 
+    // The cape's marks, the eyes and the wings' edges glow with the boost and flare after a gate
+    this.glowKick *= Math.exp(-dt * 2.2);
+    this.pulse.value = (this.boost * 0.8 + this.glowKick * 1.8) * FX.capePulse;
+
     // Aura breathes with the flaps and burns brighter when skimming
     const auraMat = this.aura.material as THREE.SpriteMaterial;
     auraMat.opacity = (0.14 + 0.08 * Math.max(0, stroke) * this.effort + proximity * 0.25) * FX.aura * (1 + ATMOSPHERE.night.value * 1.5);
@@ -999,6 +1012,8 @@ export class Avatar {
   /** Starts the crash animation of this kind; `side` is the wing that hit (1 right, -1 left) */
   die(kind: DeathKind, side: 1 | -1) {
     this.death = { kind, t: 0, side };
+    this.pulse.value = 0;
+    this.glowKick = 0;
     this.barrel.t = -1;
     this.barrelProgress = -1;
   }

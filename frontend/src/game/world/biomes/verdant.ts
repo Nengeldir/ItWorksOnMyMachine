@@ -134,6 +134,7 @@ export const VERDANT: Biome = {
   sky: { cloudSea: null, puffs: 50, puffsBelow: false, puffLift: 380, mist: { mode: "valley", above: 18, thickness: 34 } },
   particles: {
     ambient: [
+      { kind: "dust", rate: 7, colors: ["#fff1cf", "#ffe4b0"], night: 0.4 },
       { kind: "fireflies", rate: 14, colors: ["#d8ff7a", "#fff2a0"], night: 3 },
       { kind: "motes", rate: 10, colors: ["#fff6dc"] },
       { kind: "petals", rate: 3, colors: ["#ffffff", "#ffd6e8"] },

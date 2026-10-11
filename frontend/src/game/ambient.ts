@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { clamp } from "./math";
 import { Kind, type ParticleSpec, type Particles } from "./particles";
-import { WATER } from "./tuning";
+import { FX, WATER } from "./tuning";
 import type { Ambient as AmbientSpec } from "./world/biomes/types";
 import { forestAt } from "./world/flora/placement";
 import type { World } from "./world/World";
@@ -70,7 +70,7 @@ export class Ambient {
     const cy = camera.y + lead.y;
     const cz = camera.z + lead.z;
     for (const e of this.emitters) {
-      e.debt += e.spec.rate * (1 + (e.spec.night ?? 0) * night) * budget * dt;
+      e.debt += e.spec.rate * (1 + (e.spec.night ?? 0) * night) * budget * dt * (e.spec.kind === "dust" ? FX.dust : 1);
       let tries = 0;
       while (e.debt >= 1 && tries++ < 40) {
         e.debt--;
@@ -98,6 +98,14 @@ export class Ambient {
         at.y = g + rand(0.6, 5);
         look(s, rand(4, 7), rand(0.28, 0.45), Kind.Firefly, -0.03, 0.4, 2.4 + night);
         this.glow.emit(at, vel.set(rand(-0.6, 0.6), rand(-0.2, 0.3), rand(-0.6, 0.6)), s);
+        break;
+      }
+      case "dust": {
+        // Sky's winged light in the air: few, large, slow, warm, drifting up; stars and soft glows
+        at.set(cx + rand(-60, 60), cy + rand(-30, 25), cz + rand(-60, 60));
+        const star = Math.random() < 0.4;
+        look(s, rand(5, 9), star ? rand(0.5, 0.9) : rand(0.35, 0.6), star ? Kind.Star : Kind.Glow, -0.05, 0.9, 1.1 + night * 0.6);
+        this.glow.emit(at, vel.set(rand(-0.4, 0.4), rand(0.05, 0.35), rand(-0.4, 0.4)), s);
         break;
       }
       case "motes": {

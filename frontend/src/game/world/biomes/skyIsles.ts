@@ -143,6 +143,6 @@ export const SKY_ISLES: Biome = {
   terrain: { kind: "legacyIslands" },
   vegetation: { kind: "legacyPines" },
   sky: { cloudSea: { depth: 260 }, puffs: 70, puffsBelow: true, puffLift: 0, mist: { mode: "camera" } },
-  particles: { ambient: [] },
+  particles: { ambient: [{ kind: "dust", rate: 9, colors: ["#fff1cf", "#ffe4b0"], night: 0.4 }] },
   portals: { color: "#8fe3ff" },
 };

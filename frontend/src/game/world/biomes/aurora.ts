@@ -128,6 +128,7 @@ export const AURORA: Biome = {
   sky: { cloudSea: { depth: 320 }, puffs: 30, puffsBelow: false, puffLift: 350, mist: { mode: "valley", above: 14, thickness: 40 } },
   particles: {
     ambient: [
+      { kind: "dust", rate: 7, colors: ["#fff1cf", "#ffe4b0"], night: 0.4 },
       { kind: "snow", rate: 40, colors: ["#ffffff", "#e6ecff"] },
       { kind: "glitter", rate: 20, colors: ["#ffffff", "#d8c8ff"] },
       { kind: "starfall", rate: 1.2, colors: ["#ffffff", "#c8f0ff"], night: 1 },

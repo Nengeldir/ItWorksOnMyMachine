@@ -217,7 +217,7 @@ export interface SkySpec {
   underwater?: UnderwaterSpec;
 }
 
-export type AmbientKind = "fireflies" | "motes" | "snow" | "leaves" | "embers" | "spores" | "ash" | "glitter" | "petals" | "starfall" | "bubbles";
+export type AmbientKind = "dust" | "fireflies" | "motes" | "snow" | "leaves" | "embers" | "spores" | "ash" | "glitter" | "petals" | "starfall" | "bubbles";
 
 /** One kind of particle drifting around the camera */
 export interface Ambient {

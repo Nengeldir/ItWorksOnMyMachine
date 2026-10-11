@@ -124,6 +124,7 @@ export const LAGOON: Biome = {
   sky: { cloudSea: null, puffs: 45, puffsBelow: false, puffLift: 250, mist: { mode: "valley", above: 10, thickness: 30 } },
   particles: {
     ambient: [
+      { kind: "dust", rate: 7, colors: ["#fff1cf", "#ffe4b0"], night: 0.4 },
       { kind: "motes", rate: 8, colors: ["#fffbe8"] },
       { kind: "petals", rate: 2, colors: ["#ff9ac8", "#ffffff"] },
       { kind: "fireflies", rate: 2, colors: ["#d8ff7a"], night: 6 },

@@ -255,6 +255,19 @@ Children of the Light; the terrain is untouched for now. Looks only (rule 6).
   High 148 calls, 132k tris, CPU 4.8 ms, GPU 1.5 ms; Medium 124 calls, 124k tris.
   Cap for everything the visuals branch adds: +6 draw calls, +25k tris, +1500 live
   particles, +0.5 ms CPU, +0.5 ms GPU here.
+- **Pass 2** (same branch): the scarf tails and the cape's hem are cut from the
+  cape's cloth (one color family for cape, wings, scarf); Sky's winged-light
+  dust in every biome's air (`AmbientKind` "dust", `FX.dust`); a pulsing
+  four-point star flare over every gate (`CrystalGates`, one instanced draw);
+  a flock of eight light butterflies leading to the next gate (`skyfx.ts`,
+  `Swarm` with its own colors, `FX.flock`); cloud wisps off the wingtips at
+  speed (`FX.wisps`, `wispsFrom`, soft particles); the cape's marks, eyes and
+  wing edges flare on boost and gate passes (`toonMaterial` `pulse`,
+  `Avatar.flare`, `FX.capePulse`). Measured A/B at the same spot: +1 draw call
+  (+1 while the flock shows), +42 tris (+~2k with the flock), GPU +0.2 to
+  +0.3 ms, CPU within noise: inside the budget. Frontend tests (Node 24 in
+  Docker): 7 fail, the same 7 that fail at the base commit 074f39d (fixed on
+  the newer main); nothing of this branch in them.
 
 ### 2026-10-10: Adventure items (continued)
 

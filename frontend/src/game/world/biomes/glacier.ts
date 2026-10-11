@@ -128,6 +128,7 @@ export const GLACIER: Biome = {
   sky: { cloudSea: { depth: 300 }, puffs: 40, puffsBelow: false, puffLift: 300, mist: { mode: "valley", above: 14, thickness: 40 } },
   particles: {
     ambient: [
+      { kind: "dust", rate: 7, colors: ["#fff1cf", "#ffe4b0"], night: 0.4 },
       { kind: "snow", rate: 90, colors: ["#ffffff", "#eef6ff"] },
       { kind: "glitter", rate: 14, colors: ["#ffffff", "#bfeaff"] },
     ],

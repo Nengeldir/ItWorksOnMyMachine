@@ -28,6 +28,7 @@ import { INTERPOLATION_DELAY_MS, Pilot, type PilotSample } from "./pilots";
 import { clamp } from "./math";
 import { SpeedLines } from "./speedlines";
 import { INK, TOON_LIGHT } from "./toon";
+import { LightFlock } from "./skyfx";
 import { FX, RANGES, RINGS, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveTuning } from "./tuning";
 import { ABILITY } from "./run/abilities";
 import { ITEM, RUN_ITEMS, type RunItemId } from "./run/items";
@@ -239,6 +240,8 @@ export class Game implements RunHost {
   private readonly clock: () => number;
   private readonly events: GameEvents;
   private readonly attract: AttractMode | null;
+  /** Sky's light creatures: a flock of butterflies leading to the next gate */
+  private readonly flock: LightFlock;
   private driftZ = 0;
   world!: World;
   view!: WorldView;
@@ -349,7 +352,8 @@ export class Game implements RunHost {
     this.softParticles = new Particles(3000, true);
     this.ambient = new Ambient(this.particles, this.softParticles);
     this.avatar = new Avatar(options.color);
-    this.fx = new PilotFx(this.avatar, options.color, this.particles);
+    this.fx = new PilotFx(this.avatar, options.color, this.particles, { soft: this.softParticles });
+    this.flock = new LightFlock();
     if (!this.attract) {
       // Your own wings make a sound on each downstroke (the effects keep their own hook)
       const puff = this.avatar.onDownstroke;
@@ -374,7 +378,7 @@ export class Game implements RunHost {
     });
     this.speedLines = new SpeedLines();
     this.debris = new Debris(options.color);
-    this.scene.add(this.avatar.group, this.debris.mesh, this.particles.points, this.softParticles.points, this.speedLines.mesh, ...this.fx.meshes);
+    this.scene.add(this.avatar.group, this.debris.mesh, this.particles.points, this.softParticles.points, this.speedLines.mesh, this.flock.mesh, ...this.fx.meshes);
 
     this.vignette = document.createElement("div");
     this.vignette.className = "speed-vignette";
@@ -875,6 +879,7 @@ export class Game implements RunHost {
     this.live.forEach((p) => this.removePilot(p));
     this.ghosts.forEach((p) => this.removePilot(p));
     this.fx.dispose();
+    this.flock.dispose();
     this.abilityFx.dispose();
     this.abilityFx2.dispose();
     this.itemFx.dispose();
@@ -927,6 +932,7 @@ export class Game implements RunHost {
     this.avatar.revive();
     this.avatar.visible = true;
     this.fx.reset();
+    this.flock.reset();
     this.speedLines.reset();
     this.rig.snap(this.flight.position, this.flight.forward, this.flight.up, this.flight.speed);
   }
@@ -1186,12 +1192,23 @@ export class Game implements RunHost {
     if (this.flight.dodge(dir, abilities ? abilities.dodgeParams() : FLIGHT)) abilities?.dodged(dir, this.flight);
   }
 
+  /** The gate the flock leads to: the race's next, or in free flight the first one ahead on the line (z grows along it) */
+  private nextGate(): THREE.Vector3 | null {
+    const rings = this.world.course.rings;
+    if (this.raceState !== "free") return rings[this.checkpoints]?.position ?? null;
+    const z = this.flight.position.z + 8;
+    for (const ring of rings) if (ring.position.z > z) return ring.position;
+    return null;
+  }
+
   /** A gate was passed: it flares (WorldView), and shards, stars and light burst out of it */
   gateBurst(index: number) {
     const ring = this.world.course.rings[index];
     this.view.passRing(index);
     this.rig.kick();
     this.flash = 1;
+    this.flock.scatter();
+    this.avatar.flare();
     const amount = this.particles.budget * RINGS.shatter;
     if (amount <= 0) return;
     const tint = ring.finish ? GOLD : color.set(this.world.palette.accent).lerp(WARM, 0.6);
@@ -1540,6 +1557,9 @@ export class Game implements RunHost {
       this.rig.fall(body.position, dt, this.field);
     }
     this.debris.update(dt);
+
+    const flockMoving = !crashed && this.attract !== "drift" && this.raceState !== "countdown" && !waiting && !this.inWormhole;
+    this.flock.update(dt, this.flight.position, this.flight.velocity, flockMoving ? this.nextGate() : null, flockMoving);
 
     const camera = this.rig.camera;
     camera.updateMatrixWorld();

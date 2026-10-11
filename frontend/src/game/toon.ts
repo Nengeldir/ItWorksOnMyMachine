@@ -36,7 +36,11 @@ export interface ToonOptions {
   emissive?: THREE.ColorRepresentation;
   side?: THREE.Side;
   ghost?: boolean;
+  /** Extra light for the glowing parts, set per frame by whoever owns it (the cape's pulse) */
+  pulse?: { value: number };
 }
+
+const NO_PULSE = { value: 0 };
 
 /** A toon material with vertex colors and a rim light that wraps the silhouette */
 export function toonMaterial(options: ToonOptions = {}): THREE.MeshToonMaterial {
@@ -58,6 +62,7 @@ export function toonMaterial(options: ToonOptions = {}): THREE.MeshToonMaterial 
     shader.uniforms.toonRimColor = TOON_LIGHT.rimColor;
     shader.uniforms.toonGlow = TOON_LIGHT.glow;
     shader.uniforms.toonTime = TOON_LIGHT.time;
+    shader.uniforms.toonPulse = options.pulse ?? NO_PULSE;
     shader.vertexShader = shader.vertexShader
       .replace("void main() {", "attribute float glow;\nvarying float vGlow;\nvoid main() {")
       .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGlow = glow;");
@@ -69,13 +74,14 @@ export function toonMaterial(options: ToonOptions = {}): THREE.MeshToonMaterial 
         uniform vec3 toonRimColor;
         uniform float toonGlow;
         uniform float toonTime;
+        uniform float toonPulse;
         varying float vGlow;
         void main() {`,
       )
       .replace(
         "#include <emissivemap_fragment>",
         `#include <emissivemap_fragment>
-        totalEmissiveRadiance += diffuseColor.rgb * vGlow * toonGlow * (0.85 + 0.15 * sin(toonTime * 2.4 + vGlow * 6.0));`,
+        totalEmissiveRadiance += diffuseColor.rgb * vGlow * (toonGlow * (0.85 + 0.15 * sin(toonTime * 2.4 + vGlow * 6.0)) + toonPulse);`,
       )
       .replace(
         "#include <opaque_fragment>",

@@ -131,6 +131,7 @@ export const EMBER: Biome = {
   sky: { cloudSea: null, puffs: 25, puffsBelow: false, puffLift: 350, mist: { mode: "valley", above: 10, thickness: 26 } },
   particles: {
     ambient: [
+      { kind: "dust", rate: 7, colors: ["#fff1cf", "#ffe4b0"], night: 0.4 },
       { kind: "embers", rate: 50, colors: ["#ff7a2a", "#ffb04a"], night: 0.5 },
       { kind: "ash", rate: 30, colors: ["#4a4444", "#6a6060"] },
     ],

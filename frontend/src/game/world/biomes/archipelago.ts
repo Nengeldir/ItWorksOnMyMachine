@@ -100,6 +100,7 @@ export const ARCHIPELAGO: Biome = {
   sky: { cloudSea: { depth: 260 }, puffs: 30, puffsBelow: true, puffLift: 0, banks: 6, mist: { mode: "camera" } },
   particles: {
     ambient: [
+      { kind: "dust", rate: 7, colors: ["#fff1cf", "#ffe4b0"], night: 0.4 },
       { kind: "motes", rate: 22, colors: ["#ffe9b0", "#fff6dc"] },
       { kind: "fireflies", rate: 4, colors: ["#fff2a0"], night: 4 },
     ],

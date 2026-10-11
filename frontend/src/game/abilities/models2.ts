@@ -233,13 +233,13 @@ export class Swarm {
   private readonly tint: THREE.InstancedBufferAttribute;
   private count = 0;
 
-  constructor(kind: Creature, capacity: number) {
+  constructor(kind: Creature, capacity: number, colors: [string, string, string] = CREATURE_COLORS[kind]) {
     const geometry = creatureGeometry(kind);
     this.flap = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4).setUsage(THREE.DynamicDrawUsage);
     this.tint = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3).fill(1), 3).setUsage(THREE.DynamicDrawUsage);
     geometry.setAttribute("flap", this.flap);
     geometry.setAttribute("tint", this.tint);
-    const [inner, outer, rim] = CREATURE_COLORS[kind];
+    const [inner, outer, rim] = colors;
     const material = new THREE.ShaderMaterial({
       uniforms: {
         time: fxTime,

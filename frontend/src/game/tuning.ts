@@ -39,6 +39,11 @@ export const FX = {
   speedLines: 1, // wind streaks at speed
   speedLinesFrom: 45, // m/s where the wind streaks start
   aura: 1, // soft glow around the pilot
+  dust: 1, // Sky's winged-light dust in the air, as a multiplier on each biome's rate
+  flock: 1, // the flock of light butterflies leading to the next gate (0 hides it)
+  wisps: 1, // cloud wisps torn off the wingtips at speed
+  wispsFrom: 50, // m/s where the wisps start
+  capePulse: 1, // how much the cape's marks and the eyes flare on boost and gate passes
   ink: 0.55, // the pilot's ink outlines: their opacity (0 turns them off; Sky draws none)
   inkTint: 0.8, // 0: one dark ink everywhere, 1: each part's own color, darkened
   vignette: 1, // speed vignette at the screen edges
@@ -276,6 +281,11 @@ export const RANGES: Record<string, [number, number, number?]> = {
   speedLinesFrom: [10, 100],
   aura: [0, 3],
   ink: [0, 1],
+  dust: [0, 3],
+  flock: [0, 1],
+  wisps: [0, 3],
+  wispsFrom: [20, 90],
+  capePulse: [0, 3],
   inkTint: [0, 1],
   vignette: [0, 2],
   bloom: [0, 2.5],

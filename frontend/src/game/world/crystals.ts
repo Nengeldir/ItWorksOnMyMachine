@@ -224,6 +224,52 @@ const beamFragment = /* glsl */ `
   }
 `;
 
+// A winged light over every gate: a four-pointed star flare (Sky's sun-dog), big and
+// pulsing over the next gate, golden over the finish, a faint twinkle over the rest
+const flareVertex = /* glsl */ `
+  attribute float gate;
+  uniform vec4 gates[GATE_COUNT];
+  varying vec2 vUv;
+  varying vec4 vGate;
+  varying float vSeed;
+  varying float vDepth;
+  void main() {
+    vGate = gates[int(gate + 0.5)];
+    vUv = uv;
+    vSeed = gate;
+    // A billboard sized by how much the gate matters
+    float size = 2.6 + vGate.y * 4.0 + vGate.w * 2.0;
+    vec4 center = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+    center.xy += position.xy * size;
+    vDepth = -center.z;
+    gl_Position = projectionMatrix * center;
+  }
+`;
+
+const flareFragment = /* glsl */ `
+  uniform vec3 gold;
+  uniform float glow;
+  uniform float time;
+  varying vec2 vUv;
+  varying vec4 vGate;
+  varying float vSeed;
+  varying float vDepth;
+  void main() {
+    vec2 p = vUv * 2.0 - 1.0;
+    float r = length(p);
+    float core = exp(-r * r * 9.0);
+    float cross = (exp(-abs(p.x) * 7.0) * exp(-abs(p.y) * 1.6) + exp(-abs(p.y) * 7.0) * exp(-abs(p.x) * 1.6)) * (1.0 - smoothstep(0.6, 1.0, r));
+    float pulse = 0.75 + 0.25 * sin(time * 1.7 + vSeed * 6.0);
+    // Close up it would fill the screen: fade it out near the camera
+    float near = smoothstep(6.0, 25.0, vDepth);
+    float strength = vGate.x * (0.2 + vGate.y * 1.1 + vGate.w * 0.5) * pulse * glow * near;
+    if (strength < 0.002) discard;
+    vec3 base = mix(vec3(1.0, 0.95, 0.84), gold, vGate.w);
+    vec3 color = base * (core * 2.2 + cross * 1.2) * strength;
+    gl_FragColor = vec4(color, clamp((core + cross * 0.8) * strength, 0.0, 1.0));
+  }
+`;
+
 /** A crystal: a six-sided spindle, long axis y, from -1 to 1 */
 function crystalGeometry(): THREE.BufferGeometry {
   const profile = [
@@ -384,7 +430,30 @@ export class CrystalGates {
     beams.frustumCulled = false;
     beams.renderOrder = 2;
 
-    this.group.add(crystals, veils, beams);
+    // Winged lights: a star flare floating over every gate
+    const flareGeometry = this.geometry(new THREE.PlaneGeometry(1, 1));
+    flareGeometry.setAttribute("gate", new THREE.InstancedBufferAttribute(new Float32Array(rings.map((_, i) => i)), 1));
+    const flareMaterial = this.material(
+      new THREE.ShaderMaterial({
+        defines,
+        uniforms: { ...shared },
+        vertexShader: flareVertex,
+        fragmentShader: flareFragment,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
+    );
+    const flares = new THREE.InstancedMesh(flareGeometry, flareMaterial, Math.max(1, rings.length));
+    flares.count = rings.length;
+    rings.forEach((ring, i) => {
+      tmpMatrix.makeTranslation(ring.position.x, ring.position.y + ring.radius + 2.5, ring.position.z);
+      flares.setMatrixAt(i, tmpMatrix);
+    });
+    flares.frustumCulled = false;
+    flares.renderOrder = 3;
+
+    this.group.add(crystals, veils, beams, flares);
     this.crystals = crystals;
     this.veils = veils;
   }
