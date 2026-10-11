@@ -199,9 +199,10 @@ export const ITEMS_FX = {
 };
 
 /** Companion movement and scale: looks only, independent of all flight rules. */
-export const PET_LOOKS = { size: 1.8, spacing: 2.9, height: 0.7, trail: 0.8, follow: 8, snapDistance: 30, bob: 0.12, wingbeat: 1, tailSway: 1, lead: 9, sparkle: 1, gallop: 1.6, stride: 1, hoopRange: 60, guideBlend: 1.5 };
+/** `spacing`: the orbit's radius (m), `orbit`: seconds per lap, `roam`: seconds of free play after a hoop, `follow`: the spring's stiffness */
+export const PET_LOOKS = { size: 1.8, spacing: 3.2, height: 0.5, trail: 0.8, follow: 5, snapDistance: 30, bob: 0.12, wingbeat: 1, tailSway: 1, lead: 9, sparkle: 1, gallop: 1.6, stride: 1, hoopRange: 80, guideBlend: 0.8, orbit: 5.5, roam: 4 };
 /** Small ornaments and particle emission, never the pilot's hitbox. */
-export const COSMETIC_FX = { capeDetail: 1, wingParticles: 22, wingParticleSize: .1 };
+export const COSMETIC_FX = { capeDetail: 1, wingParticles: 22, wingParticleSize: .1, sparkle: 1 };
 /** Collection models and motion; reward rules live on the server. */
 export const COLLECTION_FX = { bob: 0.5, spin: 0.65, size: 2.2, crystalSize: 3.8, crystalMotes: 10, moteDistance: 80, viewDistance: 240, burst: 1 };
 
@@ -263,6 +264,8 @@ export const RANGES: Record<string, [number, number, number?]> = {
   stride: [0, 2],
   hoopRange: [0, 150],
   guideBlend: [0.3, 6],
+  orbit: [2, 12],
+  roam: [0, 8],
   capeDetail: [0, 2],
   wingParticles: [0, 50],
   wingParticleSize: [0.05, 0.5],
@@ -270,7 +273,7 @@ export const RANGES: Record<string, [number, number, number?]> = {
   trail: [0, 3],
   follow: [2, 16],
   snapDistance: [10, 60],
-  bob: [0, 0.4],
+  bob: [0, 1], // the pet's bob (0.12) and the collection pickups' (0.5) share the name
   wingbeat: [0, 2],
   tailSway: [0, 2],
   sparkle: [0, 3],

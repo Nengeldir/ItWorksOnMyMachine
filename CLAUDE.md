@@ -115,12 +115,13 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | :--- | :--- |
 | `profile/` | Profile types/API client, server-authoritative balances, durable account-scoped pickup outbox and equipped appearance notifications |
 | `game/run/collection.ts` | Adventure-only hoop-distance rarity placement, streamed obstacle clearance, swept collection (5.2 m crystals, 3.2 m treasures), toon crystal/cape tokens, nearby budgeted crystal motes and pickup animation |
-| `game/cosmetics/`, `game/pets/` | Cape/hat/shoe/wing catalogs and toon models; eight detailed bird/mythological pets (fanned feather tails, plumes, brush and spined tails, per-pet ornaments; the wingless dragon, kirin and fox gallop on two swinging leg pairs) flying beside the pilot and, within `PET_LOOKS.hoopRange` of a hoop, blending onto their own unscored autopilot rail through its centre, each shedding its own budgeted trail of light (`PET_SPARKS`, `PET_LOOKS.sparkle`) |
+| `game/cosmetics/`, `game/pets/` | Cape/hat/shoe/wing catalogs and toon models; eight detailed bird/mythological pets (fanned feather tails, plumes, brush and spined tails, per-pet ornaments; the wingless dragon, kirin and fox gallop on two swinging leg pairs) playing round the pilot (`companion.ts`: a springed, bobbing orbit with loops of joy, a few seconds of roaming after each hoop) and, within `PET_LOOKS.hoopRange` of a hoop, eased onto their own unscored autopilot rail through its centre, each shedding its own budgeted trail of light (`PET_SPARKS`, `PET_LOOKS.sparkle`) |
 | `components/ProfilePanel.tsx`, `components/CollectionPreview.tsx`, `components/TestCollectionPanel.tsx` | Persistent profile/inventory, equip controls, XP/crystal HUD, animated model preview (one shared WebGL renderer for the page: never a context per preview) and unsaved test fitting room |
 | `game/Game.ts` | The game: frame loop, fixed 120 Hz physics steps, race state, ring checks, HUD data, effects wiring (gate bursts, skim spray, gate motes), rendering with optional bloom and bounded broad halos (`FX.bloomHalo`), adaptive quality, test-only shared time scaling, the `?tune` panel |
 | `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only. `touching()` is the pilot's hitbox (`FLIGHT.hit*`): a ball for the body and a rectangle per wing, tilted up at a dihedral, fixed in the flight frame (never the animated pose), sampled against the distance field with early-outs; `hitboxWorld()` is the same hitbox in world space, which `Game.step` tests against the land drawn (`LandCollider`). `FlightMods` (run upgrades: drag, sink, stall, proximity boost, dash boost, thermal lift, hover, glide lock, `thrust`, a plunge's `dive`, Hover-Stall's `hang`, `turn` for stances and Aero-Braking, Zenith's `climb`, Ascension's `ascend`, a rise on rails in `ascendStep`) are only ever passed in run mode; `flap()`, `launch()`, `deflect()`, `surge()` and a forced `dodge()` are run abilities |
 | `game/avatar.ts` | The pilot: a cel-shaded chibi flyer built from primitives (merged per body part, vertex-colored), a procedural cape and scarf (`Cloth`), two-segment feathered wings, a sculpted face (jaw and cheeks, nose, mouth, layered eyes without ink) under two hair-and-eyes styles (`setStyle(1 | 2)`, from Settings' `pilotStyle`), and all its animation: bank lead spring, barrel rolls, flapping driven by effort, bobbing, cloth ripples, limb reactions. Also `createLabel` and `glowTexture` |
 | `game/toon.ts` | Toon material (3-band gradient, rim light tinted by the biome's sun, self-lit `glow` vertex attribute for trims and wingtips) and the inverted-hull ink outline. `TOON_LIGHT` is set per biome |
+| `game/cosmetics/sparkles.ts` | `CosmeticSparkles`: rare and legendary capes, hats and shoes shed their own particles in flight (`COSMETIC_SPARKLES`, `COSMETIC_FX.sparkle`). Decoration only: no powers |
 | `game/pilotfx.ts` | Per-pilot effects: wingtip and cape ribbons, fine motes sampled along the swept wing pose with subframe births, compact downstroke puffs, golden roll arcs and directional boost dust/slivers. Shared by you, other players and ghosts |
 | `game/particles.ts` | One GPU particle system (ring buffer, physics in the vertex shader). Kinds: Glow, Star, Shard, Wisp, Firefly, Bubble. `fxTime` is the shared shader clock; `FX_LIGHT.boost` scales all glowing effects per biome |
 | `game/trail.ts` | Glowing additive ribbon (shader: soft edges, light pulses, fades near the camera) |
@@ -234,6 +235,39 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-11: Bugfixes: the audit's fixes and patch notes, pets at play, rare cosmetics' particles (Claude)
+
+Asked for: move the pet work onto `Pengyue`; apply the audit
+(`docs/audit-2026-10-11.md`, from `final-review`) and fix what it found;
+bring over only the rare cosmetics' particles from `adventure-economy`
+(`fbc5829`), as decoration, nothing of the powers; one bugfixes commit and
+a pull request onto `main`.
+- **Audit fixes** (cherry-picked from `final-review`): the Node < 22.15 test
+  resolver, dead modules and the `bob` slider range, adventures without the
+  profile server, the fitting-room firework, signed `pow()` in the wormhole
+  and finale shaders, the landing logo under the profile pill.
+- **Audit patch notes**: `TRUST_USER_HEADERS` (set in `docker-compose.yml`)
+  gates the portal's login headers; room limits (`MAX_ROOMS` 500,
+  `ROOMS_PER_CREATOR_HOUR` 20, 429 beyond); adventure plans pruned to the
+  latest 40 per pilot; pickups' clearance cached for 0.5 s for drawing
+  (collecting still checks live); an `ItemFx` unit test. Bundle splitting
+  left out (the landing backdrop needs the whole game); see the audit.
+- **Pets** (`pets/companion.ts`): `adventure-economy`'s orbit (a springed,
+  bobbing circle round the pilot with loops of joy) instead of a fixed spot.
+  After a hoop it roams about 4 s (`PET_LOOKS.roam`), easing between spots,
+  then eases back into the orbit. Fixed a jump: the spring chased the rail and
+  snapped to it at full blend (4 to 5 m in a frame at every hoop) and flung
+  the pet when it left; now the rail is blended in after the spring, and the
+  blend itself is critically damped (`guideBlend` 0.8, `hoopRange` 80).
+- **Rare cosmetics' particles** (`cosmetics/sparkles.ts`, new): the Aurora,
+  royal and ember capes, the winged helm and star-witch hat, the frost and
+  ember shoes shed their own particles in every mode (the ember cape brighter
+  while boosting). `COSMETIC_FX.sparkle` in `?tune`. Decoration only.
+- Verified: `tsc`, build (bundle-size warning), lint; 135 frontend tests (new:
+  `sparkles.test.mjs`, `itemfx.test.mjs`, the pet roam and rail test) with the
+  checked-in resolver on Node 22.14; 36 backend tests (3 new). Not looked at
+  in a browser: the pets' play, the sparkles by day and night under bloom.
 
 ### 2026-10-11: Synced main into Pengyue; running pets, pets by the pilot, a 3D face with two styles, crystals-only pickups (Claude)
 
@@ -3017,9 +3051,11 @@ ported to the islands world:
 
 - Pilot styles: send `pilotStyle` with room snapshots so other players see it
   (remote pilots and ghosts are Style 1 now); look at both faces in flight, by
-  night and with hats. Pets: judge `hoopRange` and `lead` in play; the rail
-  can swing the pet across the pilot's view when the pilot is far off the line
-  near a hoop. Check the settings dialog's Pilot and Adventure rows on a phone.
+  night and with hats. Pets: watch their play in a browser and judge `orbit`,
+  `roam`, `hoopRange` and `lead`; the rail can swing the pet across the
+  pilot's view when the pilot is far off the line near a hoop. Rare cosmetics'
+  particles: look at them by day and night under bloom; remote pilots don't
+  shed them (rooms send no appearance). Bundle splitting: see the audit. Check the settings dialog's Pilot and Adventure rows on a phone.
 
 - Opening autopilot: play the handover by hand (keyboard, mouse, gamepad,
   touch, tilt) and judge the 0.25 steering threshold; look at the glowing

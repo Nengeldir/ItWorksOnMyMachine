@@ -161,3 +161,27 @@ def test_dodge_ghost_validation():
     assert Ghost(hz=15, samples=[base + [-0.4]]).samples[0][-1] == -0.4
     with pytest.raises(ValueError):
         Ghost(hz=15, samples=[base + [1.2]])
+
+
+def test_login_headers_are_ignored_unless_trusted(monkeypatch):
+    client = TestClient(app)
+    portal = {"X-User-Id": "zoe@ethz.ch", "X-User-Name": "Zoe"}
+    assert client.get("/api/me", headers=portal).json()["verified"] is True
+    monkeypatch.delenv("TRUST_USER_HEADERS")
+    # Without the portal in front, a forged header is just a guest
+    me = client.get("/api/me", params={"client_id": "abc"}, headers=portal).json()
+    assert me["id"] == "guest:abc" and me["verified"] is False
+
+
+def test_room_creation_is_limited(monkeypatch):
+    import rooms as rooms_module
+    monkeypatch.setattr(rooms_module, "ROOMS_PER_CREATOR_HOUR", 2)
+    join = lambda code, cid: client.post(f"/api/rooms/{code}/join", json={"client_id": cid, "nickname": "A"})
+    assert join("LIMA", "spammer").status_code == 200
+    assert join("LIMB", "spammer").status_code == 200
+    assert join("LIMC", "spammer").status_code == 429
+    # Joining a room that exists is never limited, and others can still create rooms
+    assert join("LIMA", "friend").status_code == 200
+    assert join("LIMD", "someone-else").status_code == 200
+    monkeypatch.setattr(rooms_module, "MAX_ROOMS", len(rooms.rooms))
+    assert join("LIME", "third").status_code == 429

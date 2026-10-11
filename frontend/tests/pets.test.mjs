@@ -96,7 +96,57 @@ test("all existing pets are genuine pets, stay by the pilot and take a rail thro
     const frozen = companion.group.position.clone(); companion.update(0,pilot,true,course); assert.ok(companion.group.position.equals(frozen));
     companion.update(1/60,pilot,false,course); assert.equal(companion.group.visible,false);
     const replacement = new Course(42); pilot.position.copy(replacement.start);
-    companion.update(1/60,pilot,true,replacement); assert.ok(companion.group.position.z > pilot.position.z);
+    // A new course: the pet comes along at once, playing round the pilot (ahead or behind), not on the old rail
+    companion.update(1/60,pilot,true,replacement); assert.ok(companion.group.position.distanceTo(pilot.position) < 5);
+    companion.dispose();
+  }
+});
+
+test("far from hoops the pet circles the pilot playfully and smoothly instead of holding one spot", () => {
+  const scene = new Group(), pilot = new Group(), companion = new Companion(scene);
+  companion.set("fox");
+  const sides = new Set(); let previous = null, largestStep = 0, farthest = 0;
+  for (let i = 0; i < 60 * 14; i++) {
+    pilot.position.z -= 40 / 60; // 40 m/s straight ahead (-z), no course: nothing to guide it
+    companion.update(1 / 60, pilot, true);
+    const offset = companion.group.position.clone().sub(pilot.position);
+    farthest = Math.max(farthest, offset.length());
+    // Which quarter round the pilot it is in: right, ahead, left or behind
+    sides.add(Math.floor(((Math.atan2(offset.x, -offset.z) + Math.PI * 2.25) % (Math.PI * 2)) / (Math.PI / 2)));
+    if (previous) largestStep = Math.max(largestStep, offset.distanceTo(previous));
+    previous = offset;
+  }
+  assert.equal(sides.size, 4, "it goes all the way round");
+  assert.ok(farthest < 4.6, `stays close (${farthest.toFixed(2)} m)`);
+  assert.ok(largestStep < 0.25, `moves smoothly (${largestStep.toFixed(3)} m per frame)`);
+  companion.dispose();
+});
+
+test("after a hoop the pet plays around for a few seconds, and never jumps on or off the rail", () => {
+  for (const biome of ["verdant", "skyIsles", "ember"]) {
+    const world = new World(runLevel(7, 1, biome)), course = world.course;
+    const scene = new Group(), pilot = new Group(), companion = new Companion(scene);
+    companion.set("fox");
+    let roamed = 0, longest = 0, run = 0, previous = null, velocity = null, fastest = 0, sharpest = 0;
+    const dt = 1 / 120;
+    for (let z = course.start.z; z < course.endZ; z += 40 * dt) {
+      course.pointAt(z, pilot.position);
+      companion.update(dt, pilot, true, course, 40);
+      // Motion relative to the pilot: how fast, and how suddenly that changes (a jump or a fling)
+      const offset = companion.group.position.clone().sub(pilot.position);
+      if (previous) {
+        const v = offset.clone().sub(previous).divideScalar(dt);
+        fastest = Math.max(fastest, v.length());
+        if (velocity) sharpest = Math.max(sharpest, v.distanceTo(velocity) / dt);
+        velocity = v;
+      }
+      previous = offset;
+      if (companion.roam > 0) { roamed++; run++; longest = Math.max(longest, run); } else run = 0;
+    }
+    assert.ok(roamed > 0, `${biome}: it roams after hoops`);
+    assert.ok(longest * dt > 2.5, `${biome}: it takes its time (${(longest * dt).toFixed(1)} s) before orbiting again`);
+    assert.ok(fastest < 22, `${biome}: never darts (${fastest.toFixed(1)} m/s relative to the pilot)`);
+    assert.ok(sharpest < 300, `${biome}: no jumps or flings (${sharpest.toFixed(0)} m/s² relative to the pilot)`);
     companion.dispose();
   }
 });

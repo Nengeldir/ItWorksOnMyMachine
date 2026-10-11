@@ -18,6 +18,9 @@ RACE_TIMEOUT_MS = 240_000
 # A player whose stream is closed and who stopped sending state is dropped after this
 PLAYER_TIMEOUT_MS = 15_000
 EMPTY_ROOM_TIMEOUT_MS = 120_000
+# Rooms live in memory: at most this many at once, and this many new ones per pilot an hour
+MAX_ROOMS = 500
+ROOMS_PER_CREATOR_HOUR = 20
 # Snapshots go out when something moved, and at least this often
 SNAPSHOT_KEEPALIVE_MS = 1_000
 # A reported finish time must match the server's own clock within this much (network, clocks)
@@ -120,6 +123,10 @@ class Player:
 
 class RoomError(Exception):
     pass
+
+
+class RoomLimitError(Exception):
+    """Too many rooms, overall or created by one pilot (answered with 429)"""
 
 
 def check_finish_time(time_ms: int, elapsed_ms: int):
@@ -327,11 +334,21 @@ class Room:
 class RoomManager:
     def __init__(self):
         self.rooms: dict[str, Room] = {}
+        # When each pilot created their recent rooms (ms), for the per-hour limit
+        self.created: dict[str, list[int]] = {}
 
-    def get_or_create(self, code: str, seed: int | None = None) -> Room:
+    def get_or_create(self, code: str, seed: int | None = None, creator: str | None = None) -> Room:
         """The room with this code; a new one flies `seed` (if given), an existing one keeps its map"""
         room = self.rooms.get(code)
         if room is None:
+            if len(self.rooms) >= MAX_ROOMS:
+                raise RoomLimitError("All race rooms are busy right now. Try again in a few minutes.")
+            if creator is not None:
+                now = now_ms()
+                recent = [t for t in self.created.get(creator, []) if now - t < 3_600_000]
+                if len(recent) >= ROOMS_PER_CREATOR_HOUR:
+                    raise RoomLimitError("You've opened a lot of rooms this hour. Join one, or try again later.")
+                self.created[creator] = recent + [now]
             room = self.rooms[code] = Room(code, seed=seed)
         return room
 

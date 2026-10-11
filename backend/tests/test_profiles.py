@@ -166,3 +166,14 @@ def test_legacy_profiles_gain_wings_without_losing_pets_or_progress():
     profiles.claim(user, token, ["1:c0"])
     raw = json.loads(store.db.execute("SELECT data FROM profiles WHERE user_id = ?", (user.id,)).fetchone()["data"])
     assert raw["version"] == 2 and "pet:none" not in raw["inventory"]
+
+
+def test_old_adventure_plans_are_pruned(monkeypatch):
+    import profiles as module
+    monkeypatch.setattr(module, "KEEP_ADVENTURES", 3)
+    client = TestClient(app, headers={"X-User-Id": "prune-pilot"})
+    tokens = [client.post("/api/profile/adventures", json={"client_id": "prune-client", "seed": 7}).json()["token"] for _ in range(5)]
+    from app import store
+    with store.lock:
+        kept = {row["token"] for row in store.db.execute("SELECT token FROM adventures WHERE user_id = ?", ("prune-pilot",))}
+    assert kept == set(tokens[-3:])

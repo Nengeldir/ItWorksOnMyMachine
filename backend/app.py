@@ -33,7 +33,7 @@ from models import (
     TokenRequest,
     User,
 )
-from rooms import Listener, Player, Room, RoomError, RoomManager, check_finish_time, encode, now_ms
+from rooms import Listener, Player, Room, RoomError, RoomLimitError, RoomManager, check_finish_time, encode, now_ms
 from store import Store
 from profiles import Profiles
 
@@ -77,8 +77,14 @@ def clean_name(name: str) -> str:
 
 
 # Every endpoint that needs the current user calls this with its request
+def trust_user_headers() -> bool:
+    """The VIScon portal sets X-User-Id/X-User-Name in front of port 8080; anywhere else a browser
+    could send them itself. Only trusted when TRUST_USER_HEADERS=1 (docker-compose.yml sets it)"""
+    return os.getenv("TRUST_USER_HEADERS", "") == "1"
+
+
 def extract_user(request: Request, client_id: str = "", nickname: str = "") -> User:
-    id = request.headers.get("X-User-Id", "").strip()
+    id = request.headers.get("X-User-Id", "").strip() if trust_user_headers() else ""
     if id:
         name = request.headers.get("X-User-Name")
         # The VIScon proxy percent-encodes non-ASCII characters (e.g. "Zo%C3%AB" -> "Zoë")
@@ -155,7 +161,10 @@ def equip_cosmetic(body: EquipRequest, request: Request):
 @app.post("/api/rooms/{code}/join")
 async def join_room(code: str, body: JoinRequest, request: Request):
     user = extract_user(request, body.client_id, body.nickname)
-    room = rooms.get_or_create(room_code(code), body.seed)
+    try:
+        room = rooms.get_or_create(room_code(code), body.seed, creator=user.id)
+    except RoomLimitError as e:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, str(e))
     try:
         player = room.join(user.id, user.name)
     except RoomError as e:
