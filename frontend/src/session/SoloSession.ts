@@ -5,7 +5,7 @@ import type { InputObserver } from "../game/input";
 import { Store } from "./store";
 
 const COUNTDOWN_MS = 3000;
-const SOLO_COLOR = "#ff5d73";
+const SOLO_COLOR = "#e04f4a"; // Sky's red cape
 
 export interface SoloResult {
   timeMs: number;

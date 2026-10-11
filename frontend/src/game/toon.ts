@@ -91,15 +91,41 @@ export function toonMaterial(options: ToonOptions = {}): THREE.MeshToonMaterial 
   return material;
 }
 
+/** The pilot's ink (FX.ink, FX.inkTint): how opaque the lines are, and how much they take each part's own color */
+export const INK = { opacity: { value: 1 }, tint: { value: 0 } };
+
+export interface OutlineOptions {
+  /**
+   * The line takes the vertex color, darkened, by `INK.tint` (so white hair gets a
+   * pale line and a red cape a dark red one, and nothing reads as a cut-out), fades
+   * by `INK.opacity`, and keeps a steadier width on screen
+   */
+  tint?: boolean;
+}
+
 /** Ink outline: the same mesh, drawn inside out and pushed out along its normals */
-export function outlineMaterial(width = 0.022, color: THREE.ColorRepresentation = "#2a1f2e"): THREE.MeshBasicMaterial {
-  const material = new THREE.MeshBasicMaterial({ color, side: THREE.BackSide });
+export function outlineMaterial(width = 0.022, color: THREE.ColorRepresentation = "#2a1f2e", options: OutlineOptions = {}): THREE.MeshBasicMaterial {
+  const tint = !!options.tint;
+  const material = new THREE.MeshBasicMaterial({ color, side: THREE.BackSide, vertexColors: tint, transparent: tint });
   material.onBeforeCompile = (shader) => {
     shader.uniforms.outlineWidth = { value: width };
     shader.vertexShader = shader.vertexShader
       .replace("void main() {", "uniform float outlineWidth;\nvoid main() {")
-      .replace("#include <begin_vertex>", "vec3 transformed = position + normal * outlineWidth;");
+      .replace(
+        "#include <begin_vertex>",
+        tint
+          ? // Thinner up close, wider far away, so the line stays about as wide on screen (then fog takes it)
+            "vec4 inkView = modelViewMatrix * vec4(position, 1.0);\nvec3 transformed = position + normal * outlineWidth * clamp(-inkView.z / 10.0, 0.6, 2.5);"
+          : "vec3 transformed = position + normal * outlineWidth;",
+      );
+    if (tint) {
+      shader.uniforms.inkTint = INK.tint;
+      shader.uniforms.inkOpacity = INK.opacity;
+      shader.fragmentShader = shader.fragmentShader
+        .replace("void main() {", "uniform float inkTint;\nuniform float inkOpacity;\nvoid main() {")
+        .replace("#include <color_fragment>", "diffuseColor.rgb = mix(diffuseColor.rgb, vColor.rgb * 0.42, inkTint);\ndiffuseColor.a *= inkOpacity;");
+    }
   };
-  material.customProgramCacheKey = () => `windrider-outline-${width}`;
+  material.customProgramCacheKey = () => `windrider-outline-${width}-${tint ? "tint" : "ink"}`;
   return material;
 }

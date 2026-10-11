@@ -7,7 +7,7 @@ import type { Settings } from "../storage";
 import type { InputObserver } from "../game/input";
 import { Store } from "./store";
 
-const COLOR = "#ff5d73";
+const COLOR = "#e04f4a"; // Sky's red cape
 const BEST_KEY = "windrider.runs";
 
 export interface RunState {

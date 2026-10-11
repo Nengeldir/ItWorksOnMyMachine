@@ -13,6 +13,8 @@ const vel = new THREE.Vector3();
 const color = new THREE.Color();
 const down = new THREE.Vector3();
 const jitter = new THREE.Vector3();
+/** Sky's light: warm white; the player's color only tints it (FX.lightTint) */
+const WARM = new THREE.Color("#fff1cf");
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
@@ -35,7 +37,7 @@ export class PilotFx {
   private readonly ghost: boolean;
   private readonly head = new THREE.Color();
   private readonly body = new THREE.Color();
-  private readonly gold = new THREE.Color("#ffe6a0");
+  private readonly gold = new THREE.Color("#ffe4b0");
   private debtL = 0;
   private debtR = 0;
   private spiralDebt = 0;
@@ -50,9 +52,10 @@ export class PilotFx {
     this.share = options.share ?? 1;
     this.ghost = !!options.ghost;
     this.trails = [
-      new Trail(color, { width: 0.16, shimmer: 1 }),
-      new Trail(color, { width: 0.16, shimmer: 1 }),
-      new Trail(color, { width: 0.55, shimmer: 0.35, length: 1.4 }),
+      // Soft streams of air off the wingtips and a veil off the cape, not neon ribbons
+      new Trail(color, { width: 0.3, shimmer: FX.trailShimmer }),
+      new Trail(color, { width: 0.3, shimmer: FX.trailShimmer }),
+      new Trail(color, { width: 0.75, shimmer: FX.trailShimmer * 0.35, length: 1.4 }),
     ];
     this.setColor(color);
     avatar.onDownstroke = (strength) => this.downstroke(strength);
@@ -63,12 +66,11 @@ export class PilotFx {
   }
 
   setColor(value: string) {
-    this.body.set(value);
-    this.head.set(value).lerp(new THREE.Color("#ffffff"), 0.6);
-    const ribbon = this.ghost ? "#ffffff" : value;
-    this.trails[0].setColor(ribbon);
-    this.trails[1].setColor(ribbon);
-    this.trails[2].setColor(ribbon, this.ghost ? "#ffffff" : new THREE.Color(value).multiplyScalar(0.8).getStyle());
+    this.head.copy(WARM);
+    this.body.copy(WARM).lerp(new THREE.Color(value), FX.lightTint);
+    const ribbon = this.ghost ? "#ffffff" : WARM.getStyle();
+    const tail = this.ghost ? "#ffffff" : this.body.getStyle();
+    for (const trail of this.trails) trail.setColor(ribbon, tail);
   }
 
   reset() {
@@ -92,7 +94,7 @@ export class PilotFx {
     avatar.group.getWorldPosition(this.center);
 
     const barrel = avatar.barrelProgress >= 0 ? Math.sin(Math.PI * avatar.barrelProgress) : 0;
-    const wingOpacity = THREE.MathUtils.clamp(0.18 + (speed - 30) / 45 + proximity * 0.5 + barrel * 0.6 + avatar.boost * 0.3 - avatar.brake * 0.2, 0, 0.95);
+    const wingOpacity = THREE.MathUtils.clamp(0.12 + (speed - 30) / 60 + proximity * 0.4 + barrel * 0.5 + avatar.boost * 0.3 - avatar.brake * 0.2, 0, 0.8);
     const lengthScale = 1 + avatar.boost * 0.45 - avatar.brake * 0.35;
     for (const trail of this.trails) trail.glowScale = 1 + avatar.boost * FX.boostTrailGlow;
     this.trails[0].push(tipL, span, lengthScale);
@@ -101,7 +103,7 @@ export class PilotFx {
     this.trails[1].opacity = wingOpacity * (this.ghost ? 0.6 : 1);
     this.trails[2].push(cape, span, lengthScale);
     this.trails[2].opacity = FX.bodyTrail
-      ? THREE.MathUtils.clamp(0.12 + (speed - 25) / 70 + proximity * 0.3, 0, 0.6) * (this.ghost ? 0.4 : 1)
+      ? THREE.MathUtils.clamp(0.08 + (speed - 25) / 90 + proximity * 0.25, 0, 0.45) * (this.ghost ? 0.4 : 1)
       : 0;
 
     const particles = this.particles;
@@ -114,8 +116,8 @@ export class PilotFx {
         fx(0.35, 0.7, this.head, Kind.Wisp, 0, 2, 0.5));
     }
 
-    // Light motes shed from the wingtips: more with speed, a sky-like drift upwards
-    const rate = (10 + speed * 0.9) * FX.sparkles * budget * (1 + proximity + avatar.boost);
+    // Light motes shed from the wingtips: few and large, drifting up slowly like Sky's winged light
+    const rate = (4 + speed * 0.35) * FX.sparkles * budget * (1 + proximity + avatar.boost);
     this.debtL += rate * dt;
     this.debtR += rate * dt;
     for (; this.debtL >= 1; this.debtL--) this.mote(tipL);
@@ -136,12 +138,12 @@ export class PilotFx {
   }
 
   private mote(tip: THREE.Vector3) {
-    const star = Math.random() < 0.3;
-    color.copy(this.head).lerp(this.body, Math.random() * 0.6);
+    const star = Math.random() < 0.55;
+    color.copy(this.head).lerp(this.body, Math.random());
     this.particles!.emit(
       at.set(tip.x + rand(-0.25, 0.25), tip.y + rand(-0.25, 0.25), tip.z + rand(-0.25, 0.25)),
-      vel.copy(this.velocity).multiplyScalar(0.12).add(jitter.set(rand(-1.2, 1.2), rand(-0.4, 1.2), rand(-1.2, 1.2))),
-      fx(rand(0.7, 1.5), star ? rand(0.3, 0.55) : rand(0.18, 0.4), color, star ? Kind.Star : Kind.Glow, -0.8, 1.4, this.ghost ? 0.8 : rand(1.4, 2.4)),
+      vel.copy(this.velocity).multiplyScalar(0.08).add(jitter.set(rand(-0.7, 0.7), rand(-0.2, 0.9), rand(-0.7, 0.7))),
+      fx(rand(1.2, 2.4), star ? rand(0.45, 0.8) : rand(0.3, 0.55), color, star ? Kind.Star : Kind.Glow, -0.45, 2.2, this.ghost ? 0.7 : rand(1.1, 1.7)),
     );
   }
 

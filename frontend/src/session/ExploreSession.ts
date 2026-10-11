@@ -8,7 +8,7 @@ import { BIOMES, type BiomeId, makeLevel, runLevel } from "../game/world/biomes"
 import type { Settings } from "../storage";
 import { Store } from "./store";
 
-const COLOR = "#ff5d73";
+const COLOR = "#e04f4a"; // Sky's red cape
 const ORDER = Object.keys(BIOMES) as BiomeId[];
 
 export interface ExploreState {

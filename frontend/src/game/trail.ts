@@ -37,8 +37,8 @@ const fragmentShader = /* glsl */ `
     float fade = pow(1.0 - t, 1.6) * smoothstep(0.0, 0.03, t);
     // Light pulses running down the ribbon
     float pulse = 1.0 + shimmer * (0.5 * sin(t * 46.0 - time * 14.0) + 0.35 * sin(t * 17.0 - time * 5.0));
-    float core = pow(across, 3.0); // a bright thread in the middle
-    vec3 color = mix(head, tail, smoothstep(0.0, 0.7, t)) * (across * 0.55 + core * 0.9) * pulse * glow;
+    float core = pow(across, 3.0); // a faint thread in the middle (soft, like a stream of air)
+    vec3 color = mix(head, tail, smoothstep(0.0, 0.7, t)) * (across * 0.6 + core * 0.4) * pulse * glow;
     float a = fade * opacity * vNear;
     #ifdef USE_FOG
       a *= 1.0 - smoothstep(fogNear, fogFar, vFogDepth);

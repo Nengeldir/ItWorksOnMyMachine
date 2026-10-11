@@ -27,7 +27,7 @@ import { INTERPOLATION_DELAY_MS, Pilot, type PilotSample } from "./pilots";
 // import { WINGTIPS, createAirplane } from "./airplane";
 import { clamp } from "./math";
 import { SpeedLines } from "./speedlines";
-import { TOON_LIGHT } from "./toon";
+import { INK, TOON_LIGHT } from "./toon";
 import { FX, RANGES, RINGS, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveTuning } from "./tuning";
 import { ABILITY } from "./run/abilities";
 import { ITEM, RUN_ITEMS, type RunItemId } from "./run/items";
@@ -50,8 +50,10 @@ const START_SPEED = 32; // m/s
 /** The autopilot starts the course again this far past the finish (the line runs on, down towards a sea) */
 const AUTOPILOT_LOOP = 40;
 const HUD_INTERVAL = 100; // ms
-const GOLD = new THREE.Color("#ffd23f");
+const GOLD = new THREE.Color("#ffe0a0");
 const WHITE = new THREE.Color("#ffffff");
+/** Sky's light: warm white; the biome's accent only tints it */
+const WARM = new THREE.Color("#fff1cf");
 const SPRAY = new THREE.Color("#e8f7ff");
 const LAVA_SPARK = new THREE.Color("#ff9a3c");
 
@@ -1192,7 +1194,7 @@ export class Game implements RunHost {
     this.flash = 1;
     const amount = this.particles.budget * RINGS.shatter;
     if (amount <= 0) return;
-    const tint = ring.finish ? GOLD : color.set(this.world.palette.accent);
+    const tint = ring.finish ? GOLD : color.set(this.world.palette.accent).lerp(WARM, 0.6);
     const forward = ring.normal;
     const crystals = this.view.gates.crystalPositions(index, this.crystalPoints);
     for (const p of crystals) {
@@ -1205,7 +1207,7 @@ export class Game implements RunHost {
             .multiplyScalar(rand(5, 15))
             .addScaledVector(forward, rand(2, 6) + this.flight.speed * 0.15)
             .add(tmp2.set(rand(-2, 2), rand(-2, 2), rand(-2, 2))),
-          fx(rand(1, 1.9), rand(0.45, 0.95), k % 2 ? WHITE : tint, Kind.Shard, 4, 1.1, 2.8),
+          fx(rand(1, 1.9), rand(0.45, 0.95), k % 2 ? WARM : tint, Kind.Shard, 4, 1.1, 2.8),
         );
       }
     }
@@ -1220,7 +1222,7 @@ export class Game implements RunHost {
       this.particles.emit(
         this.flight.position,
         vel.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize().multiplyScalar(rand(4, 10)).addScaledVector(this.flight.velocity, 0.6),
-        fx(rand(0.5, 0.9), rand(0.5, 1.1), WHITE, Kind.Glow, 0, 3, 2),
+        fx(rand(0.5, 0.9), rand(0.5, 1.1), WARM, Kind.Glow, 0, 3, 2),
       );
     }
   }
@@ -1228,7 +1230,7 @@ export class Game implements RunHost {
   /** Stars and puffs off the impact, thrown away from the surface; each kind of crash adds its own */
   private crashBurst(kind: DeathKind, away: THREE.Vector3, p: THREE.Vector3) {
     const amount = this.particles.budget;
-    color.set(this.world.palette.accent);
+    color.set(this.world.palette.accent).lerp(WARM, 0.5);
     // Fewer and smaller than they'd be for a vanishing pilot: the body stays on screen
     for (let k = 0; k < Math.round(40 * amount); k++) {
       vel.set(rand(-1, 1), rand(-0.3, 1), rand(-1, 1)).normalize().addScaledVector(away, 0.8).normalize();
@@ -1236,7 +1238,7 @@ export class Game implements RunHost {
         p,
         vel.multiplyScalar(rand(8, 20)).addScaledVector(this.flight.velocity, -0.1),
         k % 3
-          ? fx(rand(0.4, 0.8), rand(0.25, 0.5), WHITE, Kind.Star, 6, 2, 2)
+          ? fx(rand(0.4, 0.8), rand(0.25, 0.5), WARM, Kind.Star, 6, 2, 2)
           : fx(rand(0.6, 1), rand(1, 2), color, Kind.Wisp, -1, 2.5, 0.6),
       );
     }
@@ -1273,18 +1275,18 @@ export class Game implements RunHost {
           this.softParticles.emit(at, vel.copy(d.normal).multiplyScalar(rand(1, 3)).addScaledVector(d.velocity, -0.2), fx(rand(0.6, 1.1), rand(0.5, 1.1), color, Kind.Glow, -0.2, 2, 0.45));
         } else {
           at.copy(p).add(tmp.set(rand(-0.8, 0.8), rand(-0.4, 0.4), rand(-0.8, 0.8)));
-          this.particles.emit(at, vel.set(rand(-1, 1), rand(0, 1.5), rand(-1, 1)), fx(rand(0.6, 1.1), rand(0.2, 0.4), WHITE, Kind.Glow, -0.5, 1.5, 1.8));
+          this.particles.emit(at, vel.set(rand(-1, 1), rand(0, 1.5), rand(-1, 1)), fx(rand(0.6, 1.1), rand(0.2, 0.4), WARM, Kind.Glow, -0.5, 1.5, 1.8));
         }
       }
     }
     // At the end the pilot dissolves into light, like a Sky child returning home
     if (!this.dissolved && d.time >= DISSOLVE_AT) {
       this.dissolved = true;
-      color.set(this.world.palette.accent).lerp(WHITE, 0.5);
+      color.set(this.world.palette.accent).lerp(WARM, 0.75);
       for (let k = 0; k < Math.round(70 * amount); k++) {
         at.copy(p).add(tmp.set(rand(-0.6, 0.6), rand(-0.6, 0.6), rand(-0.6, 0.6)));
         vel.set(rand(-1, 1), rand(-0.2, 1), rand(-1, 1)).normalize().multiplyScalar(rand(1, 5));
-        this.particles.emit(at, vel, k % 3 ? fx(rand(0.8, 1.6), rand(0.25, 0.5), color, Kind.Glow, -2, 1.5, 2.4) : fx(rand(0.9, 1.6), rand(0.4, 0.7), WHITE, Kind.Star, -1.5, 1.5, 2.6));
+        this.particles.emit(at, vel, k % 3 ? fx(rand(0.8, 1.6), rand(0.25, 0.5), color, Kind.Glow, -2, 1.5, 2.4) : fx(rand(0.9, 1.6), rand(0.4, 0.7), WARM, Kind.Star, -1.5, 1.5, 2.6));
       }
     }
   }
@@ -1383,7 +1385,7 @@ export class Game implements RunHost {
     if (Math.abs(n.y) < 0.95) basisA.crossVectors(n, THREE.Object3D.DEFAULT_UP).normalize();
     else basisA.set(1, 0, 0);
     basisB.crossVectors(n, basisA);
-    const tint = ring.finish ? GOLD : color.set(this.world.palette.accent);
+    const tint = ring.finish ? GOLD : color.set(this.world.palette.accent).lerp(WARM, 0.6);
     for (; this.moteDebt >= 1; this.moteDebt--) {
       const angle = Math.random() * Math.PI * 2;
       const r = ring.radius * rand(0.9, 1.25);
@@ -1429,6 +1431,8 @@ export class Game implements RunHost {
     }
     this.elapsed += dt;
     fxTime.value = this.elapsed;
+    INK.opacity.value = FX.ink;
+    INK.tint.value = FX.inkTint;
     this.adaptQuality(realDt);
 
     const selfFlying = this.attract === "chase" || this.autopiloting;

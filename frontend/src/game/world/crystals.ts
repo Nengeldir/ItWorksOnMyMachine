@@ -12,7 +12,7 @@ import type { Ring } from "./course";
 
 export type RingMode = "race" | "free" | "hidden";
 
-const GOLD = new THREE.Color("#ffd23f");
+const GOLD = new THREE.Color("#ffe0a0");
 
 /** Per-gate state on the CPU; uploaded as one vec4 per gate */
 interface GateState {
@@ -100,7 +100,7 @@ const crystalFragment = /* glsl */ `
     // Bright rims and a thin-film shimmer, like light through a gem
     vec3 film = 0.5 + 0.5 * cos(6.2831 * (fresnel * 1.3 + vec3(0.0, 0.33, 0.67)) + time * 0.6 + vSeed);
     color += fresnel * mix(vec3(1.0), base, 0.35) * (0.9 + vHighlight * 1.4 * glow);
-    color += film * fresnel * 0.35;
+    color += film * fresnel * 0.12; // a hint of rainbow, no more: Sky's light stays warm white
     color += spec * 1.8;
     color *= 1.0 + vHighlight * glow * (0.45 + 0.25 * sin(time * 3.0 + vSeed));
     color += vFlash * vec3(3.2, 3.0, 2.6);

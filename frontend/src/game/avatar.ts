@@ -8,7 +8,7 @@ import { DISSOLVE_AT, type DeathKind, WING_POINTS } from "./death";
 import type { ItemSlot } from "./items/models";
 
 // The pilot: a small cel-shaded flyer with Genshin / Sky proportions (a big
-// head, slim limbs), a Sky-style cape, a scarf, and a pair of feathered
+// head, slim limbs), a Sky-style cape that spreads into wings, and
 // glider wings on the back. Everything is built from primitives at runtime.
 //
 // The body is modelled standing (up +y, facing -z, right +x) and then laid
@@ -22,42 +22,45 @@ const TAU = Math.PI * 2;
 // --- colors ----------------------------------------------------------------------
 
 interface Tones {
-  skin: THREE.Color;
-  blush: THREE.Color;
+  body: THREE.Color; // the Sky child's dark body: face, hands, legs
   hair: THREE.Color;
   hairShine: THREE.Color;
-  cloth: THREE.Color;
-  clothLight: THREE.Color;
-  clothDark: THREE.Color;
-  trim: THREE.Color;
-  dark: THREE.Color;
-  white: THREE.Color;
-  eye: THREE.Color;
-  tip: THREE.Color;
+  tunic: THREE.Color;
+  tunicShade: THREE.Color;
+  cape: THREE.Color; // the player's color: the cape and its wings, outside
+  capeInner: THREE.Color; // the lighter inside of the cape
+  capeDark: THREE.Color;
+  trim: THREE.Color; // pale gold, only for the cape's light marks (they glow)
+  eye: THREE.Color; // the eyes are lights (above 1, so they bloom)
+  tip: THREE.Color; // the wings' edges (they glow at night)
 }
 
 type ToneName = keyof Tones;
-/** A flat tone, or a function of the vertex position (in the part's space) and its index */
-type Paint = ToneName | ((p: THREE.Vector3, tones: Tones, out: THREE.Color, index: number) => void);
+/**
+ * A flat tone, or a function of the vertex position (in the part's space) and
+ * its index; a function may return a glow (0..1) for the vertex, which lights
+ * up at night (the eyes, the cape's marks and the wings' edges)
+ */
+type Paint = ToneName | ((p: THREE.Vector3, tones: Tones, out: THREE.Color, index: number) => number | void);
 
+/** The Sky child: one strong cape color (the player's), a cream tunic, a dark body, white hair */
 function tonesFor(color: string): Tones {
-  const cloth = new THREE.Color(color);
-  const white = new THREE.Color("#fbf6ec");
+  const cape = new THREE.Color(color);
+  const cream = new THREE.Color("#f6efe2");
   const hsl = { h: 0, s: 0, l: 0 };
-  cloth.getHSL(hsl);
+  cape.getHSL(hsl);
   return {
-    skin: new THREE.Color("#ffe1cf"),
-    blush: new THREE.Color("#ffa9a4"),
-    hair: new THREE.Color("#3d2c4f").lerp(cloth, 0.12),
-    hairShine: new THREE.Color("#7a5d8f").lerp(cloth, 0.2),
-    cloth,
-    clothLight: cloth.clone().lerp(white, 0.55),
-    clothDark: new THREE.Color().setHSL(hsl.h, Math.min(1, hsl.s * 0.9), hsl.l * 0.5),
-    trim: new THREE.Color("#f3c869"),
-    dark: new THREE.Color("#3a3245"),
-    white,
-    eye: new THREE.Color("#2b2140"),
-    tip: new THREE.Color().setHSL((hsl.h + 0.08) % 1, 0.75, 0.72),
+    body: new THREE.Color("#3a2f36"),
+    hair: new THREE.Color("#efe7d8"),
+    hairShine: new THREE.Color("#fffaf0"),
+    tunic: new THREE.Color("#e9dcc1"),
+    tunicShade: new THREE.Color("#cdbb98"),
+    cape,
+    capeInner: cape.clone().lerp(cream, 0.5),
+    capeDark: new THREE.Color().setHSL(hsl.h, Math.min(1, hsl.s * 0.9), hsl.l * 0.55),
+    trim: new THREE.Color("#f6c35a"),
+    eye: new THREE.Color(1.7, 1.5, 1.1),
+    tip: cape.clone().lerp(cream, 0.72),
   };
 }
 
@@ -122,38 +125,53 @@ interface Painted {
 const paintColor = new THREE.Color();
 const paintPoint = new THREE.Vector3();
 
-/** How close two colors are, 1 = the same */
-function likeness(a: THREE.Color, b: THREE.Color): number {
-  const d = Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b);
-  return 1 - smoothstep(0.03, 0.22, d);
-}
-
-/** Writes vertex colors, and a glow for the gold trims and the wingtips (they light up at night) */
+/** Writes vertex colors, and the glow of the parts that light up at night */
 function applyPaint({ geometry, ranges }: Painted, tones: Tones) {
   const position = geometry.getAttribute("position");
   const color = geometry.getAttribute("color") as THREE.BufferAttribute;
   const glow = geometry.getAttribute("glow") as THREE.BufferAttribute;
   for (const { start, count, paint } of ranges) {
     for (let i = start; i < start + count; i++) {
-      if (typeof paint === "string") paintColor.copy(tones[paint]);
-      else paint(paintPoint.fromBufferAttribute(position, i), tones, paintColor, i - start);
+      let light: number;
+      if (typeof paint === "string") {
+        paintColor.copy(tones[paint]);
+        light = paint === "trim" || paint === "eye" ? 1 : paint === "tip" ? 0.8 : 0;
+      } else {
+        light = paint(paintPoint.fromBufferAttribute(position, i), tones, paintColor, i - start) ?? 0;
+      }
       color.setXYZ(i, paintColor.r, paintColor.g, paintColor.b);
-      glow.setX(i, Math.max(likeness(paintColor, tones.trim), likeness(paintColor, tones.tip) * 0.8));
+      glow.setX(i, light);
     }
   }
   color.needsUpdate = true;
   glow.needsUpdate = true;
 }
 
-/** A leaf-shaped feather with a little thickness, lying along +x */
-function feather(length: number, width: number): THREE.BufferGeometry {
+/**
+ * A panel of the winged cape, lying along +x from its root: a slightly convex
+ * leading edge ahead (+y) and a trailing edge behind (-y) cut into rounded
+ * lobes, `rootDepth` deep at the root and `tipDepth` at the tip, which sits at
+ * (length, tipY). A little thickness, so it has edges to ink
+ */
+function panel(length: number, rootDepth: number, tipDepth: number, lobes: number, tipY = 0): THREE.BufferGeometry {
   const shape = new THREE.Shape();
-  shape.moveTo(0, -width * 0.5);
-  shape.quadraticCurveTo(length * 0.55, -width * 0.75, length, 0);
-  shape.quadraticCurveTo(length * 0.55, width * 0.75, 0, width * 0.5);
+  shape.moveTo(0, 0.03);
+  shape.quadraticCurveTo(length * 0.5, 0.06 + tipY * 0.5, length, tipY);
+  // Back along the trailing edge in lobes, each bulging behind the chord between its corners
+  let x0 = length;
+  let y0 = tipY;
+  for (let i = 1; i <= lobes; i++) {
+    const f = i / lobes;
+    const x1 = length * (1 - f);
+    const y1 = -(tipDepth + (rootDepth - tipDepth) * f);
+    const bulge = (rootDepth * 0.5) / lobes + 0.04;
+    shape.quadraticCurveTo((x0 + x1) / 2, (y0 + y1) / 2 - bulge, x1, y1);
+    x0 = x1;
+    y0 = y1;
+  }
   shape.closePath();
-  const geometry = new THREE.ExtrudeGeometry(shape, { depth: 0.014, bevelEnabled: false, curveSegments: 5 });
-  geometry.translate(0, 0, -0.007);
+  const geometry = new THREE.ExtrudeGeometry(shape, { depth: 0.012, bevelEnabled: false, curveSegments: 6 });
+  geometry.translate(0, 0, -0.006);
   return geometry;
 }
 
@@ -194,7 +212,7 @@ class Cloth {
   private readonly ribbonCorners = [this.ribbonTriangle.a, this.ribbonTriangle.b, this.ribbonTriangle.c];
   private readonly surfaceCorners = [this.surfaceTriangle.a, this.surfaceTriangle.b, this.surfaceTriangle.c];
 
-  constructor(cols: number, rows: number, paint: (u: number, v: number, tones: Tones, out: THREE.Color) => void, material: THREE.Material) {
+  constructor(cols: number, rows: number, paint: (u: number, v: number, tones: Tones, out: THREE.Color) => number | void, material: THREE.Material) {
     this.cols = cols;
     this.rows = rows;
     this.clearance = new Float32Array((cols + 1) * (rows + 1));
@@ -435,7 +453,7 @@ export class Avatar {
     const skinMat = this.material(toonMaterial({ ghost }));
     const clothMat = this.material(toonMaterial({ ghost, side: THREE.DoubleSide, rim: 0.3 }));
     const wingMat = this.material(toonMaterial({ ghost, side: THREE.DoubleSide, rim: 0.3, rimColor: "#ffffff" }));
-    const ink = ghost ? null : this.material(outlineMaterial(0.012));
+    const ink = ghost ? null : this.material(outlineMaterial(0.012, undefined, { tint: true }));
 
     this.group.add(this.rig);
     this.rig.add(this.body);
@@ -463,31 +481,30 @@ export class Avatar {
       this.clothObstacles.push({ mesh, local: mesh.geometry.boundingBox!.clone(), bounds: new THREE.Box3() });
     };
 
-    // Pelvis: a flared tunic hem, belt and buckle
+    // Pelvis: the bell of the tunic, wide and plain like a Sky child's
     this.pelvis.position.set(0, 0.74, 0);
     skeleton.add(this.pelvis);
     part(
       this.pelvis,
-      new PartBuilder()
-        .add(
-          lathe([
-            [0.001, 0.07],
-            [0.095, 0.07],
-            [0.112, -0.02],
-            [0.135, -0.1],
-            [0.138, -0.12],
-            [0.001, -0.12],
-          ]),
-          (p, t, out) => out.copy(p.y < -0.085 ? t.trim : t.clothDark),
-          [0, 0, 0],
-          [0, 0, 0],
-          [1, 1, 0.8],
-        )
-        .add(cyl(0.1, 0.1, 0.035, 14), "dark", [0, 0.06, 0], [0, 0, 0], [1, 1, 0.8])
-        .add(new THREE.OctahedronGeometry(0.026, 0), "trim", [0, 0.06, -0.082]),
+      new PartBuilder().add(
+        lathe([
+          [0.001, 0.07],
+          [0.1, 0.07],
+          [0.118, -0.02],
+          [0.138, -0.11],
+          [0.142, -0.135],
+          [0.001, -0.135],
+        ]),
+        (p, t, out) => {
+          out.copy(t.tunic).lerp(t.tunicShade, p.y < -0.125 ? 0.6 : 0);
+        },
+        [0, 0, 0],
+        [0, 0, 0],
+        [1, 1, 0.82],
+      ),
     );
 
-    // Chest: torso, collar, neck, a little sash
+    // Chest: the tunic, a soft collar, the dark neck, round shoulders
     this.chest.position.set(0, 0.06, 0);
     this.pelvis.add(this.chest);
     part(
@@ -496,71 +513,56 @@ export class Avatar {
         .add(
           lathe([
             [0.001, -0.02],
-            [0.094, -0.02],
-            [0.084, 0.06],
-            [0.1, 0.15],
-            [0.112, 0.21],
-            [0.078, 0.26],
+            [0.1, -0.02],
+            [0.088, 0.06],
+            [0.102, 0.15],
+            [0.114, 0.21],
+            [0.08, 0.26],
             [0.03, 0.285],
             [0.001, 0.285],
           ]),
-          (p, t, out) => {
-            // A white shirt panel down the front, cloth everywhere else
-            out.copy(p.z < -0.04 && Math.abs(p.x) < 0.045 + p.y * 0.12 ? t.white : t.cloth);
-          },
+          "tunic",
           [0, 0, 0],
           [0, 0, 0],
-          [1, 1, 0.78],
+          [1, 1, 0.8],
         )
-        .add(new THREE.TorusGeometry(0.05, 0.02, 6, 16), "trim", [0, 0.27, 0], [Math.PI / 2, 0, 0], [1, 1, 0.9])
-        .add(cyl(0.034, 0.038, 0.07, 10), "skin", [0, 0.3, 0])
-        .add(sphere(0.055, 10, 8), "clothLight", [0.1, 0.22, 0], [0, 0, 0], [1, 0.85, 0.85])
-        .add(sphere(0.055, 10, 8), "clothLight", [-0.1, 0.22, 0], [0, 0, 0], [1, 0.85, 0.85]),
+        .add(new THREE.TorusGeometry(0.05, 0.018, 6, 16), "tunicShade", [0, 0.27, 0], [Math.PI / 2, 0, 0], [1, 1, 0.9])
+        .add(cyl(0.034, 0.038, 0.07, 10), "body", [0, 0.3, 0])
+        .add(sphere(0.055, 10, 8), "tunic", [0.1, 0.22, 0], [0, 0, 0], [1, 0.85, 0.85])
+        .add(sphere(0.055, 10, 8), "tunic", [-0.1, 0.22, 0], [0, 0, 0], [1, 0.85, 0.85]),
     );
 
-    // Head: big and round, with bangs, side locks, a cowlick and a face
+    // Head: the dark face of a Sky child with two lights for eyes, under fluffy white hair
     this.head.position.set(0, 0.32, 0);
     this.chest.add(this.head);
-    const hair: Paint = (p, t, out) => out.copy(p.y > 0.12 && p.z < 0.02 ? t.hairShine : t.hair);
+    const hair: Paint = (p, t, out) => {
+      out.copy(t.hair).lerp(t.hairShine, smoothstep(0.12, 0.3, p.y));
+    };
     const headBuilder = new PartBuilder()
-      .add(sphere(0.165, 20, 14), "skin", [0, 0.15, 0], [0, 0, 0], [1, 0.97, 0.98])
-      .add(
-        new THREE.SphereGeometry(0.178, 20, 12, 0, TAU, 0, Math.PI * 0.58),
-        hair,
-        [0, 0.165, 0.008],
-        [0.35, 0, 0],
-      )
-      .add(sphere(0.12, 12, 8), hair, [0, 0.17, 0.07], [0, 0, 0], [1.3, 1.25, 1.1])
-      // Side locks and bangs hang down (cones point up, so flip them)
-      .add(new THREE.ConeGeometry(0.045, 0.17, 8), hair, [0.14, 0.06, -0.035], [Math.PI + 0.1, 0, -0.12])
-      .add(new THREE.ConeGeometry(0.045, 0.17, 8), hair, [-0.14, 0.06, -0.035], [Math.PI + 0.1, 0, 0.12])
-      .add(new THREE.ConeGeometry(0.038, 0.12, 7), hair, [0.065, 0.205, -0.125], [Math.PI + 0.45, 0, 0.3])
-      .add(new THREE.ConeGeometry(0.04, 0.13, 7), hair, [-0.01, 0.21, -0.135], [Math.PI + 0.4, 0, -0.05])
-      .add(new THREE.ConeGeometry(0.034, 0.11, 7), hair, [-0.085, 0.2, -0.12], [Math.PI + 0.45, 0, -0.35])
-      .add(new THREE.ConeGeometry(0.018, 0.14, 6), hair, [0.02, 0.36, -0.01], [-0.7, 0, 0.2])
-      // Eyes with a highlight, blush, a tiny hair clip
-      .add(sphere(0.026, 10, 8), "eye", [0.058, 0.13, -0.148], [0, 0, 0], [0.85, 1.25, 0.5])
-      .add(sphere(0.026, 10, 8), "eye", [-0.058, 0.13, -0.148], [0, 0, 0], [0.85, 1.25, 0.5])
-      .add(sphere(0.008, 6, 5), "white", [0.064, 0.143, -0.16])
-      .add(sphere(0.008, 6, 5), "white", [-0.052, 0.143, -0.16])
-      .add(sphere(0.022, 8, 6), "blush", [0.092, 0.095, -0.128], [0, 0, 0], [1.2, 0.6, 0.4])
-      .add(sphere(0.022, 8, 6), "blush", [-0.092, 0.095, -0.128], [0, 0, 0], [1.2, 0.6, 0.4])
-      .add(new THREE.OctahedronGeometry(0.03, 0), "trim", [0.15, 0.22, -0.04], [0, 0, 0.6], [1, 1.4, 0.6]);
+      .add(sphere(0.165, 20, 14), "body", [0, 0.15, 0], [0, 0, 0], [1, 0.97, 0.98])
+      .add(sphere(0.024, 10, 8), "eye", [0.056, 0.14, -0.152], [0, 0, 0], [0.8, 1.4, 0.5])
+      .add(sphere(0.024, 10, 8), "eye", [-0.056, 0.14, -0.152], [0, 0, 0], [0.8, 1.4, 0.5])
+      // A cap of hair, a fringe of puffs, side locks over the ears, a tuft on top
+      .add(new THREE.SphereGeometry(0.188, 20, 12, 0, TAU, 0, Math.PI * 0.62), hair, [0, 0.168, 0.012], [0.3, 0, 0])
+      .add(sphere(0.08, 12, 9), hair, [0.095, 0.215, -0.1], [0, 0, 0], [1.15, 0.95, 1])
+      .add(sphere(0.08, 12, 9), hair, [-0.095, 0.215, -0.1], [0, 0, 0], [1.15, 0.95, 1])
+      .add(sphere(0.075, 12, 9), hair, [0, 0.245, -0.115], [0, 0, 0], [1.2, 0.9, 1])
+      .add(sphere(0.06, 12, 9), hair, [0.15, 0.12, -0.02], [0, 0, 0.2], [0.8, 1.5, 0.9])
+      .add(sphere(0.06, 12, 9), hair, [-0.15, 0.12, -0.02], [0, 0, -0.2], [0.8, 1.5, 0.9])
+      .add(sphere(0.05, 10, 8), hair, [0.03, 0.33, 0.02], [0, 0, 0], [1.3, 0.8, 1.1]);
     part(this.head, headBuilder);
 
-    // A ponytail in two links that swing
+    // A short tail of hair in two puffs that swing
     let parent: THREE.Object3D = this.head;
     const ponyAt: Vec[] = [
-      [0, 0.24, 0.13],
-      [0, -0.13, 0],
+      [0, 0.22, 0.14],
+      [0, -0.12, 0],
     ];
     for (let i = 0; i < 2; i++) {
       const joint = new THREE.Object3D();
       joint.position.set(...ponyAt[i]);
       parent.add(joint);
-      const builder = new PartBuilder();
-      if (i === 0) builder.add(new THREE.TorusGeometry(0.03, 0.012, 6, 12), "trim", [0, 0, 0], [Math.PI / 2, 0, 0]);
-      builder.add(sphere(0.06 - i * 0.012, 10, 8), "hair", [0, -0.07, 0], [0, 0, 0], [1, 1.6, 0.9]);
+      const builder = new PartBuilder().add(sphere(0.065 - i * 0.018, 10, 8), hair, [0, -0.065, 0], [0, 0, 0], [1, 1.5, 0.9]);
       part(joint, builder);
       this.pony.push(joint);
       parent = joint;
@@ -574,9 +576,8 @@ export class Avatar {
       part(
         shoulder,
         new PartBuilder()
-          .add(sphere(0.05, 10, 8), "clothLight", [0, -0.02, 0])
-          .add(capsule(0.036, 0.13), "clothLight", [0, -0.1, 0])
-          .add(new THREE.TorusGeometry(0.037, 0.01, 5, 12), "trim", [0, -0.17, 0], [Math.PI / 2, 0, 0]),
+          .add(sphere(0.052, 10, 8), "tunic", [0, -0.02, 0])
+          .add(capsule(0.04, 0.11), "tunic", [0, -0.085, 0]),
       );
       const elbow = new THREE.Object3D();
       elbow.position.set(0, -0.19, 0);
@@ -584,73 +585,55 @@ export class Avatar {
       part(
         elbow,
         new PartBuilder()
-          .add(capsule(0.03, 0.13), "skin", [0, -0.08, 0])
-          .add(cyl(0.036, 0.033, 0.05, 10), "white", [0, -0.12, 0])
-          .add(sphere(0.036, 10, 8), "skin", [0, -0.19, 0], [0, 0, 0], [0.75, 1.15, 0.45]),
+          .add(capsule(0.03, 0.13), "body", [0, -0.08, 0])
+          .add(sphere(0.036, 10, 8), "body", [0, -0.19, 0], [0, 0, 0], [0.75, 1.15, 0.45]),
       );
 
       const hip = new THREE.Object3D();
       hip.position.set(0.062 * s, -0.04, 0);
       this.pelvis.add(hip);
-      clothObstacle(part(hip, new PartBuilder().add(capsule(0.05, 0.2), "white", [0, -0.14, 0])));
+      clothObstacle(part(hip, new PartBuilder().add(capsule(0.048, 0.2), "body", [0, -0.14, 0])));
       const knee = new THREE.Object3D();
       knee.position.set(0, -0.29, 0);
       hip.add(knee);
       clothObstacle(part(
         knee,
         new PartBuilder()
-          .add(capsule(0.042, 0.18), "dark", [0, -0.13, 0])
-          .add(new THREE.TorusGeometry(0.046, 0.013, 6, 12), "trim", [0, -0.03, 0], [Math.PI / 2, 0, 0])
+          .add(capsule(0.04, 0.18), "body", [0, -0.13, 0])
           // Pointed toes, like a dancer's
-          .add(capsule(0.034, 0.08), "dark", [0, -0.3, -0.012], [0.25, 0, 0]),
+          .add(capsule(0.034, 0.08), "body", [0, -0.3, -0.012], [0.25, 0, 0]),
       ));
 
-      // Wings: an inner arm-wing and an outer hand-wing, each a fan of feathers
+      // Wings: the cape itself, as in Sky, in two panels that bend at the wrist
       const wing = new THREE.Object3D();
-      wing.position.set(0.05 * s, 0.17, 0.12);
+      wing.position.set(0.05 * s, 0.17, 0.15);
       wing.rotation.order = "YZX";
       this.chest.add(wing);
-      const featherPaint: Paint = (p, t, out) => {
-        const d = p.length();
-        out.copy(t.cloth).lerp(t.clothLight, smoothstep(0.05, 0.6, d)).lerp(t.white, smoothstep(0.5, 0.9, d) * 0.6);
+      // The panels lie along +x; the left wing's are turned round (a rotation keeps the ink hull right)
+      const mirror: Vec = [0, s > 0 ? 0 : Math.PI, 0];
+      const panelPaint = (reach: number): Paint => (p, t, out) => {
+        // The outside in the player's color, the inside lighter; the far edges catch the light
+        const edge = smoothstep(0.55, 1, Math.hypot(p.x, p.y) / reach);
+        out.copy(p.z > 0 ? t.cape : t.capeInner).lerp(t.tip, edge * 0.7);
+        return edge * 0.6;
       };
-      const inner = new PartBuilder().add(capsule(0.022, 0.5), "trim", [0.27 * s, 0.03, 0], [0, 0, Math.PI / 2 - 0.12 * s]);
-      for (let i = 0; i < 4; i++) {
-        const angle = -0.9 - i * 0.22; // fanning back towards the feet
-        inner.add(feather(0.5 + i * 0.05, 0.13), featherPaint, [(0.08 + i * 0.13) * s, 0.02 + i * 0.012, 0.004 * i], [
-          0,
-          0,
-          s > 0 ? angle : Math.PI - angle,
-        ]);
-      }
+      const inner = new PartBuilder()
+        .add(panel(0.6, 0.5, 0.42, 2), panelPaint(0.75), [0, 0, 0], mirror)
+        .add(capsule(0.016, 0.52), "capeDark", [0.28 * s, 0.015, 0.004], [0, 0, Math.PI / 2 - 0.1 * s]);
       part(wing, inner, wingMat);
       const wingOuter = new THREE.Object3D();
-      wingOuter.position.set(0.54 * s, 0.07, 0);
+      wingOuter.position.set(0.56 * s, 0.03, 0);
       wingOuter.rotation.order = "YZX";
       wing.add(wingOuter);
-      const tipPaint: Paint = (p, t, out) => {
-        const d = p.length();
-        out.copy(t.clothLight).lerp(t.white, smoothstep(0.05, 0.4, d) * 0.5).lerp(t.tip, smoothstep(0.45, 0.95, d));
-      };
-      const outer = new PartBuilder().add(capsule(0.018, 0.3), "trim", [0.15 * s, -0.02, 0], [0, 0, Math.PI / 2 + 0.25 * s]);
-      const primaries = 5;
-      for (let i = 0; i < primaries; i++) {
-        const angle = 0.12 - i * 0.3;
-        const length = 0.98 - i * 0.1;
-        outer.add(feather(length, 0.15), tipPaint, [(0.05 + i * 0.045) * s, -0.02 * i, 0.004 * i], [
-          0,
-          0,
-          s > 0 ? angle : Math.PI - angle,
-        ]);
-      }
+      const outer = new PartBuilder()
+        .add(panel(1, 0.56, 0.06, 3, 0.1), panelPaint(1), [0, 0, 0], mirror)
+        .add(capsule(0.013, 0.45), "capeDark", [0.24 * s, 0.03, 0.004], [0, 0, Math.PI / 2 - 0.1 * s]);
       part(wingOuter, outer, wingMat);
       const tip = new THREE.Object3D();
-      tip.position.set((0.05 + 0.98 * Math.cos(0.12)) * s, 0.98 * Math.sin(0.12), 0);
+      tip.position.set(1 * s, 0.1, 0);
       wingOuter.add(tip);
-      const last = 0.12 - (primaries - 1) * 0.3;
-      const lastLength = 0.98 - (primaries - 1) * 0.1;
       const trail = new THREE.Object3D();
-      trail.position.set((0.05 + (primaries - 1) * 0.045 + lastLength * Math.cos(last)) * s, -0.02 * (primaries - 1) + lastLength * Math.sin(last), 0);
+      trail.position.set(0.02 * s, -0.56, 0);
       wingOuter.add(trail);
 
       return { shoulder, elbow, hip, knee, wing, wingOuter, tip, trail };
@@ -678,26 +661,33 @@ export class Avatar {
     this.feet = [foot(this.right), foot(this.left)];
     this.slots = { back, head: crown, hand, feet: this.feet[0] };
 
-    // The cape: wide, long and rippling, with a golden hem and an emblem
+    // The cape: wide, long and rippling, in the player's color, with a column of
+    // light marks down the back (Sky's wing energy) that glow
     this.cape = new Cloth(
       10,
       16,
       (u, v, t, out) => {
-        const emblem = Math.abs(u) * 1.25 + Math.abs(v - 0.42) * 3.2 < 0.42;
-        const hem = v > 0.9 || (v > 0.8 && v < 0.84);
-        out.copy(hem || emblem ? t.trim : t.cloth).lerp(t.clothDark, hem || emblem ? 0 : smoothstep(0.2, 1, v) * 0.5);
+        const row = Math.round(v * 16);
+        const mark = Math.abs(u) < 0.15 && row >= 5 && row <= 11 && row % 2 === 1;
+        out.copy(mark ? t.trim : t.cape).lerp(t.capeDark, mark ? 0 : (1 - smoothstep(0, 0.25, v)) * 0.35);
+        if (!mark) out.lerp(t.tip, smoothstep(0.82, 1, v) * 0.6);
+        return mark ? 1 : smoothstep(0.9, 1, v) * 0.3;
       },
       clothMat,
     );
     this.painted.push(this.cape.painted);
     this.chest.add(this.cape.mesh);
 
-    // Two scarf tails that stream over the cape
+    // Two scarf tails cut from the cape's cloth, streaming from the neck over the cape,
+    // paling towards their tips like the wings' edges (and glowing there at night)
     this.scarf = [0, 1].map(() => {
       const tail = new Cloth(
         1,
         12,
-        (u, v, t, out) => out.copy(v > 0.86 ? t.trim : t.white).lerp(t.clothLight, (u + 1) * 0.15),
+        (_u, v, t, out) => {
+          out.copy(t.cape).lerp(t.tip, smoothstep(0.3, 1, v) * 0.7);
+          return smoothstep(0.6, 1, v) * 0.5;
+        },
         clothMat,
       );
       this.painted.push(tail.painted);
@@ -709,7 +699,7 @@ export class Avatar {
     this.aura = new THREE.Sprite(
       new THREE.SpriteMaterial({
         map: glowTexture(),
-        color: this.tones.clothLight,
+        color: new THREE.Color("#fff0d2"),
         blending: THREE.AdditiveBlending,
         transparent: true,
         depthWrite: false,
@@ -717,7 +707,7 @@ export class Avatar {
       }),
     );
     this.materials.push(this.aura.material);
-    this.aura.scale.setScalar(1.8);
+    this.aura.scale.setScalar(2.2);
     this.rig.add(this.aura);
 
     this.repaint();
@@ -731,7 +721,6 @@ export class Avatar {
 
   private repaint() {
     for (const painted of this.painted) applyPaint(painted, this.tones);
-    (this.aura.material as THREE.SpriteMaterial).color.copy(this.tones.clothLight);
   }
 
   setColor(color: string) {

@@ -231,6 +231,31 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-11: The Sky look, pass 1: a Sky child, warm-white light (Claude, WIP on `visuals`)
+
+Decided with the user: every visual (pilot, terrain, VFX) is anchored on Sky:
+Children of the Light; the terrain is untouched for now. Looks only (rule 6).
+- **Pilot** (`avatar.ts`): the feathered wings are gone; the cape itself spreads
+  into two scalloped panels per wing (`panel()`), outside in the player's color,
+  inside paler, edges glowing at night. Dark body and face with two lights for
+  eyes (HDR vertex color), cream tunic, fluffy white hair, a short hair tail; the
+  scarf tails are cut from the cape's cloth; a column of four glowing marks down
+  the cape (Sky's wing energy). `Paint` functions may return a per-vertex glow.
+- **Ink** (`toon.ts` `outlineMaterial(..., { tint })`, `INK`): the pilot's lines
+  take each part's own color darkened (`FX.inkTint`), fade by `FX.ink` (0 = none),
+  and keep a steadier width on screen. The default pilot color is Sky's red.
+- **VFX**: all light effects in warm white (`WARM`), the player's color only as
+  a tint (`FX.lightTint`); wingtip ribbons wider, softer, no pulses
+  (`FX.trailShimmer`); fewer, larger, slower motes; bloom softer (0.5 / 0.8 /
+  1.15); crystal rainbow film down to a hint; pale gold instead of yellow.
+- Verified: tsc, lint. Looked at in the app's browser (dev server): the pilot in
+  flight on Sky Archipelago, no console errors. Frontend tests not run (WSL has
+  Node 20; they need 22.6+). Not checked: night biomes, other players' colors.
+- Baseline for the VFX budget (this machine, pane 1046x601 @2x, seed 42):
+  High 148 calls, 132k tris, CPU 4.8 ms, GPU 1.5 ms; Medium 124 calls, 124k tris.
+  Cap for everything the visuals branch adds: +6 draw calls, +25k tris, +1500 live
+  particles, +0.5 ms CPU, +0.5 ms GPU here.
+
 ### 2026-10-10: Adventure items (continued)
 
 Item 10 completes the first milestone: three air steps, paired feathered boots, rings and downward puffs. Items 5–9 add lantern ghost gates, conch breadcrumbs, an automatic Phoenix revive, 10-second ribbon handling and collectible attraction. Build/lint pass; 66 tests pass, including bag/charge rejection, timed effects, revive, swept gates/collectibles and finite geometry. Browser gallery inspected; fixed clipping by fitting all models into four rows. Detailed effect balance, audible mix and focused-window GPU performance remain unverified. Item 11–20 and world pickups are the next milestone.
@@ -2571,6 +2596,12 @@ ported to the islands world:
 
 ## Next up
 
+- **Sky look, next** (`visuals`): within the VFX budget above, add Sky's
+  winged-light dust in every biome's air (Sky Isles has none), a pulsing star
+  flare over the next gate and a few along the course, a small flock of light
+  butterflies leading towards the next gate (reuse `Swarm`), cloud wisps off the
+  wingtips at speed, the cape's marks pulsing on boost and gate passes. Then
+  look at everything at night and in a focused window.
 - Item milestones: 1–10 implemented. Finish 11–20 and seeded island pickups, then verify day/night looks, audible mix, handling with mouse/gamepad and focused-window performance.
 
 - **Lives**: look at them in a browser (the `.run-side` column under the

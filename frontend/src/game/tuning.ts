@@ -30,6 +30,8 @@ export const FX = {
   trailLength: 1, // multiplier on ribbon length
   trailWidth: 1,
   trailGlow: 1, // brightness of the ribbons
+  trailShimmer: 0, // light pulses running down the ribbons (restart to apply)
+  lightTint: 0.25, // how much of the player's color the light effects keep (Sky's light is warm white)
   bodyTrail: true, // the wide silk ribbon from the cape
   sparkles: 1, // wingtip motes per metre, as a multiplier
   flapPuffs: 1, // feather puffs on each downstroke
@@ -37,10 +39,12 @@ export const FX = {
   speedLines: 1, // wind streaks at speed
   speedLinesFrom: 45, // m/s where the wind streaks start
   aura: 1, // soft glow around the pilot
+  ink: 0.55, // the pilot's ink outlines: their opacity (0 turns them off; Sky draws none)
+  inkTint: 0.8, // 0: one dark ink everywhere, 1: each part's own color, darkened
   vignette: 1, // speed vignette at the screen edges
-  bloom: 0.6, // glow strength (0 turns post-processing off)
-  bloomRadius: 0.55,
-  bloomThreshold: 1.3,
+  bloom: 0.5, // glow strength (0 turns post-processing off)
+  bloomRadius: 0.8, // wide and soft, like Sky's halos
+  bloomThreshold: 1.15,
   bloomResolution: 1, // the bloom renders at most at this pixel ratio (its cost grows fast with it)
   bloomMsaa: 2, // antialiasing samples of the bloom's render target
   autoQuality: true, // drop effects if the frame rate can't keep up
@@ -263,12 +267,16 @@ export const RANGES: Record<string, [number, number, number?]> = {
   trailLength: [0.2, 2.5],
   trailWidth: [0.2, 3],
   trailGlow: [0, 3],
+  trailShimmer: [0, 2],
+  lightTint: [0, 1],
   sparkles: [0, 4],
   flapPuffs: [0, 4],
   skimDust: [0, 4],
   speedLines: [0, 3],
   speedLinesFrom: [10, 100],
   aura: [0, 3],
+  ink: [0, 1],
+  inkTint: [0, 1],
   vignette: [0, 2],
   bloom: [0, 2.5],
   bloomRadius: [0, 1.5],
