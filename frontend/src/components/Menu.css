@@ -264,6 +264,22 @@ body:has(.menu-backdrop:empty) {
   font-weight: 700;
 }
 
+.menu-pilot-text {
+  display: grid;
+  text-align: left;
+  line-height: 1.15;
+}
+
+.menu-pilot-text small {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-family: var(--font-numbers);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ink-70);
+}
+
 .menu-badge {
   width: 2.5rem;
   height: 2.5rem;
@@ -273,42 +289,6 @@ body:has(.menu-backdrop:empty) {
   color: #fff;
   background: linear-gradient(160deg, color-mix(in srgb, var(--ink) 72%, #fff), var(--ink));
   box-shadow: 0 3px 0 color-mix(in srgb, var(--ink) 65%, #000);
-}
-
-.menu-popover {
-  position: fixed;
-  z-index: 2;
-  width: min(22rem, calc(100% - 2.5rem));
-  padding: 1rem 1.1rem;
-  border-radius: 22px;
-  background: var(--glass-strong);
-}
-
-.menu-popover header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.menu-popover h2 {
-  font-size: 1.05rem;
-}
-
-.menu-popover .menu-icon {
-  width: 2rem;
-  height: 2rem;
-  border: none;
-  background: none;
-}
-
-.settings-panel {
-  top: 4.5rem;
-  right: 1.25rem;
-}
-
-.pilot-panel {
-  bottom: 5rem;
-  right: 1.25rem;
 }
 
 /* Narrow screens: an opened board stacks upwards from the flag, clear of the pilot button */

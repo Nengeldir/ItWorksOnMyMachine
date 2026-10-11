@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { hash3, hashToUnit, makeRng, range } from "../rng";
-import { ATMOSPHERE, atmospheric, skyMaterial } from "./atmosphere";
+import { ATMOSPHERE, atmospheric, bornNow, skyMaterial } from "./atmosphere";
 import { CrystalGates, type RingMode } from "./crystals";
 import { LandCollider } from "./landCollider";
 import { type ChunkMesh, CHUNK_SIZE, VOXEL, chunkKey, rockChunks } from "./mesher";
@@ -18,7 +18,7 @@ import { Tree } from "./trees";
 import { sunDirection } from "./palette";
 import type { World } from "./World";
 import { reloadForNewBuild } from "../../staleBuild";
-import { DEEP } from "../tuning";
+import { DEEP, TERRAIN } from "../tuning";
 
 export const VIEW_DISTANCE = 1400;
 const FOG_NEAR = 250;
@@ -40,7 +40,15 @@ interface RockChunk {
   state: "idle" | "pending" | "loaded";
   mesh: THREE.Mesh | null;
   trees: THREE.InstancedMesh | null;
+  /** Its pines and how far each reaches down to snapped rock, for drawing them */
+  pines: Tree[];
+  sink: Float32Array | null;
 }
+
+const pineMatrix = new THREE.Matrix4();
+const pineRotation = new THREE.Quaternion();
+const pinePosition = new THREE.Vector3();
+const pineScale = new THREE.Vector3();
 
 type MeshResult = (ChunkMesh & { kind: "chunk"; level: string; key: number }) | (NodeResult & { kind: "node"; level: string });
 
@@ -118,6 +126,8 @@ export class WorldView {
   private readonly lastStream = new THREE.Vector3(Infinity, 0, 0);
   private disposed = false;
   private streamDirty = true;
+  /** Sky Isles chunks that have just arrived: their pines are still growing in */
+  private readonly sprouting: { chunk: RockChunk; born: number }[] = [];
 
   constructor(world: World, scene: THREE.Scene) {
     this.world = world;
@@ -144,7 +154,9 @@ export class WorldView {
     this.treeGeometry = this.geometry(pineGeometry(new THREE.Color(palette.forest), new THREE.Color(palette.trunk)));
 
     this.sky = new THREE.Mesh(this.geometry(new THREE.SphereGeometry(4000, 32, 16)), this.material(skyMaterial()));
-    this.sky.renderOrder = -2;
+    // After the land (it writes no depth and is tested against the land's), so its clouds
+    // and stars are only worked out for the pixels where the sky actually shows
+    this.sky.renderOrder = 0.5;
     this.group.add(this.sky);
     const { cloudSea, puffs, puffsBelow, puffLift, banks } = world.biome.sky;
     if (cloudSea) this.buildCloudSea(cloudSea.depth);
@@ -176,6 +188,8 @@ export class WorldView {
         state: "idle" as const,
         mesh: null,
         trees: null,
+        pines: [],
+        sink: null,
       }));
       for (const chunk of this.chunks) this.byKey.set(chunk.key, chunk);
     } else {
@@ -239,7 +253,9 @@ export class WorldView {
   }
 
   private startWorkers() {
-    const count = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 4) - 1));
+    // Up to three on laptops, as many as six where there are cores to spare: the land arrives sooner
+    const cores = navigator.hardwareConcurrency || 4;
+    const count = Math.max(1, Math.min(cores >= 12 ? 6 : 3, cores - 1));
     for (let i = 0; i < count; i++) {
       const worker = new Worker(new URL("./mesher.worker.ts", import.meta.url), { type: "module" });
       worker.onmessage = (event: MessageEvent<MeshResult>) => {
@@ -391,6 +407,8 @@ export class WorldView {
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.BufferAttribute(result.positions, 3));
       geometry.setAttribute("color", new THREE.BufferAttribute(result.colors, 3));
+      // Fades in out of the haze from now (atmosphere.ts)
+      geometry.setAttribute("born", new THREE.BufferAttribute(new Float32Array(result.positions.length / 3).fill(bornNow()), 1));
       geometry.computeVertexNormals();
       geometry.computeBoundingSphere();
       chunk.mesh = new THREE.Mesh(geometry, this.rockMaterial);
@@ -408,26 +426,53 @@ export class WorldView {
     this.world.trees.add(chunk.key, trees);
     if (trees.length) {
       const mesh = new THREE.InstancedMesh(this.treeGeometry, this.treeMaterial, trees.length);
-      const matrix = new THREE.Matrix4();
-      const rotation = new THREE.Quaternion();
-      const position = new THREE.Vector3();
-      const scale = new THREE.Vector3();
       const color = new THREE.Color();
       trees.forEach((tree, i) => {
         const spin = hash3(Math.floor(tree.x * 10), Math.floor(tree.z * 10), 1);
-        rotation.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, spin * Math.PI * 2);
-        // Drawn from the rock up to the collider's top: a tree whose rock was snapped lower reaches down to it
-        const sink = result.treeSink[i] ?? 0;
-        mesh.setMatrixAt(
-          i,
-          matrix.compose(position.set(tree.x, tree.ground - sink, tree.z), rotation, scale.set(tree.radius, tree.height + sink, tree.radius)),
-        );
         const shade = 0.82 + 0.3 * hash3(Math.floor(tree.x * 10), Math.floor(tree.z * 10), 2);
         mesh.setColorAt(i, color.setRGB(shade, shade * (0.97 + 0.06 * spin), shade));
       });
-      mesh.computeBoundingSphere();
       chunk.trees = mesh;
+      chunk.pines = trees;
+      chunk.sink = result.treeSink;
+      // Culled by their full size; drawn growing out of the rock while it fades in
+      this.placePines(chunk, 1);
+      mesh.computeBoundingSphere();
+      this.placePines(chunk, 0);
+      this.sprouting.push({ chunk, born: bornNow() });
       this.group.add(mesh);
+    }
+  }
+
+  /** Writes a chunk's pines into its instances, `grown` (0 to 1) of their size. Drawn only: colliders never move */
+  private placePines(chunk: RockChunk, grown: number) {
+    const mesh = chunk.trees!;
+    for (let i = 0; i < chunk.pines.length; i++) {
+      const tree = chunk.pines[i];
+      const spin = hash3(Math.floor(tree.x * 10), Math.floor(tree.z * 10), 1);
+      pineRotation.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, spin * Math.PI * 2);
+      // Drawn from the rock up to the collider's top: a tree whose rock was snapped lower reaches down to it
+      const sink = chunk.sink?.[i] ?? 0;
+      mesh.setMatrixAt(
+        i,
+        pineMatrix.compose(
+          pinePosition.set(tree.x, tree.ground - sink, tree.z),
+          pineRotation,
+          pineScale.set(tree.radius * grown, (tree.height + sink) * grown, tree.radius * grown),
+        ),
+      );
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Pines of chunks that have just arrived grow to their size over the land's fade */
+  private sprout() {
+    const now = bornNow();
+    for (let i = this.sprouting.length - 1; i >= 0; i--) {
+      const { chunk, born } = this.sprouting[i];
+      const t = Math.min(1, (now - born) * ATMOSPHERE.revealRate.value);
+      if (chunk.trees) this.placePines(chunk, t * (2 - t));
+      if (t >= 1 || !chunk.trees) this.sprouting.splice(i, 1);
     }
   }
 
@@ -452,6 +497,8 @@ export class WorldView {
       this.group.remove(chunk.trees);
       chunk.trees.dispose(); // its instance buffers; the pine geometry is shared
       chunk.trees = null;
+      chunk.pines = [];
+      chunk.sink = null;
     }
     chunk.state = "idle";
   }
@@ -475,6 +522,9 @@ export class WorldView {
 
   /** Per frame: stream rock around the camera, the sky follows it, the gates animate */
   update(camera: THREE.Camera, dt: number, velocity?: THREE.Vector3) {
+    // The clock arriving land fades in by: the wall clock, so it also runs while the game's is slowed
+    ATMOSPHERE.now.value = performance.now() / 1000;
+    ATMOSPHERE.revealRate.value = 1 / Math.max(TERRAIN.fadeIn, 1e-3);
     const mist = this.world.biome.sky.mist;
     if (mist.mode === "valley") ATMOSPHERE.mistHeight.value = this.world.valleyFloor(camera.position.z) + mist.above;
     const underwater = this.world.biome.sky.underwater;
@@ -495,6 +545,7 @@ export class WorldView {
       this.water?.update();
     } else {
       this.stream(camera.position);
+      if (this.sprouting.length) this.sprout();
     }
     this.sky.position.copy(camera.position);
     this.gates.update(dt, camera);

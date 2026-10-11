@@ -47,6 +47,59 @@ function useMountedSession(session: Mountable, settings: Settings) {
   return ref;
 }
 
+/** The glass shows for this long after the mouse last moved (or a tap) */
+const IDLE_AFTER_MS = 2500;
+/** A touch this short and still is a tap (it shows the glass), not a steer */
+const TAP_MS = 300;
+const TAP_MOVE = 12;
+/** The glass that hides (GameScreen.css): the cursor resting on any of it keeps it all shown */
+const CHROME = ".glass, .run-items, .run-upgrades";
+
+/**
+ * In game every glass panel (anything `.glass`, plus the item bag and upgrade icons) is hidden until the
+ * mouse moves (or, on a touch screen, a tap), and hides again once it rests: true while hidden. A mouse
+ * locked to the game steers, and so does a finger dragging the stick: neither counts. What stays
+ * (GameScreen.css, the `:not()` list): the lives, the objectives, the compass and gate marker, the
+ * level's title, the touch controls, and what waits on you (upgrade picker, finish screen, results,
+ * tutorial); everything shows while paused or with an overlay open. To bring a panel back for good,
+ * add it to that list.
+ */
+function useIdleUi(): boolean {
+  const [idle, setIdle] = useState(true);
+  useEffect(() => {
+    let timer = 0;
+    const wake = (stay = false) => {
+      setIdle(false);
+      window.clearTimeout(timer);
+      if (!stay) timer = window.setTimeout(() => setIdle(true), IDLE_AFTER_MS);
+    };
+    const onMove = (event: MouseEvent) => {
+      if (document.pointerLockElement) return;
+      // Resting on the glass (about to click Menu or the gear): it stays
+      wake(!!(event.target as Element | null)?.closest?.(CHROME));
+    };
+    const touches = new Map<number, { x: number; y: number; t: number }>();
+    const onDown = (event: PointerEvent) => {
+      if (event.pointerType === "touch") touches.set(event.pointerId, { x: event.clientX, y: event.clientY, t: event.timeStamp });
+    };
+    const onUp = (event: PointerEvent) => {
+      const down = touches.get(event.pointerId);
+      touches.delete(event.pointerId);
+      if (down && event.timeStamp - down.t < TAP_MS && Math.hypot(event.clientX - down.x, event.clientY - down.y) < TAP_MOVE) wake();
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("pointerup", onUp, true);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("pointerup", onUp, true);
+      window.clearTimeout(timer);
+    };
+  }, []);
+  return idle;
+}
+
 /** Keyboard shortcuts for the panels, since the mouse is often locked to the game */
 function useHotkeys(keys: Record<string, () => void>) {
   const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
@@ -152,6 +205,7 @@ const ReadyCard = ({ children }: { children: ReactNode }) => <div className="rea
 // --- Time trial ------------------------------------------------------------------
 
 const SoloScreen = ({ seed, settings, onSettings, onExit, tutorial, onTutorialEnd = noop }: ScreenProps & { seed: number }) => {
+  const idle = useIdleUi();
   const [session] = useState(() => new SoloSession(seed, clientId(), settings));
   const ref = useMountedSession(session, settings);
   const { hud, stage, result, leaderboard, ghosts, error } = useSyncExternalStore(
@@ -170,7 +224,7 @@ const SoloScreen = ({ seed, settings, onSettings, onExit, tutorial, onTutorialEn
   });
 
   return (
-    <div className="game">
+    <div className={`game${idle ? " ui-idle" : ""}`}>
       <div ref={ref} className="game-view" />
       {hud && <Hud hud={hud} settings={settings} />}
       <TopBar title={`Time trial · #${seed}${hud ? ` · ${hud.biomeName} · ${hud.paletteName}` : ""}`} onExit={onExit} controls={{ settings, onSettings, muted: !!hud?.muted }} />
@@ -245,6 +299,7 @@ const RoomMapSelect = ({ onPick, onBack }: { onPick: (seed: number) => void; onB
 };
 
 const RoomScreen = ({ code, seed, settings, onSettings, onExit, tutorial, onTutorialEnd = noop }: ScreenProps & { code: string; seed?: number }) => {
+  const idle = useIdleUi();
   const [session] = useState(
     () => new RoomSession(code, { clientId: clientId(), nickname: settings.nickname, seed }, settings),
   );
@@ -277,7 +332,7 @@ const RoomScreen = ({ code, seed, settings, onSettings, onExit, tutorial, onTuto
   });
 
   return (
-    <div className="game">
+    <div className={`game${idle ? " ui-idle" : ""}`}>
       <div ref={ref} className="game-view" />
       {hud && <Hud hud={hud} settings={settings} />}
       <TopBar title={`Room ${code}${hud ? ` · course #${hud.seed} · ${hud.biomeName} · ${hud.paletteName}` : ""}`} onExit={onExit} controls={{ settings, onSettings, muted: !!hud?.muted }}>
@@ -343,6 +398,7 @@ const RoomScreen = ({ code, seed, settings, onSettings, onExit, tutorial, onTuto
 // --- Explore ---------------------------------------------------------------------
 
 const ExploreScreen = ({ biome, seed, settings, onSettings, onExit, testMode = false }: ScreenProps & { biome: BiomeId; seed: number; testMode?: boolean }) => {
+  const idle = useIdleUi();
   const [collectionOpen, setCollectionOpen] = useState(false);
   const [session] = useState(() => new ExploreSession(biome, seed, settings, testMode));
   const ref = useMountedSession(session, settings);
@@ -365,7 +421,7 @@ const ExploreScreen = ({ biome, seed, settings, onSettings, onExit, testMode = f
   const phase = run?.phase;
   const transitioning = phase === "portal" || phase === "pick" || phase === "finale" || phase === "won";
   return (
-    <div className="game">
+    <div className={`game${idle ? " ui-idle" : ""}`}>
       <div ref={ref} className="game-view" />
       {hud && !summary && (!transitioning || hud.paused) && <Hud hud={hud} settings={settings} showStyle={testMode} />}
       {/* Test mode flies a real run: its score, chain and compass to the portal */}
@@ -430,6 +486,7 @@ const ExploreScreen = ({ biome, seed, settings, onSettings, onExit, testMode = f
 // --- Roguelike run ------------------------------------------------------------------
 
 const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onTutorialEnd = noop }: ScreenProps & { seed: number; onNewRun: () => void }) => {
+  const idle = useIdleUi();
   const [session] = useState(() => new RunSession(seed, settings));
   const ref = useMountedSession(session, settings);
   const { hud, stage, offers, next, arrived, summary, best, error } = useSyncExternalStore(session.store.subscribe, session.store.get);
@@ -455,10 +512,10 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onT
   }, [tutorial, stage, onTutorialEnd]);
 
   return (
-    <div className="game">
+    <div className={`game${idle ? " ui-idle" : ""}`}>
       <div ref={ref} className="game-view" />
       {/* Nothing but the wormhole while passing through a portal */}
-      {(hud?.paused || stage === "intro" || stage === "summary" || run?.phase === "explore" || run?.phase === "arrive") && <ProfileStatus paused={hud?.paused} />}
+      {stage !== "intro" && (hud?.paused || stage === "summary" || run?.phase === "explore" || run?.phase === "arrive") && <ProfileStatus paused={hud?.paused} />}
       {hud && (hud.paused || (stage !== "intro" && stage !== "pick" && stage !== "summary" && run?.phase !== "portal" && run?.phase !== "finale" && run?.phase !== "won")) && <Hud hud={hud} settings={settings} showStyle />}
       {run && stage !== "intro" && stage !== "summary" && stage !== "pick" && run.phase !== "finale" && run.phase !== "won" && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
       {run?.phase === "finale" && (

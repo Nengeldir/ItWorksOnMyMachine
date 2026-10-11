@@ -47,8 +47,8 @@ export const FX = {
   bloomRadius: 0.12,
   bloomHalo: 0.12, // contribution from the widest blur layers
   bloomThreshold: 1.3,
-  bloomResolution: 1, // the bloom renders at most at this pixel ratio (its cost grows fast with it)
-  bloomMsaa: 2, // antialiasing samples of the bloom's render target
+  bloomResolution: 1, // with bloom, the frame renders at most at this pixel ratio (its cost grows fast with it)
+  bloomSamples: 0, // multisampling of the bloom's float target (very dear on integrated GPUs); 0 smooths edges with FXAA instead
   autoQuality: true, // drop effects if the frame rate can't keep up
 };
 
@@ -113,7 +113,8 @@ export const TERRAIN = {
   cacheMiB: 48, // bounded cache of hidden terrain (estimated CPU + GPU buffers)
   viewDistance: 1500,
   readyRadius: 260, // the start waits until the land this close has arrived
-  uploadsPerFrame: 4, // arrived land meshes taken in per frame once you're flying (smooths frame times)
+  arrivalsPerFrame: 12, // arrived land meshes taken in per frame once you're flying (each costs about 0.04 ms)
+  fadeIn: 0.9, // seconds for land that has just arrived to fade in out of the haze, and its plants to grow in
   snowLine: 0, // metres added to the biome's snow line
   coverSlope: 0, // added to the slope where grass (moss, sand…) gives way to rock
   texture: 1, // strength of the painted noise on cliffs
@@ -316,7 +317,7 @@ export const RANGES: Record<string, [number, number, number?]> = {
   bloomHalo: [0, 1],
   bloomThreshold: [0.5, 1.5],
   bloomResolution: [0.5, 2, 0.05],
-  bloomMsaa: [0, 4, 1],
+  bloomSamples: [0, 4, 1],
   crystals: [6, 32, 1],
   drift: [0, 3],
   driftRate: [0, 3],
@@ -349,7 +350,8 @@ export const RANGES: Record<string, [number, number, number?]> = {
   lodFar: [300, 1400, 10],
   viewDistance: [600, 2500, 10],
   readyRadius: [100, 500, 10],
-  uploadsPerFrame: [1, 16, 1],
+  arrivalsPerFrame: [1, 32, 1],
+  fadeIn: [0, 3, 0.05],
   snowLine: [-300, 300],
   coverSlope: [-0.4, 0.25],
   texture: [0, 3],

@@ -116,7 +116,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `profile/` | Profile types/API client, server-authoritative balances, durable account-scoped pickup outbox and equipped appearance notifications |
 | `game/run/collection.ts` | Adventure-only hoop-distance rarity placement, streamed obstacle clearance, swept collection (5.2 m crystals, 3.2 m treasures), toon crystal/cape tokens, nearby budgeted crystal motes and pickup animation |
 | `game/cosmetics/`, `game/pets/` | Cape/hat/shoe/wing catalogs and toon models; eight detailed bird/mythological pets (fanned feather tails, plumes, brush and spined tails, per-pet ornaments; the wingless dragon, kirin and fox gallop on two swinging leg pairs) flying beside the pilot and, within `PET_LOOKS.hoopRange` of a hoop, blending onto their own unscored autopilot rail through its centre, each shedding its own budgeted trail of light (`PET_SPARKS`, `PET_LOOKS.sparkle`) |
-| `components/ProfilePanel.tsx`, `components/CollectionPreview.tsx`, `components/TestCollectionPanel.tsx` | Persistent profile/inventory, equip controls, XP/crystal HUD, animated model preview (one shared WebGL renderer for the page: never a context per preview) and unsaved test fitting room |
+| `components/ProfilePanel.tsx`, `components/CollectionPreview.tsx`, `components/TestCollectionPanel.tsx` | The adventure journal (`ProfilePanel`: name, level, crystals, collection, equip; opened from the menu's pilot pill or the pause), the in-flight XP/crystal pill (`ProfileStatus`, not before take-off), animated model preview (one shared WebGL renderer for the page: never a context per preview) and the unsaved test fitting room. Journal, settings and fitting room share the `.sheet` card in `index.css` (with `.chip`, `.segmented`, `.meter`); `kindIcons.tsx` has an icon per collection kind |
 | `game/Game.ts` | The game: frame loop, fixed 120 Hz physics steps, race state, ring checks, HUD data, effects wiring (gate bursts, skim spray, gate motes), rendering with optional bloom and bounded broad halos (`FX.bloomHalo`), adaptive quality, test-only shared time scaling, the `?tune` panel |
 | `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only. `touching()` is the pilot's hitbox (`FLIGHT.hit*`): a ball for the body and a rectangle per wing, tilted up at a dihedral, fixed in the flight frame (never the animated pose), sampled against the distance field with early-outs; `hitboxWorld()` is the same hitbox in world space, which `Game.step` tests against the land drawn (`LandCollider`). `FlightMods` (run upgrades: drag, sink, stall, proximity boost, dash boost, thermal lift, hover, glide lock, `thrust`, a plunge's `dive`, Hover-Stall's `hang`, `turn` for stances and Aero-Braking, Zenith's `climb`, Ascension's `ascend`, a rise on rails in `ascendStep`) are only ever passed in run mode; `flap()`, `launch()`, `deflect()`, `surge()` and a forced `dodge()` are run abilities |
 | `game/avatar.ts` | The pilot: a cel-shaded chibi flyer built from primitives (merged per body part, vertex-colored), a procedural cape and scarf (`Cloth`), two-segment feathered wings, a sculpted face (jaw and cheeks, nose, mouth, layered eyes without ink) under two hair-and-eyes styles (`setStyle(1 | 2)`, from Settings' `pilotStyle`), and all its animation: bank lead spring, barrel rolls, flapping driven by effort, bobbing, cloth ripples, limb reactions. Also `createLabel` and `glowTexture` |
@@ -156,7 +156,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/world/meshCleanup.ts` | Worker-side exact-welded component cleanup for both meshers: discard small closed thin shells, shorten narrow tips with per-face winding checks, subdivide compact stones once and retain their bounds. Open/non-manifold edges and a one-cell chunk collar are protected. Flat material attributes follow source faces. `MESH_CLEANUP` source constants in tuning.ts require worker reload; no per-frame work |
 | `game/world/landCollider.ts` | `LandCollider`: collisions with exactly the land drawn. Every land mesh on screen (Sky Isles chunks, shown v2 nodes, added and removed with them) as triangles in a lazily built grid per mesh; exact tests: ball, segment (sweeps between steps), convex quad (separating axes) and signed `nearest` (the crash tumble). Rock that is in the field but not drawn (thinner than the 6 m grid) is never hit |
 | `game/world/trees.ts` | Tree colliders and their lookup index. `Plant` is the collider of generator-v2 plants and structures: a tapered trunk, an optional canopy ellipsoid, an optional upright disc (a windmill's sails) an optional gate (two posts and a bar, open in between) and an optional hall (a long box: the ETH building's wings) |
-| `game/world/flora/` | Generator-v2 vegetation: `species.ts` (sizes, colliders), `meshes.ts` (models from primitives), `placement.ts` (`placeFlora`, run in the mesher workers: structures first, then plants keeping clear of them, then grass), `view.ts` (`FloraView`: one instanced pool per kind, impostor atlas, grass), `pool.ts` |
+| `game/world/flora/` | Generator-v2 vegetation: `species.ts` (sizes, colliders), `meshes.ts` (models from primitives), `placement.ts` (`placeFlora`, run in the mesher workers: structures first, then plants keeping clear of them, then grass), `view.ts` (`FloraView`: one instanced pool per kind, impostor atlas, grass), `pool.ts` (`InstancePool`: dense instances per owner, each with a `born` time so new plants grow in) |
 | `game/world/structures/` | Built things (21 kinds: towers, lanterns, windmills, a monastery, a lighthouse, shrine gates…) riding the flora pipeline as extra kinds after a biome's species. `kinds.ts`: `StructureId`, `STRUCTURE_INFO` (collider, footprint, plinth depth, spinning parts), `kindInfo(biome, kind)`. `models.ts`: `structureGeometry` (1 m tall, true proportions, vertex color / sway / glow / spin). A biome lists them in `Biome.structures` (`StructureSpec`: spacing, chance, height, colors, `landmark` for one per stretch of the course, `where` site rules: above, lateral, wet, `water` depth, forest, hilltop, `on` ground or rock, facing the line). Species plus structures must fit the impostor atlas (16). Run biomes only; they collide |
 | `game/world/course.ts` | The racing line (a descending curve in z) and the gates along it |
 | `game/world/palette.ts` | The `Palette` type: a lighting mood (colors, sun elevation and azimuth, night factor, mist, effect glow), and `sunDirection(palette)`. Each biome lists its moods |
@@ -195,9 +195,17 @@ Players never collide, so the server only relays positions.
   follows the mesh.
 - **Rendering:** `Game.loop` interpolates between physics states, animates
   the avatar on top, updates effects, then renders. High quality uses an
-  `EffectComposer` (RenderPass → UnrealBloomPass → OutputPass) with HDR
-  half-float targets. Only colors above `FX.bloomThreshold` (1.3) bloom, so
-  effects that should glow write colors above 1.
+  `EffectComposer` (RenderPass → UnrealBloomPass → OutputPass → FXAAPass) with
+  HDR half-float targets and no multisampling (`FX.bloomSamples` 0: MSAA on a
+  float target costs more than the scene on integrated GPUs). Only colors above
+  `FX.bloomThreshold` (1.3) bloom, so effects that should glow write colors
+  above 1. Shader programs differ by what they draw into (the bloom's linear
+  target or the screen): `Game.compileShaders` precompiles for the one in use.
+- **Arriving land:** land shown where none was (`LandStreamer.show(node,
+  fresh)`, Sky Isles chunks) fades in out of the haze, and its plants grow in,
+  by a `born` time (a vertex attribute on land, an instance attribute in
+  `InstancePool`) against `ATMOSPHERE.now`; `TERRAIN.fadeIn` seconds. Changes
+  of detail are not fresh and swap at once. Geometry without `born` reads 0.
 - **Biome light:** `WorldView` sets `ATMOSPHERE` from the palette, and
   `Game.setSeed` sets `TOON_LIGHT` (rim color, trim glow: 0.15 by day up to
   1.45 at night) and `FX_LIGHT.boost` (`palette.glow`). Bloom strength scales
@@ -207,8 +215,9 @@ Players never collide, so the server only relays positions.
   (clamp first), and never divide by something that can reach zero. One NaN
   pixel turns the whole bloomed frame black. This happened with the light
   pillars; see the change log.
-- **Quality levels:** 2 = bloom at up to 2× DPR (composer capped at 1.5×),
-  1 = no bloom, 0 = 1× DPR and 40% particles. `adaptQuality` steps down after
+- **Quality levels:** 2 = bloom, the whole frame at `FX.bloomResolution` (1×)
+  at most, FXAA; 1 = no bloom, up to 1.5× DPR with the canvas's own MSAA;
+  0 = 1× DPR and 40% particles. `adaptQuality` steps down after
   sustained frames over 25 ms, and never back up.
 
 ### Checking visuals
@@ -234,6 +243,82 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-11: Performance pass and land that fades in (Claude)
+
+Asked for: the game is compute intensive; smooth the loading (no assets
+appearing), improve performance, keep the looks. Measured first, in headless
+Chrome on this machine's Intel UHD (ANGLE D3D11, 1578 × 802, DPR 1) with
+`__bench` and GPU timer queries. Looks and loading only (rule 6).
+- **Bloom's multisampling was most of a High frame.** The composer's
+  half-float target had 2 samples and was resolved twice a frame; the same
+  pipeline without samples cost a third. Now `FX.bloomSamples` is 0 (the knob
+  was `bloomMsaa`; renamed so a saved 2 can't mask the fix) and an `FXAAPass`
+  after the `OutputPass` smooths edges. With bloom the canvas itself is at
+  `bloomResolution` (it was up to 2× with the scene at 1×, so the last passes
+  ran over up to four times the pixels).
+- **Shaders were compiled twice, the second time mid-flight.** A program is
+  built per output color space, and `renderer.compile` ran with the screen as
+  target while High draws into the bloom's linear target: every material was
+  rebuilt in the frame its object first showed (one 578 ms frame in a 10 s
+  flight, when a new plant kind came into range). `Game.compileShaders` binds
+  a 1 × 1 target when bloom is on, runs again when a quality change turns
+  bloom on or off, and nothing is drawn until the bloom's modules have loaded.
+  Programs after loading Verdant: 76 before, 52 now. `checkShaderErrors` is
+  on in dev builds only.
+- **Sky drawn after the land** (`renderOrder` 0.5, was -2): its clouds and
+  stars are only worked out where the sky shows.
+- **Cloth** (`avatar.ts`): the ribbon/coat check reads the buffers directly
+  and the coat's triangle bounds once per call, same arithmetic (it was
+  about 1.4 ms a frame in accessor calls).
+- **Arriving land fades in** (see Key mechanics): out of the haze over
+  `TERRAIN.fadeIn` (0.9 s), plants and impostors growing out of the ground,
+  Sky Isles' pines too (`WorldView.sprout`, drawn only). Collection pickups
+  and item pickups grow in over the last fifth of their 240 m range.
+- **Land arrives sooner:** `TERRAIN.arrivalsPerFrame` 12 (was
+  `uploadsPerFrame` 4; taking a mesh in costs about 0.04 ms, and at 4 a frame
+  a 700-node vista took 3 s at 60 fps), and up to six mesher workers on
+  machines with 12 or more threads (three otherwise, as before).
+- Measured, High, median of 300 flown frames, before → after: Verdant GPU
+  13.1 → 7.1 ms, CPU 15 → 9 ms; Sky Isles GPU 10 → 4.4 ms (a second run 7.9),
+  CPU 11.7 → 5.9; Reef GPU 14.1 → 8.8, CPU 15.8 → 10.4. Medium is within
+  noise (Verdant GPU 6.7 → 5). CPU times include waiting on the GPU.
+- Verified: build, lint, 126 frontend tests (the cloth and race-hash tests
+  among them). Screenshots in headless Chrome: Verdant by day and night,
+  Twilight with bloom, Sky Isles and Verdant mid-fade, the wormhole; after
+  3.5 s of flight with a 4 s fade, no land within 500 m was fading (detail
+  changes don't fade). **Not seen in motion or in a focused window**: the
+  fade's feel, FXAA on thin ribbons and ink outlines, pickups growing in.
+  Backend untouched.
+
+### 2026-10-11: Wardrobe PR rebased onto main, linear (Claude)
+
+Asked for: resolve the rebase conflicts, no merge commits. The branch carried the whole Pengyue history (53 commits), already in main in rebased form. Only the cosmetics commit was replayed onto `9105a32` (conflicts resolved by hand: main's wings, pets and cloth clearance kept). Dropped as superseded: the pets commit (main's pets are newer) and the Wardrobe panel (main's journal replaced it). Net change: README's Cosmetics section. Verified: build, lint, 126 tests. Not looked at in a browser. Old branch kept locally as `backup-wardrobe-pre-rebase`.
+
+### 2026-10-11: Landing sheets unified, the journal (Claude)
+
+Asked for by the UX group, added to the hide-ui PR. Settings, the profile
+(now the adventure journal) and the test fitting room are one `.sheet` card in
+How to fly's style, themed by the map. The menu's "Profile & inventory"
+button and name popover are gone: the pilot pill shows level and crystals and
+opens the journal (an invite without a name opens it on the name field). The
+in-flight profile pill no longer shows before take-off. UI only. Verified:
+lint, build, 126 tests; in the browser at 1280 × 800 and 375 × 812 (journal
+squeezed on phones, fixed), the invite flow, the fitting room. Entry
+animations not watched (hidden pane).
+
+### 2026-10-11: In-game glass hidden until the mouse moves (Claude)
+
+Asked for by the UX group (aggressive on purpose; the team adds back what's
+needed): every glass panel in game is hidden until the mouse moves or the
+screen is tapped, and fades 2.5 s later (`useIdleUi` in `GameScreen.tsx`,
+the `.ui-idle` rule in `GameScreen.css`). A locked mouse steering and a
+finger dragging the stick don't count. Stays: lives, objectives, compass,
+gate marker, level title, touch controls, picker, finish screen, results,
+tutorial; all of it shows while paused or with an overlay open. To keep a
+panel, add it to the rule's `:not()` list. Verified: lint, build, 126
+tests; in the browser, which panels hide before take-off, in flight, paused
+and on a tap. Not tried on a phone or with a locked mouse by hand.
 
 ### 2026-10-11: Synced main into Pengyue; running pets, pets by the pilot, a 3D face with two styles, crystals-only pickups (Claude)
 
@@ -3014,6 +3099,17 @@ ported to the islands world:
   through islands and gates, no console errors.
 
 ## Next up
+
+- Performance pass (2026-10-11) follow-ups: watch the fade-in and FXAA in a
+  real window (thin ribbons, ink outlines; `bloomSamples` 2 is the old look).
+  Still popping: full trees swap for impostors at the 140 m detail ring, and
+  land changes detail at once. Land is 180 of about 260 draw calls a frame
+  (one mesh per node): batching it is the next CPU win. On HiDPI screens High
+  draws at 1× (as before); with the cheaper bloom, `bloomResolution` 1.25 to
+  1.5 may be affordable. Medium still uses the canvas's 4× MSAA.
+
+- Hidden in-game glass (2026-10-11): with the team, bring back what must stay
+  (candidates: the start button, countdown/GO, Crashed, the race clock).
 
 - Pilot styles: send `pilotStyle` with room snapshots so other players see it
   (remote pilots and ghosts are Style 1 now); look at both faces in flight, by

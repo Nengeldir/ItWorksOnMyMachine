@@ -125,6 +125,9 @@ below the islands, and you respawn at your last ring, with the clock still
 running. While the land around you is still loading (outside races), the
 pilot glides in slowly by itself and you get control once it has arrived.
 
+In flight the glass panels (top bar, flight panel, score, abilities, messages)
+stay hidden until you move the mouse or tap the screen, and fade again a moment
+later; the lives, objectives and the way to the next gate or portal stay.
 Press `P` to pause and press it again to resume. Flight, effects and adventure
 timers freeze, and gameplay audio is silenced. In time trials and multiplayer,
 the official race clock keeps running during a pause; other players keep racing.
@@ -216,6 +219,18 @@ them. Fly within 3.2 metres to collect one; a full bag leaves it available.
 The gallery (`/?gallery`) folds its controls on small screens.
 Item rules appear under **Run items**, placement under **Island pickups** (takes
 effect next level), and looks under **Item looks** in `?tune`.
+
+## Cosmetics
+
+The appearance catalog in `frontend/src/game/cosmetics/` extends the pilot's
+original cape and boots with Dawn sail, Leafwhisper, Aurora veil, Phoenix mantle
+and Cloud court capes; Stargazer hat, Lotus crown, Grove antlers and Sky courier
+hats (plus the existing Aviator cap and Winged helm); and Cloud slippers, Petal
+steps, Frost walkers and Ember greaves. All use the pilot's toon shading,
+night-sensitive trims and animated joints. Appearance preferences are validated
+and saved separately from controls and scores; they never affect flight physics.
+Wings and companion pets use the same saved appearance; the journal and the
+test fitting room select them.
 
 ## How It Works
 
@@ -338,6 +353,9 @@ repeated rebuilding. In the developer `?tune` panel, `Terrain` exposes
 `lodLookAheadSeconds` and `lodLookAheadMax`. The cache is bounded
 by estimated buffer memory and 256 hidden nodes. Mixed-detail terrain still
 uses overlapping border cells; it is not a fully stitched adaptive mesh.
+Land that comes on screen where none was shown fades in out of the haze over
+`fadeIn` seconds (0.9) while its plants grow in; a change of detail swaps at
+once. `arrivalsPerFrame` (12) is how many arrived meshes are taken in per frame.
 
 **Flight model** ([`frontend/src/game/flight.ts`](frontend/src/game/flight.ts)):
 an arcade, energy-based wingsuit. The nose points where you go, gravity along
@@ -356,6 +374,10 @@ wing dust and compact downstroke puffs. `rollSparkles` adjusts the golden
 barrel-roll arcs; `boostSparkles` adjusts the gold dust and ivory slivers
 swept behind the wings during boost. `bloomHalo` controls the widest glow
 layers independently of bloom strength and radius, keeping light edges defined.
+With bloom (High quality) the frame is drawn at `bloomResolution` (1) times the
+CSS size at most and its edges are smoothed by FXAA; `bloomSamples` above 0
+multisamples the bloom's float target instead, which costs several times more
+on integrated GPUs.
 Cosmetics exposes `wingParticleSize` for the decorated wings' tiny accents.
 Collection pickups exposes crystal size, mote rate and mote distance; Run
 exposes `portalFlash` for crossing sparkles and screen brightening. Crystal
@@ -395,8 +417,9 @@ doesn't fly the course itself.
 
 ## Saved adventure profile
 
-**Profile & inventory** in the menu shows your level, XP, crystals, items,
-cosmetics, wings and pets. Collect crystals near hoops and rarer discoveries farther
+Your **journal** (the pilot pill at the menu's bottom right, with your level
+and crystals) shows your name, level, XP, crystals, items, cosmetics, wings and
+pets. Collect crystals near hoops and rarer discoveries farther
 beside them during Adventure. Rewards save immediately to your existing login's
 profile in SQLite. Pause an adventure to inspect the inventory; equip collected
 cosmetics or a companion, and preview every model. Races and test mode grant no
@@ -420,7 +443,7 @@ capes have distinct embroidered hems.
 | `frontend/src/profile/`               | Profile API client, types and durable pickup outbox       |
 | `frontend/src/game/run/collection.ts` | Hoop-distance rarity, terrain-safe pickups and collection models |
 | `frontend/src/game/cosmetics/`, `game/pets/` | Toon outfits, decorated wing fans and animated hoop guides |
-| `frontend/src/components/ProfilePanel.tsx`, `CollectionPreview.tsx`, `TestCollectionPanel.tsx` | Profile, inventory, equip controls, preview and unsaved test fitting room |
+| `frontend/src/components/ProfilePanel.tsx`, `CollectionPreview.tsx`, `TestCollectionPanel.tsx` | The journal (profile, inventory, equip controls), preview and unsaved test fitting room |
 | `backend/app.py`                       | API endpoints, login headers, solo runs                  |
 | `backend/rooms.py`                     | Rooms, race state machine, SSE listeners, tick loop      |
 | `backend/store.py`                     | SQLite runs, leaderboards and ghosts                     |

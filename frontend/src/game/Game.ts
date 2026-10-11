@@ -240,6 +240,9 @@ export class Game implements RunHost {
   private composer: EffectComposer | null = null;
   private bloomPass: UnrealBloomPass | null = null;
   private composerLoading = false;
+  private bloomFailed = false;
+  /** Stands in for the bloom's target while shaders are compiled (see compileShaders) */
+  private readonly compileTarget = new THREE.WebGLRenderTarget(1, 1);
   private quality: Quality = 2;
   private slowFrames = 0;
   private measured = 0;
@@ -314,7 +317,9 @@ export class Game implements RunHost {
     this.attract = options.attract ?? null;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, QUALITY[this.quality].pixelRatio));
+    // Checking every program's link log stalls the frame its shader is first used in
+    this.renderer.debug.checkShaderErrors = import.meta.env.DEV;
+    this.renderer.setPixelRatio(this.pixelRatio());
     this.renderer.domElement.className = "game-canvas";
     container.appendChild(this.renderer.domElement);
 
@@ -795,9 +800,8 @@ export class Game implements RunHost {
       }
     }
     this.scene.add(this.view.group);
-    // Compile the level's shaders now (behind the loading wait or the wormhole), not mid-flight;
-    // compile() skips hidden objects, so the new land is hidden only afterwards
-    this.renderer.compile(this.scene, this.rig.camera);
+    // Compile the level's shaders now (behind the loading wait or the wormhole), not mid-flight
+    this.compileShaders();
     this.view.group.visible = !this.inWormhole;
     this.particles.clear();
     this.softParticles.clear();
@@ -952,6 +956,7 @@ export class Game implements RunHost {
     this.speedLines.dispose();
     this.debris.dispose();
     this.composer?.dispose();
+    this.compileTarget.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
     this.marker.remove();
@@ -1803,7 +1808,19 @@ export class Game implements RunHost {
   // --- rendering -------------------------------------------------------------------
 
   private get bloomOn(): boolean {
-    return this.quality === 2 && FX.bloom > 0;
+    return this.quality === 2 && FX.bloom > 0 && !this.bloomFailed;
+  }
+
+  /**
+   * Builds the scene's shader programs ahead of their first use. A program is built for the
+   * color space it writes: what is drawn into the bloom's (linear) target is another program
+   * than what is drawn straight to the screen, so compile with the kind of target in use, or
+   * every shader is built a second time in the frame its object first shows up
+   */
+  private compileShaders() {
+    if (this.bloomOn) this.renderer.setRenderTarget(this.compileTarget);
+    this.renderer.compile(this.scene, this.rig.camera);
+    this.renderer.setRenderTarget(null);
   }
 
   private render() {
@@ -1811,7 +1828,12 @@ export class Game implements RunHost {
     // Particle sizes are in metres: keep the conversion in step with the zooming FOV
     this.particles.setViewport(this.renderer.domElement.height, camera.fov);
     this.softParticles.setViewport(this.renderer.domElement.height, camera.fov);
-    if (this.bloomOn && !this.composer) void this.createComposer();
+    if (this.bloomOn && !this.composer) {
+      // Nothing is drawn for the moment the bloom's modules take to load: drawing straight to
+      // the screen meanwhile would build every shader for the screen, then again for the bloom
+      void this.createComposer();
+      return;
+    }
     if (this.bloomOn && this.composer && this.bloomPass) {
       this.bloomPass.strength = FX.bloom * (1 + this.world.palette.night * 0.25);
       this.bloomPass.radius = FX.bloomRadius;
@@ -1838,26 +1860,31 @@ export class Game implements RunHost {
         import("three/examples/jsm/postprocessing/RenderPass.js"),
         import("three/examples/jsm/postprocessing/UnrealBloomPass.js"),
         import("three/examples/jsm/postprocessing/OutputPass.js"),
+        import("three/examples/jsm/postprocessing/FXAAPass.js"),
       ]);
     } catch (error) {
-      // Leaves composerLoading set, so this frame loop doesn't retry every frame
+      // No bloom then: draw straight to the screen
+      this.bloomFailed = true;
+      this.composerLoading = false;
       reloadForNewBuild(error);
       return;
     }
-    const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }] = modules;
+    const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }, { FXAAPass }] = modules;
     this.composerLoading = false;
     if (!this.bloomOn || this.composer) return;
     const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
-    // Half floats keep colors above 1, so only really bright things bloom; 4× MSAA keeps edges clean
-    // Half floats keep colors above 1 for the bloom; FX.bloomMsaa sets the antialiasing samples
-    const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: FX.bloomMsaa });
+    // Half floats keep colors above 1 for the bloom. Multisampling a float target is by far the
+    // dearest part of the frame on integrated GPUs (it is resolved twice a frame), so edges are
+    // smoothed by an FXAA pass at the end instead; FX.bloomSamples > 0 brings the samples back
+    const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: FX.bloomSamples });
     const composer = new EffectComposer(this.renderer, target);
-    composer.setPixelRatio(Math.min(this.renderer.getPixelRatio(), FX.bloomResolution));
+    composer.setPixelRatio(this.renderer.getPixelRatio());
     composer.setSize(this.container.clientWidth || 1, this.container.clientHeight || 1);
     composer.addPass(new RenderPass(this.scene, this.rig.camera));
     this.bloomPass = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), FX.bloom, FX.bloomRadius, FX.bloomThreshold);
     composer.addPass(this.bloomPass);
     composer.addPass(new OutputPass());
+    if (FX.bloomSamples === 0) composer.addPass(new FXAAPass());
     this.composer = composer;
   }
 
@@ -1867,9 +1894,22 @@ export class Game implements RunHost {
     this.bloomPass?.dispose();
     this.composer = null;
     this.bloomPass = null;
+    this.renderer.setPixelRatio(this.pixelRatio());
+    this.resize();
+  }
+
+  /**
+   * The canvas's pixel ratio at a quality level. With bloom the whole frame is drawn at
+   * FX.bloomResolution at most, canvas included: the page scales it up for free, where a
+   * bigger canvas would run the last full-screen passes over up to four times the pixels
+   */
+  private pixelRatio(quality: Quality = this.quality): number {
+    const bloom = quality === 2 && FX.bloom > 0 && !this.bloomFailed;
+    return Math.min(window.devicePixelRatio, QUALITY[quality].pixelRatio, bloom ? FX.bloomResolution : Infinity);
   }
 
   private setQuality(quality: Quality) {
+    const bloomWas = this.bloomOn;
     this.quality = quality;
     if (!this.bloomOn && this.composer) {
       this.composer.dispose();
@@ -1877,9 +1917,11 @@ export class Game implements RunHost {
       this.composer = null;
       this.bloomPass = null;
     }
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, QUALITY[quality].pixelRatio));
+    this.renderer.setPixelRatio(this.pixelRatio(quality));
     this.particles.budget = QUALITY[quality].particles;
     this.resize();
+    // With or without bloom is another set of programs: build them now, not one by one in flight
+    if (bloomWas !== this.bloomOn) this.compileShaders();
   }
 
   /** Steps the quality down if frames keep taking too long (never back up, so it can't flicker) */
@@ -1899,7 +1941,7 @@ export class Game implements RunHost {
     const width = this.container.clientWidth || 1;
     const height = this.container.clientHeight || 1;
     this.renderer.setSize(width, height, false);
-    this.composer?.setPixelRatio(Math.min(this.renderer.getPixelRatio(), FX.bloomResolution));
+    this.composer?.setPixelRatio(this.renderer.getPixelRatio());
     this.composer?.setSize(width, height);
     this.rig.resize(width / height);
     this.particles.setViewport(height * this.renderer.getPixelRatio(), this.rig.camera.fov);
@@ -1950,7 +1992,7 @@ export class Game implements RunHost {
         controller.onChange(() => {
           save();
           // The bloom's render targets are built with these: rebuild them
-          if (key === "bloomResolution" || key === "bloomMsaa") this.rebuildBloom();
+          if (key === "bloomResolution" || key === "bloomSamples") this.rebuildBloom();
         });
       }
       folder.close();

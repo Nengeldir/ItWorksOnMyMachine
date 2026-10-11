@@ -3,6 +3,7 @@ import { wingToken } from "../cosmetics/wings";
 import type { WingId } from "../cosmetics/catalog";
 import type { Reward, Rarity } from "../../profile/types";
 import { COLLECTION_FX } from "../tuning";
+import { smoothstep } from "../math";
 import { PICKUP_PREFS } from "./pickups";
 import type { World } from "../world/World";
 import { Builder, buildItem, leaf, star, type ItemId } from "../items/models";
@@ -154,13 +155,16 @@ export class Collection {
     if (!visible) return;
     for (const view of this.views) {
       const { pickup, model, root } = view;
-      root.visible = !pickup.collected && !(PICKUP_PREFS.crystalsOnly && pickup.reward.kind !== "crystal") && pickup.position.distanceToSquared(camera) < COLLECTION_FX.viewDistance ** 2;
+      const far = pickup.position.distanceTo(camera);
+      root.visible = !pickup.collected && !(PICKUP_PREFS.crystalsOnly && pickup.reward.kind !== "crystal") && far < COLLECTION_FX.viewDistance;
       if (!root.visible) continue;
       root.visible = collectionClear(this.world, pickup);
       if (!root.visible) continue;
       root.position.y = pickup.position.y + Math.sin(this.time * 2 + pickup.reward.angle) * COLLECTION_FX.bob;
       root.rotation.y = this.time * COLLECTION_FX.spin;
-      root.scale.setScalar(pickup.reward.kind === "crystal" ? COLLECTION_FX.crystalSize : COLLECTION_FX.size);
+      // Grows in over the last stretch of the view distance instead of popping up at its edge
+      const grown = 1 - smoothstep(COLLECTION_FX.viewDistance * 0.8, COLLECTION_FX.viewDistance, far);
+      root.scale.setScalar((pickup.reward.kind === "crystal" ? COLLECTION_FX.crystalSize : COLLECTION_FX.size) * grown);
       if (particles && pickup.reward.kind === "crystal" && pickup.position.distanceToSquared(camera) < COLLECTION_FX.moteDistance ** 2) {
         view.moteDebt += dt * COLLECTION_FX.crystalMotes * particles.budget;
         this.color.set(RARITY_COLOR[pickup.reward.rarity]);
