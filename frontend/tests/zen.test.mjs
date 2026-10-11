@@ -80,6 +80,19 @@ test('the ground keeps to the heights of a level, with rivers in its valleys', (
   }
 });
 
+test('Zen starts in open air with a clear glide ahead, never inside a hill', async () => {
+  const { MAPS, featuredSeed } = await import('../src/game/world/biomes/index.ts');
+  // 98665 put today's Glacier start 176 m inside a mountain
+  for (const seed of [98665, 3, 7, 1234, ...MAPS.map(featuredSeed)]) {
+    const world = new World(zenLevel(seed));
+    const { position: p, direction: d } = world.spawnPoint(0);
+    assert.ok(world.distance(p.x, p.y, p.z) > 20, `${world.biome.id} #${seed}: start at ${p.toArray().map(Math.round)} has no room`);
+    for (let t = 10; t <= 200; t += 10) {
+      assert.ok(world.distance(p.x + d.x * t, p.y + d.y * t, p.z + d.z * t) > 8, `${world.biome.id} #${seed}: rock ${t} m ahead of the start`);
+    }
+  }
+});
+
 test('valleys never jump: the land eases up from them, no cliff off a flat floor', () => {
   const ground = open('aurora', 5).land.ground;
   let worst = 0;

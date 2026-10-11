@@ -21,6 +21,9 @@ const SEA_STEP = 8;
 const SEA_PAD = 1700;
 const START_AIM_LIFT = 4; // metres above the first ring's centre the start aims at, for the sink on the way
 const START_CLEARANCE = 3; // metres of air the aimed start needs all the way to the first ring
+/** An open world's start: metres of air all round it, and of glide ahead that must be clear */
+const START_ROOM = 24;
+const START_RUNWAY = 260;
 /** An open world's cell's shapes are ordered from its `cellIndex` · ORDER_SPAN, so cells made in any order blend alike */
 const ORDER_SPAN = 100_000;
 /** An open world keeps at most this many cells of land made; past it, the furthest go (back the same if asked for again) */
@@ -87,6 +90,8 @@ export class World {
   /** An open world's cells of land made so far, and their shapes */
   private readonly made = new Map<string, { area: Area; shapes: Shape[] }>();
   private making = false;
+  /** An open world's start, found once (`findOpenStart`) */
+  private openStart: { position: Vector3; direction: Vector3 } | null = null;
 
   constructor(level: Level) {
     this.level = level;
@@ -330,12 +335,59 @@ export class World {
 
   /** Where to put a pilot who has passed `checkpoints` rings */
   spawnPoint(checkpoints: number): { position: Vector3; direction: Vector3 } {
+    if (this.open) {
+      this.openStart ??= this.findOpenStart();
+      return { position: this.openStart.position.clone(), direction: this.openStart.direction.clone() };
+    }
     const { rings, start } = this.course;
     if (checkpoints <= 0 || !rings.length) {
       return { position: start.clone(), direction: this.startDirection.clone() };
     }
     const ring = rings[Math.min(checkpoints, rings.length) - 1];
     return { position: ring.position.clone().addScaledVector(ring.normal, 4), direction: ring.normal.clone() };
+  }
+
+  /**
+   * An open world has no line to start on: from the origin outwards, the first spot over a valley's
+   * middle (anywhere, without ground) that has room around it and a clear glide ahead, 45 m over the
+   * land or water there, heading along the valley if that way is clear
+   */
+  private findOpenStart(): { position: Vector3; direction: Vector3 } {
+    const ground = this.land?.ground ?? null;
+    const water = this.openWater?.level ?? this.seaAt(0);
+    const dir = new Vector3();
+    const clear = (x: number, y: number, z: number) => {
+      if (this.distance(x, y, z) < START_ROOM) return false;
+      for (let t = 10; t <= START_RUNWAY; t += 10) {
+        if (this.distance(x + dir.x * t, y + dir.y * t, z + dir.z * t) < (t < 60 ? START_ROOM : START_ROOM / 2)) return false;
+      }
+      return true;
+    };
+    for (let ring = 0; ring <= 40; ring++) {
+      const r = ring * 60;
+      const n = ring === 0 ? 1 : Math.ceil((2 * Math.PI * r) / 60);
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2;
+        const x = Math.cos(a) * r;
+        const z = Math.sin(a) * r;
+        if (ground?.open && ground.valleyDistance(x, z) > 60) continue;
+        const floor = ground ? Math.max(ground.height(x, z), water ?? -Infinity) : 0;
+        const y = ground ? floor + 45 : 0;
+        // Along the valley first (across the valley noise's slope), then every way
+        const headings: number[] = [];
+        if (ground?.open) {
+          const v = ground.valleyNoise(x, z);
+          const along = Math.atan2(-(ground.valleyNoise(x, z + 6) - v), ground.valleyNoise(x + 6, z) - v);
+          headings.push(along, along + Math.PI);
+        }
+        for (let h = 0; h < 8; h++) headings.push((h / 8) * Math.PI * 2);
+        for (const h of headings) {
+          dir.set(Math.sin(h), -0.08, Math.cos(h)).normalize();
+          if (clear(x, y, z)) return { position: new Vector3(x, y, z), direction: dir.clone() };
+        }
+      }
+    }
+    return { position: this.course.start.clone().setY(ground ? ground.height(0, 0) + 120 : 0), direction: this.startDirection.clone() };
   }
 }
 

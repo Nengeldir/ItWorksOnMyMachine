@@ -233,6 +233,15 @@ the course.
 
 ## Change log
 
+### 2026-10-11: Zen no longer starts inside a hill (Claude)
+
+Reported: opening Zen crashed at once. The open world started at the old
+line's start (y = 0) whatever stood there: today's Glacier put it 176 m
+inside a mountain. `World.spawnPoint` now finds, from the origin outwards,
+a spot 45 m over a valley's middle (or the islands) with 24 m of room and
+260 m of clear glide, heading along the valley. Verified: lint, build,
+134 tests (new: starts of every map and today's seed); browser below.
+
 ### 2026-10-11: Sky Isles on the shared generator (Claude)
 
 It was the one map on the old frozen generator (a leftover from when it was
