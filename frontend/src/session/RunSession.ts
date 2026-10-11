@@ -69,7 +69,12 @@ export class RunSession {
     if (!this.container) return;
     const generation = ++this.generation;
     try {
-      const adventure = await profileClient.start(this.seed);
+      // Persistent rewards need the server; without it the adventure still flies, collecting nothing
+      // (the profile pill says the profile is unavailable)
+      const adventure = await profileClient.start(this.seed).catch((error: unknown) => {
+        console.warn("Adventure rewards unavailable:", error);
+        return null;
+      });
       if (generation !== this.generation || !this.container) return;
       this.game = new Game(this.container, {
         seed: this.seed,
@@ -81,8 +86,8 @@ export class RunSession {
         events: { hud: (hud) => this.store.set({ hud }), takeOver: () => this.begin(false) },
       });
       this.game.startRun(this.seed, {
-        rewards: adventure.rewards,
-        collected: reward => profileClient.collect(adventure.token, reward.id),
+        rewards: adventure?.rewards,
+        collected: reward => { if (adventure) profileClient.collect(adventure.token, reward.id); },
         offer: (offers, next) => this.store.set({ stage: "pick", offers, next }),
         arrived: (level, biome) => this.store.set({ arrived: { level, biome, at: performance.now() } }),
         ended: (summary) => this.ended(summary),
