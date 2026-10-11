@@ -324,7 +324,8 @@ Children of the Light; the terrain is untouched for now. Looks only (rule 6).
   shape at 36% height lifted 2.5 cm); the wings are layered feathers again
   (`feather()`: thick plates with drooping tips, gold quills; five
   secondaries and four coverts on the arm, five primaries and three coverts
-  on the hand), the wardrobe's wing models still replace them.
+  on the hand), the wardrobe's wing models still replace them. The wardrobe's
+  and the items' ink is the pilot's tinted ink too, so `FX.ink` governs all of it.
 
 ### 2026-10-10: Rebased PR #46 onto current main, without merge commits (Claude)
 

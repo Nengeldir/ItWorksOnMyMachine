@@ -6,7 +6,8 @@ import type { HatId, ShoeId } from "./catalog";
 const GOLD = "#f3c869", IVORY = "#fff4df";
 // Each accessory owns its geometry; materials live for the lifetime of this module.
 const toon = toonMaterial({ side: THREE.DoubleSide, rim: 0.35 });
-const ink = outlineMaterial(0.006);
+// The same ink as the pilot's: tinted by each part's color, hidden when FX.ink is 0
+const ink = outlineMaterial(0.006, undefined, { tint: true });
 export function paintedModel(builder: Builder): THREE.Group {
   const group = new THREE.Group(), geometry = builder.build();
   const mesh = new THREE.Mesh(geometry, toon);

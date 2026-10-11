@@ -279,7 +279,7 @@ let ink: THREE.MeshBasicMaterial | null = null;
 function materials() {
   if (!toon) {
     toon = toonMaterial({ side: THREE.DoubleSide, rim: 0.4 });
-    ink = outlineMaterial(0.008);
+    ink = outlineMaterial(0.008, undefined, { tint: true }); // the pilot's ink (FX.ink, inkTint)
   }
   return { toon: toon!, ink: ink! };
 }
