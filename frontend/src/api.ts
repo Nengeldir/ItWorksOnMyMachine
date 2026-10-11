@@ -44,6 +44,8 @@ export interface RoomInfo {
   phase: RoomPhase;
   start_at: number | null;
   race_id: number;
+  /** The pilot who can restart a running race: the first one in, passed on when they leave */
+  host: string | null;
   players: RoomPlayer[];
   results: RaceResult[];
   server_time: number;

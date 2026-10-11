@@ -177,7 +177,8 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `media.ts` | `useMediaToggle(query)`: an open/closed toggle that starts open where a media query matches and follows the screen when it changes |
 
 Backend (`backend/`): `app.py` endpoints, `rooms.py` race state machine and
-15 Hz SSE relay, `store.py` SQLite runs and ghosts, `models.py` Pydantic models.
+15 Hz SSE relay (the first pilot in is the host and can restart a race; a race is
+called 60 s after the first finish), `store.py` SQLite runs and ghosts, `models.py` Pydantic models.
 Players never collide, so the server only relays positions.
 
 ### Key mechanics
@@ -245,6 +246,47 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-11: Race rooms: no more waiting forever, a host who restarts, the pilots in the lobby (Claude)
+
+Reported: multiplayer is stuck when the race is finished; unsure what a
+dropped connection does. Asked for: a restart for the host, and seeing how
+many pilots are there at the beginning. Also `footage/` in `.gitignore`.
+- **Why it was stuck** (read from the code, not reproduced with two
+  players): a room's race only ended when every racer had finished, or
+  240 s after the start. One pilot who was away, in a hidden tab, or whose
+  finish was refused kept everyone else on "Waiting for the other racers",
+  with nothing to press.
+- **Rules** (`backend/rooms.py`, a deliberate change in rooms only):
+  the race is called `FINISH_GRACE_MS` (60 s) after the first finish; a
+  racer with no stream who sent no state for `RACER_DROPPED_MS` (5 s) is no
+  longer waited for (they stay in the room for the next race; they are
+  still removed after 15 s). The 240 s limit stays.
+- **Host**: `Room.host_id`, the first pilot in, in the room message as
+  `host`; when the host leaves or is dropped it passes to the
+  longest-standing pilot who is connected. `POST /api/rooms/{code}/restart`
+  (host only, 409 otherwise): any phase, a new 5 s countdown for everyone in
+  the room. Start and Change map are still anyone's.
+- **Frontend**: `RoomClient.restart`, `RoomSession.restart`. The host gets
+  "Restart race" in the top bar while a race runs (the top bar shows while
+  paused), on the finish strip (Enter once finished) and on the paused
+  results card (`RaceResults` takes its retry texts). The lobby shows a
+  roster under the start pill (`.room-roster`): how many pilots, their
+  names and colors, who is host, and the last race's times. A client the
+  server forgot mid-race (it rejoins as a new pilot who sits the race out)
+  goes back to free flight instead of racing on unscored.
+- **Dropped connections, as they are now**: the browser reopens the stream
+  by itself and state POSTs keep you alive, so a blip changes nothing; gone
+  for 5 s you stop holding the race, for 15 s you are removed (the host
+  passes on) and a return joins as a new pilot for the next race.
+- Deploy frontend and backend together (`host` is new in the room message).
+- Verified: 44 backend tests (4 new: host handover, restart, the grace
+  after the first finish, a dropped racer; two old tests give their racers
+  a stream), build, lint, 138 frontend tests. In headless Chrome on the dev
+  server with the real backend: the lobby roster with two pilots, and the
+  host passing to the browser when the other was dropped. **Not played**:
+  a real two-player race through finish, grace and restart; the roster on
+  a phone.
 
 ### 2026-10-11: Bugfixes: the audit's fixes and patch notes, pets at play, rare cosmetics' particles (Claude)
 
@@ -3176,6 +3218,12 @@ ported to the islands world:
   through islands and gates, no console errors.
 
 ## Next up
+
+- Race rooms (2026-10-11): play a two-player race through finish, the 60 s
+  grace and a host restart; tune `FINISH_GRACE_MS`. A refused finish (409)
+  still leaves that pilot "finished" locally until the race is called.
+  Start and Change map are anyone's: decide whether they become host-only.
+  The host's Restart has no confirmation.
 
 - Performance pass (2026-10-11) follow-ups: watch the fade-in and FXAA in a
   real window (thin ribbons, ink outlines; `bloomSamples` 2 is the old look).

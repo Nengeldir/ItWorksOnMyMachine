@@ -265,6 +265,8 @@ const SoloScreen = ({ seed, settings, onSettings, onExit, tutorial, onTutorialEn
 
 // --- Race room -------------------------------------------------------------------
 
+const ROOM_RESTART = { hint: "Waiting for the others · Enter restarts the race", touch: "Restart race", button: "Restart race" };
+
 /** The landing page's map select over the room's game (held paused): the room flies the map picked next */
 const RoomMapSelect = ({ onPick, onBack }: { onPick: (seed: number) => void; onBack: () => void }) => {
   const [countdown, setCountdown] = useState(untilTomorrow);
@@ -293,6 +295,9 @@ const RoomScreen = ({ code, seed, settings, onSettings, onExit, tutorial, onTuto
   useUiTheme(hud?.seed);
   const me = room?.players.find((p) => p.id === selfId);
   const lobby = room?.phase === "lobby";
+  // The host (the first pilot in) can call a running race off and restart it for everyone
+  const host = !!room && room.host === selfId;
+  const finished = !lobby && me?.finish_ms != null;
   // The tutorial runs in the lobby; if someone starts the race first, it's over
   const coaching = !!tutorial && !!room && lobby;
   // Your own land first (others can still start: the countdown gives it a few more seconds)
@@ -309,7 +314,11 @@ const RoomScreen = ({ code, seed, settings, onSettings, onExit, tutorial, onTuto
   }
 
   useHotkeys({
-    Enter: () => lobby && !coaching && !building && !choosing && session.start(),
+    Enter: () => {
+      if (lobby) {
+        if (!coaching && !building && !choosing) session.start();
+      } else if (host && finished) session.restart();
+    },
     KeyN: () => lobby && !coaching && setChoosing(true),
   });
 
@@ -318,6 +327,7 @@ const RoomScreen = ({ code, seed, settings, onSettings, onExit, tutorial, onTuto
       <div ref={ref} className="game-view" />
       {hud && <Hud hud={hud} settings={settings} />}
       <TopBar title={`Room ${code}${hud ? ` · course #${hud.seed} · ${hud.biomeName} · ${hud.paletteName}` : ""}`} onExit={onExit} controls={{ settings, onSettings, muted: !!hud?.muted }}>
+        {host && room && !lobby && <button className="glass" onClick={() => session.restart()}>Restart race</button>}
         <span className={`connection glass ${connection}`}>
           <span className="dot" />
           {connection === "connected" ? "online" : connection}
@@ -341,6 +351,27 @@ const RoomScreen = ({ code, seed, settings, onSettings, onExit, tutorial, onTuto
           </div>
         </ReadyCard>
       )}
+      {room && lobby && !coaching && !choosing && (
+        <aside className="room-roster glass" aria-label="Pilots in the room">
+          <strong>{room.players.length === 1 ? "1 pilot" : `${room.players.length} pilots`} in the room</strong>
+          <ul>
+            {room.players.map((p) => (
+              <li key={p.id}>
+                <span className="dot" style={{ background: p.color }} />
+                {p.name}{p.id === selfId && " (you)"}{p.id === room.host && " · host"}
+              </li>
+            ))}
+          </ul>
+          {room.results.length > 0 && (
+            <>
+              <strong>Last race</strong>
+              <ol>
+                {room.results.map((r) => <li key={r.id}>{r.name} · {formatTime(r.time_ms)}</li>)}
+              </ol>
+            </>
+          )}
+        </aside>
+      )}
       {choosing && lobby && (
         <RoomMapSelect
           onPick={(seed) => {
@@ -357,8 +388,9 @@ const RoomScreen = ({ code, seed, settings, onSettings, onExit, tutorial, onTuto
 
       {room && !lobby && me?.finish_ms != null && (
         <RaceResults paused={!!hud?.paused} timeMs={me.finish_ms} context={`Room ${code}`}
-          onResume={() => session.resume()}>
+          onResume={() => session.resume()} onRetry={host ? () => session.restart() : undefined} retry={ROOM_RESTART}>
           {lastPlace !== null && <p>You finished <strong>{ordinal(lastPlace)}</strong>. Waiting for the others…</p>}
+          <p>{host ? "You're the host: restart whenever you like." : "The race is called a minute after the first finish, or when the host restarts."}</p>
           <h3>Race standings</h3>
           <ol className="race-results-standings">{hud?.standings.map(s => <li key={s.id} className={s.me ? "me" : undefined}>{s.name} · {s.finishMs !== null ? formatTime(s.finishMs) : `${s.checkpoints}/${hud.totalCheckpoints} gates`}</li>)}</ol>
         </RaceResults>

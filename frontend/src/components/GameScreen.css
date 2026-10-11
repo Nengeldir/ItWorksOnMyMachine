@@ -206,6 +206,53 @@
   align-items: center;
 }
 
+/* The room's lobby, under the start pill: who is here, and how the last race went */
+.room-roster {
+  position: absolute;
+  top: 11.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 2rem);
+  max-height: calc(100% - 20rem);
+  overflow: auto;
+  padding: 0.6rem 0.95rem;
+  border-radius: 16px;
+  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.room-roster :is(ul, ol) {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.room-roster ol {
+  padding-left: 1.4rem;
+  list-style: decimal;
+  font-variant-numeric: tabular-nums;
+}
+
+.room-roster ul li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.room-roster .dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+@media (max-height: 520px) {
+  .room-roster { top: 8.4rem; max-height: calc(100% - 9.5rem); }
+}
+
 .ready-card .row button:not(.primary) {
   min-height: 3.25rem;
   border-radius: 999px;

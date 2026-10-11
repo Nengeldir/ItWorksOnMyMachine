@@ -15,6 +15,10 @@ from dataclasses import dataclass, field
 TICK_HZ = 15
 COUNTDOWN_MS = 5_000
 RACE_TIMEOUT_MS = 240_000
+# Once the first pilot is through the finish, the others get this long before the race is called
+FINISH_GRACE_MS = 60_000
+# A racer whose stream is closed and who stopped sending state for this long no longer holds the race up
+RACER_DROPPED_MS = 5_000
 # A player whose stream is closed and who stopped sending state is dropped after this
 PLAYER_TIMEOUT_MS = 15_000
 EMPTY_ROOM_TIMEOUT_MS = 120_000
@@ -149,6 +153,9 @@ class Room:
         self.phase = "lobby"  # lobby -> countdown -> racing -> lobby
         self.start_at: int | None = None
         self.race_id = 0
+        self.first_finish_at: int | None = None
+        # The first pilot in; passed on when they leave. Only the host can restart a running race
+        self.host_id: str | None = None
         self.players: dict[str, Player] = {}
         self.by_token: dict[str, Player] = {}
         self.results: list[dict] = []
@@ -165,6 +172,7 @@ class Room:
             "phase": self.phase,
             "start_at": self.start_at,
             "race_id": self.race_id,
+            "host": self.host_id,
             "players": [p.public() for p in self.players.values()],
             "results": self.results,
             "server_time": now if now is not None else now_ms(),
@@ -214,17 +222,26 @@ class Room:
         self.players[player.id] = player
         self.by_token[player.token] = player
         self.empty_since = None
+        if self.host_id is None:
+            self.host_id = player.id
         self.notify(now)
         return player
 
     def leave(self, player: Player, now: int | None = None):
         now = now if now is not None else now_ms()
+        self.remove(player, now)
+        self.check_race_over(now)
+        self.notify(now)
+
+    def remove(self, player: Player, now: int):
         self.players.pop(player.id, None)
         self.by_token.pop(player.token, None)
         if not self.players:
             self.empty_since = now
-        self.check_race_over(now)
-        self.notify(now)
+        if self.host_id == player.id:
+            # The longest-standing pilot who is still connected takes over
+            heirs = sorted(self.players.values(), key=lambda p: not p.connected)
+            self.host_id = heirs[0].id if heirs else None
 
     def update_state(self, player: Player, t: float, p: list[float], q: list[float], v: float, cp: int, now: int | None = None, boost: float = 0, brake: float = 0, dodge: float = 0):
         player.state = [
@@ -257,9 +274,19 @@ class Room:
         now = now if now is not None else now_ms()
         if self.phase != "lobby":
             raise RoomError("a race is already running")
+        self.begin(now)
+
+    def restart(self, player: Player, now: int | None = None):
+        """The host calls the race off and puts everyone back on the start line, whatever the phase"""
+        if player.id != self.host_id:
+            raise RoomError("only the host can restart the race")
+        self.begin(now if now is not None else now_ms())
+
+    def begin(self, now: int):
         self.phase = "countdown"
         self.start_at = now + COUNTDOWN_MS
         self.race_id += 1
+        self.first_finish_at = None
         self.results = []
         for player in self.players.values():
             player.racing = True
@@ -275,6 +302,8 @@ class Room:
             raise RoomError("you already finished")
         check_finish_time(time_ms, now - self.start_at)
         player.finish_ms = time_ms
+        if self.first_finish_at is None:
+            self.first_finish_at = now
         self.results.append({"id": player.id, "name": player.name, "color": player.color, "time_ms": time_ms})
         self.results.sort(key=lambda r: r["time_ms"])
         place = next(i for i, r in enumerate(self.results, 1) if r["id"] == player.id)
@@ -287,8 +316,14 @@ class Room:
     def check_race_over(self, now: int):
         if self.phase != "racing" or self.start_at is None:
             return
-        still_flying = [p for p in self.players.values() if p.racing and p.finish_ms is None]
-        if not still_flying or now - self.start_at > RACE_TIMEOUT_MS:
+        # A racer who dropped out (no stream, no state) is not waited for; they stay in the room meanwhile
+        still_flying = [
+            p
+            for p in self.players.values()
+            if p.racing and p.finish_ms is None and (p.connected or now - p.last_seen <= RACER_DROPPED_MS)
+        ]
+        called = self.first_finish_at is not None and now - self.first_finish_at > FINISH_GRACE_MS
+        if not still_flying or called or now - self.start_at > RACE_TIMEOUT_MS:
             self.phase = "lobby"
             for player in self.players.values():
                 player.racing = False
@@ -308,12 +343,9 @@ class Room:
             p for p in self.players.values() if not p.connected and now - p.last_seen > PLAYER_TIMEOUT_MS
         ]
         for player in stale:
-            self.players.pop(player.id, None)
-            self.by_token.pop(player.token, None)
+            self.remove(player, now)
             changed = True
         if stale:
-            if not self.players:
-                self.empty_since = now
             self.check_race_over(now)
 
         if changed:

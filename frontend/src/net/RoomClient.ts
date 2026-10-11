@@ -141,6 +141,11 @@ export class RoomClient {
     return request(this.url("start"), "POST", { token: this.token });
   }
 
+  /** Host only: call the race off and put everyone back on the start line */
+  restart(): Promise<void> {
+    return request(this.url("restart"), "POST", { token: this.token });
+  }
+
   /** Another map: the one picked in the map select, or (without a seed) a random one */
   newMap(seed?: number): Promise<void> {
     return request(this.url("map"), "POST", { token: this.token, seed });
