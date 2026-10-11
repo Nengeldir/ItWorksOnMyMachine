@@ -2,9 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as THREE from 'three';
 import { World } from '../src/game/world/World.ts';
-import { makeLevel, skyIslesLevel } from '../src/game/world/biomes/index.ts';
+import { makeLevel } from '../src/game/world/biomes/index.ts';
 import { meshNode, NODE_SIZE, VOXEL } from '../src/game/world/terrain/mesh.ts';
-import { meshChunk } from '../src/game/world/mesher.ts';
 import { cleanMesh, remapFaces } from '../src/game/world/meshCleanup.ts';
 import { LandStreamer } from '../src/game/world/terrain/streamer.ts';
 import { LandCollider } from '../src/game/world/landCollider.ts';
@@ -42,19 +41,6 @@ test('seeded terrain has no open interior edges after cleanup', () => {
         assert.equal(open.length, 0, `${biome} seed ${seed} at ${cell}: internal holes`);
       }
     }
-  }
-});
-
-test('adjacent full-detail chunks share exact edges, including at negative coordinates', () => {
-  for (const boundary of [0, 96]) {
-    const distance = (x, y, z) => Math.hypot(x - boundary, y - 48, z - 48) - 28;
-    const world = new World(skyIslesLevel(42));
-    world.legacy = { distance };
-    const a = meshChunk(world, boundary / 96 - 1, 0, 0);
-    const b = meshChunk(world, boundary / 96, 0, 0);
-    const edges = edgesOf(new Float32Array([...a.positions, ...b.positions]));
-    assert.ok(edges.length > 0);
-    assert.ok(edges.every(e => e.count === 2), 'closed sphere across a chunk seam must be watertight');
   }
 });
 

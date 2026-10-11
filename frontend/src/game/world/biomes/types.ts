@@ -250,6 +250,8 @@ export interface Biome {
   readonly sky: SkySpec;
   readonly particles: ParticleStyle;
   readonly portals: PortalSpec;
+  /** The terrain and vegetation in a mood's colors (`makeLevel` applies it), for maps whose moods recolor the land */
+  readonly recolor?: (palette: Palette) => Pick<Biome, "terrain" | "vegetation">;
 }
 
 /** Everything that decides a level, small enough to post to the mesher workers */
@@ -259,6 +261,8 @@ export interface LevelKey {
   mood: number; // index into the biome's moods
   runSeed: number; // 0 outside a run
   index: number; // level number in the run (0 outside a run)
+  /** Zen: an open world, with no line and land every way (generator-v2 biomes only) */
+  open?: boolean;
 }
 
 export interface Level {

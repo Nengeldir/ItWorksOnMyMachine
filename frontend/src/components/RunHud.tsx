@@ -215,7 +215,9 @@ export const FinishScreen = ({
     <div className="run-finish">
       <section className="finish-card">
         <small>
-          {testMode ? "Test" : "Run"} #{summary.seed} · {won ? "complete" : `fell in ${BIOMES[last].name}`}
+          {/* No run seed here, as in the top bar (the test sandbox keeps it, for testing) */}
+          {testMode && `Test #${summary.seed} · `}
+          {won ? (testMode ? "complete" : "Complete") : `${testMode ? "fell" : "Fell"} in ${BIOMES[last].name}`}
         </small>
         <h2>{won ? "Journey's end" : "Out of feathers"}</h2>
         <div className="finish-score">
@@ -253,7 +255,8 @@ export const FinishScreen = ({
           New run <kbd>N</kbd>
         </button>}
         <button onClick={onMenu}>
-          Return to menu <kbd>⌫</kbd>
+          {/* The key's name, not the ⌫ character: the UI's fonts don't have it, and some systems draw nothing */}
+          Return to menu <kbd>Backspace</kbd>
         </button>
       </nav>
     </div>

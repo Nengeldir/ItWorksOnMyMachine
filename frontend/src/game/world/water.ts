@@ -5,6 +5,7 @@ import { WATER } from "../tuning";
 import { ATMOSPHERE, MIST } from "./atmosphere";
 import type { WaterKind } from "./terrain/river";
 import type { IslandFall, World } from "./World";
+import { type Area, CELL } from "./open";
 
 // Stylized water for every biome: river pools stepping down the valley, the
 // falls between them, and seas. One shader, four kinds:
@@ -299,9 +300,14 @@ export class WaterView {
   private readonly materials: THREE.ShaderMaterial[] = [];
   private readonly geometries: THREE.BufferGeometry[] = [];
 
-  constructor(world: World) {
+  /** All of a level's water; or, given an open world's cell, that cell's (see `buildCell`) */
+  constructor(world: World, area: Area | null = null) {
     const terrain = world.biome.terrain;
     if (terrain.kind !== "v2") return;
+    if (area) {
+      this.buildCell(world, area);
+      return;
+    }
     if (world.hasSea && terrain.sea) this.buildSea(world, this.uniforms("water", terrain.sea.colors, world.palette.night, 0, 0));
     if (world.islandFalls.length && terrain.islandFalls) {
       this.buildIslandFalls(world.islandFalls, this.uniforms("water", terrain.islandFalls.colors, world.palette.night, 1, 1));
@@ -452,28 +458,59 @@ export class WaterView {
     }
   }
 
-  /** A sea: a grid over the whole level, with the depth over the ground (and the rock standing in it) per vertex */
-  private buildSea(world: World, uniforms: Record<string, THREE.IUniform>) {
+  /**
+   * An open world's cell: its sea, or its rivers and lakes (one sheet at the water level, wherever
+   * the ground dips below it), and the falls off its islands
+   */
+  private buildCell(world: World, area: Area) {
+    const terrain = world.biome.terrain;
+    if (terrain.kind !== "v2") return;
+    const night = world.palette.night;
+    const water = world.openWater;
+    const river = terrain.ground?.river;
+    if (world.hasSea && terrain.sea) this.buildSea(world, this.uniforms("water", terrain.sea.colors, night, 0, 0), { area, level: world.seaAt(0)! });
+    else if (water && river) this.buildSea(world, this.uniforms(water.kind, river.colors, night, 0, 0), { area, level: water.level });
+    const falls = world.islandFalls.filter((f) => f.x >= area.x0 && f.x < area.x1 && f.z >= area.z0 && f.z < area.z1);
+    if (falls.length && terrain.islandFalls) this.buildIslandFalls(falls, this.uniforms("water", terrain.islandFalls.colors, night, 1, 1));
+  }
+
+  /**
+   * A sea: a grid over the whole level, with the depth over the ground (and the rock standing in it)
+   * per vertex. Or an open world's cell's water, level at `cell.level` (cells' grids meet exactly),
+   * left out where the ground stands above it all
+   */
+  private buildSea(world: World, uniforms: Record<string, THREE.IUniform>, cell: { area: Area; level: number } | null = null) {
     const field = world.land!;
     const ground = field.ground;
     const { course } = world;
     let xMin = Infinity;
     let xMax = -Infinity;
-    for (let z = course.start.z - 600; z <= course.endZ + 900; z += 50) {
-      xMin = Math.min(xMin, course.x(z));
-      xMax = Math.max(xMax, course.x(z));
+    let step = 22;
+    let x0: number, z0: number, columns: number, rows: number;
+    if (cell) {
+      columns = rows = Math.ceil(CELL / step);
+      step = CELL / columns;
+      x0 = cell.area.x0;
+      z0 = cell.area.z0;
+    } else {
+      for (let z = course.start.z - 600; z <= course.endZ + 900; z += 50) {
+        xMin = Math.min(xMin, course.x(z));
+        xMax = Math.max(xMax, course.x(z));
+      }
+      x0 = xMin - 1500;
+      z0 = course.start.z - 1400;
+      columns = Math.ceil((xMax + 1500 - x0) / step);
+      rows = Math.ceil((course.endZ + 1600 - z0) / step);
     }
-    const step = 22;
-    const x0 = xMin - 1500;
-    const z0 = course.start.z - 1400;
-    const columns = Math.ceil((xMax + 1500 - x0) / step);
-    const rows = Math.ceil((course.endZ + 1600 - z0) / step);
+    const levelAt = (z: number) => (cell ? cell.level : world.seaAt(z)!);
     // Rock standing in the water (stacks, islets): foam rings around them
     const standing = field.shapes.filter((s) => {
-      const lo = world.seaAt(s.min.z)!;
-      const hi = world.seaAt(s.max.z)!;
+      if (cell && (s.max.x < x0 - 30 || s.min.x > x0 + CELL + 30 || s.max.z < z0 - 30 || s.min.z > z0 + CELL + 30)) return false;
+      const lo = levelAt(s.min.z);
+      const hi = levelAt(s.max.z);
       return s.min.y < Math.max(lo, hi) + 2 && s.max.y > Math.min(lo, hi) - 2;
     });
+    let wet = false;
     const positions = new Float32Array((columns + 1) * (rows + 1) * 3);
     const normals = new Float32Array(positions.length);
     const depth = new Float32Array((columns + 1) * (rows + 1));
@@ -482,7 +519,7 @@ export class WaterView {
         const i = r * (columns + 1) + c;
         const x = x0 + c * step;
         const z = z0 + r * step;
-        const sea = world.seaAt(z)!;
+        const sea = levelAt(z);
         positions[i * 3] = x;
         positions[i * 3 + 1] = sea;
         positions[i * 3 + 2] = z;
@@ -495,8 +532,10 @@ export class WaterView {
           }
         }
         depth[i] = d;
+        if (d > 0) wet = true;
       }
     }
+    if (cell && !wet) return;
     const index: number[] = [];
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < columns; c++) {

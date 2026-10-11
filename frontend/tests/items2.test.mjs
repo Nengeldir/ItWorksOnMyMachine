@@ -82,13 +82,6 @@ test('adventure vegetation leaves the pickup and both approaches clear',async()=
  for(const site of sites)assert.ok(pickupClear(world,site.position),site.id);
 });
 
-test('frozen race meshes, trees, distances and gates retain their recorded hashes',async()=>{
- const {raceHashes}=await import('../src/game/devtools.ts');
- const hashes=raceHashes();
- for(const [seed,values] of Object.entries({1:['4cb2746a','f4f3226a','9086de69','583fd555'],7:['a1696d0a','fb4fc91d','6aab8c08','c8cc2d15'],42:['3a723711','112f6564','3b43c006','40f33295']}))
-  assert.deepEqual(['mesh','trees','dist','rings'].map(key=>hashes[seed][key]),values);
-});
-
 test('held Dragon Tear drives the real flight downward and release returns pitch control',()=>{
  const {items,flight}=setup();use(items,flight,'dragonTear');
  for(let i=0;i<360;i++){const input={pitch:0,roll:0,use:1};const mods=step(items,flight,1/120,input);flight.step(1/120,input,0,undefined,mods);}

@@ -82,9 +82,12 @@ function paintFor(surface: Surface): Paint {
   return paint;
 }
 
+/** Nodes per axis a key can tell apart (±KEY_HALF), at every level: ±1500 km of the finest, for an endless line */
+export const KEY_SPAN = 65536;
+const KEY_HALF = KEY_SPAN / 2;
+
 export function nodeKey(lod: number, ix: number, iy: number, iz: number): number {
-  // Up to ±1024 nodes on each axis at every level
-  return ((lod * 2048 + ix + 1024) * 2048 + iy + 1024) * 2048 + iz + 1024;
+  return ((lod * KEY_SPAN + ix + KEY_HALF) * KEY_SPAN + iy + KEY_HALF) * KEY_SPAN + iz + KEY_HALF;
 }
 
 const EMPTY: TerrainMesh = { positions: new Float32Array(0), rock: new Uint8Array(0), cover: new Uint8Array(0), snow: new Float32Array(0), crystal: new Uint8Array(0) };

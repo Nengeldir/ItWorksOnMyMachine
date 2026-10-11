@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Vector3 } from "three";
 import { Autopilot } from "../src/game/autopilot.ts";
 import { Flight, hitboxWorld } from "../src/game/flight.ts";
-import { skyIslesLevel, runLevel } from "../src/game/world/biomes/index.ts";
+import { makeLevel, runLevel } from "../src/game/world/biomes/index.ts";
 import { World } from "../src/game/world/World.ts";
 
 // Flies a whole course on the autopilot, to 40 m past the finish (where Game loops it)
@@ -38,7 +38,8 @@ function fly(level) {
 }
 
 test("the autopilot flies through the middle of every gate and keeps clear of the land", () => {
-  for (const level of [skyIslesLevel(42), skyIslesLevel(7), runLevel(1, 1, "lagoon"), runLevel(2, 1, "ember")]) {
+  const skyIsles = (seed) => makeLevel({ biome: "skyIsles", seed, mood: 0, runSeed: 0, index: 0 });
+  for (const level of [skyIsles(42), skyIsles(7), runLevel(1, 1, "lagoon"), runLevel(2, 1, "ember")]) {
     const { clearance, offCentre, passed, rings } = fly(level);
     assert.equal(passed, rings, "every gate, once");
     assert.ok(offCentre < 0.5, `through the middle (${offCentre.toFixed(2)} m off)`);

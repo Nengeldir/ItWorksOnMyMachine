@@ -8,6 +8,8 @@ export type Screen =
   | { kind: "explore"; biome: BiomeId; seed: number }
   | { kind: "test"; biome: BiomeId; seed: number }
   | { kind: "run"; seed: number }
+  // Endless free flight in one map (an open world)
+  | { kind: "zen"; seed: number }
   | { kind: "gallery" };
 
 export function validBiome(biome: string | null): biome is BiomeId {
@@ -41,6 +43,8 @@ export function screenFromSearch(search: string, hasNickname: boolean): Screen {
     return { kind: "test", biome, seed: seed ?? run ?? 1 };
   }
   if (run !== null) return { kind: "run", seed: run };
+  const zen = validSeed(params.get("zen"));
+  if (zen !== null) return { kind: "zen", seed: zen };
   // /?explore=ember, or just /?explore to start in the first world and switch from there
   const explore = params.get("explore");
   if (explore !== null) return { kind: "explore", biome: validBiome(explore) ? explore : "skyIsles", seed: seed ?? 1 };
@@ -53,6 +57,7 @@ export function urlFor(screen: Screen): string {
   if (screen.kind === "room") return `/?room=${screen.code}`;
   if (screen.kind === "explore" || screen.kind === "test") return `/?${screen.kind}=${screen.biome}&seed=${screen.seed}`;
   if (screen.kind === "run") return `/?run=${screen.seed}`;
+  if (screen.kind === "zen") return `/?zen=${screen.seed}`;
   if (screen.kind === "gallery") return "/?gallery";
   return "/";
 }

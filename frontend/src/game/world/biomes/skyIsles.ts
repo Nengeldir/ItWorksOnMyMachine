@@ -1,11 +1,12 @@
 import type { Palette } from "../palette";
-import type { Biome } from "./types";
+import type { Biome, VegetationSpec } from "./types";
 
-// The race map: floating islands with pine forests over a sea of clouds. Races
-// and time trials always fly here, and its generator is frozen (see
-// TerrainRecipe "legacyIslands"), so every recorded ghost still matches its map.
+// Sky Isles: pine-crowned islands adrift over a sea of clouds, threaded by rock
+// tunnels. Built like every other map (generator v2); its rock, grass and pines
+// take each mood's colors (`recolor`), so autumn woods, a winter's snow and
+// starlit rock are the mood's own.
 
-// A race map picks one of these from its seed (the "palette" stream), as it always has
+// A map picks one of these from its seed (the "palette" stream)
 const MOODS: readonly Palette[] = [
   {
     name: "Alpine",
@@ -135,14 +136,80 @@ const MOODS: readonly Palette[] = [
   },
 ];
 
+/** a mixed with b (hex colors), t of the way */
+function mix(a: string, b: string, t: number): string {
+  const ca = parseInt(a.slice(1), 16);
+  const cb = parseInt(b.slice(1), 16);
+  let out = 0;
+  for (const shift of [16, 8, 0]) {
+    const x = (ca >> shift) & 255;
+    const y = (cb >> shift) & 255;
+    out |= Math.round(x + (y - x) * t) << shift;
+  }
+  return `#${out.toString(16).padStart(6, "0")}`;
+}
+
+/** The islands' rock and cover, the pines and the grass, in a mood's colors */
+function land(palette: Palette): Pick<Biome, "terrain" | "vegetation"> {
+  const { rock, grass, forest, trunk, snow } = palette;
+  const vegetation: VegetationSpec = {
+    kind: "flora",
+    spacing: 6,
+    density: 0.7,
+    openDensity: 0.08,
+    forest: { scale: 160, cover: 0.55 },
+    treeline: 400,
+    minUp: 0.7,
+    species: [
+      { id: "pine", weight: 5, height: [8, 16], foliage: forest, foliage2: mix(forest, "#ffffff", 0.12), trunk },
+      { id: "bush", weight: 1.5, height: [1.3, 2.2], foliage: mix(grass, forest, 0.4), foliage2: grass, where: { forest: false } },
+      { id: "boulder", weight: 0.5, height: [1.2, 2.6], foliage: mix(rock, "#ffffff", 0.15), foliage2: rock, where: { forest: false } },
+    ],
+    grass: { spacing: 2.6, height: [0.5, 0.9], color: grass, tip: mix(grass, "#fff6c8", 0.35), flowers: ["#ffffff", "#ffd84a", "#c9a7ff"], flowerShare: palette.night > 0.5 ? 0.05 : 0.15 },
+  };
+  return {
+    terrain: {
+      kind: "v2",
+      ground: null,
+      groundSurface: 0,
+      surfaces: [
+        // 0: the islands: banded rock, grass on top
+        { rock, rock2: mix(rock, "#ffffff", 0.18), bands: 5, under: mix(rock, "#000000", 0.35), top: grass, top2: mix(grass, forest, 0.25), snow: false },
+        // 1: bare rock (the gates)
+        { rock: mix(rock, "#808080", 0.2), rock2: mix(rock, "#ffffff", 0.12), bands: 3, under: mix(rock, "#000000", 0.4), top: mix(grass, rock, 0.5), snow: false },
+      ],
+      layers: { dirt: mix(rock, "#3a2a1c", 0.4), sand: "#e0c58f", snow, snowLine: 9999, topSlope: 0.7, texture: 1, glow: "#ffd98a" },
+      land: {
+        gates: { tunnel: 4, squeeze: 2, arch: 2, needles: 1 },
+        gateSurface: 1,
+        features: [
+          { kind: "islands", count: 150, size: [18, 55], lateral: [25, 280], rise: [-90, 90], surface: 0, holes: 0.3 },
+          { kind: "islands", count: 18, size: [60, 110], lateral: [280, 600], rise: [-140, 120], surface: 0, holes: 0.4 },
+        ],
+      },
+    },
+    vegetation,
+  };
+}
+
 export const SKY_ISLES: Biome = {
   id: "skyIsles",
   name: "Sky Isles",
   tagline: "Pine-crowned islands adrift over a sea of clouds",
   moods: MOODS,
-  terrain: { kind: "legacyIslands" },
-  vegetation: { kind: "legacyPines" },
-  sky: { cloudSea: { depth: 260 }, puffs: 70, puffsBelow: true, puffLift: 0, mist: { mode: "camera" } },
-  particles: { ambient: [] },
+  ...land(MOODS[0]),
+  recolor: land,
+  structures: [
+    // Small things on the island tops: lanterns, and prayer flags on the high points
+    { id: "stoneLantern", spacing: 26, chance: 0.35, height: [2.6, 3.4], colors: { stone: "#efe6d2", stone2: "#b8c79a", roof: "#3f7fb8" }, where: { on: "rock" } },
+    { id: "prayerPole", spacing: 70, chance: 0.5, height: [7, 10], colors: { stone: "#cfc4ac", roof: "#f2c761" }, where: { on: "rock", hilltop: true } },
+  ],
+  sky: { cloudSea: { depth: 260 }, puffs: 40, puffsBelow: true, puffLift: 0, banks: 3, mist: { mode: "camera" } },
+  particles: {
+    ambient: [
+      { kind: "motes", rate: 16, colors: ["#ffffff", "#fff6dc"] },
+      { kind: "fireflies", rate: 3, colors: ["#fff2a0"], night: 4 },
+    ],
+  },
   portals: { color: "#8fe3ff" },
 };

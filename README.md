@@ -22,10 +22,15 @@ the last ring.
   Gale Force, a spirit manta to draft behind, Resonance, Ascension and the
   falcon and butterfly gliding stances). Today's run has its own seed,
   apart from today's course.
+- **Zen:** one map that never ends, every way: valleys, rivers, mountains
+  and islands made around you as you fly, wherever you go; no gates, no
+  clock, no score, nothing saved. A crash puts you back in the air close to
+  where you tumbled. Every map.
 
-All three modes share one pool of maps: a seed stands for one of the nine
+All modes share one pool of maps: a seed stands for one of the nine
 biomes, its layout and its light, the same in a time trial, a room and an
-adventure level.
+adventure level (Zen's open world has the map's look and light, not that
+course's layout).
 
 Built on the VIScon hackathon template: React + Three.js in the browser,
 FastAPI behind Caddy on the team VM.
@@ -282,7 +287,8 @@ water's surface seen from below, ripples of light run over the seabed, shafts
 of light slant down, fish school and jellyfish drift; you fly it like any
 other level. Fly any biome freely at
 `/?explore=<id>&seed=<n>` (ids: `verdant`, `glacier`, `archipelago`,
-`lagoon`, `twilight`, `ember`, `aurora`, `reef`).
+`lagoon`, `twilight`, `ember`, `aurora`, `reef`), or for ever with
+`/?zen=<seed>` (the Zen tab).
 
 Rivers keep their color and ripples up to the edge. Below it, waterfall foam
 flows downward and accelerates with the drop. In `?tune`, Water's `fallSpeed`
