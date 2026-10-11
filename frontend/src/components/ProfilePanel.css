@@ -1,43 +1,338 @@
-.profile-dialog { width: min(960px, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); border: 1px solid var(--ink-12); border-radius: 26px; padding: 1.5rem; color: var(--ink); overflow: auto; }
-.profile-dialog::backdrop { background: #14203a80; backdrop-filter: blur(8px); }
-.profile-header, .profile-stats, .profile-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-.profile-header h2 { margin: .2rem 0 .8rem; }
-.profile-header button { flex-shrink: 0; }
-.profile-stats { justify-content: flex-start; flex-wrap: wrap; padding: .8rem 0; }
-.profile-stats strong, .profile-flight span { display: inline-flex; align-items: center; gap: .4rem; }
-.profile-xp { display: grid; gap: .35rem; margin-bottom: 1rem; }
-.profile-xp progress, .profile-flight progress { width: 100%; height: .5rem; accent-color: #ad859e; }
-.profile-toolbar { flex-wrap: wrap; padding: .6rem 0 1rem; }
-.profile-toolbar [role="tablist"] { display: flex; flex-wrap: wrap; gap: .35rem; }
-.profile-toolbar [aria-selected="true"] { background: var(--ink); color: white; }
-.profile-toolbar label { display: flex; gap: .4rem; align-items: center; font-size: .8rem; }
-.profile-body { display: grid; grid-template-columns: 1fr 250px; gap: 1rem; }
-.inventory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: .7rem; align-content: start; max-height: 440px; overflow: auto; padding: .25rem; }
-.inventory-entry { display: flex; flex-direction: column; align-items: flex-start; gap: .3rem; border: 1px solid; min-height: 130px; text-align: left; padding: .7rem; background: var(--ink-06); }
-.inventory-entry.locked { background: transparent; }
-.inventory-entry[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 1px; }
-.inventory-entry small { font-size: .68rem; text-transform: capitalize; color: var(--ink-70); }
-.inventory-entry span:last-child { display: inline-flex; align-items: center; gap: .25rem; font-size: .7rem; }
-.inventory-symbol { font-size: 1.5rem; color: var(--ink-70); }
-.inventory-detail { background: var(--ink-06); border-radius: 20px; text-align: center; padding: 1rem; align-self: start; }
-.inventory-detail h3 { margin: .5rem 0; }
-.inventory-detail p, .profile-dialog footer { font-size: .8rem; color: var(--ink-70); }
-.inventory-detail small { display: block; margin-top: .7rem; font-size: .72rem; }
-.collection-preview { height: 190px; width: 100%; display: grid; place-items: center; overflow: hidden; }
-.collection-preview canvas { display: block; }
-.inventory-empty { grid-column: 1 / -1; }
-.profile-empty { padding: 2rem 0; }
+/* The adventure journal (and the test sandbox's fitting room): a wide sheet (index.css). Only the grid of
+   discoveries scrolls; the header, the pilot panel and the toolbar stay put. */
+.profile-dialog.sheet {
+  width: min(60rem, calc(100vw - 2rem));
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  overflow: hidden;
+}
+
+.profile-dialog .sheet-head {
+  margin-bottom: 0;
+}
+
+.profile-dialog .sheet-panel + .sheet-panel {
+  margin-top: 0;
+}
+
+.journal-intro {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--ink-70);
+}
+
+/* Who you are: your name (guests), level, crystals and the way to the next level */
+.journal-pilot {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.journal-name {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-70);
+}
+
+.journal-name input {
+  max-width: 20rem;
+}
+
+.journal-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.journal-xp {
+  margin-left: auto;
+  font-family: var(--font-numbers);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-70);
+}
+
+.journal-saved {
+  font-size: 0.75rem;
+  color: var(--ink-45);
+}
+
+.journal-loading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.journal-loading p {
+  margin: 0;
+}
+
+.journal-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/* Collected only: a soft chip with its box */
+.journal-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: var(--ink-06);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.journal-unequip {
+  margin-left: auto;
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+}
+
+.journal-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 15.5rem;
+  gap: 0.85rem;
+}
+
+.journal-grid {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  gap: 0.6rem;
+  align-content: start;
+  padding: 0.2rem;
+}
+
+/* A discovery: its kind's icon on a disc in its rarity's colour, name, kind and rarity, where it stands */
+.journal-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  min-height: 8rem;
+  padding: 0.75rem;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.6);
+  text-align: left;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.journal-card:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.85);
+  transform: translateY(-1px);
+}
+
+.journal-card[aria-pressed="true"] {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 1px var(--ink);
+}
+
+.journal-card.locked {
+  background: rgba(255, 255, 255, 0.3);
+  color: var(--ink-70);
+}
+
+.journal-card.locked .journal-icon {
+  filter: grayscale(0.8);
+  opacity: 0.6;
+}
+
+.journal-icon {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--rarity, var(--ink-12)) 40%, #fff);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rarity, var(--ink-12)) 70%, transparent);
+}
+
+.journal-card b {
+  line-height: 1.2;
+}
+
+.journal-card small {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  text-transform: capitalize;
+  color: var(--ink-70);
+}
+
+.journal-rarity {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--rarity, var(--ink-45));
+  flex: none;
+}
+
+.journal-state {
+  margin-top: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.journal-empty {
+  grid-column: 1 / -1;
+  color: var(--ink-70);
+}
+
+.journal-detail {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: center;
+}
+
+.journal-detail h3 {
+  margin: 0.3rem 0 0;
+}
+
+.journal-detail .journal-chips {
+  justify-content: center;
+  text-transform: capitalize;
+}
+
+.journal-detail p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--ink-70);
+}
+
+.journal-detail .primary {
+  width: 100%;
+  border-radius: 999px;
+}
+
+.journal-detail small {
+  font-size: 0.72rem;
+  color: var(--ink-45);
+}
+
+.journal-preview {
+  position: relative;
+  width: 100%;
+}
+
+.journal-turn {
+  position: absolute;
+  right: 0.2rem;
+  bottom: 0.2rem;
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+
+.journal-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1rem;
+  font-size: 0.75rem;
+  color: var(--ink-45);
+}
+
+.journal-foot p {
+  margin: 0;
+}
+
+.collection-preview {
+  height: 190px;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.collection-preview canvas {
+  display: block;
+}
+
+.collection-preview:not([data-unavailable]) .preview-error {
+  display: none;
+}
+
+/* Phones: one column, the picked one's preview on top, the whole sheet scrolls */
+@media (max-width: 650px) {
+  .profile-dialog.sheet {
+    width: calc(100vw - 1rem);
+    max-height: calc(100dvh - 1rem);
+    padding: 1rem;
+    border-radius: 24px;
+    overflow: auto;
+  }
+
+  .profile-dialog.sheet > * {
+    flex-shrink: 0;
+  }
+
+  .journal-body {
+    grid-template-columns: 1fr;
+  }
+
+  .journal-detail {
+    grid-row: 1;
+    overflow: visible;
+  }
+
+  .collection-preview {
+    height: 150px;
+  }
+
+  .journal-grid {
+    overflow: visible;
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .journal-card {
+    min-height: 7rem;
+  }
+
+  .journal-xp {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+}
+
+/* --- In flight: the profile pill and the collection notice --------------------------------------- */
 .profile-flight { position: absolute; right: 1rem; top: 5rem; z-index: 5; width: 170px; padding: .65rem .8rem; border-radius: 18px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem; font-size: .78rem; }
+.profile-flight span { display: inline-flex; align-items: center; gap: .4rem; }
+.profile-flight progress { width: 100%; height: .5rem; accent-color: #ad859e; }
 .profile-flight small { width: 100%; font-size: .65rem; }
 .profile-flight button { width: 100%; padding: .35rem; }
 .collection-notice { position: absolute; left: 50%; bottom: 6rem; transform: translateX(-50%); max-width: min(500px, 85vw); border-radius: 18px; padding: .8rem 1.1rem; z-index: 12; text-align: center; font-size: .85rem; pointer-events: none; animation: collection-arrive .45s ease-out; }
 .collection-notice.level-up { border: 1px solid #dcb565; box-shadow: 0 0 26px #e3bf7140; }
 @keyframes collection-arrive { from { opacity: 0; transform: translate(-50%, 12px) scale(.94); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
-.menu-inventory { position: fixed; top: 1.5rem; left: 1.5rem; padding: .7rem 1rem; border-radius: 18px; }
-@media (max-width: 650px) { .profile-dialog { padding: 1rem; width: calc(100vw - 1rem); max-height: calc(100dvh - 1rem); } .profile-body { grid-template-columns: 1fr; } .inventory-detail { grid-row: 1; } .collection-preview { height: 150px; } .inventory-grid { max-height: 300px; grid-template-columns: repeat(2, 1fr); } .inventory-entry { min-height: 115px; } .profile-flight { top: auto; bottom: 1rem; right: .5rem; width: 130px; } .collection-notice { bottom: 11rem; } .menu-inventory { top: .75rem; left: .75rem; } }
+@media (max-width: 650px) { .collection-notice { bottom: 11rem; } }
 @media (prefers-reduced-motion: reduce) { .collection-notice { animation: none; } }
-.collection-preview:not([data-unavailable]) .preview-error { display: none; }
 .profile-flight { pointer-events: none; }
 .profile-flight.paused { pointer-events: auto; }
 /* Keep the profile away from the centred flight bars on narrow screens. */
-@media (max-width: 650px) { .profile-flight { top: 5rem; bottom: auto; width: 105px; padding: .5rem; font-size: .7rem; } }
+@media (max-width: 650px) { .profile-flight { top: 5rem; bottom: auto; right: .5rem; width: 105px; padding: .5rem; font-size: .7rem; } }

@@ -1,3 +1,4 @@
+import { IconSettings, IconX } from "@tabler/icons-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { ACTION_LABELS, bindingActions, bindable, defaultBindings, keyboardBinding, keyLabel, type BindingAction } from "../game/bindings";
 import { defaultSettings, type Settings } from "../storage";
@@ -50,19 +51,25 @@ export default function SettingsPanel({ settings, onSettings, onClose }: Props) 
       <input type="range" aria-label={label} min={min} max={max} step={step} value={settings[key] ?? fallback} onChange={e => update({ [key]: Number(e.target.value) })} />
     </label>
   );
-  return <dialog ref={dialog} className="settings-dialog glass" aria-labelledby="settings-title" onCancel={e => e.preventDefault()}>
-    <header><div><h2 id="settings-title">Settings</h2><p>Saved automatically on this device.</p></div><button autoFocus onClick={onClose} aria-label="Close settings">Close</button></header>
-    <section><h3>Flight controls</h3>
+  return <dialog ref={dialog} className="settings-dialog sheet" aria-labelledby="settings-title" onCancel={e => e.preventDefault()}>
+    <header className="sheet-head">
+      <span className="overlay-badge"><IconSettings size={22} /></span>
+      <div><small>Saved on this device</small><h2 id="settings-title">Settings</h2></div>
+      <button className="sheet-close" autoFocus onClick={onClose} aria-label="Close settings"><IconX size={20} /></button>
+    </header>
+    <section className="sheet-panel"><h3>Flight controls</h3>
       {slider("mouseSensitivity", "Mouse sensitivity", 0.3, 6, 0.1, 2)}
       <p className="settings-help">Default: 2×. Mouse up and forward stick dive unless inverted.</p>
       {toggle("invertMouse", "Invert mouse up / down")}
       {toggle("invertGamepad", "Invert gamepad up / down")}
       {toggle("invertPitch", "Invert keyboard pitch")}
       {slider("deadZone", "Gamepad stick dead zone", 0, 0.4, 0.01, 0.12)}
-      <h3>Touch</h3>
+    </section>
+    <section className="sheet-panel"><h3>Touch</h3>
       <p className="settings-help">On a phone or tablet, drag anywhere on the view to steer and use the on-screen buttons.</p>
       {toggle("invertTouch", "Invert touch up / down")}
-      <h3>Keyboard bindings</h3>
+    </section>
+    <section className="sheet-panel"><h3>Keyboard bindings</h3>
       <p className="settings-help">Letters and symbols follow your keyboard layout. Select a key, then press its replacement. Escape cancels. Gamepad buttons keep their standard layout.</p>
       <p className="binding-message" role="status">{waiting ? `Press a key for ${ACTION_LABELS[waiting.action]}. ${message}` : message || "You can set a primary and an alternate key."}</p>
       <div className="binding-list">{bindingActions.map(action => <div className="binding-row" key={action}>
@@ -76,7 +83,7 @@ export default function SettingsPanel({ settings, onSettings, onClose }: Props) 
       </div>)}</div>
       <button onClick={() => { const defaults = defaultSettings(); update({bindings:defaultBindings(),mouseSensitivity:2,invertPitch:false,invertMouse:false,invertGamepad:false,invertTouch:false,deadZone:defaults.deadZone}); setWaiting(null); setMessage("Flight controls reset."); }}>Reset controls</button>
     </section>
-    <section><h3>Pilot</h3>
+    <section className="sheet-panel"><h3>Pilot</h3>
       <div className="field"><span>Character style</span>
         <div className="style-choice" role="radiogroup" aria-label="Character style">
           {([1, 2] as const).map(style => <button key={style} role="radio" aria-checked={(settings.pilotStyle ?? 1) === style}
@@ -84,20 +91,20 @@ export default function SettingsPanel({ settings, onSettings, onClose }: Props) 
         </div>
       </div>
     </section>
-    <section><h3>Adventure</h3>
+    <section className="sheet-panel"><h3>Adventure</h3>
       {toggle("crystalsOnly", "Crystal pickups only (hide item and treasure pickups)")}
     </section>
-    <section><h3>Sound</h3>
+    <section className="sheet-panel"><h3>Sound</h3>
       {toggle("muted", "Mute all audio")}
       {slider("musicVolume", "Music volume", 0, 1, 0.05, 1)}
       {slider("effectsVolume", "Effects and wind volume", 0, 1, 0.05, 1)}
     </section>
-    <section><h3>Display and camera</h3>
+    <section className="sheet-panel"><h3>Display and camera</h3>
       <label className="field"><span>Graphics quality</span><select value={settings.quality ?? "auto"} onChange={e => update({quality:e.target.value as Settings["quality"]})}>
         <option value="auto">Automatic</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
       </select></label>
       {toggle("reducedMotion", "Reduce camera shake and field-of-view effects")}
     </section>
-    <footer><button onClick={onClose}>Done</button></footer>
+    <footer><button className="primary" onClick={onClose}>Done</button></footer>
   </dialog>;
 }
