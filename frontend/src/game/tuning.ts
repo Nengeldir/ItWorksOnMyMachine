@@ -270,7 +270,7 @@ export const RANGES: Record<string, [number, number, number?]> = {
   trail: [0, 3],
   follow: [2, 16],
   snapDistance: [10, 60],
-  bob: [0, 0.4],
+  bob: [0, 1], // the pet's bob (0.12) and the collection pickups' (0.5) share the name
   wingbeat: [0, 2],
   tailSway: [0, 2],
   sparkle: [0, 3],
