@@ -17,6 +17,8 @@ export class InstancePool {
   private readonly group: THREE.Group;
   private dirty = false;
   private dirtyFrom = Infinity; // lowest slot changed since the last upload
+  /** When each instance arrived (see `bornNow`): the shaders grow and fade new ones in */
+  private born: THREE.InstancedBufferAttribute;
 
   constructor(geometry: THREE.BufferGeometry, material: THREE.Material, group: THREE.Group, capacity = 512) {
     this.geometry = geometry;
@@ -24,6 +26,8 @@ export class InstancePool {
     this.group = group;
     this.capacity = capacity;
     this.mesh = this.create(capacity);
+    this.born = new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1);
+    geometry.setAttribute("born", this.born);
     this.owner = new Float64Array(capacity);
     this.index = new Int32Array(capacity);
     group.add(this.mesh);
@@ -46,6 +50,10 @@ export class InstancePool {
     (next.instanceMatrix.array as Float32Array).set(this.mesh.instanceMatrix.array as Float32Array);
     (next.instanceColor!.array as Float32Array).set(this.mesh.instanceColor!.array as Float32Array);
     next.count = this.count;
+    const born = new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1);
+    (born.array as Float32Array).set(this.born.array as Float32Array);
+    this.born = born;
+    this.geometry.setAttribute("born", born);
     const owner = new Float64Array(capacity);
     owner.set(this.owner);
     const index = new Int32Array(capacity);
@@ -60,18 +68,20 @@ export class InstancePool {
     this.dirtyFrom = 0;
   }
 
-  /** Adds `n` instances for an owner: 16 floats of matrix and 3 of color each */
-  add(owner: number, matrices: Float32Array, colors: Float32Array) {
+  /** Adds `n` instances for an owner: 16 floats of matrix and 3 of color each; `born` to have them grow in */
+  add(owner: number, matrices: Float32Array, colors: Float32Array, born = 0) {
     const n = colors.length / 3;
     if (!n || this.slots.has(owner)) return;
     if (this.count + n > this.capacity) this.grow(this.count + n);
     const list: number[] = [];
     const m = this.mesh.instanceMatrix.array as Float32Array;
     const c = this.mesh.instanceColor!.array as Float32Array;
+    const b = this.born.array as Float32Array;
     for (let i = 0; i < n; i++) {
       const slot = this.count++;
       m.set(matrices.subarray(i * 16, i * 16 + 16), slot * 16);
       c.set(colors.subarray(i * 3, i * 3 + 3), slot * 3);
+      b[slot] = born;
       this.owner[slot] = owner;
       this.index[slot] = i;
       list.push(slot);
@@ -87,6 +97,7 @@ export class InstancePool {
     this.slots.delete(owner);
     const m = this.mesh.instanceMatrix.array as Float32Array;
     const c = this.mesh.instanceColor!.array as Float32Array;
+    const b = this.born.array as Float32Array;
     // Highest slots first, so a moved instance is never one we're about to remove
     list.sort((a, b) => b - a);
     this.dirtyFrom = Math.min(this.dirtyFrom, list[list.length - 1]);
@@ -95,6 +106,7 @@ export class InstancePool {
       if (slot !== last) {
         m.copyWithin(slot * 16, last * 16, last * 16 + 16);
         c.copyWithin(slot * 3, last * 3, last * 3 + 3);
+        b[slot] = b[last];
         const moved = this.owner[last];
         this.owner[slot] = moved;
         this.index[slot] = this.index[last];
@@ -120,11 +132,14 @@ export class InstancePool {
     const color = this.mesh.instanceColor!;
     matrix.clearUpdateRanges();
     color.clearUpdateRanges();
+    this.born.clearUpdateRanges();
     if (length > 0) {
       matrix.addUpdateRange(from * 16, length * 16);
       color.addUpdateRange(from * 3, length * 3);
+      this.born.addUpdateRange(from, length);
       matrix.needsUpdate = true;
       color.needsUpdate = true;
+      this.born.needsUpdate = true;
     }
   }
 

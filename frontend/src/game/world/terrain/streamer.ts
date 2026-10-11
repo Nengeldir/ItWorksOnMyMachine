@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { TERRAIN } from "../../tuning";
+import { bornNow } from "../atmosphere";
 import { PLANT_STRIDE } from "../flora/species";
 import type { FloraView } from "../flora/view";
 import { kindInfo } from "../structures/kinds";
@@ -13,7 +14,8 @@ import { NODE_SIZE, type TerrainMesh, VOXEL, nodeKey } from "./mesh";
 // node has 16 cells a side, so the triangle count per node stays the same and
 // far land is coarse. A coarse node stays on screen until all of its finer
 // replacements have arrived (and the other way round when merging), so the land
-// never shows holes or two levels at once.
+// never shows holes or two levels at once. Land that comes on screen where none
+// was shown before fades in out of the haze (its `born` attribute, atmosphere.ts).
 
 export const LOD_LEVELS = 4;
 const ROOT_LOD = LOD_LEVELS - 1;
@@ -172,7 +174,7 @@ export class LandStreamer {
     // Take in a few of the arrived meshes (all of them while nothing is on screen yet)
     this.trimCache();
     if (this.arrived.length) {
-      const budget = this.ready ? TERRAIN.uploadsPerFrame : this.arrived.length;
+      const budget = this.ready ? TERRAIN.arrivalsPerFrame : this.arrived.length;
       for (const result of this.arrived.splice(0, budget)) this.take(result);
       this.settle();
     }
@@ -242,6 +244,7 @@ export class LandStreamer {
       geometry.setAttribute("cover", new THREE.BufferAttribute(result.cover, 4, true));
       geometry.setAttribute("crystal", new THREE.BufferAttribute(result.crystal ?? new Uint8Array(result.positions.length / 3), 1, true));
       geometry.setAttribute("snow", new THREE.BufferAttribute(result.snow, 1));
+      geometry.setAttribute("born", new THREE.BufferAttribute(new Float32Array(result.positions.length / 3), 1));
       geometry.computeBoundingSphere();
       node.mesh = new THREE.Mesh(geometry, this.material);
       node.mesh.matrixAutoUpdate = false;
@@ -272,7 +275,8 @@ export class LandStreamer {
         this.showUnder(shownAncestor);
         this.hide(shownAncestor);
       } else {
-        this.show(node);
+        // Fresh: no finer land stood here either, so this is land arriving, not changing detail
+        this.show(node, !this.anyShown(node));
         // Merging: the finer nodes it replaces go
         if (node.children) for (const child of node.children) this.hideTree(child);
       }
@@ -282,6 +286,12 @@ export class LandStreamer {
   private shownAncestor(node: Node): Node | null {
     for (let a = node.parent; a; a = a.parent) if (a.shown) return a;
     return null;
+  }
+
+  private anyShown(node: Node): boolean {
+    if (node.shown) return true;
+    if (node.children) for (const child of node.children) if (this.anyShown(child)) return true;
+    return false;
   }
 
   /** Existing collision/render coverage remains usable while its LOD replacement loads. */
@@ -310,7 +320,7 @@ export class LandStreamer {
     }
   }
 
-  private show(node: Node) {
+  private show(node: Node, fresh = false) {
     const cached = this.cache.get(node.key);
     if (cached) {
       this.cacheBytes -= cached.bytes;
@@ -318,11 +328,18 @@ export class LandStreamer {
     }
     node.shown = true;
     if (node.mesh) {
+      // Fades in from now if fresh; otherwise it must not still carry a fade from an earlier showing
+      const born = node.mesh.geometry.getAttribute("born") as THREE.BufferAttribute;
+      const now = bornNow();
+      if (fresh || born.array[0] > now - 10) {
+        (born.array as Float32Array).fill(fresh ? now : 0);
+        born.needsUpdate = true;
+      }
       this.group.add(node.mesh);
       // What is on screen is what you hit
       this.collider.add(node.key, node.mesh.geometry.getAttribute("position").array as Float32Array, VOXEL << node.lod);
     }
-    if (node.plants && this.flora) this.flora.show(node.key, node.lod, node.plants, node.tufts!, node.box);
+    if (node.plants && this.flora) this.flora.show(node.key, node.lod, node.plants, node.tufts!, node.box, fresh);
   }
 
   private hide(node: Node) {

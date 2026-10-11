@@ -193,6 +193,7 @@ class Cloth {
   private readonly rows: number;
   private readonly point = new THREE.Vector3();
   private readonly clearance: Float32Array;
+  private bounds: Float32Array | null = null;
   private readonly ribbonTriangle = new THREE.Triangle();
   private readonly surfaceTriangle = new THREE.Triangle();
   private readonly ribbonCorners = [this.ribbonTriangle.a, this.ribbonTriangle.b, this.ribbonTriangle.c];
@@ -233,31 +234,47 @@ class Cloth {
     for (let r = 0; r <= this.rows; r++) {
       for (let c = 0; c <= this.cols; c++) {
         shape((c / this.cols) * 2 - 1, r / this.rows, this.point);
-        position.setXYZ(r * (this.cols + 1) + c, this.point.x, this.point.y, this.point.z);
+        this.point.toArray(position.array, (r * (this.cols + 1) + c) * 3);
       }
     }
     position.needsUpdate = true;
     this.mesh.geometry.computeVertexNormals();
   }
 
+  /** Each triangle's bounds projected into (x, y): min x, max x, min y, max y */
+  private projectedBounds(): Float32Array {
+    const p = this.mesh.geometry.getAttribute("position").array as Float32Array;
+    const index = this.mesh.geometry.index!.array;
+    const bounds = (this.bounds ??= new Float32Array((index.length / 3) * 4));
+    for (let j = 0, o = 0; j < index.length; j += 3, o += 4) {
+      const d = index[j] * 3, e = index[j + 1] * 3, f = index[j + 2] * 3;
+      bounds[o] = Math.min(p[d], p[e], p[f]);
+      bounds[o + 1] = Math.max(p[d], p[e], p[f]);
+      bounds[o + 2] = Math.min(p[d + 1], p[e + 1], p[f + 1]);
+      bounds[o + 3] = Math.max(p[d + 1], p[e + 1], p[f + 1]);
+    }
+    return bounds;
+  }
+
   /** Lift ribbons above another cloth mesh, including crossings between vertices. */
   keepAbove(surface: Cloth, gap: number) {
     const position = this.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
-    const surfacePosition = surface.mesh.geometry.getAttribute("position");
-    const index = this.mesh.geometry.index!;
-    const surfaceIndex = surface.mesh.geometry.index!;
+    // Straight from the buffers: this runs for every pair of triangles, every frame
+    const p = position.array as Float32Array;
+    const sp = surface.mesh.geometry.getAttribute("position").array as Float32Array;
+    const index = this.mesh.geometry.index!.array;
+    const surfaceIndex = surface.mesh.geometry.index!.array;
+    const surfaceBounds = surface.projectedBounds();
     this.clearance.fill(0);
-    for (let i = 0; i < index.count; i += 3) {
-      for (let k = 0; k < 3; k++) this.ribbonCorners[k].fromBufferAttribute(position, index.getX(i + k));
+    for (let i = 0; i < index.length; i += 3) {
+      for (let k = 0; k < 3; k++) this.ribbonCorners[k].fromArray(p, index[i + k] * 3);
       const [a, b, c] = this.ribbonCorners;
       const minX = Math.min(a.x, b.x, c.x), maxX = Math.max(a.x, b.x, c.x);
       const minY = Math.min(a.y, b.y, c.y), maxY = Math.max(a.y, b.y, c.y);
       let lift = 0;
-      for (let j = 0; j < surfaceIndex.count; j += 3) {
-        for (let k = 0; k < 3; k++) this.surfaceCorners[k].fromBufferAttribute(surfacePosition, surfaceIndex.getX(j + k));
-        const [d, e, f] = this.surfaceCorners;
-        if (Math.max(d.x, e.x, f.x) < minX || Math.min(d.x, e.x, f.x) > maxX ||
-            Math.max(d.y, e.y, f.y) < minY || Math.min(d.y, e.y, f.y) > maxY) continue;
+      for (let j = 0, o = 0; j < surfaceIndex.length; j += 3, o += 4) {
+        if (surfaceBounds[o + 1] < minX || surfaceBounds[o] > maxX || surfaceBounds[o + 3] < minY || surfaceBounds[o + 2] > maxY) continue;
+        for (let k = 0; k < 3; k++) this.surfaceCorners[k].fromArray(sp, surfaceIndex[j + k] * 3);
 
         // The height difference is linear on each triangle. Its maximum lies
         // at a vertex of their projected intersection: an enclosed corner or
@@ -289,11 +306,11 @@ class Cloth {
       // Accumulate first: all three corners must move by at least this lift,
       // and neighboring triangles share the larger correction without seams.
       for (let k = 0; k < 3; k++) {
-        const vertex = index.getX(i + k);
+        const vertex = index[i + k];
         this.clearance[vertex] = Math.max(this.clearance[vertex], lift);
       }
     }
-    for (let i = 0; i < position.count; i++) position.setZ(i, position.getZ(i) + this.clearance[i]);
+    for (let i = 0; i < position.count; i++) p[i * 3 + 2] += this.clearance[i];
     position.needsUpdate = true;
     this.mesh.geometry.computeVertexNormals();
   }

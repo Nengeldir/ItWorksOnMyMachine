@@ -8,7 +8,8 @@ import { sceneryTime as fxTime } from "../particles";
 // - mist that thickens below you, down towards the sea of clouds,
 // - rims that light up on edges seen against the sun (backlight),
 // - rock strata: soft horizontal bands on cliffs,
-// - under the sea: ripples of light from the surface running over everything.
+// - under the sea: ripples of light from the surface running over everything,
+// - land and plants that have just arrived fade in out of the haze (the `born` attribute).
 // The sky is a dome with the same light; under the sea it shows the water's
 // surface from below instead.
 
@@ -34,7 +35,19 @@ export const ATMOSPHERE = {
   caustics: { value: 1 },
   surfaceGlow: { value: 1 },
   time: fxTime,
+  // Arriving land: the wall clock in seconds (not the scenery's, which can slow or stand
+  // still), and one over the seconds a fade takes. WorldView sets both every frame
+  now: { value: 0 },
+  revealRate: { value: 1 },
 };
+
+/**
+ * The time to write into a geometry's `born` attribute (per vertex for land, per instance for
+ * plants) so that it fades in from now on. Geometry without the attribute reads 0: long there
+ */
+export function bornNow(): number {
+  return ATMOSPHERE.now.value;
+}
 
 /**
  * Mist: below a level a little under the camera (rock far beneath you sinks into
@@ -91,6 +104,7 @@ const PARS = /* glsl */ `
   uniform float atmoCaustics;
   uniform float atmoTime;
   varying vec3 vAtmoWorld;
+  varying float vAtmoReveal;
   ${SUN_GLOW}
   ${MIST}
   ${CAUSTICS}
@@ -111,8 +125,18 @@ export function atmospheric<T extends THREE.MeshLambertMaterial>(material: T, st
     shader.uniforms.atmoUnderwater = ATMOSPHERE.underwater;
     shader.uniforms.atmoCaustics = ATMOSPHERE.caustics;
     shader.uniforms.atmoTime = ATMOSPHERE.time;
+    shader.uniforms.atmoNow = ATMOSPHERE.now;
+    shader.uniforms.atmoRevealRate = ATMOSPHERE.revealRate;
     shader.vertexShader = shader.vertexShader
-      .replace("void main() {", "varying vec3 vAtmoWorld;\nvoid main() {")
+      .replace(
+        "void main() {",
+        `attribute float born;
+        uniform float atmoNow;
+        uniform float atmoRevealRate;
+        varying vec3 vAtmoWorld;
+        varying float vAtmoReveal;
+        void main() {`,
+      )
       .replace(
         "#include <project_vertex>",
         `#include <project_vertex>
@@ -120,7 +144,8 @@ export function atmospheric<T extends THREE.MeshLambertMaterial>(material: T, st
         #ifdef USE_INSTANCING
           atmoWorld = instanceMatrix * atmoWorld;
         #endif
-        vAtmoWorld = (modelMatrix * atmoWorld).xyz;`,
+        vAtmoWorld = (modelMatrix * atmoWorld).xyz;
+        vAtmoReveal = clamp((atmoNow - born) * atmoRevealRate, 0.0, 1.0);`,
       );
     shader.fragmentShader = shader.fragmentShader
       .replace("void main() {", `${PARS}\nvoid main() {`)
@@ -158,6 +183,9 @@ export function atmospheric<T extends THREE.MeshLambertMaterial>(material: T, st
             float mist = atmoMist(vAtmoWorld, dist);
             gl_FragColor.rgb = mix(gl_FragColor.rgb, atmoMistColor, clamp(mist, 0.0, 0.85) * (1.0 - fogFactor));
             gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor + sunGlow(viewDir), fogFactor);
+            // Just arrived: out of the haze, the color the far land already has, not out of nothing
+            float reveal = vAtmoReveal * vAtmoReveal * (3.0 - 2.0 * vAtmoReveal);
+            gl_FragColor.rgb = mix(fogColor + sunGlow(viewDir), gl_FragColor.rgb, reveal);
           #endif
         }`,
       );
