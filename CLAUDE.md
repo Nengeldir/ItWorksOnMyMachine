@@ -93,7 +93,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
   Included in the standard production build; no Docker changes or debug flags.
 - `/?gallery` shows every item model and the pilot's item animations.
 - `/?explore=<biome>&seed=<n>` flies a run level of any biome freely (no
-  clock, nothing saved), e.g. `/?explore=verdant&seed=2` (Morning) or `&seed=3`
+  clock, nothing saved), e.g. `/?explore=verdant&seed=1` (Morning) or `&seed=2`
   (Moonlit).
 - **One map pool for every mode:** a seed stands for one map (`seedMap`:
   which biome, which mood), the same in time trials, rooms and runs
@@ -168,7 +168,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `session/` | Solo, room, explore and run sessions wiring a `Game` to the network and UI. `ExploreSession`: free flight through any biome (`/?explore=verdant&seed=2`), nothing saved; `?test` reuses it with a RunController for real portals/upgrades and unsaved victory previews, showing only test shortcuts rather than biome/light controls. `RunSession`: a roguelike run (`/?run=<seed>`), best score per run seed in localStorage |
 | `net/` | Server clock sync and the room connection (SSE down, POST up) |
 | `staleBuild.ts` | After a redeploy, an open tab's lazy chunks (bloom, `?tune`) and mesher worker are 404s: `reloadForNewBuild` reloads the page once (at most every 30 s, production only) |
-| `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, controls, and the run's HUD, title card and upgrade picker (`RunHud.tsx`). The menu's live course behind the glass is `MenuBackdrop` (a `Game` in `drift` attract mode, which switches courses with `setSeed`, keeps a few it showed parked (`ATTRACT_KEEP` besides its own) so going back is instant, snapshots each one for card art and reports when one is all in (`onShown`)); today's best folds into a flag (`TodaysBest`). `MapSelect` is the map select of every mode (`solo`, `run`, `room`: a carousel of today's card, one per map (`featuredSeed`) and a random one, art in `public/maps/`; a run's card shows your best on it, never the maps after the first; over a room's lobby it opens as `RoomMapSelect`, holding the game; on the landing page, a course the backdrop is still building is covered by its picture (`.map-veil`), which fades into the live view once it's in). Before a race, `GameScreen`'s `ReadyCard` sits where the timer will be; its `Panel` (results) folds to its heading and main buttons on narrow screens. `Help` is the "?" with its How to fly card and the newcomer's "First flight?" (`keys.ts`: the keys as the player bound them). `Coach` is the tutorial: one control at a time, watched on keys, mouse and gamepad |
+| `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, and the run's HUD, title card and upgrade picker (`RunHud.tsx`). The menu's live course behind the glass is `MenuBackdrop` (a `Game` in `drift` attract mode, which switches courses with `setSeed`, keeps a few it showed parked (`ATTRACT_KEEP` besides its own) so going back is instant, snapshots each one for card art and reports when one is all in (`onShown`)); today's best folds into a flag (`TodaysBest`). `MapSelect` is the map select of every mode (`solo`, `run`, `room`: a carousel of today's card, one per map (`featuredSeed`) and a random one, art in `public/maps/`; a run's card shows your best on it, never the maps after the first; over a room's lobby it opens as `RoomMapSelect`, holding the game; on the landing page, a course the backdrop is still building is covered by its picture (`.map-veil`), which fades into the live view once it's in). Before a race, `GameScreen`'s `ReadyCard` sits where the timer will be; its `Panel` (results) folds to its heading and main buttons on narrow screens. `Help` is the "?" with its How to fly card and the newcomer's "First flight?" (`keys.ts`: the keys as the player bound them). `Coach` is the tutorial: one control at a time, watched on keys, mouse and gamepad |
 | `components/Feather.tsx` | The golden feather (inline SVG: cream-to-gold vane, ink outline, glint; `spent` for an outline only): the run's lives on the HUD and the Spare feather upgrade's icon |
 | `theme.ts` | The UI's colors per map: `useUiTheme(seed)` sets `--ink` (picked per palette name, else derived from the sky) and `--tint` (the horizon); every other shade comes from those two with `color-mix()`; `usePaletteTheme(palette)` does the same for any level (runs, explore, the map select) |
 | `route.ts` | The URL ↔ screen mapping (`screenFromSearch`, `urlFor`, `Screen`), pure so it's tested; `test` is honored on every single-player URL |
@@ -234,6 +234,45 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-11: Final review before unit testing and playtesting (Claude)
+
+Asked for: go over every visual and gameplay aspect, feature by feature and
+file by file, verify it works and looks as intended, write an audit
+document, fix small bugs and leave detailed patch notes for the rest. The
+audit is `docs/audit-2026-10-11.md` (method, a verdict per feature, patch
+notes). Branch `final-review`, from `Pengyue`.
+- **Tests on Node < 22.15** (`tests/register.mjs`): the asynchronous
+  fallback hook's regex lost its backslash inside a template literal, so all
+  20 test files failed with `ERR_MODULE_NOT_FOUND` on Node 22.14.
+- **The firework in test mode** (`items/fx.ts`): `ItemFx` unequipped any
+  firework on the back whenever the Comet Tail item wasn't burning, so one
+  put on from the fitting room vanished in a frame and never lit. It now only
+  drives the rocket it strapped on itself. Test mode's Shift+I lets the
+  oldest item go when the bag is full (`Items.makeRoom`), so every item is
+  reachable.
+- **Offline adventures** (`RunSession`): an unreachable profile server
+  stopped the adventure from starting at all; it now flies without
+  persistent rewards.
+- **Shaders** (`run/portal.ts`, `run/finale.ts`): `pow(x, 2.0)` on signed
+  values (NaN on Direct3D-backed browsers, spread by bloom) replaced by x * x.
+- **Landing page on phones** (`Menu.css`): the logo no longer runs under the
+  Profile & inventory pill below 1000 px; short screens get a smaller logo.
+- Removed dead `components/Controls.tsx` and `game/airplane.ts`; the `?tune`
+  `bob` range now covers the collection pickups' default.
+- Verified: build, lint, 129 frontend tests (one new) and 33 backend tests
+  pass. In Chrome (dev server, scratch backend, frames stepped at 60 fps):
+  the opening autopilot and take-off, a portal through the wormhole to the
+  picker and the next biome, the finale, test mode's finish screen, the
+  fitting-room firework staying on and lighting, the Comet Tail burning and
+  coming off, an adventure with the profile request failing, all nine biomes
+  by `__shot`, the gallery and the inventory; no console errors. Phone layout
+  checked in a 844 x 390 iframe only, not on a device.
+- Not fixed here (patch notes in the audit): trusted login headers if the
+  port is exposed without the portal, unbounded rooms and stored adventure
+  plans, the 1.48 MB bundle, a unit test for ItemFx, per-frame clearance
+  probes of persistent pickups. Rarity colors, crystal placement, the claim
+  trust model and the pet's motion are part of the follow-up improvements.
 
 ### 2026-10-11: Synced main into Pengyue; running pets, pets by the pilot, a 3D face with two styles, crystals-only pickups (Claude)
 
@@ -3014,6 +3053,12 @@ ported to the islands world:
   through islands and gates, no console errors.
 
 ## Next up
+
+- From the final review (`docs/audit-2026-10-11.md`, patch notes): strip or
+  gate the `X-User-Id` login headers if port 8080 can ever be reached
+  without the VIScon portal; limit room creation and prune old adventure
+  plans; split the 1.48 MB bundle by route; a unit test for `ItemFx` with a
+  fake canvas; throttle `collectionClear` to every 0.5 s.
 
 - Pilot styles: send `pilotStyle` with room snapshots so other players see it
   (remote pilots and ghosts are Style 1 now); look at both faces in flight, by
