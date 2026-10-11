@@ -235,6 +235,10 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-11: Wardrobe PR rebased onto main, linear (Claude)
+
+Asked for: resolve the rebase conflicts, no merge commits. The branch carried the whole Pengyue history (53 commits), already in main in rebased form. Only the cosmetics commit was replayed onto `9105a32` (conflicts resolved by hand: main's wings, pets and cloth clearance kept). Dropped as superseded: the pets commit (main's pets are newer) and the Wardrobe panel (main's journal replaced it). Net change: README's Cosmetics section. Verified: build, lint, 126 tests. Not looked at in a browser. Old branch kept locally as `backup-wardrobe-pre-rebase`.
+
 ### 2026-10-11: Landing sheets unified, the journal (Claude)
 
 Asked for by the UX group, added to the hide-ui PR. Settings, the profile
