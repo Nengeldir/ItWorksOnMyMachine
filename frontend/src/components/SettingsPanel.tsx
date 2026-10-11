@@ -43,7 +43,7 @@ export default function SettingsPanel({ settings, onSettings, onClose }: Props) 
     window.addEventListener("keyup", stop, true);
     return () => { window.removeEventListener("keydown", capture, true); window.removeEventListener("keyup", stop, true); el.close(); };
   }, []);
-  const toggle = (key: "invertPitch" | "invertMouse" | "invertGamepad" | "invertTouch" | "reducedMotion" | "muted" | "crystalsOnly", label: string) => (
+  const toggle = (key: "invertPitch" | "invertMouse" | "invertGamepad" | "invertTouch" | "reducedMotion" | "muted" | "crystalsOnly" | "leftHandedTouch", label: string) => (
     <label className="check"><input type="checkbox" checked={!!settings[key]} onChange={e => update({ [key]: e.target.checked })} />{label}</label>
   );
   const slider = (key: "mouseSensitivity" | "deadZone" | "musicVolume" | "effectsVolume", label: string, min: number, max: number, step: number, fallback: number) => (
@@ -68,6 +68,8 @@ export default function SettingsPanel({ settings, onSettings, onClose }: Props) 
     <section className="sheet-panel"><h3>Touch</h3>
       <p className="settings-help">On a phone or tablet, drag anywhere on the view to steer and use the on-screen buttons.</p>
       {toggle("invertTouch", "Invert touch up / down")}
+      {toggle("leftHandedTouch", "Left-handed race UI")}
+      <p className="settings-help">Solo and group races: buttons on the left, flight instruments on the right. Drag the other side to steer.</p>
     </section>
     <section className="sheet-panel"><h3>Keyboard bindings</h3>
       <p className="settings-help">Letters and symbols follow your keyboard layout. Select a key, then press its replacement. Escape cancels. Gamepad buttons keep their standard layout.</p>

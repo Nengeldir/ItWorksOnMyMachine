@@ -95,7 +95,7 @@ const Hud = ({ hud, settings, showStyle = false }: { hud: HudState; settings: Se
         </ol>
       )}
 
-      {/* The flight panel, bottom centre */}
+      {/* Compact flight instruments at the screen edge */}
       <div className="hud-bottom">
         <div className={`hud-flight glass ${hud.crashed ? "crashed" : ""}`}>
           <Bar kind="boost" label={boostLabel(hud)} value={hud.boostCharge} />

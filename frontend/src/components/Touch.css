@@ -198,8 +198,8 @@ html.touch .finale-skip {
 
 /* The game is flown in landscape: held upright, a phone is asked to turn.
    (Android turns by itself on the first tap, see TouchControls.onGesture.) */
-@media (orientation: portrait) and (pointer: coarse) {
-  .game::after {
+@media (orientation: portrait) {
+  html.touch .game::after {
     content: "Turn your device sideways to fly";
     position: absolute;
     inset: 0;
@@ -215,7 +215,7 @@ html.touch .finale-skip {
     backdrop-filter: blur(18px);
   }
 
-  .game::before {
+  html.touch .game::before {
     content: "";
     position: absolute;
     z-index: 11;
@@ -230,12 +230,12 @@ html.touch .finale-skip {
   }
 
   /* The way back to the menu stays in reach */
-  .game .topbar {
+  html.touch .game .topbar {
     z-index: 12;
   }
 
-  .game .topbar-title,
-  .game .connection {
+  html.touch .game .topbar-title,
+  html.touch .game .connection {
     display: none;
   }
 }
@@ -464,8 +464,8 @@ html.touch .coach-step {
 
 }
 
-@media (orientation: portrait) and (pointer: coarse) {
-  .game .topbar {
+@media (orientation: portrait) {
+  html.touch .game .topbar {
     z-index: 12;
   }
 }

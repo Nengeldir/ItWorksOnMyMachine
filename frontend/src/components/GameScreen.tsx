@@ -23,12 +23,15 @@ import Coach from "./Coach";
 import { HelpButton } from "./Help";
 import SettingsPanel from "./SettingsPanel";
 import Hud from "./Hud";
+import { RaceResults } from "./RaceResults";
+import { GhostNotice } from "./GhostNotice";
 import { ProfileStatus } from "./ProfilePanel";
 import TestCollectionPanel from "./TestCollectionPanel";
 import Leaderboard from "./Leaderboard";
 import MapSelect from "./MapSelect";
 import "./GameScreen.css";
 import "./Touch.css";
+import "./HudLayout.css";
 
 interface Mountable {
   mount(container: HTMLElement): void;
@@ -224,7 +227,7 @@ const SoloScreen = ({ seed, settings, onSettings, onExit, tutorial, onTutorialEn
   });
 
   return (
-    <div className={`game${idle ? " ui-idle" : ""}`}>
+    <div className={`game race-layout${idle ? " ui-idle" : ""}${hud?.paused ? " is-paused" : ""}${settings.leftHandedTouch ? " left-handed" : ""}`}>
       <div ref={ref} className="game-view" />
       {hud && <Hud hud={hud} settings={settings} />}
       <TopBar title={`Time trial · #${seed}${hud ? ` · ${hud.biomeName} · ${hud.paletteName}` : ""}`} onExit={onExit} controls={{ settings, onSettings, muted: !!hud?.muted }} />
@@ -240,42 +243,21 @@ const SoloScreen = ({ seed, settings, onSettings, onExit, tutorial, onTutorialEn
       )}
 
       {stage === "racing" && ghosts.length > 0 && hud?.raceState !== "finished" && (
-        <div className="ghost-note glass">Racing the ghosts of {ghosts.join(", ")}</div>
+        <GhostNotice key={ghosts.join("\n")} names={ghosts} />
       )}
 
       {stage === "results" && result && (
-        <Panel
-          className="results"
-          head={
-            <>
-              <small>Finished · #{seed}</small>
-              <h2>{formatTime(result.timeMs)}</h2>
-            </>
-          }
-          intro={
-            <>
-              {result.saving && <p>Saving your time…</p>}
-              {result.error && <p className="error">{result.error}</p>}
-              {result.rank !== undefined && (
-                <p>
-                  <strong>{ordinal(result.rank)}</strong> on this course
-                  {result.personalBestMs !== undefined && result.personalBestMs < result.timeMs && (
-                    <> · your best is {formatTime(result.personalBestMs)}</>
-                  )}
-                  {result.personalBestMs === result.timeMs && <> · new personal best!</>}
-                </p>
-              )}
-            </>
-          }
-          actions={
-            <button className="primary" onClick={() => session.start()}>
-              Fly again <kbd>Enter</kbd>
-            </button>
-          }
-        >
+        <RaceResults paused={!!hud?.paused} timeMs={result.timeMs} context={`Time trial · #${seed}`}
+          onResume={() => session.resume()} onRetry={() => session.start()}>
+          {result.saving && <p>Saving your time…</p>}
+          {result.error && <p className="error">{result.error}</p>}
+          {result.rank !== undefined && <p><strong>{ordinal(result.rank)}</strong> on this course
+            {result.personalBestMs !== undefined && result.personalBestMs < result.timeMs && <> · your best is {formatTime(result.personalBestMs)}</>}
+            {result.personalBestMs === result.timeMs && <> · new personal best!</>}
+          </p>}
           <h3>Best times</h3>
           <Leaderboard entries={leaderboard} empty="No times yet on this course." />
-        </Panel>
+        </RaceResults>
       )}
     </div>
   );
@@ -332,7 +314,7 @@ const RoomScreen = ({ code, seed, settings, onSettings, onExit, tutorial, onTuto
   });
 
   return (
-    <div className={`game${idle ? " ui-idle" : ""}`}>
+    <div className={`game race-layout${idle ? " ui-idle" : ""}${hud?.paused ? " is-paused" : ""}${settings.leftHandedTouch ? " left-handed" : ""}`}>
       <div ref={ref} className="game-view" />
       {hud && <Hud hud={hud} settings={settings} />}
       <TopBar title={`Room ${code}${hud ? ` · course #${hud.seed} · ${hud.biomeName} · ${hud.paletteName}` : ""}`} onExit={onExit} controls={{ settings, onSettings, muted: !!hud?.muted }}>
@@ -374,22 +356,12 @@ const RoomScreen = ({ code, seed, settings, onSettings, onExit, tutorial, onTuto
       )}
 
       {room && !lobby && me?.finish_ms != null && (
-        <Panel
-          className="results"
-          head={
-            <>
-              <small>Finished · Room {code}</small>
-              <h2>{formatTime(me.finish_ms)}</h2>
-            </>
-          }
-          intro={
-            lastPlace !== null && (
-              <p>
-                You finished <strong>{ordinal(lastPlace)}</strong>. Waiting for the others…
-              </p>
-            )
-          }
-        />
+        <RaceResults paused={!!hud?.paused} timeMs={me.finish_ms} context={`Room ${code}`}
+          onResume={() => session.resume()}>
+          {lastPlace !== null && <p>You finished <strong>{ordinal(lastPlace)}</strong>. Waiting for the others…</p>}
+          <h3>Race standings</h3>
+          <ol className="race-results-standings">{hud?.standings.map(s => <li key={s.id} className={s.me ? "me" : undefined}>{s.name} · {s.finishMs !== null ? formatTime(s.finishMs) : `${s.checkpoints}/${hud.totalCheckpoints} gates`}</li>)}</ol>
+        </RaceResults>
       )}
     </div>
   );

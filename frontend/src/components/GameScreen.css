@@ -448,7 +448,7 @@
     visibility 0s;
 }
 
-.game.ui-idle:not(:has(.hud-pause, dialog[open], .overlay)) :is(.glass, .run-items, .run-upgrades):not(.run-lives, .run-objectives, .hud-pause, .panel, .coach, .no-webgl, .run-finish *, .run-picker *) {
+.game.ui-idle:not(.race-layout):not(:has(.hud-pause, dialog[open], .overlay)) :is(.glass, .run-items, .run-upgrades):not(.run-lives, .run-objectives, .hud-pause, .panel, .coach, .no-webgl, .run-finish *, .run-picker *) {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;

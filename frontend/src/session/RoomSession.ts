@@ -155,6 +155,10 @@ export class RoomSession {
     }, 4000);
   }
 
+  resume() {
+    if (this.store.get().hud?.paused) this.game?.togglePause();
+  }
+
   start() {
     this.client?.start().catch((e: Error) => this.flash(e.message));
   }
