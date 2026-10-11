@@ -54,6 +54,7 @@ export const FX = {
   wisps: 1, // cloud wisps torn off the wingtips at speed
   wispsFrom: 50, // m/s where the wisps start
   capePulse: 1, // how much the cape's marks and the eyes flare on boost and gate passes
+  pilotTheme: 1, // the pilot's cloth takes the level's accent hue (the gates' color, made to stand out in that scene)
   vignette: 1, // speed vignette at the screen edges
   bloom: 0.45, // glow strength (0 turns post-processing off)
   bloomRadius: 0.4, // wide and soft, like Sky's halos
@@ -329,6 +330,7 @@ export const RANGES: Record<string, [number, number, number?]> = {
   wisps: [0, 3],
   wispsFrom: [20, 90],
   capePulse: [0, 3],
+  pilotTheme: [0, 1],
   vignette: [0, 2],
   bloom: [0, 2.5],
   bloomRadius: [0, 1],

@@ -59,6 +59,9 @@ const GOLD = new THREE.Color("#ffe0a0");
 const WHITE = new THREE.Color("#ffffff");
 /** Sky's light: warm white; the biome's accent only tints it */
 const WARM = new THREE.Color("#fff1cf");
+const themeColor = new THREE.Color();
+const themeAccent = new THREE.Color();
+const themeHsl = { h: 0, s: 0, l: 0 };
 const SPRAY = new THREE.Color("#e8f7ff");
 const LAVA_SPARK = new THREE.Color("#ff9a3c");
 
@@ -252,6 +255,8 @@ export class Game implements RunHost {
   private readonly clock: () => number;
   private readonly events: GameEvents;
   private readonly attract: AttractMode | null;
+  /** The pilot's own color (the session's, or the room's): the level's theme is laid over it */
+  private baseColor: string;
   /** Sky's light creatures: a flock of butterflies leading to the next gate */
   private readonly flock: LightFlock;
   private driftZ = 0;
@@ -364,6 +369,7 @@ export class Game implements RunHost {
     this.particles = new Particles();
     this.softParticles = new Particles(3000, true);
     this.ambient = new Ambient(this.particles, this.softParticles);
+    this.baseColor = options.color;
     this.avatar = new Avatar(options.color);
     this.companion = new Companion(this.scene);
     this.appearanceChanged();
@@ -780,6 +786,7 @@ export class Game implements RunHost {
     FX_LIGHT.boost.value = palette.glow;
     TOON_LIGHT.rimColor.value.set(palette.sun).lerp(WHITE, 0.35);
     TOON_LIGHT.glow.value = 0.15 + palette.night * 1.3;
+    this.themePilot();
     this.audio.setBiome(level.biome.id, palette.night);
     this.setGhosts([]);
     this.style = 0;
@@ -788,9 +795,22 @@ export class Game implements RunHost {
 
   setSelf(id: string, color: string) {
     this.selfId = id;
-    this.avatar.setColor(color);
-    this.fx.setColor(color);
-    this.debris.setColor(color);
+    this.baseColor = color;
+    this.themePilot();
+  }
+
+  /**
+   * The pilot's cloth in the level's accent hue (the gates' color, chosen to
+   * stand out in that scene while belonging to it), saturated and mid-light so
+   * it reads from behind; by FX.pilotTheme, else the pilot's own color
+   */
+  private themePilot() {
+    themeAccent.set(this.world.palette.accent).getHSL(themeHsl);
+    themeAccent.setHSL(themeHsl.h, Math.min(0.85, Math.max(0.6, themeHsl.s)), 0.5);
+    const themed = themeColor.set(this.baseColor).lerp(themeAccent, FX.pilotTheme).getStyle();
+    this.avatar.setColor(themed);
+    this.fx.setColor(themed);
+    this.debris.setColor(themed);
   }
 
   testAction(action: TestAction) {

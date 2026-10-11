@@ -309,6 +309,12 @@ Children of the Light; the terrain is untouched for now. Looks only (rule 6).
   but on everything), so: ink off by default, flat on, and the pilot's
   primitives are chunkier (spheres 9x7, capsules 7 sides, lathes 10, panel
   curves 3 segments) to match the land's facet size.
+- **The pilot's color follows the level** (asked: matching the scene, still
+  standing out): `Game.themePilot` paints cape, wings, scarf, ribbons and
+  debris in the level's accent hue (the gates' color, which the palettes
+  already pick to stand out in that scene), saturation 0.6 to 0.85, lightness
+  0.5, by `FX.pilotTheme` (1; 0 = the player's own color). A room's assigned
+  color is themed the same way for yourself; others see your assigned color.
 
 ### 2026-10-10: Rebased PR #46 onto current main, without merge commits (Claude)
 
