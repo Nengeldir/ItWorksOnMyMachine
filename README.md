@@ -60,6 +60,13 @@ docker compose up -d --build
 - With the portal's access control on, players are logged in and their portal
   name shows up in rooms and on leaderboards. With it disabled, anyone can play
   and picks a nickname; the browser remembers a random id for them.
+- The backend only trusts the portal's login headers (`X-User-Id`,
+  `X-User-Name`) when `TRUST_USER_HEADERS=1`, which `docker-compose.yml` sets.
+  Never expose port 8080 without the portal in front: anyone could send them.
+  A local `python app.py` ignores them, so everyone is a guest there.
+- Rooms live in memory: at most 500 at once, and 20 new ones per pilot an
+  hour (`MAX_ROOMS`, `ROOMS_PER_CREATOR_HOUR` in `rooms.py`); beyond, a 429.
+  Each pilot keeps their latest 40 adventure plans (`KEEP_ADVENTURES`).
 - Dev servers on the VM aren't reachable from outside. Forward the port over
   SSH, e.g. `ssh -L 5173:localhost:5173 viscon@<your VM>`.
 
@@ -378,7 +385,9 @@ With bloom (High quality) the frame is drawn at `bloomResolution` (1) times the
 CSS size at most and its edges are smoothed by FXAA; `bloomSamples` above 0
 multisamples the bloom's float target instead, which costs several times more
 on integrated GPUs.
-Cosmetics exposes `wingParticleSize` for the decorated wings' tiny accents.
+Cosmetics exposes `wingParticleSize` for the decorated wings' tiny accents and
+`sparkle`, the rate of the rare capes', hats' and shoes' own particles
+(starlight, gilded flakes, embers, a wisp, stardust, frost, sparks).
 Collection pickups exposes crystal size, mote rate and mote distance; Run
 exposes `portalFlash` for crossing sparkles and screen brightening. Crystal
 pickups have a fixed 5.2 m collection radius (treasures: 3.2 m).
@@ -387,7 +396,9 @@ Companions exposes `sparkle`, the rate of each pet's own trail of light
 phoenix's embers, the dragon's cloud breath, the kirin's stars, the fox's
 foxfire, the griffin's sun flecks), `lead` (how far ahead the pet flies its
 rail), `hoopRange` (how near a hoop the pilot must be before the pet takes the
-rail through it), `guideBlend` (how fast it switches) and `gallop`/`stride`
+rail through it), `guideBlend` (how fast it switches), `orbit` (seconds per
+circle round the pilot), `roam` (seconds it plays around after a hoop before
+orbiting again), `follow` (the spring's stiffness: lower is softer) and `gallop`/`stride`
 for the wingless pets' running legs.
 
 **Looks** ([`frontend/src/game/avatar.ts`](frontend/src/game/avatar.ts) and

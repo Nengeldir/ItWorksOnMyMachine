@@ -258,6 +258,13 @@ export class Items {
     return true;
   }
 
+  /** Test mode only: the oldest item leaves a full bag, so the next one handed out always fits */
+  makeRoom() {
+    if (this.bag.length < ITEM.bag) return;
+    this.bag.shift();
+    this.selected = Math.max(0, this.selected - 1);
+  }
+
   /** The next item in the bag becomes the one to use */
   cycle() {
     if (this.bag.length > 1) this.selected = (this.selected + 1) % this.bag.length;
