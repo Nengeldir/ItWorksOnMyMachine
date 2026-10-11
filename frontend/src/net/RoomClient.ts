@@ -146,8 +146,9 @@ export class RoomClient {
     return request(this.url("map"), "POST", { token: this.token, seed });
   }
 
-  finish(timeMs: number, ghost: GhostData): Promise<{ place: number; personal_best_ms: number }> {
-    return request(this.url("finish"), "POST", { token: this.token, time_ms: timeMs, ghost });
+  /** `gates`: the course's gates, one XP each on the finisher's profile */
+  finish(timeMs: number, ghost: GhostData, gates = 0): Promise<{ place: number; personal_best_ms: number; xp?: number }> {
+    return request(this.url("finish"), "POST", { token: this.token, time_ms: timeMs, ghost, gates });
   }
 
   close() {

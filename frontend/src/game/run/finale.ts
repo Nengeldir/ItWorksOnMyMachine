@@ -83,10 +83,13 @@ const skyFragment = /* glsl */ `
     float n = fbm(d * 3.0);
     float n2 = fbm(d * 7.0 + 3.1);
     float width = 0.15 + 0.07 * n;
-    float band = exp(-pow(lat / width, 2.0));
+    // Squared by hand: lat is signed, and pow() of a negative base is undefined in GLSL (NaN on Direct3D)
+    float across = lat / width;
+    float band = exp(-across * across);
     float core = exp(-(l * l) / 0.3 - (lat * lat) / 0.025);
     // Dark dust lanes winding along the middle of the band
-    float dust = smoothstep(0.42, 0.72, fbm(d * 9.0 + 1.3)) * exp(-pow((lat - 0.03 * sin(l * 2.5)) / 0.055, 2.0));
+    float lane = (lat - 0.03 * sin(l * 2.5)) / 0.055;
+    float dust = smoothstep(0.42, 0.72, fbm(d * 9.0 + 1.3)) * exp(-lane * lane);
 
     vec3 col = vec3(0.003, 0.004, 0.014) + vec3(0.012, 0.016, 0.045) * (1.0 - abs(b));
     col += vec3(0.5, 0.6, 0.95) * band * (0.15 + 0.6 * n2) * 0.32;

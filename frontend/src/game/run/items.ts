@@ -3,8 +3,9 @@ import type { Flight, FlightInput, FlightMods, HitPart } from "../flight";
 import type { ItemId } from "../items/models";
 import { clamp, smoothstep } from "../math";
 import { segmentDistanceSq } from "./segments";
-import { placePickups, pickupClear, PICKUP, type Pickup } from "./pickups";
+import { placePickups, pickupClear, PICKUP, PICKUP_PREFS, type Pickup } from "./pickups";
 import type { Course } from "../world/course";
+import { RARITY_ORDER, RARITY_STYLE } from "../collection/rarity";
 
 // The design list's items (CLAUDE.md, "Items and abilities"), for runs only:
 // things you find on the islands and carry in a bag of three. Using one
@@ -83,12 +84,10 @@ export type ItemSave = "starflake";
 
 /** How rare (and how strong) an item is: common, uncommon, rare, legendary */
 export type Rarity = 0 | 1 | 2 | 3;
-export const RARITIES = [
-  { name: "Common", color: "#9be3a5" },
-  { name: "Uncommon", color: "#8fc8ff" },
-  { name: "Rare", color: "#c9a2ff" },
-  { name: "Legendary", color: "#ffd36e" },
-] as const;
+/** The shared rarity palette (collection/rarity.ts), by index */
+export const RARITIES = RARITY_ORDER.map((rarity) => RARITY_STYLE[rarity]);
+/** Below this player level an item never turns up on the islands (legendary and the strongest rare ones) */
+const MIN_LEVEL_BY_RARITY = [1, 1, 3, 6];
 
 export interface RunItemInfo {
   id: RunItemId;
@@ -102,16 +101,18 @@ export interface RunItemInfo {
   /** Works by itself while carried: never "used" */
   auto?: boolean;
   description: string;
+  /** The pilot level it starts turning up at (default by rarity) */
+  minLevel?: number;
 }
 
 export const RUN_ITEMS: readonly RunItemInfo[] = [
   { id: "anemoCatcher", model: "anemoCatcher", name: "Anemo Catcher", icon: "🍶", rarity: 0, charges: 1, description: "Uncork a bottle of wind: an updraft lifts you straight up, for the gate you were about to miss." },
   { id: "starflakeShield", model: "starflakeShield", name: "Starflake Shield", icon: "❄️", rarity: 2, charges: 1, description: "A shimmering, fragile aura of ice: it shatters on the first thing you hit, and you glance off instead of crashing." },
   { id: "gliderWax", model: "gliderWax", name: "Luminescent Glider Wax", icon: "🍯", rarity: 1, charges: 1, description: "Wax your wings with sunlight: for eight seconds there is no drag and no sink. Hold your top speed without losing height." },
-  { id: "cometFirework", model: "firework", name: "Comet Tail Firework", icon: "🎆", rarity: 2, charges: 1, description: "A giant rocket strapped to your back: a terrifying, barely steerable burst of speed and a tail of sparks." },
+  { id: "cometFirework", model: "firework", name: "Comet Tail Firework", icon: "🎆", rarity: 2, charges: 1, description: "A giant rocket strapped to your back: a terrifying, barely steerable burst of speed and a tail of sparks.", minLevel: 4 },
   { id: "spiritLantern", model: "spiritLantern", name: "Spirit Lantern", icon: "🏮", rarity: 1, charges: 1, description: "Light the lantern for 15 seconds to reveal and collect hidden ghost gates worth 500 points." },
   { id: "echoConch", model: "echoConch", name: "Echoing Conch", icon: "🐚", rarity: 0, charges: 1, description: "A sonar song highlights a safe route through the next three gates." },
-  { id: "phoenixFeather", model: "phoenixFeather", name: "Feather of the Great Phoenix", icon: "🔥", rarity: 3, charges: 1, auto: true, description: "Carried charm: a crash consumes the feather and revives you in mid-air with two seconds of protection." },
+  { id: "phoenixFeather", model: "phoenixFeather", name: "Feather of the Great Phoenix", icon: "🔥", rarity: 3, charges: 1, auto: true, description: "Carried charm: a crash consumes the feather and revives you in mid-air with two seconds of protection.", minLevel: 8 },
   { id: "silkRibbon", model: "silkRibbon", name: "Cloud-Spun Silk Ribbon", icon: "🎀", rarity: 1, charges: 1, description: "Ten seconds of much tighter turns for threading narrow canyons." },
   { id: "vortexGeode", model: "vortexGeode", name: "Vortex Geode", icon: "💎", rarity: 1, charges: 1, description: "For six seconds, a gentle vortex draws nearby loose light and energy into you." },
   { id: "aeroBoots", model: "aeroBoots", name: "Aero-Boots of the Adepti", icon: "🥾", rarity: 2, charges: 3, description: "Three steps on the air. Each press gives a quick upward correction." },
@@ -119,15 +120,21 @@ export const RUN_ITEMS: readonly RunItemInfo[] = [
   { id: "glacialPrism", model: "glacialPrism", name: "Glacial Prism", icon: "🧊", rarity: 2, charges: 1, description: "Freeze the adventure level timer and the decay of your skim combo for five seconds." },
   { id: "sunNectar", model: "sunNectar", name: "Sun-Kissed Nectar", icon: "🌼", rarity: 0, charges: 1, description: "Drink golden nectar to refill your boost reserve and wingbeat stamina immediately." },
   { id: "windTether", model: "windTether", name: "Tether of the Wind Spirit", icon: "🪝", rarity: 2, charges: 1, description: "A hook of light pulls you into a sharp swing around a nearby gate. Find an anchor within 110 metres." },
-  { id: "mothCape", model: "mothCape", name: "Illusory Moth Cape", icon: "🦋", rarity: 3, charges: 1, description: "Become a spirit for three seconds and pass through rock. Trees, water and the abyss still matter." },
+  { id: "mothCape", model: "mothCape", name: "Illusory Moth Cape", icon: "🦋", rarity: 3, charges: 1, description: "Become a spirit for three seconds and pass through rock. Trees, water and the abyss still matter.", minLevel: 8 },
   { id: "resonantChimes", model: "resonantChimes", name: "Resonant Chimes", icon: "🎐", rarity: 1, charges: 1, description: "For twelve seconds, each gate sends a shockwave that widens the next gate." },
   { id: "crystalUpdraft", model: "crystalUpdraft", name: "Crystallized Updraft", icon: "🌪️", rarity: 1, charges: 1, description: "Drop a wind trampoline on the surface below. Dip toward it to bounce high into the sky." },
-  { id: "duskHourglass", model: "duskHourglass", name: "Dusk-Weaver's Hourglass", icon: "⌛", rarity: 3, charges: 1, description: "For four seconds, scenery and the spirit manta move at a quarter pace while your flight stays normal." },
-  { id: "electroPrism", model: "electroPrism", name: "Electro-Charged Prism", icon: "⚡", rarity: 2, charges: 1, description: "Near misses release chain lightning and score bonus points for twelve seconds." },
-  { id: "dragonTear", model: "dragonTear", name: "Tear of the Dragon", icon: "💧", rarity: 2, charges: 1, description: "Hold the use button to dive straight down, for up to six seconds. Release to regain normal flight." },
+  { id: "duskHourglass", model: "duskHourglass", name: "Dusk-Weaver's Hourglass", icon: "⌛", rarity: 3, charges: 1, description: "For four seconds, scenery and the spirit manta move at a quarter pace while your flight stays normal.", minLevel: 10 },
+  { id: "electroPrism", model: "electroPrism", name: "Electro-Charged Prism", icon: "⚡", rarity: 2, charges: 1, description: "Near misses release chain lightning and score bonus points for twelve seconds.", minLevel: 5 },
+  { id: "dragonTear", model: "dragonTear", name: "Tear of the Dragon", icon: "💧", rarity: 2, charges: 1, description: "Hold the use button to dive straight down, for up to six seconds. Release to regain normal flight.", minLevel: 5 },
 ];
 
 export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.id === id)!;
+
+/** The pilot level an item starts turning up at */
+export const itemLevel = (item: RunItemInfo): number => item.minLevel ?? MIN_LEVEL_BY_RARITY[item.rarity];
+
+/** The items a pilot of this level can find (test mode passes Infinity: all of them) */
+export const itemsFor = (playerLevel: number): RunItemInfo[] => RUN_ITEMS.filter((item) => itemLevel(item) <= playerLevel);
 
 /** How long each item's effect lasts once used (seconds) */
 const DURATION: Record<RunItemId, () => number> = {
@@ -217,6 +224,12 @@ export class Items {
   private readonly steered: FlightInput = { pitch: 0, roll: 0 };
   /** The level the items are in */
   world: ItemWorld | null = null;
+  /** The pilot's level: items above it never turn up on the islands */
+  playerLevel = Infinity;
+  /** Metres added to the pickup radius (the fox, the stargazer hat) */
+  reach = 0;
+  /** The rarity of the item last picked up, for its burst of light */
+  pickedRarity: Rarity = 0;
 
   setLevel(world: ItemWorld) {
     this.world = world;
@@ -226,7 +239,7 @@ export class Items {
     this.sampled = false;
     this.ghostGates.length = 0;
     this.lights.length = 0;
-    this.pickups.splice(0, this.pickups.length, ...placePickups(world, RUN_ITEMS));
+    this.pickups.splice(0, this.pickups.length, ...placePickups(world, itemsFor(this.playerLevel)));
     this.clearanceTime = 0;
     for(const ring of world.course.rings) for(let j=0;j<3;j++){
       const position=world.course.pointAt(ring.position.z-30+j*8).add(new THREE.Vector3((j-1)*3,1,0));
@@ -254,8 +267,27 @@ export class Items {
     this.bag.push({ id, charges: runItem(id).charges });
     if (this.bag.length === 1) this.selected = 0;
     this.picked = id;
+    this.pickedRarity = runItem(id).rarity;
     this.cue.pickup++;
     return true;
+  }
+
+  /**
+   * The charm's relic (a keepsake carried on adventures): starts that item's effect without
+   * taking anything from the bag. The looks and sounds follow as for an item used from the bag
+   */
+  activate(id: RunItemId, flight: Flight): boolean {
+    if (runItem(id).auto || !this.start(id, flight)) return false;
+    this.used = id;
+    this.cue.use++;
+    return true;
+  }
+
+  /** Test mode only: the oldest item leaves a full bag, so the next one handed out always fits */
+  makeRoom() {
+    if (this.bag.length < ITEM.bag) return;
+    this.bag.shift();
+    this.selected = Math.max(0, this.selected - 1);
   }
 
   /** The next item in the bag becomes the one to use */
@@ -369,6 +401,15 @@ export class Items {
     if (index < 0 || !this.world) return false;
     this.bag.splice(index, 1);
     this.selected = Math.min(this.selected, Math.max(0, this.bag.length - 1));
+    return this.rekindle(flight);
+  }
+
+  /**
+   * The phoenix's revival itself (a carried feather, the charm, or the phoenix pet): back on the
+   * clear course tube, briefly untouchable
+   */
+  rekindle(flight: Flight): boolean {
+    if (!this.world) return false;
     const z = clamp(flight.position.z, this.world.course.start.z, this.world.course.endZ - 25);
     const position = this.world.course.pointAt(z);
     flight.reset(position, this.world.course.tangentAt(z), ITEM.phoenixSpeed);
@@ -434,11 +475,11 @@ export class Items {
     const checkClearance = this.clearanceTime <= 0;
     if (checkClearance) this.clearanceTime = 0.5;
     for (const pickup of this.pickups) {
-      if (pickup.collected) continue;
+      if (pickup.collected || PICKUP_PREFS.crystalsOnly) continue;
       // Trees arrive with streamed land; recheck nearby air as it arrives.
       if (checkClearance && pickup.position.distanceToSquared(flight.position)<200**2)
         pickup.blocked = !pickupClear(this.world!,pickup.position);
-      const touching = !pickup.blocked && (this.sampled ? segmentDistanceSq(pickup.position,this.previous,flight.position) : pickup.position.distanceToSquared(flight.position)) <= PICKUP.radius**2;
+      const touching = !pickup.blocked && (this.sampled ? segmentDistanceSq(pickup.position,this.previous,flight.position) : pickup.position.distanceToSquared(flight.position)) <= (PICKUP.radius + this.reach)**2;
       if (touching && (this.bag.length<ITEM.bag || !pickup.touching)) pickup.collected = this.give(pickup.id);
       pickup.touching = touching;
     }

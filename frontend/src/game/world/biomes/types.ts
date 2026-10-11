@@ -259,6 +259,8 @@ export interface LevelKey {
   mood: number; // index into the biome's moods
   runSeed: number; // 0 outside a run
   index: number; // level number in the run (0 outside a run)
+  /** How much harder the line is than the time trial on this seed (0..1, course.ts `Difficulty`); runs only */
+  difficulty?: number;
 }
 
 export interface Level {

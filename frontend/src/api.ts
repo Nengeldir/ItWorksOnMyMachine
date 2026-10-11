@@ -17,6 +17,8 @@ export interface LeaderboardEntry {
 export interface RunResult {
   rank: number;
   personal_best_ms: number;
+  /** XP the finish earned (one per gate) */
+  xp?: number;
   leaderboard: LeaderboardEntry[];
 }
 
@@ -114,6 +116,7 @@ export function finishRun(body: {
   client_id: string;
   nickname: string;
   ghost: GhostData;
+  gates?: number;
 }): Promise<RunResult> {
   return request("/api/runs/finish", "POST", body);
 }

@@ -1,0 +1,98 @@
+.shop-dialog { width: min(1040px, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); border: 1px solid var(--ink-12); border-radius: 26px; padding: 1.5rem; color: var(--ink); overflow: auto;
+  background: radial-gradient(ellipse at 15% 0%, #fff3d6cc, transparent 55%), radial-gradient(ellipse at 90% 10%, #e7dcffcc, transparent 50%), var(--glass-strong, #f3f1f8ee); }
+.shop-dialog::backdrop { background: #14203a80; backdrop-filter: blur(8px); }
+.shop-header { display: flex; align-items: center; gap: 1rem; }
+.shop-header > div:first-child { flex: 1; }
+.shop-header h2 { margin: .2rem 0 .4rem; }
+.shop-balance { display: inline-flex; align-items: center; gap: .4rem; font-weight: 700; padding: .45rem .8rem; border-radius: 999px; background: #ffffffaa; border: 1px solid #bfe9f0; }
+.shop-loading, .shop-status { font-size: .85rem; color: var(--ink-70); min-height: 1.2rem; }
+.shop-section { margin-top: 1.1rem; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.section-head h3 { margin: 0 0 .6rem; }
+.section-head small { color: var(--ink-70); }
+.demo-tag { padding: .15rem .5rem; border-radius: 999px; background: #ffe7c2; color: #8a5a10 !important; font-weight: 700; }
+
+.shop-offers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
+.shop-offer { position: relative; display: flex; flex-direction: column; align-items: center; gap: .3rem; text-align: center; padding: .8rem; border-radius: 20px; cursor: pointer;
+  border: 1px solid var(--ink-12); background: #ffffff8c; transition: transform .2s; }
+.shop-offer:hover { transform: translateY(-2px); }
+.shop-offer:not(.rarity-common) { border-color: color-mix(in srgb, var(--rarity) 80%, transparent); background: linear-gradient(170deg, color-mix(in srgb, var(--rarity) 26%, #ffffffa0), #ffffff90 65%); }
+.shop-offer.rarity-legendary { box-shadow: 0 0 26px color-mix(in srgb, var(--rarity) 45%, transparent); }
+.shop-offer.selected { outline: 2px solid var(--ink); outline-offset: 2px; }
+.shop-offer .collection-preview { height: 150px; }
+.shop-icon { height: 150px; display: grid; place-items: center; font-size: 3.6rem; }
+.shop-offer .rarity-name { color: var(--rarity-deep); font-weight: 700; text-transform: capitalize; }
+.shop-power { margin: .1rem 0 .3rem; font-size: .74rem; color: var(--ink-70); }
+.shop-offer button { display: inline-flex; align-items: center; gap: .3rem; margin-top: auto; }
+.shop-short { font-size: .7rem; color: var(--ink-70); }
+
+.shop-pouches { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
+.pouch { position: relative; display: flex; flex-direction: column; align-items: center; gap: .2rem; padding: 1rem .8rem; border-radius: 18px; border: 1px solid #bfe9f0;
+  background: linear-gradient(170deg, #e9fbff, #ffffffb0); overflow: hidden; }
+.pouch-gems { font-size: 2rem; }
+.pouch small { color: var(--ink-70); }
+.pouch .price { margin-top: .3rem; font-weight: 700; padding: .3rem .8rem; border-radius: 999px; background: #26314d; color: white; }
+.pouch .ribbon { position: absolute; top: .6rem; right: -2.2rem; transform: rotate(35deg); width: 8rem; background: #ffc94d; font-size: .65rem; font-weight: 700; padding: .15rem 0; }
+.demo-note { margin-top: .8rem; padding: 1rem; border-radius: 18px; border: 1px solid #ffd896; text-align: left; }
+.demo-note p { font-size: .85rem; }
+
+/* The wheel */
+.wheel-row { display: grid; grid-template-columns: minmax(0, 360px) 1fr; gap: 1.5rem; align-items: center; }
+.wheel { position: relative; width: 100%; max-width: 360px; aspect-ratio: 1; margin: 0 auto; filter: drop-shadow(0 8px 22px #b98a3c40); }
+.wheel canvas { width: 100%; height: 100%; border-radius: 50%; border: 6px solid #f3d18b; box-sizing: border-box; background: #fff8ea; }
+.wheel canvas.spinning { transition: transform 4.6s cubic-bezier(.12, .7, .08, 1); }
+.wheel-pointer { position: absolute; top: -.9rem; left: 50%; transform: translateX(-50%); z-index: 2; font-size: 1.8rem; color: #c8902a; text-shadow: 0 2px 4px #0003; }
+.wheel-odds { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: .3rem; font-size: .8rem; }
+.wheel-odds li { display: flex; align-items: center; gap: .5rem; }
+.wheel-odds b { margin-left: auto; }
+.swatch { width: .9rem; height: .9rem; border-radius: 4px; border: 1px solid #0002; }
+.spin-button { display: inline-flex; align-items: center; gap: .4rem; font-size: 1.05rem; min-height: 3.2rem; padding: 0 1.4rem; }
+.spin-button:not(:disabled) { animation: spin-breathe 2.4s ease-in-out infinite; }
+@keyframes spin-breathe { 50% { box-shadow: 0 0 0 6px #ffc94d40, 0 0 26px #ffc94d66; } }
+
+/* The prize */
+.win-screen { position: fixed; inset: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: none; display: grid; place-items: center;
+  background: radial-gradient(circle, color-mix(in srgb, var(--rarity) 30%, #14203aaa), #14203ad0); animation: win-fade .3s ease-out; overflow: hidden; color: var(--ink); }
+.win-screen::backdrop { background: transparent; }
+.win-screen.nothing { background: #14203ab0; }
+.win-card { position: relative; width: min(380px, 86vw); padding: 2rem 1.6rem 1.4rem; border-radius: 28px; text-align: center; overflow: hidden;
+  border: 2px solid color-mix(in srgb, var(--rarity) 85%, white); box-shadow: 0 0 60px color-mix(in srgb, var(--rarity) 60%, transparent); animation: win-pop .55s cubic-bezier(.2, 1.6, .4, 1); }
+.win-screen.nothing .win-card { border-color: #d9dde6; box-shadow: none; }
+.win-rays { position: absolute; inset: -60%; background: repeating-conic-gradient(color-mix(in srgb, var(--rarity) 35%, transparent) 0 8deg, transparent 8deg 22deg); animation: win-rays 8s linear infinite; opacity: .55; pointer-events: none; }
+.win-screen.nothing .win-rays { display: none; }
+.win-card > :not(.win-rays) { position: relative; }
+.win-icon { display: block; font-size: 4.2rem; animation: win-bounce 1.2s ease-in-out infinite; }
+.win-card small { text-transform: uppercase; letter-spacing: .14em; color: var(--rarity-deep); font-weight: 700; }
+.win-card h3 { font-size: 1.6rem; margin: .3rem 0 .5rem; }
+.win-card p { font-size: .9rem; }
+.confetti i { position: absolute; top: -5%; width: .55rem; height: .9rem; border-radius: 2px; animation: confetti-fall linear forwards; }
+@keyframes win-fade { from { opacity: 0; } }
+@keyframes win-pop { from { transform: scale(.4) rotate(-6deg); opacity: 0; } }
+@keyframes win-rays { to { transform: rotate(360deg); } }
+@keyframes win-bounce { 50% { transform: translateY(-8px) scale(1.06); } }
+@keyframes confetti-fall { to { top: 105%; transform: rotate(720deg) translateX(40px); } }
+
+@media (max-width: 760px) {
+  .shop-dialog { padding: 1rem; width: calc(100vw - 1rem); max-height: calc(100dvh - 1rem); }
+  .shop-offers, .shop-pouches { grid-template-columns: 1fr; }
+  .shop-offer { flex-direction: row; flex-wrap: wrap; text-align: left; }
+  .shop-offer .collection-preview, .shop-icon { height: 96px; width: 96px; font-size: 2.6rem; }
+  .shop-power { width: 100%; }
+  .wheel-row { grid-template-columns: 1fr; }
+  .wheel { max-width: 280px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wheel canvas.spinning { transition-duration: .6s; }
+  .win-rays, .win-icon, .spin-button:not(:disabled), .confetti i { animation: none; }
+  .confetti { display: none; }
+}
+
+/* Phones held sideways: tighter, the wheel beside its odds */
+@media (max-height: 520px) {
+  .shop-dialog { padding: .7rem 1rem; max-height: calc(100dvh - .6rem); }
+  .shop-header h2 { margin: 0 0 .2rem; font-size: 1.2rem; }
+  .shop-offer .collection-preview, .shop-icon { height: 90px; }
+  .wheel-row { grid-template-columns: minmax(0, 220px) 1fr; }
+  .wheel { max-width: 220px; }
+  .wheel-odds { font-size: .7rem; gap: .1rem; }
+}

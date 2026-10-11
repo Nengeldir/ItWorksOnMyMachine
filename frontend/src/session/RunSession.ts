@@ -7,6 +7,7 @@ import type { Settings } from "../storage";
 import type { InputObserver } from "../game/input";
 import { Store } from "./store";
 import { profileClient } from "../profile/client";
+import type { Adventure, RunReward } from "../profile/types";
 
 const COLOR = "#ff5d73";
 const BEST_KEY = "windrider.runs";
@@ -21,6 +22,8 @@ export interface RunState {
   summary: RunSummary | null;
   best: number | null;
   error: string | null;
+  /** What the finished adventure earned on the profile (null while saving or offline) */
+  reward: RunReward | null;
 }
 
 function loadBests(): Record<string, number> {
@@ -44,6 +47,9 @@ export class RunSession {
   private container: HTMLElement | null = null;
   private game: Game | null = null;
   private generation = 0;
+  /** The adventure's reward plan and token (null offline), and whether its result went to the server */
+  private adventure: Adventure | null = null;
+  private reported = false;
 
   constructor(seed: number, settings: Settings) {
     this.seed = seed;
@@ -57,6 +63,7 @@ export class RunSession {
       summary: null,
       best: bestRun(seed),
       error: null,
+      reward: null,
     });
   }
 
@@ -69,24 +76,33 @@ export class RunSession {
     if (!this.container) return;
     const generation = ++this.generation;
     try {
-      const adventure = await profileClient.start(this.seed);
+      // Persistent rewards need the server; without it the adventure still flies, collecting nothing
+      // (the profile pill says the profile is unavailable)
+      const adventure = await profileClient.start(this.seed).catch((error: unknown) => {
+        console.warn("Adventure rewards unavailable:", error);
+        return null;
+      });
       if (generation !== this.generation || !this.container) return;
+      this.adventure = adventure;
+      this.reported = false;
       this.game = new Game(this.container, {
         seed: this.seed,
         level: runLevel(this.seed, 1, runOrder(this.seed)[0]),
         clock: () => performance.now(),
         controls: this.settings,
         color: COLOR,
-        events: { hud: (hud) => this.store.set({ hud }) },
+        // Steering during the opening autopilot takes the controls where the pilot is
+        events: { hud: (hud) => this.store.set({ hud }), takeOver: () => this.begin(false) },
       });
       this.game.startRun(this.seed, {
-        rewards: adventure.rewards,
-        collected: reward => profileClient.collect(adventure.token, reward.id),
+        rewards: adventure?.rewards,
+        collected: reward => { if (adventure) profileClient.collect(adventure.token, reward.id); },
         offer: (offers, next) => this.store.set({ stage: "pick", offers, next }),
         arrived: (level, biome) => this.store.set({ arrived: { level, biome, at: performance.now() } }),
         ended: (summary) => this.ended(summary),
-      });
-      // Hold still on the start line until take-off
+      // The pilot's level: items and abilities above it never turn up (what they wear comes from the profile)
+      }, undefined, { playerLevel: profileClient.level() });
+      // The opening autopilot glides the level until the player steers or takes off
       if (this.store.get().stage === "intro") this.game.holdRun(true);
     } catch (e) {
       if (generation !== this.generation) return;
@@ -97,6 +113,9 @@ export class RunSession {
 
   unmount() {
     this.generation++;
+    // Leaving mid-flight still counts what was flown: its gates' XP and its score's crystals
+    const progress = this.game?.runSnapshot();
+    if (progress && this.store.get().stage !== "intro") this.report(progress);
     this.game?.dispose();
     this.game = null;
     this.container = null;
@@ -113,12 +132,12 @@ export class RunSession {
     this.game?.engage();
   }
 
-  /** Off the intro panel and into the air */
-  begin() {
+  /** Off the intro panel: the controls are yours. `engage`: lock the mouse (needs a click or key event) */
+  begin(engage = true) {
     if (this.store.get().stage !== "intro" || !this.game) return;
     this.store.set({ stage: "flying" });
     this.game?.holdRun(false);
-    this.game?.engage();
+    if (engage) this.game?.engage();
   }
 
   /** Enter during the finale: skip to the white light */
@@ -134,10 +153,23 @@ export class RunSession {
 
   /** The same run from the start */
   again() {
+    const progress = this.game?.runSnapshot();
+    if (progress && this.store.get().stage === "flying") this.report(progress);
     this.game?.dispose();
     this.game = null;
-    this.store.set({ stage: "flying", summary: null, offers: [], arrived: null, hud: null, error: null, best: bestRun(this.seed) });
+    this.store.set({ stage: "flying", summary: null, offers: [], arrived: null, hud: null, error: null, best: bestRun(this.seed), reward: null });
     void this.create();
+  }
+
+  /** Sends the adventure's result once (the profile client keeps retrying it if the server is away) */
+  private report(summary: RunSummary) {
+    const adventure = this.adventure;
+    if (!adventure || this.reported || (summary.gates === 0 && summary.score === 0)) return;
+    this.reported = true;
+    void profileClient.reportRun(adventure.token, {
+      score: Math.max(0, Math.round(summary.score)), levels: Math.max(1, Math.min(8, summary.levels)), completed: summary.completed,
+      gates: summary.gates, time_ms: Math.max(0, summary.timeMs), crashes: summary.crashes,
+    }).then((reward) => { if (reward && this.adventure === adventure) this.store.set({ reward }); });
   }
 
   retry() {
@@ -158,6 +190,7 @@ export class RunSession {
       }
     }
     this.store.set({ stage: "summary", summary, best: previous });
+    this.report(summary);
     // Back to the default sky map, flown by itself, behind the finish screen
     this.game?.victoryLap(dailySeed());
   }

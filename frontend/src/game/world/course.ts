@@ -23,6 +23,34 @@ export interface Ring {
 }
 
 /**
+ * How much harder an adventure level's line is than the time trial on the same seed, from 0 (the
+ * time trial itself, and the first level of a run) to 1 (the last level): the turns swing wider and
+ * sharper, the line rises and falls more (with short climbs), gates come closer together and their
+ * rings shrink. The land is carved around the line, so it reshapes with it
+ */
+export interface Difficulty {
+  /** Lateral swing of the line, × */
+  swing: number;
+  /** Frequency of the sharper bends, × */
+  bends: number;
+  /** Extra short-wavelength wiggles (m) */
+  wiggle: number;
+  /** How much the slope varies, × (above 2 the line briefly climbs) */
+  slopeSwing: number;
+  /** Rolling dips and rises added to the slope */
+  rolls: number;
+  /** Gate spacing, × */
+  spacing: number;
+  /** Ring radius, metres less */
+  shrink: number;
+}
+
+export function difficulty(level: number): Difficulty {
+  const d = Math.max(0, Math.min(1, level));
+  return { swing: 1 + 0.4 * d, bends: 1 + 0.25 * d, wiggle: 18 * d, slopeSwing: 1 + 1.3 * d, rolls: 0.07 * d, spacing: 1 - 0.15 * d, shrink: 1.6 * d };
+}
+
+/**
  * The racing line: a descending 3D curve, a function of z, so it never turns back.
  * Gates (obstacles the line threads) sit along it, each with a ring.
  */
@@ -37,11 +65,17 @@ export class Course {
   private readonly z0: number;
   private readonly xs: Float64Array;
   private readonly ys: Float64Array;
+  /** 0 for races, time trials and a run's first level; up to 1 for its last (see `Difficulty`) */
+  readonly level: number;
+  private readonly hard: Difficulty;
 
-  constructor(seed: number) {
+  constructor(seed: number, level = 0) {
     this.noise = createNoise2D(makeRng(seed, "line"));
+    this.level = level;
+    this.hard = difficulty(level);
     const rng = makeRng(seed, "gates");
-    for (let z = 90; z < LENGTH; z += range(rng, 95, 130)) this.gates.push(z);
+    // The same draws at every difficulty (level 0 is exactly the frozen map), only spaced closer
+    for (let z = 90; z < LENGTH; z += range(rng, 95, 130) * this.hard.spacing) this.gates.push(z);
     this.endZ = LENGTH + 80;
 
     // Sampled densely: heights come from adding up the slope, and distance queries are fast
@@ -54,7 +88,7 @@ export class Course {
       const z = this.z0 + i * STEP;
       this.xs[i] = this.x(z);
       this.ys[i] = y;
-      y -= (SLOPE + SLOPE_SWING * this.noise(z * 0.003, 3.1)) * STEP;
+      y -= (SLOPE + SLOPE_SWING * this.hard.slopeSwing * this.noise(z * 0.003, 3.1) + (this.level > 0 ? this.hard.rolls * this.noise(z * 0.011, 5.3) * 3 : 0)) * STEP;
     }
 
     this.gates.forEach((z, index) => {
@@ -62,7 +96,7 @@ export class Course {
         index,
         position: this.pointAt(z),
         normal: this.tangentAt(z),
-        radius: RING_RADIUS,
+        radius: RING_RADIUS - this.hard.shrink,
         finish: false,
       });
     });
@@ -79,7 +113,10 @@ export class Course {
   }
 
   x(z: number): number {
-    return 170 * this.noise(z * 0.0011, 1.3) + 45 * this.noise(z * 0.004, 7.7);
+    const base = 170 * this.noise(z * 0.0011, 1.3) + 45 * this.noise(z * 0.004, 7.7);
+    if (this.level <= 0) return base;
+    const h = this.hard;
+    return 170 * h.swing * this.noise(z * 0.0011, 1.3) + 45 * h.swing * this.noise(z * 0.004 * h.bends, 7.7) + h.wiggle * this.noise(z * 0.0062, 11.9);
   }
 
   y(z: number): number {

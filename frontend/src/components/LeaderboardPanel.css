@@ -1,0 +1,75 @@
+.hall-dialog { width: min(980px, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); border: 1px solid var(--ink-12); border-radius: 26px; padding: 1.5rem; color: var(--ink); overflow: auto;
+  background: radial-gradient(ellipse at 50% -10%, #fff1cccc, transparent 55%), var(--glass-strong, #f3f1f8ee); }
+.hall-dialog::backdrop { background: #14203a80; backdrop-filter: blur(8px); }
+.hall-header { display: flex; align-items: center; gap: .8rem; }
+.hall-header > div { flex: 1; }
+.hall-header h2 { margin: .2rem 0 .6rem; }
+.hall-crown { color: #c8902a; }
+.hall-status { color: var(--ink-70); font-size: .85rem; }
+.verified { color: #2f7fb0; vertical-align: -2px; margin-left: .25rem; }
+
+.hall-board { list-style: none; margin: 0; padding: 0; display: grid; gap: .45rem; }
+.hall-board button { width: 100%; display: grid; grid-template-columns: 2.6rem 3.2rem minmax(0, 1fr) 4rem; grid-template-rows: auto auto; align-items: center; gap: .1rem .7rem; text-align: left;
+  padding: .55rem .8rem; border-radius: 18px; border: 1px solid var(--ink-12); background: #ffffff80; }
+.hall-board button:hover { background: #ffffffc0; }
+.hall-board .rank { grid-row: span 2; font-size: 1.15rem; font-weight: 800; text-align: center; font-family: var(--font-numbers, inherit); }
+.hall-board .portrait { grid-row: span 2; }
+.portrait { width: 3.2rem; height: 3.2rem; border-radius: 50%; object-fit: cover; background: radial-gradient(circle at 50% 35%, #fff7e6, #dfe6f5); border: 2px solid #ffffffcc; box-shadow: 0 2px 8px #14203a22; }
+.portrait.initials { display: grid; place-items: center; font-weight: 800; color: var(--ink-70); }
+.hall-board .who { display: grid; min-width: 0; }
+.hall-board .who b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hall-board .who small { color: var(--ink-70); font-size: .72rem; }
+.hall-board .level { grid-row: span 2; text-align: center; display: grid; }
+.hall-board .level small { font-size: .6rem; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-70); }
+.hall-board .level b { font-size: 1.4rem; font-family: var(--font-numbers, inherit); }
+.hall-board progress { grid-column: 3; width: 100%; height: .35rem; accent-color: #c8902a; }
+.hall-board .rank-1 button { border-color: #ffc94d; box-shadow: 0 0 22px #ffc94d55; background: linear-gradient(100deg, #fff3cfcc, #ffffffa0); }
+.hall-board .rank-2 button { border-color: #c9d3e3; background: linear-gradient(100deg, #eef2f9cc, #ffffffa0); }
+.hall-board .rank-3 button { border-color: #e6b98f; background: linear-gradient(100deg, #fbe9dacc, #ffffffa0); }
+.hall-board .me button { outline: 2px solid var(--ink); outline-offset: 1px; }
+
+.pilot-page { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 1.2rem; align-items: start; }
+.pilot-hero { text-align: center; background: radial-gradient(ellipse at 50% 70%, #fff7e6 0%, var(--ink-06) 70%); border-radius: 22px; padding: .8rem; position: sticky; top: 0; }
+.pilot-hero .minifigure { height: 300px; }
+.pilot-hero h3 { margin: .3rem 0 .1rem; }
+.pilot-hero .you { margin-left: .4rem; font-size: .65rem; padding: .1rem .4rem; border-radius: 999px; background: var(--ink); color: white; vertical-align: 2px; }
+.pilot-rank { margin: 0 0 .4rem; color: var(--ink-70); font-size: .85rem; }
+.pilot-hero progress { width: 100%; height: .45rem; accent-color: #c8902a; }
+.pilot-hero > small { font-size: .72rem; color: var(--ink-70); }
+.pilot-details section { margin-bottom: 1.1rem; }
+.pilot-details h4 { margin: 0 0 .5rem; }
+.pilot-details h4 small { color: var(--ink-70); font-weight: 400; }
+.pilot-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .5rem; margin: 0; }
+.pilot-stats div { padding: .55rem .7rem; border-radius: 14px; background: #ffffff8c; border: 1px solid var(--ink-12); }
+.pilot-stats dt { font-size: .68rem; color: var(--ink-70); text-transform: uppercase; letter-spacing: .06em; }
+.pilot-stats dd { margin: .15rem 0 0; font-weight: 700; font-family: var(--font-numbers, inherit); }
+.pilot-races { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .35rem; }
+.pilot-races li { display: flex; align-items: baseline; gap: .4rem; padding: .4rem .6rem; border-radius: 12px; background: #ffffff8c; font-size: .82rem; }
+.pilot-races li span { flex: 1; }
+.pilot-races li b { font-family: var(--font-numbers, inherit); }
+.pilot-races li small { color: var(--ink-70); font-size: .65rem; }
+.pilot-races li.none { opacity: .55; }
+.pilot-pets { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .45rem; }
+.pilot-pets li { display: flex; align-items: center; gap: .35rem; padding: .35rem .65rem; border-radius: 999px; border: 1px solid var(--ink-12); background: #ffffff8c; font-size: .85rem; }
+.pilot-pets li:not(.rarity-common) { border-color: color-mix(in srgb, var(--rarity) 80%, transparent); background: color-mix(in srgb, var(--rarity) 18%, #ffffffb0); }
+.pilot-pets li small { color: var(--ink-70); font-size: .68rem; }
+.pilot-achievements { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: .4rem; }
+.pilot-achievements li { display: grid; grid-template-columns: 1.6rem 1fr; gap: 0 .4rem; padding: .45rem .6rem; border-radius: 14px; background: #ffffff60; border: 1px dashed var(--ink-12); opacity: .6; }
+.pilot-achievements li span { grid-row: span 2; font-size: 1.2rem; }
+.pilot-achievements li small { font-size: .68rem; color: var(--ink-70); }
+.pilot-achievements li.done { opacity: 1; border: 1px solid #ffc94d; background: linear-gradient(120deg, #fff3cfcc, #ffffffa0); }
+
+@media (max-width: 760px) {
+  .hall-dialog { padding: 1rem; width: calc(100vw - 1rem); max-height: calc(100dvh - 1rem); }
+  .hall-board button { grid-template-columns: 2rem 2.6rem minmax(0, 1fr) 3rem; }
+  .portrait { width: 2.6rem; height: 2.6rem; }
+  .pilot-page { grid-template-columns: 1fr; }
+  .pilot-hero { position: static; display: grid; grid-template-columns: 140px 1fr; text-align: left; align-items: center; }
+  .pilot-hero .minifigure { height: 190px; grid-row: span 4; }
+}
+
+@media (max-height: 520px) {
+  .hall-dialog { padding: .7rem 1rem; max-height: calc(100dvh - .6rem); }
+  .hall-header h2 { margin: 0 0 .2rem; font-size: 1.2rem; }
+  .pilot-hero .minifigure { height: 170px; }
+}

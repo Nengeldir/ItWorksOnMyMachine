@@ -132,7 +132,7 @@ export class ExploreSession {
         this.store.set({ summary, offers: [], next: null });
         this.game?.victoryLap(dailySeed());
       },
-    }, this.level(biome, mood), Infinity); // the sandbox never runs out of lives
+    }, this.level(biome, mood), { lives: Infinity }); // the sandbox never runs out of lives, and every item and ability is open
   }
 
   pick(id: UpgradeId) {
@@ -170,6 +170,8 @@ export class ExploreSession {
     this.previewLook = look; this.game?.testAppearance(look);
   }
   previewItem(id: ItemId) { if (this.testMode) this.game?.equip(id); }
+  /** Carry a keepsake as the charm in this test run (null: the profile's own) */
+  previewCharm(id: string | null) { if (this.testMode) this.game?.testCharmItem(id); }
   previewUseItem() { if (this.testMode) this.game?.useItem(); }
   previewThrust(on: boolean) { if (this.testMode) this.game?.thrust(on ? 1 : 0); }
   clearPreviewItems() {

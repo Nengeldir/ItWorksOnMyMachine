@@ -66,20 +66,24 @@ test("teleports while visible snap instead of dragging a pet through the whole w
   follower.dispose();
 });
 
-test("all existing pets are genuine pets and a rail guide leads through every hoop without changing the player", () => {
+test("all existing pets are genuine pets, stay by the pilot and take a rail through every hoop without changing the player", () => {
   assert.deepEqual(PETS.map(p => p.id), ["swallow", "owl", "crane", "phoenix", "dragon", "kirin", "fox", "griffin"]);
   for (const biome of ["skyIsles", "verdant", "reef", "glacier", "archipelago", "lagoon", "twilight", "ember", "aurora"]) {
     const world = new World(runLevel(7, 1, biome)), course = world.course;
     const scene = new Group(), pilot = new Group(), companion = new Companion(scene);
-    companion.set("crane"); let previous = null;
+    companion.set("crane"); let previous = null, onRail = 0, beside = 0;
     const nearest = new Map(course.rings.map(r => [r.index, Infinity]));
     for (let z = course.start.z; z < course.endZ + 3; z += .25) {
       course.pointAt(z, pilot.position); const saved = pilot.position.clone();
       companion.update(1/120, pilot, true, course, 50);
       const at = companion.group.position;
       assert.ok(pilot.position.equals(saved)); assert.ok(pilot.quaternion.equals(new Quaternion()));
-      assert.ok(at.z > z && at.z - z < 25);
-      assert.ok(course.pointAt(at.z).distanceTo(at) < 1e-9);
+      // Always close to the pilot; on the rail only near a hoop, and beside the pilot far from every hoop
+      assert.ok(at.distanceTo(pilot.position) < PET_LOOKS.lead + 6);
+      const hoop = Math.min(...course.rings.filter(r => r.position.z >= z - 2).map(r => r.position.distanceTo(pilot.position)));
+      if (hoop < PET_LOOKS.hoopRange - 10) onRail++;
+      const anyHoop = Math.min(...course.rings.map(r => r.position.distanceTo(pilot.position)));
+      if (anyHoop > PET_LOOKS.hoopRange + 40) { beside++; assert.ok(at.distanceTo(pilot.position) < 4.5, biome); }
       assert.ok(world.distance(at.x, at.y, at.z) > 6, biome);
       if (previous) for (const ring of course.rings) {
         const span = at.clone().sub(previous), t = Math.max(0, Math.min(1, ring.position.clone().sub(previous).dot(span) / Math.max(1e-12, span.lengthSq())));
@@ -88,10 +92,32 @@ test("all existing pets are genuine pets and a rail guide leads through every ho
       previous = at.clone();
     }
     assert.ok([...nearest.values()].every(distance => distance < .5), biome);
+    assert.ok(onRail > 0 && beside > 0, biome);
     const frozen = companion.group.position.clone(); companion.update(0,pilot,true,course); assert.ok(companion.group.position.equals(frozen));
     companion.update(1/60,pilot,false,course); assert.equal(companion.group.visible,false);
     const replacement = new Course(42); pilot.position.copy(replacement.start);
-    companion.update(1/60,pilot,true,replacement); assert.ok(companion.group.position.z > pilot.position.z);
+    // A new course: the pet comes along at once, playing round the pilot (ahead or behind), not on the old rail
+    companion.update(1/60,pilot,true,replacement); assert.ok(companion.group.position.distanceTo(pilot.position) < 5);
     companion.dispose();
   }
+});
+
+test("far from hoops the pet circles the pilot playfully and smoothly instead of holding one spot", () => {
+  const scene = new Group(), pilot = new Group(), companion = new Companion(scene);
+  companion.set("fox");
+  const sides = new Set(); let previous = null, largestStep = 0, farthest = 0;
+  for (let i = 0; i < 60 * 14; i++) {
+    pilot.position.z -= 40 / 60; // 40 m/s straight ahead (-z), no course: nothing to guide it
+    companion.update(1 / 60, pilot, true);
+    const offset = companion.group.position.clone().sub(pilot.position);
+    farthest = Math.max(farthest, offset.length());
+    // Which quarter round the pilot it is in: right, ahead, left or behind
+    sides.add(Math.floor(((Math.atan2(offset.x, -offset.z) + Math.PI * 2.25) % (Math.PI * 2)) / (Math.PI / 2)));
+    if (previous) largestStep = Math.max(largestStep, offset.distanceTo(previous));
+    previous = offset;
+  }
+  assert.equal(sides.size, 4, "it goes all the way round");
+  assert.ok(farthest < 4.6, `stays close (${farthest.toFixed(2)} m)`);
+  assert.ok(largestStep < 0.25, `moves smoothly (${largestStep.toFixed(3)} m per frame)`);
+  companion.dispose();
 });

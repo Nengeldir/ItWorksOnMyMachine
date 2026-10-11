@@ -7,7 +7,9 @@ import type { Flight } from "../flight";
 import { Trail } from "../trail";
 import { clamp, smoothstep } from "../math";
 import { Kind, type Particles, fx } from "../particles";
-import { ITEM, type Items, type RunItemId, runItem } from "../run/items";
+import { ITEM, RARITIES, type Items, type RunItemId, runItem } from "../run/items";
+import type { Charm } from "../run/charm";
+import type { ItemId } from "./models";
 import { ITEMS_FX } from "../tuning";
 import { RelicFx } from "./relicFx";
 import { auraMesh } from "./auras";
@@ -27,7 +29,7 @@ import type { Equipment } from "./equip";
 //    wings in a flash of gold; while it lasts, golden ribbons stream off the
 //    wingtips and the wings shed glitter like honey in the sun.
 
-export type ItemSound = "pickup" | "full" | "auto" | "uncork" | "shield" | "shatter" | "wax";
+export type ItemSound = "pickup" | "full" | "auto" | "uncork" | "shield" | "shatter" | "wax" | "fuse" | "ignite" | "douse" | "eat";
 
 export interface ItemFxHost {
   kick(degrees?: number): void;
@@ -41,6 +43,7 @@ const LEAF = new THREE.Color("#8ee8b0");
 const ICE = new THREE.Color("#a8e4ff");
 const FROST = new THREE.Color("#e8fbff");
 const HONEY = new THREE.Color("#ffd36e");
+const PICKED = new THREE.Color();
 const UP = new THREE.Vector3(0, 1, 0);
 const ORIGIN = new THREE.Vector3();
 
@@ -118,6 +121,12 @@ export class ItemFx {
   private readonly waxTrails: Trail[];
   private waxShown = 0;
   private glitterDebt = 0;
+  // Comet Tail Firework: the rocket this item strapped on (a firework worn any other way is left alone)
+  private ownFirework = false;
+  // The charm: its rocket (strapped on with the full swing over the shoulder) and its food
+  private charmRocket = false;
+  private readonly charmCue = { rocketOn: 0, rocketOff: 0, eat: 0 };
+  private lit = false;
 
   constructor(scene: THREE.Scene, avatar: Avatar, equipment: Equipment, particles: Particles, host: ItemFxHost) {
     this.avatar = avatar;
@@ -159,8 +168,8 @@ export class ItemFx {
     for (const trail of this.waxTrails) trail.opacity = 0;
   }
 
-  /** After the avatar and its effects animated: everything else */
-  update(dt: number, items: Items, flight: Flight, flying: boolean) {
+  /** After the avatar and its effects animated: everything else; `charm`: the keepsake carried */
+  update(dt: number, items: Items, flight: Flight, flying: boolean, charm: Charm | null = null) {
     this.active = true;
     this.group.visible = !this.inWormhole;
     const budget = this.particles.budget * (flying ? 1 : 0);
@@ -177,8 +186,27 @@ export class ItemFx {
     this.gliderWax(dt, items, flight, budget);
     this.relics.group.visible = true;
     this.relics.update(dt, items, flight, flying);
-    this.equipment.setThrust(items.burn);
-    if (items.time("cometFirework") < 0 && this.equipment.wearing("back") === "firework") this.equipment.unequip("back");
+    this.charmLooks(charm, budget);
+    // Only the rockets the Comet Tail item or the charm put on burn and come off with them: one put
+    // on from the test fitting room (or any other way) keeps its own flame and stays on the back
+    if (this.ownFirework || this.charmRocket) {
+      const worn = this.equipment.wearing("back") === "firework";
+      if (!worn) this.ownFirework = this.charmRocket = false;
+      else {
+        if (this.ownFirework && items.time("cometFirework") < 0) {
+          this.ownFirework = false;
+          // The charm's rocket stays strapped on after a Comet Tail burnt in it
+          if (!this.charmRocket) this.equipment.unequip("back");
+        }
+        const flame = Math.max(this.ownFirework ? items.burn : 0, this.charmRocket ? charm?.flame ?? 0 : 0);
+        this.equipment.setThrust(flame);
+        if (flame > 0.2 && !this.lit) {
+          this.lit = true;
+          this.host.sound("ignite");
+          this.host.kick(5);
+        } else if (flame < 0.05) this.lit = false;
+      }
+    }
     this.updateWaves(dt);
     this.rings.end();
   }
@@ -205,11 +233,21 @@ export class ItemFx {
     }
     if(c.pickup !== seen.pickup){
       seen.pickup=c.pickup;
-      this.host.sound("pickup");
-      this.wave(this.avatar.group.position,null,0.8,2,0.5,HONEY);
-      for(let i=0;i<Math.round(18*budget);i++){
-        vel.set(rand(-2,2),rand(0,3),rand(-2,2));
-        this.particles.emit(this.avatar.group.position,vel,fx(0.8,0.2,HONEY,Kind.Star,-1,1,1.5));
+      // A burst of light in the item's rarity color: rarer finds ring wider and shower more sparks
+      const rarity = items.pickedRarity;
+      const tint = PICKED.set(RARITIES[rarity].light);
+      this.host.sound("pickup", 1 + rarity * 0.12);
+      const pilot = this.avatar.group.position;
+      this.wave(pilot,null,0.8,2 + rarity,0.5 + rarity * 0.15,tint);
+      if (rarity >= 2) this.wave(pilot,UP,1.2,3 + rarity,0.7,tint);
+      for(let i=0;i<Math.round((18 + rarity * 22)*budget);i++){
+        vel.set(rand(-2,2),rand(0,3 + rarity),rand(-2,2)).multiplyScalar(1 + rarity * 0.35);
+        this.particles.emit(pilot,vel,fx(0.8 + rarity * 0.15,0.2 + rarity * 0.04,i % 3 ? tint : WHITE,Kind.Star,-1,1,1.5 + rarity * 0.2));
+      }
+      // Legendary: a column of light rising out of the pilot
+      for (let i = 0; rarity === 3 && i < Math.round(30 * budget); i++) {
+        at.copy(pilot).add(tmp.set(rand(-0.6, 0.6), rand(-1, 1), rand(-0.6, 0.6)));
+        this.particles.emit(at, vel.set(0, rand(6, 14), 0), fx(rand(0.6, 1.1), rand(0.15, 0.3), tint, Kind.Glow, 0, 0.8, 2.2));
       }
     }
     if (c.full !== seen.full) {
@@ -266,13 +304,49 @@ export class ItemFx {
     } else if (id === "starflakeShield") {
       this.shieldT = 0;
     } else if (id === "cometFirework") {
-      this.equipment.equip("firework", true);
+      // Burns in the charm's rocket if one is already strapped on
+      if (this.equipment.wearing("back") !== "firework") this.equipment.equip("firework", true);
+      this.ownFirework = true;
       this.host.sound("uncork");
       this.host.kick(9);
     } else if (id === "gliderWax") {
       this.waxShown = 0;
       for (const trail of this.waxTrails) trail.reset();
       this.host.sound("wax");
+    }
+  }
+
+  // --- the charm ---------------------------------------------------------------------------
+
+  /** The charm's moments: the rocket strapped on (and lit by the flame logic) or taken off, food eaten */
+  private charmLooks(charm: Charm | null, budget: number) {
+    if (!charm) return;
+    const seen = this.charmCue;
+    if (charm.cue.rocketOn !== seen.rocketOn) {
+      seen.rocketOn = charm.cue.rocketOn;
+      // The full pull-out: in the hand, over the shoulder, strapped on; the fuse hisses meanwhile
+      if (this.equipment.wearing("back") !== "firework") this.equipment.equip("firework");
+      this.charmRocket = true;
+      this.host.sound("fuse");
+    }
+    if (charm.cue.rocketOff !== seen.rocketOff) {
+      seen.rocketOff = charm.cue.rocketOff;
+      if (this.charmRocket && !this.ownFirework) this.equipment.unequip("back");
+      this.charmRocket = false;
+      this.host.sound("douse");
+    }
+    if (charm.cue.eat !== seen.eat) {
+      seen.eat = charm.cue.eat;
+      if (charm.id) {
+        this.equipment.equip(charm.id as ItemId);
+        this.equipment.use("eat");
+      }
+      this.host.sound("eat");
+      const hand = this.avatar.slots.hand.getWorldPosition(at);
+      for (let k = 0; k < Math.round(16 * budget); k++) {
+        vel.set(rand(-1.5, 1.5), rand(0.5, 2.5), rand(-1.5, 1.5));
+        this.particles.emit(hand, vel, fx(rand(0.5, 0.9), rand(0.1, 0.2), k % 2 ? HONEY : WHITE, Kind.Star, -0.5, 1.5, 1.6));
+      }
     }
   }
 

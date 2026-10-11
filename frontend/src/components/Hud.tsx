@@ -9,8 +9,9 @@ import "./Hud.css";
 // multiplier × 0.5, and the flight model adds FLIGHT.proximityBoost × proximity² m/s² of speed
 const STYLE_RATE = 0.5;
 
+/** In an adventure the boost doesn't recharge by itself: it points you at the stamina orbs */
 const boostLabel = (hud: HudState) =>
-  hud.boosting ? "Boosting" : hud.boostCharge < 0.999 ? "Boost charging" : "Boost ready";
+  hud.boosting ? "Boosting" : hud.boostCharge >= 0.999 ? "Boost ready" : hud.run ? (hud.boostCharge < 0.05 ? "Boost empty · fly through orange orbs" : "Refill at orange orbs") : "Boost charging";
 
 /** What skimming the rock is earning right now: points in a run, speed in a race */
 function skimLabel(hud: HudState, points: boolean): string {

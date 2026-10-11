@@ -75,6 +75,8 @@ class FinishRequest(BaseModel):
     token: str
     time_ms: RaceTime
     ghost: Ghost | None = None
+    # Gates on the course, for the finisher's XP (older clients send none)
+    gates: Annotated[int, Field(ge=0, le=60)] = 0
 
 
 class RunStartRequest(BaseModel):
@@ -91,6 +93,7 @@ class RunFinishRequest(BaseModel):
     client_id: ClientId
     nickname: Nickname = ""
     ghost: Ghost | None = None
+    gates: Annotated[int, Field(ge=0, le=60)] = 0
 
 
 class LeaderboardEntry(BaseModel):
@@ -104,6 +107,7 @@ class RunFinishResponse(BaseModel):
     rank: int
     personal_best_ms: int
     leaderboard: list[LeaderboardEntry]
+    xp: int = 0
 
 
 class GhostRun(BaseModel):
@@ -122,5 +126,29 @@ class PickupClaimRequest(JoinRequest):
 
 
 class EquipRequest(JoinRequest):
-    slot: Annotated[str, Field(pattern=r"^(cape|hat|shoes|wings|pet)$")]
-    asset: Annotated[str, Field(min_length=1, max_length=40)]
+    slot: Annotated[str, Field(pattern=r"^(cape|hat|shoes|wings|pet|charm)$")]
+    asset: Annotated[str, Field(min_length=1, max_length=40, pattern=r"^[A-Za-z0-9_-]+$")]
+
+
+class RunReportRequest(JoinRequest):
+    """A finished or abandoned adventure, as the client flew it (checked on the server)"""
+    token: Annotated[str, Field(min_length=1, max_length=128)]
+    score: Annotated[int, Field(ge=0, le=400_000)]
+    levels: Annotated[int, Field(ge=1, le=8)]
+    completed: bool = False
+    gates: Annotated[int, Field(ge=0, le=300)]
+    time_ms: Annotated[int, Field(ge=0, le=7_200_000)]
+    crashes: Annotated[int, Field(ge=0, le=1000)] = 0
+
+
+class PetNameRequest(JoinRequest):
+    pet: Annotated[str, Field(pattern=r"^[a-z]{2,16}$")]
+    name: Annotated[str, Field(max_length=40)] = ""
+
+
+class StyleRequest(JoinRequest):
+    style: Annotated[int, Field(ge=1, le=2)]
+
+
+class BuyRequest(JoinRequest):
+    key: Annotated[str, Field(min_length=3, max_length=48, pattern=r"^[a-z]+:[A-Za-z0-9_-]+$")]

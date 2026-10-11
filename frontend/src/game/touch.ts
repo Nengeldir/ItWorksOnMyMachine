@@ -33,6 +33,17 @@ function button(className: string, label: string, title: string): HTMLButtonElem
   return element;
 }
 
+/** The adventure's buttons to show: abilities owned, the bag's lit item (its icon), a charm to use (its label) */
+export interface TouchButtons {
+  flap?: boolean;
+  hover?: boolean;
+  plunge?: boolean;
+  gale?: boolean;
+  item?: string;
+  nextItem?: boolean;
+  charm?: string;
+}
+
 /** A button held down: the finger on it, or -1 */
 interface Held {
   element: HTMLElement;
@@ -48,6 +59,10 @@ export class TouchControls {
   private readonly hover = button("touch-button", "Hover", "Hover");
   private readonly plunge = button("touch-button", "Plunge", "Plunging Attack");
   private readonly gale = button("touch-button", "Gale", "Gale Force");
+  // Adventure: the bag's lit item, the next one, and the charm (each only while there is one)
+  private readonly item = button("touch-button item", "Item", "Use item");
+  private readonly nextItem = button("touch-button small", "↻", "Next item");
+  private readonly charm = button("touch-button charm", "Charm", "Use charm");
   private readonly boost: Held;
   private readonly brake: Held;
   private readonly canvas: HTMLElement;
@@ -81,8 +96,9 @@ export class TouchControls {
     const brake = button("touch-button", "Brake", "Brake");
     const boost = button("touch-button big", "Boost", "Boost");
     this.flap.hidden = this.hover.hidden = this.plunge.hidden = this.gale.hidden = true;
+    this.item.hidden = this.nextItem.hidden = this.charm.hidden = true;
     // Laid out from the bottom right corner, leftwards and then up
-    pad.append(boost, brake, right, left, this.hover, this.flap, this.plunge, this.gale);
+    pad.append(boost, brake, right, left, this.hover, this.flap, this.plunge, this.gale, this.item, this.nextItem, this.charm);
     this.root.append(this.stick, top, pad);
     container.appendChild(this.root);
 
@@ -94,6 +110,9 @@ export class TouchControls {
     this.press(this.hover, "hover");
     this.press(this.plunge, "plunge");
     this.press(this.gale, "burst");
+    this.press(this.item, "useItem");
+    this.press(this.nextItem, "nextItem");
+    this.press(this.charm, "charm");
     this.press(respawn, "respawn");
     this.pause.addEventListener("click", () => input.dispatchAction("pause", true));
     // A long press must stay a held button, never a menu that takes the finger away
@@ -125,8 +144,8 @@ export class TouchControls {
     this.root.remove();
   }
 
-  /** From the game, a few times a second: what to show */
-  sync(paused: boolean, flying: boolean, flap: boolean, hover: boolean, plunge: boolean, gale: boolean) {
+  /** From the game, a few times a second: what to show (`shown`: the adventure buttons there is a use for) */
+  sync(paused: boolean, flying: boolean, shown: TouchButtons) {
     if (paused !== this.paused) {
       this.paused = paused;
       this.root.classList.toggle("paused", paused);
@@ -143,10 +162,15 @@ export class TouchControls {
       this.let(this.brake);
     }
     this.root.classList.toggle("idle", !flying);
-    this.flap.hidden = !flap;
-    this.hover.hidden = !hover;
-    this.plunge.hidden = !plunge;
-    this.gale.hidden = !gale;
+    this.flap.hidden = !shown.flap;
+    this.hover.hidden = !shown.hover;
+    this.plunge.hidden = !shown.plunge;
+    this.gale.hidden = !shown.gale;
+    this.item.hidden = !shown.item;
+    if (shown.item && this.item.textContent !== shown.item) this.item.textContent = shown.item;
+    this.nextItem.hidden = !shown.nextItem;
+    this.charm.hidden = !shown.charm;
+    if (shown.charm && this.charm.textContent !== shown.charm) this.charm.textContent = shown.charm;
   }
 
   /**

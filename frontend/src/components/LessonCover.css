@@ -1,0 +1,31 @@
+/* A plain document editor, light and calm: nothing of the game shows through */
+.lesson-cover { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; background: #f9fbfd; color: #1f1f1f;
+  font-family: Arial, "Helvetica Neue", Helvetica, sans-serif; }
+.docs-top { display: flex; align-items: center; gap: .6rem; padding: .45rem .9rem .2rem; background: #f9fbfd; }
+.lesson-back { width: 2.4rem; height: 2.4rem; display: grid; place-items: center; border-radius: 50%; border: none; background: transparent; color: #444746; cursor: pointer; }
+.lesson-back:hover { background: #e8eaed; }
+.docs-icon { width: 1.5rem; height: 2rem; flex-shrink: 0; }
+.docs-titles { flex: 1; min-width: 0; }
+.docs-title-row { display: flex; align-items: center; gap: .5rem; color: #444746; }
+.docs-title { font-size: 1.1rem; color: #1f1f1f; padding: .1rem .3rem; border-radius: 4px; outline: none; white-space: nowrap; }
+.docs-title:hover, .docs-title:focus { box-shadow: inset 0 0 0 1px #747775; }
+.docs-menus { display: flex; gap: .15rem; font-size: .85rem; color: #1f1f1f; }
+.docs-menus span { padding: .15rem .45rem; border-radius: 4px; }
+.docs-menus span:hover { background: #e8eaed; }
+.docs-end { display: flex; align-items: center; gap: .8rem; color: #444746; }
+.docs-share { padding: .55rem 1.2rem; border-radius: 999px; background: #c2e7ff; color: #001d35; font-size: .9rem; font-weight: 600; }
+.docs-avatar { width: 2rem; height: 2rem; border-radius: 50%; display: grid; place-items: center; background: #8e5e9e; color: white; font-weight: 700; }
+.docs-toolbar { display: flex; align-items: center; gap: .55rem; margin: .3rem .9rem; padding: .35rem 1rem; border-radius: 999px; background: #edf2fa; color: #444746; overflow: hidden; white-space: nowrap; }
+.docs-toolbar .sep { width: 1px; height: 1.2rem; background: #c7c7c7; }
+.docs-toolbar .pill { font-size: .82rem; padding: .1rem .3rem; }
+.docs-toolbar .pill.wide { min-width: 5rem; }
+.docs-ruler { height: 1.4rem; margin: 0 auto; width: min(816px, 92vw); background: repeating-linear-gradient(90deg, #c7c7c7 0 1px, transparent 1px 12px) bottom / 100% 6px no-repeat; border-bottom: 1px solid #dadce0; }
+.docs-canvas { flex: 1; overflow: auto; background: #f9fbfd; padding: 1rem 0 3rem; }
+.docs-page { width: min(816px, 92vw); min-height: 1056px; margin: 0 auto; background: white; box-shadow: 0 1px 3px #3c40434d, 0 4px 8px 3px #3c404326; padding: 96px; box-sizing: border-box;
+  font-size: 11pt; line-height: 1.5; outline: none; caret-color: #1f1f1f; }
+@media (max-width: 700px) {
+  .docs-menus { display: none; }
+  .docs-toolbar { margin: .2rem .5rem; }
+  .docs-page { padding: 32px 24px; min-height: 80vh; }
+  .docs-end .docs-share { display: none; }
+}

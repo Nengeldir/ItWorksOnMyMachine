@@ -93,7 +93,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
   Included in the standard production build; no Docker changes or debug flags.
 - `/?gallery` shows every item model and the pilot's item animations.
 - `/?explore=<biome>&seed=<n>` flies a run level of any biome freely (no
-  clock, nothing saved), e.g. `/?explore=verdant&seed=2` (Morning) or `&seed=3`
+  clock, nothing saved), e.g. `/?explore=verdant&seed=1` (Morning) or `&seed=2`
   (Moonlit).
 - **One map pool for every mode:** a seed stands for one map (`seedMap`:
   which biome, which mood), the same in time trials, rooms and runs
@@ -113,13 +113,18 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 
 | Path | What it does |
 | :--- | :--- |
-| `profile/` | Profile types/API client, server-authoritative balances, durable account-scoped pickup outbox and equipped appearance notifications |
+| `profile/` | Profile types/API client, server-authoritative balances, durable account-scoped pickup outbox, the run-report outbox, market, wheel, pet names, style and public pages, and equipped appearance notifications |
+| `game/collection/` | The collection beyond looks. `rarity.ts`: the one rarity palette (common untinted, uncommon sky blue, rare violet, legendary gold). `abilities.ts`: every pet's, rare/legendary cosmetic's and keepsake's power as data (`POWERS`: stats, charm use, voice, shed particles), `perksFor` adds them up, `charmOf`. `fx.ts`: `CollectionFx`, rare cosmetics' particles, the powers' flares, the pet's calls. `sounds.ts`: synthesized signature sounds (`Synth`, `voice`, `chime`; `playVoice`/`playChime` for menus). `icons.ts` |
+| `game/run/charm.ts` | `Charm`: the keepsake carried on adventures (key `K`): relics once per level with their charges, food treats, passive keepsakes, the giant firework (`ROCKET`: strap, fuse, a lasting push until taken off) |
+| `game/run/orbs.ts` | Stamina orbs: adventures have no natural boost recharge; orbs along the line between hoops refill it, fewer and weaker per level (`ORB`, in `?tune`); one instanced draw call |
 | `game/run/collection.ts` | Adventure-only hoop-distance rarity placement, streamed obstacle clearance, swept collection (5.2 m crystals, 3.2 m treasures), toon crystal/cape tokens, nearby budgeted crystal motes and pickup animation |
-| `game/cosmetics/`, `game/pets/` | Cape/hat/shoe/wing catalogs and toon models; eight detailed bird/mythological pets leading on their own unscored autopilot rail |
-| `components/ProfilePanel.tsx`, `components/CollectionPreview.tsx`, `components/TestCollectionPanel.tsx` | Persistent profile/inventory, equip controls, XP/crystal HUD, animated model preview and unsaved test fitting room |
+| `game/cosmetics/`, `game/pets/` | Cape/hat/shoe/wing catalogs and toon models; eight detailed bird/mythological pets (fanned feather tails, plumes, brush and spined tails, per-pet ornaments; the wingless dragon, kirin and fox gallop on two swinging leg pairs) flying beside the pilot and, within `PET_LOOKS.hoopRange` of a hoop, blending onto their own unscored autopilot rail through its centre, each shedding its own budgeted trail of light (`PET_SPARKS`, `PET_LOOKS.sparkle`) |
+| `components/ProfilePanel.tsx`, `components/CollectionPreview.tsx`, `components/Minifigure.tsx`, `components/TestCollectionPanel.tsx` | Inventory (rarity tiles, powers, unlock levels, Equip / Carry as charm, pet names), the draggable standing figurine with the pet (`Avatar.stance.stand`), XP/crystal HUD, animated previews, and the unsaved test fitting room (Carry as charm too) |
+| `components/preview3d.ts`, `components/portrait.ts` | One shared WebGL renderer for every preview, drawing into each preview's own 2D canvas (never a context per preview); cached leaderboard portraits |
+| `components/ShopPanel.tsx`, `components/LeaderboardPanel.tsx`, `components/LessonCover.tsx` | The Lantern Market (three daily offers, demo pouches, the Wheel of Winds and its prize screen), the Hall of Winds (leaderboard and pilot pages), lesson mode's blank document |
 | `game/Game.ts` | The game: frame loop, fixed 120 Hz physics steps, race state, ring checks, HUD data, effects wiring (gate bursts, skim spray, gate motes), rendering with optional bloom and bounded broad halos (`FX.bloomHalo`), adaptive quality, test-only shared time scaling, the `?tune` panel |
 | `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only. `touching()` is the pilot's hitbox (`FLIGHT.hit*`): a ball for the body and a rectangle per wing, tilted up at a dihedral, fixed in the flight frame (never the animated pose), sampled against the distance field with early-outs; `hitboxWorld()` is the same hitbox in world space, which `Game.step` tests against the land drawn (`LandCollider`). `FlightMods` (run upgrades: drag, sink, stall, proximity boost, dash boost, thermal lift, hover, glide lock, `thrust`, a plunge's `dive`, Hover-Stall's `hang`, `turn` for stances and Aero-Braking, Zenith's `climb`, Ascension's `ascend`, a rise on rails in `ascendStep`) are only ever passed in run mode; `flap()`, `launch()`, `deflect()`, `surge()` and a forced `dodge()` are run abilities |
-| `game/avatar.ts` | The pilot: a cel-shaded chibi flyer built from primitives (merged per body part, vertex-colored), a procedural cape and scarf (`Cloth`), two-segment feathered wings, and all its animation: bank lead spring, barrel rolls, flapping driven by effort, bobbing, cloth ripples, limb reactions. Also `createLabel` and `glowTexture` |
+| `game/avatar.ts` | The pilot: a cel-shaded chibi flyer built from primitives (merged per body part, vertex-colored), a procedural cape and scarf (`Cloth`), two-segment feathered wings, a sculpted face (jaw and cheeks, nose, mouth, layered eyes without ink) under two hair-and-eyes styles (`setStyle(1 | 2)`, from Settings' `pilotStyle`), and all its animation: bank lead spring, barrel rolls, flapping driven by effort, bobbing, cloth ripples, limb reactions. Also `createLabel` and `glowTexture` |
 | `game/toon.ts` | Toon material (3-band gradient, rim light tinted by the biome's sun, self-lit `glow` vertex attribute for trims and wingtips) and the inverted-hull ink outline. `TOON_LIGHT` is set per biome |
 | `game/pilotfx.ts` | Per-pilot effects: wingtip and cape ribbons, fine motes sampled along the swept wing pose with subframe births, compact downstroke puffs, golden roll arcs and directional boost dust/slivers. Shared by you, other players and ghosts |
 | `game/particles.ts` | One GPU particle system (ring buffer, physics in the vertex shader). Kinds: Glow, Star, Shard, Wisp, Firefly, Bubble. `fxTime` is the shared shader clock; `FX_LIGHT.boost` scales all glowing effects per biome |
@@ -168,7 +173,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `session/` | Solo, room, explore and run sessions wiring a `Game` to the network and UI. `ExploreSession`: free flight through any biome (`/?explore=verdant&seed=2`), nothing saved; `?test` reuses it with a RunController for real portals/upgrades and unsaved victory previews, showing only test shortcuts rather than biome/light controls. `RunSession`: a roguelike run (`/?run=<seed>`), best score per run seed in localStorage |
 | `net/` | Server clock sync and the room connection (SSE down, POST up) |
 | `staleBuild.ts` | After a redeploy, an open tab's lazy chunks (bloom, `?tune`) and mesher worker are 404s: `reloadForNewBuild` reloads the page once (at most every 30 s, production only) |
-| `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, controls, and the run's HUD, title card and upgrade picker (`RunHud.tsx`). The menu's live course behind the glass is `MenuBackdrop` (a `Game` in `drift` attract mode, which switches courses with `setSeed`, keeps a few it showed parked (`ATTRACT_KEEP` besides its own) so going back is instant, snapshots each one for card art and reports when one is all in (`onShown`)); today's best folds into a flag (`TodaysBest`). `MapSelect` is the map select of every mode (`solo`, `run`, `room`: a carousel of today's card, one per map (`featuredSeed`) and a random one, art in `public/maps/`; a run's card shows your best on it, never the maps after the first; over a room's lobby it opens as `RoomMapSelect`, holding the game; on the landing page, a course the backdrop is still building is covered by its picture (`.map-veil`), which fades into the live view once it's in). Before a race, `GameScreen`'s `ReadyCard` sits where the timer will be; its `Panel` (results) folds to its heading and main buttons on narrow screens. `Help` is the "?" with its How to fly card and the newcomer's "First flight?" (`keys.ts`: the keys as the player bound them). `Coach` is the tutorial: one control at a time, watched on keys, mouse and gamepad |
+| `components/` | React screens: menu (with the Adventure card), HUD, lobby, results, and the run's HUD, title card and upgrade picker (`RunHud.tsx`). The menu's live course behind the glass is `MenuBackdrop` (a `Game` in `drift` attract mode, which switches courses with `setSeed`, keeps a few it showed parked (`ATTRACT_KEEP` besides its own) so going back is instant, snapshots each one for card art and reports when one is all in (`onShown`)); today's best folds into a flag (`TodaysBest`). `MapSelect` is the map select of every mode (`solo`, `run`, `room`: a carousel of today's card, one per map (`featuredSeed`) and a random one, art in `public/maps/`; a run's card shows your best on it, never the maps after the first; over a room's lobby it opens as `RoomMapSelect`, holding the game; on the landing page, a course the backdrop is still building is covered by its picture (`.map-veil`), which fades into the live view once it's in). Before a race, `GameScreen`'s `ReadyCard` sits where the timer will be; its `Panel` (results) folds to its heading and main buttons on narrow screens. `Help` is the "?" with its How to fly card and the newcomer's "First flight?" (`keys.ts`: the keys as the player bound them). `Coach` is the tutorial: one control at a time, watched on keys, mouse and gamepad |
 | `components/Feather.tsx` | The golden feather (inline SVG: cream-to-gold vane, ink outline, glint; `spent` for an outline only): the run's lives on the HUD and the Spare feather upgrade's icon |
 | `theme.ts` | The UI's colors per map: `useUiTheme(seed)` sets `--ink` (picked per palette name, else derived from the sky) and `--tint` (the horizon); every other shade comes from those two with `color-mix()`; `usePaletteTheme(palette)` does the same for any level (runs, explore, the map select) |
 | `route.ts` | The URL ↔ screen mapping (`screenFromSearch`, `urlFor`, `Screen`), pure so it's tested; `test` is honored on every single-player URL |
@@ -201,12 +206,18 @@ Players never collide, so the server only relays positions.
 - **Biome light:** `WorldView` sets `ATMOSPHERE` from the palette, and
   `Game.setSeed` sets `TOON_LIGHT` (rim color, trim glow: 0.15 by day up to
   1.45 at night) and `FX_LIGHT.boost` (`palette.glow`). Bloom strength scales
-  with `1 + night * 0.6`. When you add a lit material, hook it into these
+  with `1 + night * 0.25`, and its widest blur layers are scaled by `FX.bloomHalo`. When you add a lit material, hook it into these
   instead of hard-coding colors.
 - **Shader safety:** never call `pow()` on something that can go negative
   (clamp first), and never divide by something that can reach zero. One NaN
   pixel turns the whole bloomed frame black. This happened with the light
   pillars; see the change log.
+- **Adventures only (rule 6):** collection powers (`RunController.perks`,
+  from what's equipped), the charm, stamina orbs (the boost never recharges by
+  itself in a run: `FlightMods.recharge = 0`), unlock levels (`playerLevel`:
+  items, upgrades and server treasures above it never turn up) and harder
+  levels (`LevelKey.difficulty`, `course.ts` `Difficulty`: 0 on level 1, which
+  is the unchanged map, up to 1 on level 8). Races never see any of it.
 - **Quality levels:** 2 = bloom at up to 2× DPR (composer capped at 1.5×),
   1 = no bloom, 0 = 1× DPR and 40% particles. `adaptQuality` steps down after
   sustained frames over 25 ms, and never back up.
@@ -234,6 +245,222 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-11: Collection powers, the charm, economy, market, Hall of Winds, orbs, harder levels (Claude)
+
+Asked for, after the final review: pickup effects in rarity colors with
+exponentially rarer finds and duplicate messages; powers for every item,
+rare+ cosmetic and pet (with descriptions in the inventory, key reminders,
+the rocket as a lasting toggle); unique particles and sounds for rare+
+things and pets; a robust database; a public leaderboard with pilot pages
+and pet names; crystals between hoops; lesson mode; a market with daily
+offers, demo pouches and a daily wheel; XP for gates and score into
+crystals; unlock levels; a bit more sparkle and a gentler portal flash at
+night; pets playing round the pilot; mobile; a figurine in the inventory; a
+feature-ideas document; then (added mid-way) harder levels, stamina orbs
+instead of natural boost recharge, and an infinite-mode prototype plan.
+Branch `adventure-economy`, from `final-review`.
+- **Server** (`backend/profiles.py`, `app.py`, `models.py`): unlock levels
+  and prices in the catalog; odds 27:9:3:1 per rarity; every collectible
+  unique (duplicates pay crystals); the charm slot; `POST /api/profile/runs`
+  (2 XP per gate, 10 per level, 60 for finishing; score / 200 crystals, +5%
+  per level, at most 1,500; once per adventure, checked against the server's
+  clock and per-level caps); claims of later levels need their time; the
+  market (`/api/shop`, `/buy`), the wheel (`/spin`, once a UTC day, drawn on
+  the server), pet names, style, `/api/players` and `/api/players/{id}`
+  (HMAC public ids); race XP per gate; per-pilot rate limits, at most 20
+  adventures an hour, plans pruned to the latest 40, CHECK constraints.
+- **Run** (`run/controller.ts`, `charm.ts`, `orbs.ts`, `items.ts`,
+  `upgrades.ts`, `pickups.ts`, `collection.ts`, `flight.ts`): powers applied
+  as FlightMods and scoring; the charm; unlock levels; stamina orbs and no
+  natural recharge (`FlightMods.recharge`); harder levels
+  (`world/course.ts`, `LevelKey.difficulty`, `levelId`); the portal smaller
+  and offset on deeper levels; crystals between hoops; pickup bursts in
+  rarity colors; toasts naming the key that uses an item.
+- **Looks and sounds** (`collection/fx.ts`, `sounds.ts`, `items/fx.ts`,
+  `audio.ts`, `pets/companion.ts`, `avatar.ts`): rare cosmetics' particles,
+  powers' flares, pets' calls; the rocket's full strap-on, fuse, ignition and
+  douse; the pet's orbit (critically damped spring, loops of joy, roaming
+  after hoops); `Avatar.stance.stand`; boost 60/s and roll 90/s sparkles; the
+  portal flash dims at night (`RUN.portalNightDim`).
+- **UI**: the inventory with the figurine; the Lantern Market and wheel; the
+  Hall of Winds; lesson mode; landing nav pills; the charm chip; the finish
+  screen's rewards; touch Item, next and Charm buttons; phones' layouts.
+- **Docs**: `docs/adventure-profile.md` (the economy, rewritten),
+  `docs/feature-ideas.md`, `docs/infinite-mode-prototype.md` with its trials
+  (`docs/prototypes/infinite/trial.mjs`), README.
+- Verified: build (bundle-size warning), lint, 140 frontend tests (11 new or
+  extended: `adventure.test.mjs`, the pet orbit) and 46 backend tests (13
+  new; four updated where rules changed on purpose). In Chrome on the dev
+  server with a scratch backend: the inventory (figurine turned by drag,
+  rarity tiles, the power card), the market (offers, a real spin landing on
+  its slice, the prize screen for crystals and for nothing), the Hall of
+  Winds and a pilot page, lesson mode over a time trial (paused, Escape
+  back), the rocket charm strapping on and burning in test mode, orbs and the
+  fox's orbit in flight, phones held sideways (844 x 390) and upright (390 x
+  760) in frames. Frames were stepped by hand in the hidden tab.
+- Not verified: sounds (not listened to), real phones, a full eight-level
+  adventure flown by hand (difficulty feel, orb balance, crystals per run),
+  frame time in a focused window with many powers' particles.
+
+### 2026-10-11: Final review before unit testing and playtesting (Claude)
+
+Asked for: go over every visual and gameplay aspect, feature by feature and
+file by file, verify it works and looks as intended, write an audit
+document, fix small bugs and leave detailed patch notes for the rest. The
+audit is `docs/audit-2026-10-11.md` (method, a verdict per feature, patch
+notes). Branch `final-review`, from `Pengyue`.
+- **Tests on Node < 22.15** (`tests/register.mjs`): the asynchronous
+  fallback hook's regex lost its backslash inside a template literal, so all
+  20 test files failed with `ERR_MODULE_NOT_FOUND` on Node 22.14.
+- **The firework in test mode** (`items/fx.ts`): `ItemFx` unequipped any
+  firework on the back whenever the Comet Tail item wasn't burning, so one
+  put on from the fitting room vanished in a frame and never lit. It now only
+  drives the rocket it strapped on itself. Test mode's Shift+I lets the
+  oldest item go when the bag is full (`Items.makeRoom`), so every item is
+  reachable.
+- **Offline adventures** (`RunSession`): an unreachable profile server
+  stopped the adventure from starting at all; it now flies without
+  persistent rewards.
+- **Shaders** (`run/portal.ts`, `run/finale.ts`): `pow(x, 2.0)` on signed
+  values (NaN on Direct3D-backed browsers, spread by bloom) replaced by x * x.
+- **Landing page on phones** (`Menu.css`): the logo no longer runs under the
+  Profile & inventory pill below 1000 px; short screens get a smaller logo.
+- Removed dead `components/Controls.tsx` and `game/airplane.ts`; the `?tune`
+  `bob` range now covers the collection pickups' default.
+- Verified: build, lint, 129 frontend tests (one new) and 33 backend tests
+  pass. In Chrome (dev server, scratch backend, frames stepped at 60 fps):
+  the opening autopilot and take-off, a portal through the wormhole to the
+  picker and the next biome, the finale, test mode's finish screen, the
+  fitting-room firework staying on and lighting, the Comet Tail burning and
+  coming off, an adventure with the profile request failing, all nine biomes
+  by `__shot`, the gallery and the inventory; no console errors. Phone layout
+  checked in a 844 x 390 iframe only, not on a device.
+- Not fixed here (patch notes in the audit): trusted login headers if the
+  port is exposed without the portal, unbounded rooms and stored adventure
+  plans, the 1.48 MB bundle, a unit test for ItemFx, per-frame clearance
+  probes of persistent pickups. Rarity colors, crystal placement, the claim
+  trust model and the pet's motion are part of the follow-up improvements.
+
+### 2026-10-11: Synced main into Pengyue; running pets, pets by the pilot, a 3D face with two styles, crystals-only pickups (Claude)
+
+Asked for: sync `Pengyue` with `main` (PR #46 had gone in an hour before),
+then: wingless pets' limbs should run in mid-air; pets always close to the
+player, following the autopilot path only near hoops; a slightly more 3D
+face; a male/female choice in Settings called Style 1 and Style 2; an option
+to hide item pickups and keep only crystals.
+- **Sync** (merge commit `ac89a3e`, no rebase or force-push): the previous
+  session's uncommitted work was stashed first and restored after. Code
+  conflicts were all additive on main's side (items, keyboard layouts,
+  map select, 65-entry catalog) and took main; this file and `AGENTS.md` were
+  merged by hand keeping both sides' log entries. After the merge the tree was
+  identical to `main` but for `AGENTS.md` (Pengyue's last commits were already
+  in main). Restoring the stash: `leaf(..., segments)` moved to
+  `items/builder.ts` (main split it out), and the level clock waits for both
+  the opening autopilot and the Glacial Prism.
+- **Pets** (`pets/models.ts`, `pets/companion.ts`): everything hangs from a
+  `rig` that rocks and lifts with the gait; dragon, kirin and fox get two leg
+  pairs (shoulder and hip pivots) in a bounding gallop (`PET_LOOKS.gallop`,
+  `stride`); the griffin keeps tucked paws (it has wings). The companion now
+  stays beside the pilot (its offset is smoothed in the pilot's frame, so no
+  lag at speed: about 3 m away) and blends onto its rail
+  (`Autopilot.guide`, `lead` now 9 m) while a hoop not yet passed is within
+  `hoopRange` (60 m) of the pilot, at `guideBlend` per second, and back after.
+  Looks only (rule 6). Vertex budget kept (fox 15,822 of 16,000; 12 meshes).
+- **Face** (`avatar.ts`): a jaw-and-cheek volume under the head sphere, small
+  cheek pads, a nose, a smiling mouth, and eyes in layers (almond, lit iris
+  tinted by the cloth, two highlights, lash line, brow). Small features are
+  drawn without ink (`part(..., outline = false)`), which would swallow them.
+- **Styles** (`Avatar.setStyle`, `Settings.pilotStyle`, Settings > Pilot):
+  Style 1 is the previous look (ponytail, bangs, side locks, hair clip,
+  lashed eyes with a flick); Style 2 has short tousled hair swept to one side,
+  spikes at crown and nape, short side burns, no ponytail, straighter thicker
+  brows. Applied by `Game.setControls` and the collection preview. Local
+  only: other players and ghosts show Style 1 (not sent over the network).
+- **Crystals only** (`Settings.crystalsOnly`, Settings > Adventure,
+  `PICKUP_PREFS` in `run/pickups.ts`): item pickups (`Items.frame`,
+  `items/pickups.ts`) and collection treasures (`run/collection.ts`) are
+  neither drawn nor collected; crystals stay. Takes effect at once.
+- Verified: build, lint, and all 128 frontend tests pass (Node 22.14 with an
+  asynchronous `module.register` resolver; the checked-in `register.mjs`
+  needs 22.15). New tests: pets stay within 4.5 m of the pilot far from hoops
+  and pass every hoop within 0.5 m on the rail in all nine biomes; settings
+  validate `pilotStyle` and `crystalsOnly`; crystals-only skips and hides
+  treasures. In Chrome (dev server): both faces from the front, three-quarter
+  and back (Style 2 has no ponytail); fox, kirin and dragon at three gallop
+  phases; a `/?test&seed=7` flight logging the fox 3.1 m from the pilot far
+  from hoops, switching to the rail 60 m before a hoop and back after it.
+  Not checked: the faces at flight distance and at night, the settings
+  dialog's new rows by eye, an adventure with crystals-only on.
+
+### 2026-10-11: Opening autopilot, glowing map titles, richer pets, fitting-room crash; review of Codex's last five commits (Claude)
+
+Asked for: an adventure that opens on autopilot until the player intervenes,
+then hands over and spawns the hoops; a thin glowing border on the map
+titles; better pet models (particles, decorations, real tails and
+feathers); the test-mode crash when spawning pets or items; a check of the
+last five commits.
+- **Review** of `76517ae`, `7fc567d`, `db65e80`, `aacfd08`, `88273f7` (all
+  made by Codex): the code is sound (build, lint, tests pass) but
+  `88273f7` "autopilot for adventure" holds only particle tweaks (roll/boost
+  gold accents, smaller gate and portal bursts). The opening autopilot and
+  title outline were built on `feature/adventure-title-intro` (`0a2f1bf`,
+  PR #47), never on `Pengyue`, which is why the start was still static. That
+  version also sent the pilot back to the start on Take off. Codex logged
+  `aacfd08` and `88273f7` only in `AGENTS.md`, a copy of this file
+  (2,500 lines) that is drifting from it; this file had the old bloom night
+  factor (0.6, now 0.25) and portal flash (0.35, now 0.25). `Hud.css`'s
+  `--portal-flash` default (0.35) is overwritten by `Game.veil` at runtime.
+- **Opening autopilot** (`Game.holdRun`, `takeOver`; `RunController.preview`,
+  `takeOff(at)`; `RunSession.begin(engage)`): the intro is no longer frozen.
+  The pilot flies the racing line on rails (`Autopilot`), the gates are
+  hidden, pickups, portal and its hum are off and the level clock and title
+  card wait. Steering past 0.25, boost or brake past 0.5, any move key
+  (barrel roll, abilities), a click on the view, Take off or `Enter` hands
+  over in place at the rail's speed and heading; gates whose plane is
+  already behind the pilot are marked passed without points (a crash
+  respawns after them), and the rest grow in (`setRings("race", next)`).
+  The glide restarts from the start before the third-from-last gate, so
+  the portal is never reached on autopilot. Touch controls stay visible
+  during the glide. A hint under the start pill says how to take over.
+  Gameplay change in runs only (rule 6); `?test` runs start at once.
+- **Map titles** (`RunHud.css`): the ink lettering gets a warm light
+  `-webkit-text-stroke` under the fill (`paint-order`) and a soft glow,
+  replacing the dark drop shadow that sank dark text into dark maps.
+- **Test-mode crash** (`CollectionPreview.tsx`): reproduced in Chrome.
+  Every selection in the fitting room built a new `WebGLRenderer`;
+  `dispose()` never frees the context, so after about 16 picks Chrome
+  dropped its oldest context, the game's ("THREE.WebGLRenderer: Context
+  Lost"), and the flight went dead. Previews now share one renderer for the
+  page and only free their scene's buffers. Also helps the menu's inventory.
+- **Pets** (`pets/models.ts`, `pets/companion.ts`): wings are broader
+  (8 primaries fading to a darker tip, a covert row, phoenix tips lit);
+  bird tails are fans of feathers (owl), drooping ink-tipped plumes (crane),
+  forked streamers with a star (swallow) or long flame plumes with an eye
+  of light (phoenix); the fox has three swelling brushes with fur tufts and
+  lit tips, the dragon a spined whip ending in a gold fin, the griffin a
+  lion's tufted tail, the kirin a fan of cloud streamers. Ornaments: the
+  swallow's ribbon scarf, the owl's crescent moon, the crane's jade beads,
+  the phoenix's crest, the dragon's pearl, the kirin's hoof clouds, the
+  fox's paper lantern, the griffin's rayed sun disc. Each pet sheds its own
+  particles from its tail (`PET_SPARKS`), budgeted, scaled by
+  `PET_LOOKS.sparkle` (new, in `?tune`). Pet feathers use 4 curve segments
+  per edge (`leaf(..., segments)`), keeping every pet under the test's
+  16,000-vertex and 12-mesh budget.
+- Verified: production build (existing bundle-size warning), lint and all
+  104 frontend tests pass (Node 22.14 with an asynchronous `module.register`
+  resolver). In Chrome on the dev server with the local backend (data in a
+  temp dir), frames stepped by hand in a hidden tab: the context loss
+  reproduced before the fix (game context lost after the picks) and not
+  after 24+ picks across pets, items and wings. `/?run=7`: the glide flew
+  200 m in 6 s with no gates, score or clock; a `D` press handed over in
+  place (no jump), gate 1 counted as skipped, the clock and title card
+  started and the gates grew in. All eight pets rendered side by side and
+  from behind; the phoenix's trail emits in flight (Twilight, dusk). The
+  handover then crashed into a pillar with no further input: control comes
+  back mid-canyon, so a hands-off player can crash right after taking over.
+  See Next up for what wasn't looked at.
+
 
 ### 2026-10-10: Rebased PR #46 onto current main, without merge commits (Claude)
 
@@ -2895,6 +3122,32 @@ ported to the islands world:
 
 ## Next up
 
+- Playtest the economy (`docs/adventure-profile.md`): orb spacing and
+  restore per level, crystals per run (score / 200) against market prices,
+  unlock levels, the wheel's odds; listen to every pet's call and keepsake
+  signature; judge difficulty 0.5 to 1 by hand (the tightest bends are about
+  17 m radius at level 8); real phones (the new touch buttons, the market's
+  wheel, the figurine's drag). Remote pilots still don't show cosmetics or
+  powers' particles (rooms send no appearance). Infinite mode: see
+  `docs/infinite-mode-prototype.md`; more ideas in `docs/feature-ideas.md`.
+
+- From the final review (`docs/audit-2026-10-11.md`, patch notes): strip or
+  gate the `X-User-Id` login headers if port 8080 can ever be reached
+  without the VIScon portal; limit room creation; split the bundle (now
+  about 1.6 MB) by route; a unit test for `ItemFx` with a fake canvas.
+  (Done since: adventure plans pruned, `collectionClear` cached per pickup.)
+
+- Pilot styles: send `pilotStyle` with room snapshots so other players see it
+  (remote pilots and ghosts are Style 1 now); look at both faces in flight, by
+  night and with hats. Pets: judge `hoopRange` and `lead` in play; the rail
+  can swing the pet across the pilot's view when the pilot is far off the line
+  near a hoop. Check the settings dialog's Pilot and Adventure rows on a phone.
+
+- Opening autopilot: play the handover by hand (keyboard, mouse, gamepad,
+  touch, tilt) and judge the 0.25 steering threshold; look at the glowing
+  titles on Twilight, Aurora and the Reef at night; look at the new pets
+  in flight by day and night, and their particle trails under bloom.
+  Decide whether `AGENTS.md` should stay (it duplicates this file).
 - All twenty adventure items and seeded island pickups are implemented. Playtest item balance, audio mix, mouse/gamepad handling and focused-window performance. Tune rarity heights and the three-slot bag through real flights.
 - PR #46 integration: inspect profile/inventory and test fitting room at phone
   sizes; decorated clothes with main's cloth clearance; day/night crystal,

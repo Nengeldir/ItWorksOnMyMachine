@@ -1,43 +1,108 @@
-.profile-dialog { width: min(960px, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); border: 1px solid var(--ink-12); border-radius: 26px; padding: 1.5rem; color: var(--ink); overflow: auto; }
+.profile-dialog { width: min(1180px, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); border: 1px solid var(--ink-12); border-radius: 26px; padding: 1.5rem; color: var(--ink); overflow: auto; }
 .profile-dialog::backdrop { background: #14203a80; backdrop-filter: blur(8px); }
 .profile-header, .profile-stats, .profile-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .profile-header h2 { margin: .2rem 0 .8rem; }
 .profile-header button { flex-shrink: 0; }
 .profile-stats { justify-content: flex-start; flex-wrap: wrap; padding: .8rem 0; }
+.profile-stats span { font-size: .8rem; color: var(--ink-70); }
 .profile-stats strong, .profile-flight span { display: inline-flex; align-items: center; gap: .4rem; }
 .profile-xp { display: grid; gap: .35rem; margin-bottom: 1rem; }
 .profile-xp progress, .profile-flight progress { width: 100%; height: .5rem; accent-color: #ad859e; }
-.profile-toolbar { flex-wrap: wrap; padding: .6rem 0 1rem; }
+.profile-toolbar { flex-wrap: wrap; padding: .2rem 0 .8rem; }
 .profile-toolbar [role="tablist"] { display: flex; flex-wrap: wrap; gap: .35rem; }
 .profile-toolbar [aria-selected="true"] { background: var(--ink); color: white; }
 .profile-toolbar label { display: flex; gap: .4rem; align-items: center; font-size: .8rem; }
-.profile-body { display: grid; grid-template-columns: 1fr 250px; gap: 1rem; }
-.inventory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: .7rem; align-content: start; max-height: 440px; overflow: auto; padding: .25rem; }
-.inventory-entry { display: flex; flex-direction: column; align-items: flex-start; gap: .3rem; border: 1px solid; min-height: 130px; text-align: left; padding: .7rem; background: var(--ink-06); }
-.inventory-entry.locked { background: transparent; }
+
+/* Figurine | collection | the selected treasure */
+.profile-body { display: grid; grid-template-columns: 230px minmax(0, 1fr) 280px; gap: 1rem; align-items: start; }
+.profile-figure { background: radial-gradient(ellipse at 50% 70%, #fff7e6 0%, var(--ink-06) 70%); border-radius: 22px; padding: .6rem; text-align: center; position: sticky; top: 0; }
+.figure-caption { margin: 0; font-size: .8rem; color: var(--ink-70); }
+.figure-charm { margin: .4rem 0 0; font-size: .75rem; padding: .3rem .5rem; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--rarity) 70%, transparent); }
+.minifigure { position: relative; height: 330px; width: 100%; cursor: grab; touch-action: pan-y; outline: none; border-radius: 18px; }
+.minifigure.dragging { cursor: grabbing; }
+.minifigure:focus-visible { box-shadow: 0 0 0 3px #506ee4; }
+.minifigure canvas, .collection-preview canvas { display: block; width: 100%; height: 100%; }
+.minifigure-hint { position: absolute; bottom: .3rem; left: 0; right: 0; font-size: .65rem; color: var(--ink-70); pointer-events: none; }
+.minifigure:not([data-unavailable]) .preview-error, .collection-preview:not([data-unavailable]) .preview-error { display: none; }
+
+.inventory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: .6rem; align-content: start; max-height: 470px; overflow: auto; padding: .3rem; }
+.inventory-entry { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: .25rem; border: 1px solid var(--ink-12); min-height: 124px; text-align: left; padding: .65rem; background: var(--ink-06); border-radius: 16px; }
+/* Rarity: common carries no color; uncommon sky blue, rare violet, legendary gold */
+.inventory-entry:not(.rarity-common) { border-color: color-mix(in srgb, var(--rarity) 80%, transparent); background: linear-gradient(160deg, color-mix(in srgb, var(--rarity) 22%, transparent), var(--ink-06) 70%); }
+.inventory-entry.rarity-rare { box-shadow: 0 0 14px color-mix(in srgb, var(--rarity) 30%, transparent); }
+.inventory-entry.rarity-legendary { box-shadow: 0 0 20px color-mix(in srgb, var(--rarity) 45%, transparent), inset 0 0 12px color-mix(in srgb, var(--rarity) 25%, transparent); }
+.inventory-entry.locked { opacity: .62; filter: saturate(.7); }
 .inventory-entry[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 1px; }
-.inventory-entry small { font-size: .68rem; text-transform: capitalize; color: var(--ink-70); }
-.inventory-entry span:last-child { display: inline-flex; align-items: center; gap: .25rem; font-size: .7rem; }
-.inventory-symbol { font-size: 1.5rem; color: var(--ink-70); }
-.inventory-detail { background: var(--ink-06); border-radius: 20px; text-align: center; padding: 1rem; align-self: start; }
-.inventory-detail h3 { margin: .5rem 0; }
+.inventory-entry small { font-size: .66rem; text-transform: capitalize; color: var(--ink-70); }
+.inventory-entry .rarity-name { color: var(--rarity-deep); font-weight: 700; }
+.inventory-entry.rarity-common .rarity-name { color: var(--ink-70); font-weight: 400; }
+.inventory-state { display: inline-flex; align-items: center; gap: .25rem; font-size: .68rem; margin-top: auto; }
+.inventory-symbol { font-size: 1.6rem; line-height: 1; }
+.inventory-power { position: absolute; top: .45rem; right: .55rem; font-size: .8rem; color: var(--rarity-deep); }
+.inventory-entry.rarity-common .inventory-power { color: var(--ink-70); }
+
+.inventory-detail { background: var(--ink-06); border-radius: 20px; text-align: center; padding: 1rem; align-self: start; border: 1px solid var(--ink-12); }
+.inventory-detail:not(.rarity-common) { border-color: color-mix(in srgb, var(--rarity) 75%, transparent); background: linear-gradient(180deg, color-mix(in srgb, var(--rarity) 18%, transparent), var(--ink-06) 55%); }
+.inventory-detail.rarity-legendary { box-shadow: 0 0 26px color-mix(in srgb, var(--rarity) 35%, transparent); }
+.inventory-detail h3 { margin: .5rem 0 .2rem; }
 .inventory-detail p, .profile-dialog footer { font-size: .8rem; color: var(--ink-70); }
-.inventory-detail small { display: block; margin-top: .7rem; font-size: .72rem; }
-.collection-preview { height: 190px; width: 100%; display: grid; place-items: center; overflow: hidden; }
-.collection-preview canvas { display: block; }
+.inventory-detail .rarity-badge { color: var(--rarity-deep); font-weight: 700; text-transform: capitalize; margin: 0 0 .5rem; }
+.inventory-detail .lore { font-style: italic; }
+.inventory-detail .power { text-align: left; background: color-mix(in srgb, var(--rarity) 14%, #ffffff80); border-radius: 14px; padding: .6rem .7rem; margin: .5rem 0; }
+.inventory-detail .power b { color: var(--rarity-deep); }
+.inventory-detail .power p { margin: .3rem 0; color: var(--ink); }
+.inventory-detail .power small { font-size: .7rem; color: var(--ink-70); }
+.inventory-detail button { margin: .2rem; }
+.inventory-detail button.small { font-size: .75rem; padding: .3rem .6rem; }
+.detail-state { display: flex; align-items: center; justify-content: center; gap: .3rem; }
+.pet-name { display: grid; gap: .3rem; margin-top: .7rem; text-align: left; font-size: .78rem; }
+.pet-name div { display: flex; gap: .3rem; }
+.pet-name input { flex: 1; min-width: 0; padding: .45rem .6rem; border-radius: 10px; border: 1px solid var(--ink-12); }
+.collection-preview { height: 190px; width: 100%; display: grid; place-items: stretch; overflow: hidden; position: relative; }
+.collection-preview .preview-error { position: absolute; inset: 0; display: grid; place-items: center; }
 .inventory-empty { grid-column: 1 / -1; }
 .profile-empty { padding: 2rem 0; }
+
 .profile-flight { position: absolute; right: 1rem; top: 5rem; z-index: 5; width: 170px; padding: .65rem .8rem; border-radius: 18px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem; font-size: .78rem; }
 .profile-flight small { width: 100%; font-size: .65rem; }
 .profile-flight button { width: 100%; padding: .35rem; }
 .collection-notice { position: absolute; left: 50%; bottom: 6rem; transform: translateX(-50%); max-width: min(500px, 85vw); border-radius: 18px; padding: .8rem 1.1rem; z-index: 12; text-align: center; font-size: .85rem; pointer-events: none; animation: collection-arrive .45s ease-out; }
 .collection-notice.level-up { border: 1px solid #dcb565; box-shadow: 0 0 26px #e3bf7140; }
+.collection-notice[class*="rarity-"]:not(.rarity-common) { border: 1px solid color-mix(in srgb, var(--rarity) 80%, transparent); box-shadow: 0 0 24px color-mix(in srgb, var(--rarity) 40%, transparent); }
+.collection-notice.duplicate { font-style: italic; }
 @keyframes collection-arrive { from { opacity: 0; transform: translate(-50%, 12px) scale(.94); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
-.menu-inventory { position: fixed; top: 1.5rem; left: 1.5rem; padding: .7rem 1rem; border-radius: 18px; }
-@media (max-width: 650px) { .profile-dialog { padding: 1rem; width: calc(100vw - 1rem); max-height: calc(100dvh - 1rem); } .profile-body { grid-template-columns: 1fr; } .inventory-detail { grid-row: 1; } .collection-preview { height: 150px; } .inventory-grid { max-height: 300px; grid-template-columns: repeat(2, 1fr); } .inventory-entry { min-height: 115px; } .profile-flight { top: auto; bottom: 1rem; right: .5rem; width: 130px; } .collection-notice { bottom: 11rem; } .menu-inventory { top: .75rem; left: .75rem; } }
-@media (prefers-reduced-motion: reduce) { .collection-notice { animation: none; } }
-.collection-preview:not([data-unavailable]) .preview-error { display: none; }
 .profile-flight { pointer-events: none; }
 .profile-flight.paused { pointer-events: auto; }
-/* Keep the profile away from the centred flight bars on narrow screens. */
-@media (max-width: 650px) { .profile-flight { top: 5rem; bottom: auto; width: 105px; padding: .5rem; font-size: .7rem; } }
+
+/* Narrower: the figurine above, then the collection and the selected treasure */
+@media (max-width: 1000px) {
+  .profile-body { grid-template-columns: minmax(0, 1fr) 260px; }
+  .profile-figure { grid-column: 1 / -1; position: static; display: grid; grid-template-columns: 180px 1fr; align-items: center; gap: .5rem; text-align: left; }
+  .profile-figure .minifigure { height: 220px; grid-row: span 3; }
+}
+@media (max-width: 650px) {
+  .profile-dialog { padding: 1rem; width: calc(100vw - 1rem); max-height: calc(100dvh - 1rem); }
+  .profile-body { grid-template-columns: 1fr; }
+  .profile-figure { grid-template-columns: 130px 1fr; }
+  .profile-figure .minifigure { height: 170px; }
+  .inventory-detail { grid-row: 2; }
+  .collection-preview { height: 150px; }
+  .inventory-grid { max-height: 320px; grid-template-columns: repeat(2, 1fr); }
+  .inventory-entry { min-height: 110px; }
+  .collection-notice { bottom: 11rem; }
+  .profile-flight { top: 5rem; bottom: auto; width: 105px; padding: .5rem; font-size: .7rem; }
+}
+/* Phones held sideways: little height, so the header folds up and the figure shrinks */
+@media (max-height: 520px) {
+  .profile-dialog { padding: .7rem 1rem; max-height: calc(100dvh - .6rem); }
+  .profile-header h2 { margin: 0 0 .2rem; font-size: 1.2rem; }
+  .profile-stats { padding: .2rem 0; gap: .6rem; font-size: .85rem; }
+  .profile-xp { margin-bottom: .4rem; gap: .2rem; font-size: .8rem; }
+  .profile-xp small { display: none; }
+  .profile-figure { grid-template-columns: 120px 1fr; padding: .3rem; }
+  .profile-figure .minifigure { height: 140px; }
+  .collection-preview { height: 120px; }
+  .inventory-grid { max-height: 240px; }
+  .profile-dialog footer p:first-child { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .collection-notice { animation: none; } }

@@ -59,3 +59,10 @@ test("a new action whose default key is already taken gets a spare key, and noth
   const all = Object.values(s.bindings).flat();
   assert.equal(new Set(all).size, all.length, "no key bound twice");
 });
+test("pilot style and crystals-only pickups are saved and validated", () => {
+  assert.equal(defaultSettings().pilotStyle, 1); assert.equal(defaultSettings().crystalsOnly, false);
+  const s = normalizeSettings({pilotStyle: 2, crystalsOnly: true});
+  assert.equal(s.pilotStyle, 2); assert.equal(s.crystalsOnly, true);
+  for (const bad of [3, "2", null, 0]) assert.equal(normalizeSettings({pilotStyle: bad}).pilotStyle, 1);
+  assert.equal(normalizeSettings({crystalsOnly: "yes"}).crystalsOnly, false);
+});

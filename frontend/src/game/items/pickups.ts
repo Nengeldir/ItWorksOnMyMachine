@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { glowTexture } from "../avatar";
 import type { Particles } from "../particles";
 import { RARITIES, runItem, type Items } from "../run/items";
-import type { Pickup } from "../run/pickups";
+import { PICKUP_PREFS, type Pickup } from "../run/pickups";
 import { ITEMS_FX } from "../tuning";
 import { ItemDisplay } from "./equip";
 
@@ -37,7 +37,7 @@ export class PickupView {
     for(const pickup of items.pickups){
       const near=pickup.position.distanceToSquared(pilot)<ITEMS_FX.pickupRange**2;
       let display=this.displays.get(pickup);
-      if(pickup.collected || pickup.blocked || !near || count>=24){
+      if(pickup.collected || pickup.blocked || !near || count>=24 || PICKUP_PREFS.crystalsOnly){
         if(display){display.dispose();this.displays.delete(pickup);}continue;
       }
       const rarity=runItem(pickup.id).rarity;

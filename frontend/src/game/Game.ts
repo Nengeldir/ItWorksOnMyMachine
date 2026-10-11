@@ -26,16 +26,19 @@ import { type ControlSettings, type InputObserver, type TestAction, Input, contr
 import { FX_LIGHT, Kind, Particles, fx, fxTime, sceneryTime } from "./particles";
 import { PilotFx } from "./pilotfx";
 import { INTERPOLATION_DELAY_MS, Pilot, type PilotSample } from "./pilots";
-// import { Trail } from "./trail";
-// import { WINGTIPS, createAirplane } from "./airplane";
 import { clamp } from "./math";
 import { SpeedLines } from "./speedlines";
 import { TOON_LIGHT } from "./toon";
-import { FX, RANGES, RINGS, RUN, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveTuning } from "./tuning";
+import { FX, RANGES, RINGS, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveTuning } from "./tuning";
 import { ABILITY } from "./run/abilities";
-import { PICKUP } from "./run/pickups";
+import { PICKUP, PICKUP_PREFS } from "./run/pickups";
 import { ITEM, RUN_ITEMS, type RunItemId } from "./run/items";
-import { RunController, type RunEvents, type RunHost } from "./run/controller";
+import { ORB } from "./run/orbs";
+import { portalFlash } from "./run/portal";
+import { RunController, type RunEvents, type RunHost, type RunOptions } from "./run/controller";
+import type { Equipped } from "./collection/abilities";
+import { CollectionFx } from "./collection/fx";
+import { type Rarity, rarityIndex } from "./collection/rarity";
 import type { UpgradeId } from "./run/upgrades";
 import type { RunHud } from "./run/run";
 import { type Level, levelId, seedLevel } from "./world/biomes";
@@ -125,6 +128,8 @@ export interface GameEvents {
   testSpeed?(rate: number): void;
   raceStarted?(): void;
   finished?(result: FinishResult): void;
+  /** The player steered during a run's opening autopilot: hand over (RunSession.begin) */
+  takeOver?(): void;
 }
 
 export interface GameOptions {
@@ -192,10 +197,20 @@ export class Game implements RunHost {
   private readonly avatar: Avatar;
   private readonly companion: Companion;
   private testLook: Appearance | null = null;
+  /** Test mode's charm, tried from the fitting room (undefined: the profile's own) */
+  private testCharm: string | undefined = undefined;
+  /** What the pilot wears and carries: the profile's, or the test fitting room's */
+  private equipped(): Equipped {
+    const own = profileClient.equipped();
+    return { ...(this.testLook ?? own), charm: this.testCharm ?? own.charm ?? "none" };
+  }
   private readonly appearanceChanged = () => {
     const appearance = this.testLook ?? profileClient.appearance();
     this.avatar.setAppearance(appearance);
     this.companion.set(appearance.pet);
+    const equipped = this.equipped();
+    this.collectionFx.setEquipped(equipped);
+    this.run?.setEquipped(equipped);
   };
   private readonly fx: PilotFx;
   /** What the pilot carries (models and animations only, for now) */
@@ -206,6 +221,8 @@ export class Game implements RunHost {
   private readonly abilityFx2: AbilityFx2;
   /** What the design list's items look like when used (items/fx.ts) */
   private readonly itemFx: ItemFx;
+  /** The collection in flight: rare cosmetics' light, the powers' flares, the companion's calls */
+  private readonly collectionFx: CollectionFx;
   /** Test mode's Shift+I hands out the items in turn */
   private nextTestItem = 0;
   readonly particles: Particles;
@@ -226,6 +243,8 @@ export class Game implements RunHost {
   private white = 0;
   /** After a run: the pilot flies the default map by itself and the player controls nothing */
   private autopiloting = false;
+  /** A run's opening: the pilot glides the racing line until the player steers; no gates, nothing scored */
+  private introAutopilot = false;
   /** Flies the racing line on rails while nobody plays (the chase backdrop, the victory lap) */
   private readonly rails = new Autopilot();
   /** When the white light after the finale began to clear (null: not clearing) */
@@ -324,6 +343,8 @@ export class Game implements RunHost {
       }
       if (this.paused && action !== "mute") return;
       if (action === "mute") this.audio.toggleMute();
+      // Any move during the opening autopilot takes the controls (and the move happens)
+      if (this.introAutopilot && action !== "mute" && action !== "respawn") this.takeOver();
       // On autopilot after a run, nothing else answers
       if (this.autopiloting) return;
       if (action === "respawn") this.respawnNow();
@@ -331,6 +352,7 @@ export class Game implements RunHost {
       if ((action === "flap" || action === "hover" || action === "plunge" || action === "burst" || action === "resonance" || action === "ascend" || action === "stance") && this.crashedAt === null && !this.glide.active) this.run?.ability(action);
       if (action === "useItem" && this.crashedAt === null && !this.glide.active) this.run?.useItem();
       if (action === "nextItem") this.run?.nextItem();
+      if (action === "charm" && this.crashedAt === null && !this.glide.active) this.run?.useCharm();
     };
     if (options.testMode) {
       this.testPlayback = new TestPlayback(container.parentElement ?? container);
@@ -343,7 +365,9 @@ export class Game implements RunHost {
           if (this.paused) this.togglePause();
           this.run?.testWin();
         } else if (action === "item") {
+          // Every item in turn; a full bag lets its oldest go, so all twenty stay reachable
           const id = RUN_ITEMS[this.nextTestItem++ % RUN_ITEMS.length].id;
+          this.run?.items.makeRoom();
           if (this.run && !this.run.giveItem(id)) this.nextTestItem--;
         } else if (!this.paused && this.crashedAt === null) this.run?.spawnTestPortal();
       };
@@ -360,7 +384,11 @@ export class Game implements RunHost {
     this.softParticles = new Particles(3000, true);
     this.ambient = new Ambient(this.particles, this.softParticles);
     this.avatar = new Avatar(options.color);
-    this.companion = new Companion(this.scene);
+    this.companion = new Companion(this.scene, this.particles);
+    this.collectionFx = new CollectionFx(this.avatar, this.particles, {
+      sound: (voice, level) => { if (!this.attract) this.audio.voice(voice, level); },
+      kick: (degrees) => this.rig.kick(degrees),
+    });
     this.appearanceChanged();
     window.addEventListener(APPEARANCE_EVENT, this.appearanceChanged);
     this.fx = new PilotFx(this.avatar, options.color, this.particles);
@@ -429,6 +457,8 @@ export class Game implements RunHost {
   /** Call from a click: locks the mouse and starts audio (browsers need a gesture for both) */
   engage = (event?: Event) => {
     if (this.paused) return;
+    // Clicking the view during the opening autopilot takes the controls
+    if (this.introAutopilot) this.takeOver();
     // A finger has no pointer to lock
     if (!this.autopiloting && (event as PointerEvent | undefined)?.pointerType !== "touch") this.input.lockPointer();
     this.audio.start();
@@ -462,15 +492,20 @@ export class Game implements RunHost {
 
   // --- the roguelike run (RunHost) ---------------------------------------------------
 
-  /** Turns this game into a roguelike run: levels, upgrades, portals (never used for races) */
-  startRun(seed: number, events: RunEvents, initial?: Level, lives?: number) {
+  /**
+   * Turns this game into a roguelike run: levels, upgrades, portals (never used for races).
+   * `options`: lives, the pilot's level and what they wear (the collection's powers)
+   */
+  startRun(seed: number, events: RunEvents, initial?: Level, options: RunOptions = {}) {
     this.run?.dispose();
     this.autopiloting = false;
+    this.introAutopilot = false;
     this.clearWhiteFrom = null;
     this.whiteOut(0);
     if (this.paused) this.togglePause();
     this.freeze(false);
-    this.run = new RunController(seed, this, events, lives);
+    this.equipment.clearWorn();
+    this.run = new RunController(seed, this, events, { equipped: this.equipped(), ...options });
     this.run.start(initial);
   }
 
@@ -482,6 +517,7 @@ export class Game implements RunHost {
   victoryLap(seed: number) {
     this.run?.dispose();
     this.run = null;
+    this.introAutopilot = false;
     this.autopiloting = true;
     if (document.pointerLockElement) document.exitPointerLock();
     this.freeze(false);
@@ -490,14 +526,43 @@ export class Game implements RunHost {
     this.clearWhiteFrom = this.elapsed;
   }
 
-  /** Holds the pilot on the start line until the player takes off */
+  /**
+   * A run's opening: the pilot glides the racing line on rails (no gates, nothing scored,
+   * the level clock stopped) until the player steers or takes off. Control is then handed
+   * over where the pilot is, at the rail's speed, and the gates ahead grow in
+   */
   holdRun(hold: boolean) {
     if (this.paused) this.togglePause();
-    this.freeze(hold);
-    if (!hold) {
+    this.freeze(false);
+    if (hold) {
+      this.introAutopilot = this.autopiloting = true;
+      this.input.reset();
+      this.input.releasePointer();
+      this.view.setRings("hidden", 0);
+      this.run?.preview();
+      return;
+    }
+    const preview = this.introAutopilot;
+    this.introAutopilot = this.autopiloting = false;
+    if (!preview) {
       this.respawn(0);
       this.run?.takeOff();
+      return;
     }
+    this.rails.reset();
+    this.run?.takeOff(this.flight.position);
+  }
+
+  /** The player steered (or clicked, or pressed a move) during the opening autopilot */
+  private takeOver() {
+    if (!this.introAutopilot) return;
+    if (this.events.takeOver) this.events.takeOver();
+    else this.holdRun(false);
+  }
+
+  /** The adventure so far (null outside a run): reported when a pilot leaves before the end */
+  runSnapshot() {
+    return this.run?.snapshot() ?? null;
   }
 
   /** Dev tools: give the running run an upgrade now, e.g. `__game.grant("slipstream")` */
@@ -527,6 +592,13 @@ export class Game implements RunHost {
   testAppearance(look: Appearance | null) {
     if (!this.testPlayback) return;
     this.testLook = look ? validateAppearance(look) : null;
+    this.appearanceChanged();
+  }
+
+  /** ?test only: carry a keepsake as the charm (null: back to the profile's own) */
+  testCharmItem(id: string | null) {
+    if (!this.testPlayback) return;
+    this.testCharm = id ?? undefined;
     this.appearanceChanged();
   }
 
@@ -571,10 +643,14 @@ export class Game implements RunHost {
     }
   }
 
-  stinger(kind: "portal" | "upgrade" | "dash" | "gate" | "finish" | "item") {
+  stinger(kind: "portal" | "upgrade" | "dash" | "gate" | "finish" | "item" | "orb") {
     if (kind === "gate") this.audio.ring();
     else if (kind === "finish") this.audio.finish();
     else this.audio.stinger(kind);
+  }
+
+  treasure(rarity: Rarity) {
+    this.audio.treasure(rarityIndex(rarity));
   }
 
   portalHum(near: number) {
@@ -582,9 +658,11 @@ export class Game implements RunHost {
   }
 
   veil(amount: number) {
-    if (this.veilFlash !== RUN.portalFlash) {
-      this.veilFlash = RUN.portalFlash;
-      this.portalVeil.style.setProperty("--portal-flash", RUN.portalFlash.toFixed(3));
+    // Gentler under a night sky, where the same brightening glares
+    const flash = portalFlash(this.world.palette.night);
+    if (this.veilFlash !== flash) {
+      this.veilFlash = flash;
+      this.portalVeil.style.setProperty("--portal-flash", flash.toFixed(3));
     }
     if (Math.abs(amount - this.veilAmount) < 0.002) return;
     this.veilAmount = amount;
@@ -805,6 +883,8 @@ export class Game implements RunHost {
     this.input.settings = controls;
     this.input.reset();
     this.rig.reducedMotion = !!controls.reducedMotion;
+    this.avatar.setStyle(controls.pilotStyle ?? 1);
+    PICKUP_PREFS.crystalsOnly = !!controls.crystalsOnly;
     this.audio.setPreferences(controls.musicVolume ?? 1, controls.effectsVolume ?? 1,
       controls.muted ?? false);
     const mode = controls.quality ?? "auto";
@@ -955,6 +1035,7 @@ export class Game implements RunHost {
     this.combo = 0;
     this.run?.abilities.reset();
     this.run?.items.reset();
+    this.run?.orbs.reset();
     this.avatar.revive();
     this.avatar.visible = true;
     this.fx.reset();
@@ -1025,7 +1106,7 @@ export class Game implements RunHost {
     if(this.run?.items.invulnerable) part=null;
     else if(this.run?.items.phasing){this.hitLand=false;part=touching(this.others,this.flight.position,this.flight.quaternion,other,hitLocal);}
     else part=this.hitTest(other,distance);
-    if ((part || this.world.lost(y,z)) && this.run?.items.revive(this.flight)) {
+    if ((part || this.world.lost(y,z)) && this.run?.revive(this.flight)) {
       this.prevPosition.copy(this.flight.position);
       this.prevQuaternion.copy(this.flight.quaternion);
       this.prevVelocity.copy(this.flight.velocity);
@@ -1048,7 +1129,7 @@ export class Game implements RunHost {
     } else if (!this.run?.items.frozenCombo && (this.comboIdle += STEP) > 1.2) {
       this.combo = 0;
     }
-    this.style += this.proximity ** 2 * this.flight.speed * STEP * this.multiplier * 0.5;
+    this.style += this.proximity ** 2 * this.flight.speed * STEP * this.multiplier * 0.5 * (this.run?.styleRate ?? 1);
 
     if (this.raceState === "racing") {
       this.recorder.record(this.clock() - this.startAt, this.flight.position, this.flight.quaternion, this.flight.boost, this.flight.brake, this.flight.dodgePhase);
@@ -1091,8 +1172,9 @@ export class Game implements RunHost {
     const abilities = this.run!.abilities;
     const items = this.run!.items;
     const direction = tmp.copy(f.velocity).normalize();
-    // The abilities first (they come back by themselves), then an item that's used up by it
-    const how = abilities.save(part, normal, direction) ?? items.save(part, normal, direction);
+    // The abilities first (they come back by themselves), then an item that's used up by it, then a
+    // collection power that comes back each level (Frost skate)
+    const how = abilities.save(part, normal, direction) ?? items.save(part, normal, direction) ?? this.run!.perkSave(part, normal, direction);
     if (!how) return false;
     if (how === "roll") f.deflect(normal, ABILITY.recoverPush, ABILITY.recoverKeep);
     else if (how === "shield") f.deflect(normal, ABILITY.weavePush, ABILITY.weaveKeep);
@@ -1112,6 +1194,7 @@ export class Game implements RunHost {
       f.dodge(normal.dot(f.right) >= 0 ? 1 : -1, this.recoverRoll, true);
     }
     if (how === "roll" || how === "shield") abilities.saved(how, hitPoint, normal);
+    else if (how === "frost") this.run!.perkSaved(how, hitPoint, normal);
     else items.saved(how, hitPoint, normal);
     return true;
   }
@@ -1160,6 +1243,8 @@ export class Game implements RunHost {
     const { x, y, z } = this.flight.position;
     const distance = Math.min(this.world.rock.distance(x, y, z), this.world.otherDistance(x, y, z));
     this.proximity = clamp((SCORE_RANGE - distance) / (SCORE_RANGE - 1.5), 0, 1);
+    // The opening glide flies before the gates have grown in
+    if (this.introAutopilot) return;
     const rings = this.world.course.rings;
     for (let i = 0; i < rings.length; i++) {
       if (!this.view.gates.passing(i) && this.crossed(i)) this.gateBurst(i);
@@ -1216,9 +1301,9 @@ export class Game implements RunHost {
   private barrelRoll(dir: 1 | -1) {
     if (this.crashedAt !== null || this.raceState === "countdown" || this.frozen || !this.view.ready) return;
     // In a run, Wind-Shear Dash turns the dodge into a blink; never while hover-stalling
-    const abilities = this.run?.abilities;
-    if (abilities && (abilities.hang >= 0 || abilities.ascend >= 0)) return;
-    if (this.flight.dodge(dir, abilities ? abilities.dodgeParams() : FLIGHT)) abilities?.dodged(dir, this.flight);
+    const run = this.run;
+    if (run && (run.abilities.hang >= 0 || run.abilities.ascend >= 0)) return;
+    if (this.flight.dodge(dir, run ? run.dodgeParams() : FLIGHT)) run?.dodged(dir, this.flight);
   }
 
   /** A gate was passed: it flares (WorldView), and shards, stars and light burst out of it */
@@ -1470,6 +1555,11 @@ export class Game implements RunHost {
     this.sceneryClock+=worldDt;sceneryTime.value=this.sceneryClock;
     this.adaptQuality(realDt);
 
+    if (this.introAutopilot) {
+      // Steering, boost or brake ends the opening autopilot; tilt and sticks need a clear push
+      const probe = this.input.sample(dt);
+      if (Math.abs(probe.pitch) > 0.25 || Math.abs(probe.roll) > 0.25 || (probe.boost ?? 0) > 0.5 || (probe.brake ?? 0) > 0.5) this.takeOver();
+    }
     const selfFlying = this.attract === "chase" || this.autopiloting;
     if (!selfFlying) {
       this.touch?.update();
@@ -1517,6 +1607,12 @@ export class Game implements RunHost {
       if (this.accumulator >= STEP) this.accumulator %= STEP;
     }
     if (selfFlying && this.flight.position.z > this.world.course.endZ + AUTOPILOT_LOOP) this.respawn(0);
+    // The opening glide starts over before the last gates, so taking over always leaves a course to fly
+    if (this.introAutopilot) {
+      const rings = this.world.course.rings;
+      const last = rings[Math.max(0, rings.length - 3)];
+      if (last && tmp.subVectors(this.flight.position, last.position).dot(last.normal) > 0) this.respawn(0);
+    }
 
     // Draw between the last two physics states
     const alpha = clamp(this.accumulator / STEP, 0, 1);
@@ -1544,11 +1640,14 @@ export class Game implements RunHost {
       if (this.run) {
         this.abilityFx.update(dt, this.run.abilities, this.world, this.flight, this.rig.camera, this.passedGate, moving);
         this.abilityFx2.update(dt, this.run.abilities, this.world, this.flight, this.rig.camera, this.passedGate, moving);
-        this.itemFx.update(dt, this.run.items, this.flight, moving);
+        this.itemFx.update(dt, this.run.items, this.flight, moving, this.run.charm);
+        this.collectionFx.update(dt, this.flight, this.run, moving && !this.inWormhole);
       } else {
         this.abilityFx.hide();
         this.abilityFx2.hide();
         this.itemFx.hide();
+        // Outside adventures the cosmetics still shine (looks only), but no power acts
+        this.collectionFx.update(dt, this.flight, null, moving && !this.attract);
       }
       this.rig.update(
         dt,
@@ -1638,7 +1737,15 @@ export class Game implements RunHost {
       plunge ||= ability.id === "plunge";
       gale ||= ability.id === "galeForce";
     }
-    this.touch?.sync(this.paused, !this.autopiloting && !this.frozen, flap, hover, plunge, gale);
+    const bag = runHud?.items.bag ?? [];
+    const lit = bag[runHud?.items.selected ?? 0];
+    const charm = runHud?.charm;
+    this.touch?.sync(this.paused, (!this.autopiloting || this.introAutopilot) && !this.frozen, {
+      flap, hover, plunge, gale,
+      item: lit && !lit.auto ? lit.icon : undefined,
+      nextItem: bag.length > 1,
+      charm: charm && charm.state !== "passive" ? (charm.state === "burning" || charm.state === "strapping" ? "Rocket off" : "Charm") : undefined,
+    });
     return {
       seed: this.world.seed,
       run: runHud,
@@ -1799,7 +1906,6 @@ export class Game implements RunHost {
     this.composerLoading = false;
     if (!this.bloomOn || this.composer) return;
     const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
-    // Half floats keep colors above 1, so only really bright things bloom; 4× MSAA keeps edges clean
     // Half floats keep colors above 1 for the bloom; FX.bloomMsaa sets the antialiasing samples
     const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: FX.bloomMsaa });
     const composer = new EffectComposer(this.renderer, target);
@@ -1884,6 +1990,9 @@ export class Game implements RunHost {
     abilities.close();
     const items = gui.addFolder("Run items (not saved)");
     for (const key of Object.keys(ITEM) as (keyof typeof ITEM)[]) items.add(ITEM, key);
+    const orbs = gui.addFolder("Stamina orbs (next level, not saved)");
+    for (const key of Object.keys(ORB) as (keyof typeof ORB)[]) orbs.add(ORB, key);
+    orbs.close();
     const pickups = gui.addFolder("Island pickups (next level, not saved)");
     for(const key of Object.keys(PICKUP) as (keyof typeof PICKUP)[]) pickups.add(PICKUP,key);
     items.close();

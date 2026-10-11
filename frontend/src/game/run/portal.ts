@@ -308,7 +308,9 @@ const shellFragment = /* glsl */ `
 
     // The way out: a soft light far ahead, inside a thin lensed ring
     float glow = exp(-theta * theta * 40.0);
-    float ring = exp(-pow((theta - 0.17) * 34.0, 2.0)) * (0.7 + 0.3 * sin(phi * 3.0 + time * 0.6));
+    // Squared by hand: pow() of a negative base is undefined in GLSL (NaN on Direct3D, which bloom spreads)
+    float edge = (theta - 0.17) * 34.0;
+    float ring = exp(-edge * edge) * (0.7 + 0.3 * sin(phi * 3.0 + time * 0.6));
     col += mix(to, vec3(1.0), 0.35) * glow * 1.6 + mix(to, vec3(1.0), 0.6) * ring * 0.55;
     // Behind you, the dark you came from
     col *= 0.55 + 0.45 * smoothstep(-0.9, 0.2, c);
@@ -458,14 +460,17 @@ export class Wormhole {
 }
 
 /** Sparkles thrown across the view as you pass through a portal */
-export function screenSparkle(particles: Particles, camera: THREE.Camera, forward: THREE.Vector3, color: THREE.Color) {
-  const count = Math.round(90 * RUN.portalFlash * particles.budget);
+/** How bright a portal's flash is under this sky: gentler the darker it is (`night` 0..1) */
+export const portalFlash = (night: number) => RUN.portalFlash * (1 - RUN.portalNightDim * Math.max(0, Math.min(1, night)));
+
+export function screenSparkle(particles: Particles, camera: THREE.Camera, forward: THREE.Vector3, color: THREE.Color, flash = RUN.portalFlash) {
+  const count = Math.round(90 * flash * particles.budget);
   for (let k = 0; k < count; k++) {
     // In a cone in front of the camera, close enough to fill the screen
     at.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).normalize().multiplyScalar(2 + Math.random() * 3);
     at.addScaledVector(forward, 3 + Math.random() * 5).add(camera.position);
     vel.subVectors(at, camera.position).normalize().multiplyScalar(1 + Math.random() * 3);
-    particles.emit(at, vel, k % 3 ? fx(0.5 + Math.random() * 0.4, 0.07 + Math.random() * 0.08, WHITE, Kind.Star, 0, 1.5, 1.9 * RUN.portalFlash) : fx(0.5 + Math.random() * 0.4, 0.08 + Math.random() * 0.1, color, Kind.Glow, 0, 1.2, 1.6 * RUN.portalFlash));
+    particles.emit(at, vel, k % 3 ? fx(0.5 + Math.random() * 0.4, 0.07 + Math.random() * 0.08, WHITE, Kind.Star, 0, 1.5, 1.9 * flash) : fx(0.5 + Math.random() * 0.4, 0.08 + Math.random() * 0.1, color, Kind.Glow, 0, 1.2, 1.6 * flash));
   }
 }
 

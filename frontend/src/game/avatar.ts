@@ -353,6 +353,9 @@ export class Avatar {
   private readonly chest = new THREE.Object3D();
   private readonly head = new THREE.Object3D();
   private readonly pony: THREE.Object3D[] = [];
+  /** The two hair-and-eyes styles under the head; one is shown */
+  private readonly styles: THREE.Object3D[] = [];
+  private style: 1 | 2 = 1;
   private readonly left: Side;
   private readonly right: Side;
   private readonly cape: Cloth;
@@ -433,9 +436,10 @@ export class Avatar {
    * throws the head back and the arms open (Resonance), `flare` rears up
    * with cape and wings thrown forward (Aero-Braking), `falcon` tucks the
    * wings back like a stooping falcon, `butterfly` spreads cape and wings
-   * wide on slow, deep beats (the gliding stances)
+   * wide on slow, deep beats (the gliding stances), `stand` stands upright on the ground with wings
+   * folded down the back and arms at the sides (the inventory's figurine and pilot pages; never in flight)
    */
-  readonly stance = { tuck: 0, hover: 0, cast: 0, surf: 0, climb: 0, sing: 0, flare: 0, falcon: 0, butterfly: 0 };
+  readonly stance = { tuck: 0, hover: 0, cast: 0, surf: 0, climb: 0, sing: 0, flare: 0, falcon: 0, butterfly: 0, stand: 0 };
   /** How far each wing (left, right) is folded in during a crash, to keep it out of rock it is wedged against (0..1) */
   private readonly folded = [0, 0];
   /** A crash playing out: the body flails, then goes limp (Game moves `group`) */
@@ -459,12 +463,12 @@ export class Avatar {
     skeleton.position.y = -0.74;
     this.body.add(skeleton);
 
-    const part = (joint: THREE.Object3D, builder: PartBuilder, material = skinMat) => {
+    const part = (joint: THREE.Object3D, builder: PartBuilder, material = skinMat, outline = true) => {
       const painted = builder.build();
       this.painted.push(painted);
       const mesh = new THREE.Mesh(painted.geometry, material);
       joint.add(mesh);
-      if (ink) {
+      if (ink && outline) {
         const outline = new THREE.Mesh(painted.geometry, ink);
         mesh.add(outline);
         this.outlines.push(outline);
@@ -532,38 +536,82 @@ export class Avatar {
         .add(sphere(0.055, 10, 8), "clothLight", [-0.1, 0.22, 0], [0, 0, 0], [1, 0.85, 0.85]),
     );
 
-    // Head: big and round, with bangs, side locks, a cowlick and a face
+    // Head: big and round, a soft jaw and cheeks under it, and the face drawn on in layers
     this.head.position.set(0, 0.32, 0);
     this.chest.add(this.head);
     const hair: Paint = (p, t, out) => out.copy(p.y > 0.12 && p.z < 0.02 ? t.hairShine : t.hair);
-    const headBuilder = new PartBuilder()
+    const iris: Paint = (_p, t, out) => out.copy(t.eye).lerp(t.cloth, 0.5);
+    const lip: Paint = (_p, t, out) => out.copy(t.blush).lerp(t.eye, 0.35);
+    const nose: Paint = (_p, t, out) => out.copy(t.skin).lerp(t.blush, 0.3);
+    part(this.head, new PartBuilder()
       .add(sphere(0.165, 20, 14), "skin", [0, 0.15, 0], [0, 0, 0], [1, 0.97, 0.98])
-      .add(
-        new THREE.SphereGeometry(0.178, 20, 12, 0, TAU, 0, Math.PI * 0.58),
-        hair,
-        [0, 0.165, 0.008],
-        [0.35, 0, 0],
-      )
-      .add(sphere(0.12, 12, 8), hair, [0, 0.17, 0.07], [0, 0, 0], [1.3, 1.25, 1.1])
-      // Side locks and bangs hang down (cones point up, so flip them)
-      .add(new THREE.ConeGeometry(0.045, 0.17, 8), hair, [0.14, 0.06, -0.035], [Math.PI + 0.1, 0, -0.12])
-      .add(new THREE.ConeGeometry(0.045, 0.17, 8), hair, [-0.14, 0.06, -0.035], [Math.PI + 0.1, 0, 0.12])
-      .add(new THREE.ConeGeometry(0.038, 0.12, 7), hair, [0.065, 0.205, -0.125], [Math.PI + 0.45, 0, 0.3])
-      .add(new THREE.ConeGeometry(0.04, 0.13, 7), hair, [-0.01, 0.21, -0.135], [Math.PI + 0.4, 0, -0.05])
-      .add(new THREE.ConeGeometry(0.034, 0.11, 7), hair, [-0.085, 0.2, -0.12], [Math.PI + 0.45, 0, -0.35])
-      .add(new THREE.ConeGeometry(0.018, 0.14, 6), hair, [0.02, 0.36, -0.01], [-0.7, 0, 0.2])
-      // Eyes with a highlight, blush, a tiny hair clip
-      .add(sphere(0.026, 10, 8), "eye", [0.058, 0.13, -0.148], [0, 0, 0], [0.85, 1.25, 0.5])
-      .add(sphere(0.026, 10, 8), "eye", [-0.058, 0.13, -0.148], [0, 0, 0], [0.85, 1.25, 0.5])
-      .add(sphere(0.008, 6, 5), "white", [0.064, 0.143, -0.16])
-      .add(sphere(0.008, 6, 5), "white", [-0.052, 0.143, -0.16])
-      .add(sphere(0.022, 8, 6), "blush", [0.092, 0.095, -0.128], [0, 0, 0], [1.2, 0.6, 0.4])
-      .add(sphere(0.022, 8, 6), "blush", [-0.092, 0.095, -0.128], [0, 0, 0], [1.2, 0.6, 0.4])
-      .add(new THREE.OctahedronGeometry(0.03, 0), "trim", [0.15, 0.22, -0.04], [0, 0, 0.6], [1, 1.4, 0.6]);
-    part(this.head, headBuilder);
+      // Cheeks and a small rounded chin give the face its front, so it takes light like a sculpted shape
+      .add(sphere(0.13, 18, 12), "skin", [0, 0.09, -0.04], [0, 0, 0], [1.04, 0.84, 0.95])
+      .add(sphere(0.045, 10, 8), "skin", [0.075, 0.085, -0.115], [0, 0, 0], [1, 0.85, 0.7])
+      .add(sphere(0.045, 10, 8), "skin", [-0.075, 0.085, -0.115], [0, 0, 0], [1, 0.85, 0.7]));
+    // Small features without ink, which would swallow them
+    part(this.head, new PartBuilder()
+      .add(sphere(0.013, 8, 6), nose, [0, 0.102, -0.166], [0, 0, 0], [0.85, 0.8, 1.25])
+      .add(new THREE.TorusGeometry(0.017, 0.004, 4, 10, Math.PI * 0.75), lip, [0, 0.066, -0.158], [0.35, 0, Math.PI * 1.125])
+      .add(sphere(0.02, 8, 6), "blush", [0.08, 0.09, -0.143], [0, 0.5, 0], [1.2, 0.6, 0.3])
+      .add(sphere(0.02, 8, 6), "blush", [-0.08, 0.09, -0.143], [0, -0.5, 0], [1.2, 0.6, 0.3]), skinMat, false);
 
-    // A ponytail in two links that swing
-    let parent: THREE.Object3D = this.head;
+    // Two styles, swapped by `setStyle`: 1 has the ponytail, bangs and big lashed eyes; 2 short tousled hair and straighter brows
+    for (const style of [1, 2] as const) {
+      const look = new THREE.Object3D();
+      look.visible = style === 1;
+      this.head.add(look);
+      this.styles.push(look);
+      const one = style === 1;
+      const hairBuilder = new PartBuilder()
+        .add(new THREE.SphereGeometry(0.178, 20, 12, 0, TAU, 0, Math.PI * 0.58), hair, [0, 0.165, 0.008], [0.35, 0, 0]);
+      if (one) {
+        hairBuilder
+          .add(sphere(0.12, 12, 8), hair, [0, 0.17, 0.07], [0, 0, 0], [1.3, 1.25, 1.1])
+          // Side locks and bangs hang down (cones point up, so flip them)
+          .add(new THREE.ConeGeometry(0.045, 0.17, 8), hair, [0.14, 0.06, -0.035], [Math.PI + 0.1, 0, -0.12])
+          .add(new THREE.ConeGeometry(0.045, 0.17, 8), hair, [-0.14, 0.06, -0.035], [Math.PI + 0.1, 0, 0.12])
+          .add(new THREE.ConeGeometry(0.038, 0.12, 7), hair, [0.065, 0.205, -0.125], [Math.PI + 0.45, 0, 0.3])
+          .add(new THREE.ConeGeometry(0.04, 0.13, 7), hair, [-0.01, 0.21, -0.135], [Math.PI + 0.4, 0, -0.05])
+          .add(new THREE.ConeGeometry(0.034, 0.11, 7), hair, [-0.085, 0.2, -0.12], [Math.PI + 0.45, 0, -0.35])
+          .add(new THREE.ConeGeometry(0.018, 0.14, 6), hair, [0.02, 0.36, -0.01], [-0.7, 0, 0.2])
+          // A tiny hair clip
+          .add(new THREE.OctahedronGeometry(0.03, 0), "trim", [0.15, 0.22, -0.04], [0, 0, 0.6], [1, 1.4, 0.6]);
+      } else {
+        hairBuilder
+          .add(sphere(0.115, 12, 8), hair, [0, 0.16, 0.06], [0, 0, 0], [1.32, 1.18, 1.08])
+          // Short side burns and a tousled fringe swept to one side
+          .add(new THREE.ConeGeometry(0.038, 0.1, 7), hair, [0.145, 0.1, -0.03], [Math.PI + 0.1, 0, -0.1])
+          .add(new THREE.ConeGeometry(0.038, 0.1, 7), hair, [-0.145, 0.1, -0.03], [Math.PI + 0.1, 0, 0.1])
+          .add(new THREE.ConeGeometry(0.042, 0.11, 7), hair, [0.075, 0.225, -0.12], [Math.PI + 0.75, 0, 0.55])
+          .add(new THREE.ConeGeometry(0.044, 0.12, 7), hair, [0.005, 0.235, -0.13], [Math.PI + 0.7, 0, 0.35])
+          .add(new THREE.ConeGeometry(0.04, 0.1, 7), hair, [-0.075, 0.225, -0.12], [Math.PI + 0.75, 0, 0.1])
+          // Spikes on the crown and the nape, swept back by the wind
+          .add(new THREE.ConeGeometry(0.04, 0.12, 7), hair, [0.03, 0.33, 0.02], [-0.9, 0, -0.25])
+          .add(new THREE.ConeGeometry(0.04, 0.12, 7), hair, [-0.05, 0.31, 0.06], [-1.2, 0, 0.3])
+          .add(new THREE.ConeGeometry(0.045, 0.11, 7), hair, [0.05, 0.12, 0.15], [-2.4, 0, -0.2])
+          .add(new THREE.ConeGeometry(0.045, 0.11, 7), hair, [-0.05, 0.12, 0.15], [-2.4, 0, 0.2]);
+      }
+      part(look, hairBuilder);
+      // Eyes: a dark almond, a lit iris in its lower half, two highlights, a lash line and a brow
+      const eyes = new PartBuilder();
+      for (const s of [1, -1]) {
+        const x = 0.058 * s, y = one ? 0.13 : 0.128, turn = 0.38 * s;
+        eyes
+          .add(sphere(one ? 0.027 : 0.025, 12, 8), "eye", [x, y, -0.149], [0, turn, 0], one ? [0.85, 1.25, 0.5] : [0.92, 1.02, 0.5])
+          .add(sphere(0.018, 10, 8), iris, [x, y - 0.012, -0.158], [0, turn, 0], [0.85, 0.85, 0.35])
+          .add(sphere(0.008, 6, 5), "white", [x + 0.007 * s, y + 0.013, -0.166])
+          .add(sphere(0.004, 5, 4), "white", [x - 0.008 * s, y - 0.016, -0.166])
+          .add(capsule(0.0045, one ? 0.05 : 0.044), "eye", [x, y + (one ? 0.031 : 0.025), -0.156], [0, turn, Math.PI / 2 - 0.14 * s])
+          .add(capsule(one ? 0.0035 : 0.006, one ? 0.034 : 0.04), "hair", [x + 0.004 * s, y + (one ? 0.06 : 0.05), -0.155], [0, turn, Math.PI / 2 + (one ? 0.2 : 0.05) * s]);
+        // Style 1's lashes flick up at the outer corner
+        if (one) eyes.add(new THREE.ConeGeometry(0.006, 0.022, 5), "eye", [x + 0.026 * s, y + 0.03, -0.148], [0, turn, -1.1 * s]);
+      }
+      part(look, eyes, skinMat, false);
+    }
+
+    // A ponytail in two links that swing (style 1)
+    let parent: THREE.Object3D = this.styles[0];
     const ponyAt: Vec[] = [
       [0, 0.24, 0.13],
       [0, -0.13, 0],
@@ -769,6 +817,13 @@ export class Avatar {
   }
 
   /** Cosmetic meshes live on the animated joints; the flight hitbox never reads them. */
+  /** Style 1 or 2 (hair and eyes); looks only */
+  setStyle(style: 1 | 2) {
+    if (style === this.style) return;
+    this.style = style;
+    this.styles.forEach((look, i) => (look.visible = i + 1 === style));
+  }
+
   setAppearance(appearance: Appearance) {
     if (this.ghost) return;
     if (appearance.wings !== this.appearance.wings) {
@@ -1005,19 +1060,50 @@ export class Avatar {
     this.pony[0].rotation.set(-1.25 + this.pitchRate * 0.1 + sway * 0.5, 0, -turn * 0.4 + sway);
     this.pony[1].rotation.set(0.25 + sway * 0.4, 0, sway * 1.2);
 
+    // Standing (the figurine): every joint eases into an upright, relaxed pose
+    if (st.stand > 0) this.standPose(st.stand, t);
+
     // Aura breathes with the flaps and burns brighter when skimming
     const auraMat = this.aura.material as THREE.SpriteMaterial;
     auraMat.opacity = (0.14 + 0.08 * Math.max(0, stroke) * this.effort + proximity * 0.25) * FX.aura * (1 + ATMOSPHERE.night.value * 1.5);
     this.aura.visible = auraMat.opacity > 0.01;
 
     if (!this.detailed && dt > 0) return;
-    this.clothTime += dt * (4.5 + this.speed * 0.11) * A.clothSpeed;
+    this.clothTime += dt * (4.5 + this.speed * 0.11) * A.clothSpeed * (1 - st.stand * 0.7);
     this.updateCloth(
-      A.clothWave * (0.075 + slow01(this.speed) * 0.05) * (1 + st.flare * 1.5 + st.butterfly * 0.6) * (1 - st.falcon * 0.6),
+      A.clothWave * (0.075 + slow01(this.speed) * 0.05) * (1 + st.flare * 1.5 + st.butterfly * 0.6) * (1 - st.falcon * 0.6) * (1 - st.stand * 0.75),
       -this.lean * 0.3 - turn * 0.15,
-      this.pitchRate * 0.12 - this.climb * 0.12 + st.flare * 0.75 - st.falcon * 0.2,
-      1 + st.butterfly * 1.6 + st.flare * 0.4 - st.falcon * 0.3,
+      this.pitchRate * 0.12 - this.climb * 0.12 + st.flare * 0.75 - st.falcon * 0.2 + st.stand * 0.1,
+      1 + st.butterfly * 1.6 + st.flare * 0.4 - st.falcon * 0.3 - st.stand * 0.35,
     );
+  }
+
+  /** Blends the pose towards standing on the ground, by `k` (0..1); a slow breath keeps it alive */
+  private standPose(k: number, t: number) {
+    const breath = Math.sin(t * 1.6);
+    const to = (o: THREE.Object3D, x: number, y: number, z: number) =>
+      o.rotation.set(o.rotation.x + (x - o.rotation.x) * k, o.rotation.y + (y - o.rotation.y) * k, o.rotation.z + (z - o.rotation.z) * k);
+    // Upright: the rig turns the prone flying body up on its feet, without the flight's bob
+    this.rig.rotation.x += (Math.PI / 2 - this.rig.rotation.x) * k;
+    this.rig.rotation.z *= 1 - k;
+    this.rig.position.multiplyScalar(1 - k);
+    this.rig.scale.setScalar(SCALE);
+    to(this.chest, 0.02 + breath * 0.012, 0, 0);
+    to(this.head, 0.06 + breath * 0.01, Math.sin(t * 0.5) * 0.12, 0);
+    this.pelvis.rotation.set(this.pelvis.rotation.x * (1 - k), this.pelvis.rotation.y * (1 - k), this.pelvis.rotation.z * (1 - k));
+    for (const [side, s] of [[this.right, 1], [this.left, -1]] as [Side, 1 | -1][]) {
+      // Wings folded behind the back like a resting bird's, the outer half curving down; they lift with each breath
+      to(side.wing, 0, -(1.22 + breath * 0.03) * s, -0.42 * s);
+      to(side.wingOuter, 0, -0.38 * s, -0.3 * s);
+      // Arms at the sides, elbows soft; legs straight, a little apart
+      to(side.shoulder, 0, -0.08 * s, (0.16 + breath * 0.01) * s);
+      to(side.elbow, 0, 0, 0.18 * s);
+      to(side.hip, 0, 0, 0.04 * s);
+      to(side.knee, -0.04, 0, 0);
+    }
+    // The ponytail hangs down instead of streaming back
+    to(this.pony[0], -0.25 + Math.sin(t * 1.1) * 0.05, 0, Math.sin(t * 0.8) * 0.06);
+    to(this.pony[1], 0.1, 0, 0);
   }
 
   /** Moves the cape and scarf: `wave` ripple size, `leanX` sideways swing, `pitch` lift of the hem, `spread` how wide it fans */
@@ -1033,6 +1119,8 @@ export class Avatar {
       this.clothMatrix.multiplyMatrices(this.clothInverse, obstacle.mesh.matrixWorld);
       obstacle.bounds.copy(obstacle.local).applyMatrix4(this.clothMatrix);
     }
+    // Standing, the cape drapes down the back instead of streaming out to its full length
+    const drape = 1 - this.stance.stand * 0.38;
     this.capeShape = (u, v, out) => {
       const spec = capeSpec(this.capeId);
       const width = (0.11 + 0.2 * Math.pow(v, 0.8) * spread) * spec.width;
@@ -1042,7 +1130,7 @@ export class Avatar {
         wave * 0.35 * v * Math.sin(TAU * 2.4 * v - ct * 1.7 + u * 2.1);
       out.set(
         u * width + leanX * v * v + Math.sin(ct * 0.6 + v * 3) * 0.03 * v * v * A.clothWave,
-        0.245 - v * 1.18 * spec.length + scallop * Math.pow(v, 6),
+        0.245 - v * 1.18 * spec.length * drape + scallop * Math.pow(v, 6),
         0.085 + 0.06 * v + 0.12 * v * v + 0.05 * (1 - u * u) * v + w - pitch * v * v,
       );
       this.clearCloth(out);

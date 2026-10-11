@@ -209,6 +209,7 @@ const SoloScreen = ({ seed, settings, onSettings, onExit, tutorial, onTutorialEn
                     <> · your best is {formatTime(result.personalBestMs)}</>
                   )}
                   {result.personalBestMs === result.timeMs && <> · new personal best!</>}
+                  {!!result.xp && <> · <b className="xp-gain">+{result.xp} XP</b></>}
                 </p>
               )}
             </>
@@ -432,7 +433,7 @@ const ExploreScreen = ({ biome, seed, settings, onSettings, onExit, testMode = f
 const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onTutorialEnd = noop }: ScreenProps & { seed: number; onNewRun: () => void }) => {
   const [session] = useState(() => new RunSession(seed, settings));
   const ref = useMountedSession(session, settings);
-  const { hud, stage, offers, next, arrived, summary, best, error } = useSyncExternalStore(session.store.subscribe, session.store.get);
+  const { hud, stage, offers, next, arrived, summary, best, error, reward } = useSyncExternalStore(session.store.subscribe, session.store.get);
   const run = hud?.run ?? null;
   usePaletteTheme(hud?.palette);
 
@@ -485,11 +486,17 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onT
           </button>
         </ReadyCard>
       )}
+      {stage === "intro" && !error && hud && (
+        <p className="ready-hint">
+          <span className="no-touch">Gliding on its own: steer, boost or click to take the wings</span>
+          <span className="touch-only">Gliding on its own: drag to take the wings</span>
+        </p>
+      )}
 
       {stage === "pick" && !hud?.paused && <UpgradePicker offers={offers} next={next} onPick={(id) => session.pick(id)} />}
 
       {stage === "summary" && summary && (
-        <FinishScreen summary={summary} best={best} onAgain={() => session.again()} onNewRun={onNewRun} onMenu={onExit} />
+        <FinishScreen summary={summary} best={best} reward={reward} onAgain={() => session.again()} onNewRun={onNewRun} onMenu={onExit} />
       )}
     </div>
   );

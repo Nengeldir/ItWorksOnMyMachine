@@ -23,6 +23,9 @@ function rows(): [Row[], Row[]] {
       [boundKeys("barrelLeft", "barrelRight"), "Dodge"],
     ],
     [
+      [boundKeys("useItem"), "Use item (adventure)"],
+      [boundKeys("nextItem"), "Next item"],
+      [boundKeys("charm"), "Use charm"],
       [boundKeys("respawn"), "Respawn"],
       [boundKeys("pause"), "Pause"],
       [boundKeys("mute"), "Mute"],

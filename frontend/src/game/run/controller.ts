@@ -1,6 +1,10 @@
 import * as THREE from "three";
-import type { Flight, FlightInput, FlightMods } from "../flight";
-import { plainMods } from "../flight";
+import type { Flight, FlightInput, FlightMods, HitPart } from "../flight";
+import { FLIGHT, plainMods } from "../flight";
+import { type Equipped, type PerkStats, charmOf, perksFor, plainPerks } from "../collection/abilities";
+import type { BindingAction } from "../bindings";
+import { Charm } from "./charm";
+import { Orbs } from "./orbs";
 import { clamp } from "../math";
 import type { Particles } from "../particles";
 import { RUN } from "../tuning";
@@ -11,7 +15,7 @@ import type { WorldView } from "../world/WorldView";
 import { Abilities, type AbilityPress } from "./abilities";
 import { Finale } from "./finale";
 import { Items, type RunItemId, runItem } from "./items";
-import { Portal, Wormhole, WormholeCamera, screenSparkle } from "./portal";
+import { Portal, Wormhole, WormholeCamera, portalFlash, screenSparkle } from "./portal";
 import {
   CHAIN_MAX,
   GATE_POINTS,
@@ -28,6 +32,7 @@ import {
 import { type RunStats, UPGRADES, type Upgrade, type UpgradeId, baseStats, offer, statsFor } from "./upgrades";
 import { Collection } from "./collection";
 import type { Reward } from "../../profile/types";
+import type { Rarity } from "../collection/rarity";
 
 // One roguelike run, from the first level to the last portal: it loads each
 // biome, scores gates and style, keeps the lives, runs the
@@ -61,9 +66,11 @@ export interface RunHost {
   readonly pixelHeight: number;
   gateBurst(index: number): void;
   wingbeat(): void;
-  stinger(kind: "portal" | "upgrade" | "dash" | "gate" | "finish" | "item"): void;
+  stinger(kind: "portal" | "upgrade" | "dash" | "gate" | "finish" | "item" | "orb"): void;
   /** The portal's hum, louder the nearer you are: 0..1 */
   portalHum(near: number): void;
+  /** A persistent treasure or crystal was collected: a chime as bright as its rarity */
+  treasure(rarity: Rarity): void;
 }
 
 export interface RunEvents {
@@ -115,6 +122,7 @@ function captureSky(scene: THREE.Scene, out?: Sky): Sky {
 }
 
 const tmp = new THREE.Vector3();
+const UP = new THREE.Vector3(0, 1, 0);
 const toTarget = new THREE.Vector3();
 const forward = new THREE.Vector3();
 const SPARKLE = new THREE.Color();
@@ -126,6 +134,20 @@ const BLUR_CLEAR = 0.8;
 const BLUR_OUT = 0.4;
 /** At most this long in the wormhole waiting for the next land, then out anyway (it glides in) */
 const EXIT_WAIT = 8;
+/** Who is flying: their level (items and abilities above it never turn up) and what they wear and carry */
+export interface RunOptions {
+  /** Crashes before the run ends (Infinity: never, the test sandbox) */
+  lives?: number;
+  playerLevel?: number;
+  equipped?: Equipped;
+}
+
+/** How a collection power saved the pilot from a hit (Frost skate) */
+export type PerkSave = "frost";
+
+/** The most glancing hit Frost skate turns into a skate (the cosine of the angle into the surface) */
+const FROST_GLANCE = 0.6;
+
 /** Out of lives: the crash plays, the view fades into light over these seconds, then the summary */
 const LOST_FADE_FROM = 1;
 const LOST_FADE = 0.9;
@@ -169,6 +191,21 @@ export class RunController {
   /** The design list's items: the bag and what they do (their looks read them, items/fx.ts) */
   readonly items = new Items();
   private toast: RunHud["toast"] = null;
+  /** The keepsake carried on this adventure (collection/abilities.ts) */
+  readonly charm = new Charm();
+  /** Stamina orbs: the only way the boost comes back by itself in a run */
+  readonly orbs = new Orbs();
+  /** What everything equipped adds up to (pets, rare cosmetics, a passive charm) */
+  perks: PerkStats = plainPerks();
+  /** The pilot's level: items and abilities above it never turn up */
+  readonly playerLevel: number;
+  /** Crashes the phoenix may still undo, and glancing hits Frost skate may still take, in this level */
+  private revivesLeft = 0;
+  private shieldsLeft = 0;
+  /** Bumped when a collection power acts, so the looks and sounds can follow */
+  readonly perkCue = { rekindle: 0, frost: 0, kick: 0, gate: 0 };
+  /** Night falls over this level (the owl's watch) */
+  private night = 0;
   private toastTime = 0;
   private toastId = 0;
   /** Through a portal: where to, the upgrades on offer, and whether the next biome is built yet */
@@ -186,21 +223,36 @@ export class RunController {
   /** The last portal's cutscene */
   private finale: Finale | null = null;
   private collection: Collection | null = null;
+  /** The opening autopilot is flying (see preview) */
+  private previewing = false;
   private readonly collected = (reward: Reward) => {
     this.events.collected?.(reward);
-    this.host.stinger("item");
+    this.host.treasure(reward.rarity);
   };
 
-  /** `lives`: crashes before the run ends (Infinity: never, the test sandbox) */
-  constructor(seed: number, host: RunHost, events: RunEvents, lives = START_LIVES) {
+  constructor(seed: number, host: RunHost, events: RunEvents, options: RunOptions = {}) {
     this.seed = seed;
-    this.lives = lives;
-    this.maxLives = lives;
+    this.playerLevel = options.playerLevel ?? Infinity;
+    this.items.playerLevel = this.playerLevel;
+    if (options.equipped) this.setEquipped(options.equipped);
+    const lives = options.lives ?? START_LIVES;
+    // The kirin and the golden feather each bring one more life (never to the endless sandbox)
+    this.lives = Number.isFinite(lives) ? lives + this.perks.lives : lives;
+    this.maxLives = this.lives;
     this.host = host;
     this.events = events;
     host.scene.add(this.group, this.wormhole.group);
+    this.group.add(this.orbs.group);
     this.skyNow = captureSky(host.scene);
     this.abilities.setStats(this.stats);
+  }
+
+  /** What the pilot wears and carries changed (the inventory can be opened while paused) */
+  setEquipped(equipped: Equipped) {
+    this.perks = perksFor(equipped);
+    this.items.reach = this.perks.pickupRadius;
+    const charm = charmOf(equipped);
+    this.charm.set(charm?.id ?? null, charm?.power ?? null);
   }
 
   /** Flight changes from upgrades and abilities, for this physics step */
@@ -210,7 +262,7 @@ export class RunController {
 
   /** Extra levels on the style multiplier */
   get multiplierCap(): number {
-    return 4 + this.stats.multiplier;
+    return 4 + this.stats.multiplier + this.perks.styleCap;
   }
 
   /** Gates to respawn after */
@@ -231,11 +283,33 @@ export class RunController {
     this.loadLevel(initial?.biome.id ?? runOrder(this.seed)[0], initial);
   }
 
-  /** Taking off from the intro: the title card plays from here */
-  takeOff() {
+  /**
+   * The opening autopilot: the level waits (no clock, no gates, no pickups, no portal)
+   * while the pilot glides the racing line on its own
+   */
+  preview() {
+    this.previewing = true;
+    this.group.visible = false;
+  }
+
+  /**
+   * Taking off from the intro: the title card plays from here. `at`: where the opening
+   * autopilot handed over; gates already behind it are skipped (never scored) and a crash
+   * comes back after them
+   */
+  takeOff(at?: THREE.Vector3) {
+    this.previewing = false;
+    this.group.visible = true;
     this.phase = "arrive";
     this.phaseTime = 0;
     this.levelTime = 0;
+    let next = 0;
+    if (at) {
+      const rings = this.host.world.course.rings;
+      while (next < rings.length - 1 && tmp.subVectors(at, rings[next].position).dot(rings[next].normal) > 0) this.passed.add(next++);
+      this.lastGate = next;
+    }
+    this.host.view.setRings("race", next);
   }
 
   // --- levels --------------------------------------------------------------------
@@ -253,19 +327,29 @@ export class RunController {
     this.host.view.setRings("race", 0);
     this.abilities.setLevel(world);
     this.items.setLevel(world);
+    this.charm.newLevel();
+    this.orbs.setLevel(world, this.level);
+    this.revivesLeft = this.perks.revives;
+    this.shieldsLeft = this.perks.shields;
+    this.night = world.palette.night;
     if (this.events.rewards) this.collection = new Collection(world, this.events.rewards.filter(r => r.level === this.level), this.host.scene);
     // The portal stands at the last gate
     const { course } = world;
     const finish = course.rings[course.rings.length - 1];
     const last = this.level >= RUN_LENGTH;
     const color = last ? "#ffe9a0" : BIOMES[destination(this.seed, this.path)].portals.color;
-    this.portals = [new Portal(finish.position.clone().addScaledVector(finish.normal, 3), finish.normal, 15, color)];
+    // Deeper levels hide the portal a little: smaller, and off to one side of the line and higher
+    const hard = world.level.key.difficulty ?? 0;
+    const aside = tmp.crossVectors(finish.normal, UP).normalize().multiplyScalar(5 * hard * (this.level % 2 ? 1 : -1));
+    const where = finish.position.clone().addScaledVector(finish.normal, 3).add(aside).addScaledVector(UP, 3 * hard);
+    this.portals = [new Portal(where, finish.normal, 15 - 4 * hard, color)];
     for (const portal of this.portals) this.group.add(portal.group);
     // Abilities start charged
     this.stamina = 2 + this.stats.flap;
     this.phase = "arrive";
     this.phaseTime = 0;
     this.events.arrived?.(this.level, biome);
+    if (this.charm.ready) this.notify(`Charm ready: ${this.charm.power!.name}`, 0, "charm");
   }
 
   private disposeLevel() {
@@ -303,6 +387,82 @@ export class RunController {
     this.items.cycle();
   }
 
+  /** K: the charm (the keepsake carried on adventures) */
+  useCharm() {
+    if (this.frozen || (this.phase !== "explore" && this.phase !== "arrive")) return;
+    const before = this.charm.rocket;
+    if (!this.charm.press(this.host.flight, this.items)) {
+      if (this.charm.use && this.charm.use.kind !== "rocket" && this.charm.use.kind !== "passive") this.notify("Charm used up for this level", 0);
+      return;
+    }
+    if (this.charm.use?.kind === "rocket") this.notify(before === "off" ? "Strapping on the giant firework…" : "Firework off your back", 0);
+    if (this.items.restore > 0) {
+      this.stamina = Math.min(2 + this.stats.flap, this.stamina + this.items.restore);
+      this.items.restore = 0;
+    }
+  }
+
+  /**
+   * A crash is coming: the phoenix may undo it, from a feather in the bag, the charm, or the
+   * phoenix companion (once per level each)
+   */
+  revive(flight: Flight): boolean {
+    if (this.items.revive(flight)) return true;
+    const use = this.charm.use;
+    if (use?.kind === "relic" && use.item === "phoenixFeather" && this.charm.left > 0) {
+      this.charm.left--;
+      this.charm.cue.use++;
+      return this.items.rekindle(flight);
+    }
+    if (this.revivesLeft > 0 && this.items.rekindle(flight)) {
+      this.orbs.reset();
+      this.revivesLeft--;
+      this.perkCue.rekindle++;
+      this.notify("The phoenix pulls you from the flames", 0);
+      return true;
+    }
+    return false;
+  }
+
+  /** Frost skate: a glancing hit (never head-on) turns into a skate off an ice ramp, once per level */
+  perkSave(part: HitPart | null, normal: THREE.Vector3, direction: THREE.Vector3): PerkSave | null {
+    if (part === null || this.shieldsLeft <= 0 || this.abilities.hang >= 0) return null;
+    return -direction.dot(normal) <= FROST_GLANCE ? "frost" : null;
+  }
+
+  perkSaved(how: PerkSave, at: THREE.Vector3, normal: THREE.Vector3) {
+    void how;
+    this.shieldsLeft--;
+    this.items.savePoint.copy(at);
+    this.items.saveNormal.copy(normal);
+    this.perkCue.frost++;
+    this.notify("Frost skate!", 0);
+  }
+
+  /** The dodge's timing and distance: Wind-Shear's blink, or the plain dodge with the collection's powers */
+  private readonly dodge = { ...FLIGHT };
+  dodgeParams(): typeof FLIGHT {
+    if (this.abilities.has("windShear")) return this.abilities.dodgeParams();
+    return Object.assign(this.dodge, FLIGHT, {
+      dodgeCooldown: FLIGHT.dodgeCooldown * this.perks.dodgeCooldown,
+      dodgeDistance: FLIGHT.dodgeDistance + this.perks.dodgeDistance,
+    });
+  }
+
+  /** A dodge began: the abilities hear of it, and Ember kick fires */
+  dodged(direction: 1 | -1, flight: Flight) {
+    this.abilities.dodged(direction, flight);
+    if (this.perks.dodgeBurst > 0) {
+      flight.surge(this.perks.dodgeBurst);
+      this.perkCue.kick++;
+    }
+  }
+
+  /** Style points right now: the owl at night, the stargazer, a starfruit */
+  get styleRate(): number {
+    return this.perks.styleRate * (this.night > 0.5 ? this.perks.nightStyle : 1) * this.charm.style;
+  }
+
   /** Puts an item in the bag right now (dev tools and test mode); false if the bag is full */
   giveItem(id: RunItemId): boolean {
     const given = this.items.give(id);
@@ -320,29 +480,36 @@ export class RunController {
     const { flight, prevPosition } = this.host;
     // This step's flight changes, for the next one
     const m = this.mods;
-    m.drag = this.stats.drag;
-    m.sink = this.stats.sink;
+    const perks = this.perks;
+    m.drag = this.stats.drag * perks.drag;
+    m.sink = this.stats.sink * perks.sink;
     m.stall = this.stats.stall;
-    m.proximityBoost = this.stats.proximity;
+    m.proximityBoost = this.stats.proximity * perks.proximity;
     m.glideLock = this.stats.glideLock > 0;
-    m.boost = this.stats.dash * 0.25;
+    m.boost = this.stats.dash * 0.25 + perks.boostAccel;
     m.hover = 0;
     m.lift = 0;
     m.thrust = 0;
     m.dive = 0;
     m.hang = false;
-    m.turn = 1;
-    m.climb = 1;
+    m.turn = perks.turn;
+    m.climb = perks.climb;
     m.ascend = 0;
+    // No natural recharge in a run: stamina orbs, abilities and items refill the boost
+    m.recharge = 0;
     if (this.phase !== "explore" && this.phase !== "arrive") return;
     if (!this.items.frozenCombo) this.levelTime += dt;
     this.abilities.worldRate=this.items.worldRate;
-    this.collection?.step(prevPosition, flight.position, this.collected, this.host.particles);
+    this.collection?.step(prevPosition, flight.position, this.collected, this.host.particles, perks.pickupRadius);
     this.abilities.step(dt, input, proximity, flight, m);
+    this.charm.step(dt, flight, m);
     const pickups = this.items.cue.pickup, full = this.items.cue.full;
     this.items.step(dt, input, proximity, flight, m);
-    if(this.items.cue.pickup !== pickups && this.items.picked) this.notify(runItem(this.items.picked).name,0);
-    else if(this.items.cue.full !== full) this.notify("Your bag is full · use an item with Y",0);
+    if (this.orbs.step(flight, perks.orbs, perks.pickupRadius) > 0) this.host.stinger("orb");
+    if (this.items.cue.pickup !== pickups && this.items.picked) {
+      const item = runItem(this.items.picked);
+      this.notify(`Picked up ${item.name}`, 0, item.auto ? undefined : "useItem", item.rarity);
+    } else if (this.items.cue.full !== full) this.notify("Your bag is full · use an item first", 0, "useItem");
     if (this.items.points > 0) {
       this.score += Math.round(this.items.points);
       this.items.points = 0;
@@ -364,21 +531,24 @@ export class RunController {
       if (before >= 0 || after < 0) continue;
       tmp.lerpVectors(prevPosition, flight.position, before / (before - after));
       const offset = tmp.distanceTo(ring.position);
-      if (offset > ring.radius + 1 + this.stats.magnet + this.abilities.widening(ring) + this.items.widening(i)) continue;
+      if (offset > ring.radius + 1 + this.stats.magnet + perks.magnet + this.abilities.widening(ring) + this.items.widening(i)) continue;
       this.passed.add(i);
       this.items.gate(i);
       this.chain = Math.min(CHAIN_MAX, this.chain + 1);
       this.bestChain = Math.max(this.bestChain, this.chain);
       this.gates++;
       this.lastGate = Math.max(this.lastGate, i + 1);
-      this.score += (GATE_POINTS + this.stats.gateBonus) * this.chain;
+      this.score += Math.round((GATE_POINTS + this.stats.gateBonus + perks.gateBonus) * this.chain * perks.gatePoints) + this.charm.gate();
+      // The dragon and the constellation wings: gates refill the boost (and a wingbeat)
+      if (perks.gateRefill > 0) flight.refillBoost(perks.gateRefill);
+      if (perks.gateRefill > 0 || perks.gateStamina > 0) this.perkCue.gate++;
       const leys = this.abilities.cue.ley;
       const strike = this.abilities.gate(i, this.chain);
       if (strike > 0) this.notify("Plunge strike!", strike);
       else if (this.abilities.cue.ley !== leys) this.notify("A ley line wakes: endless boost", 0);
       else if (this.abilities.threaded(i, offset, ring.radius, flight)) this.notify("Through the heart", 0);
-      // Every gate refills a wingbeat
-      this.stamina = Math.min(2 + this.stats.flap, this.stamina + 1);
+      // Every gate refills a wingbeat (the dragon adds one more)
+      this.stamina = Math.min(2 + this.stats.flap, this.stamina + 1 + perks.gateStamina);
       let next = 0;
       while (this.passed.has(next)) next++;
       this.host.view.setRings("race", next);
@@ -387,7 +557,7 @@ export class RunController {
     }
 
     for (const portal of this.portals) {
-      if (portal.crossed(prevPosition, flight.position, this.stats.magnet)) {
+      if (portal.crossed(prevPosition, flight.position, this.stats.magnet + perks.magnet)) {
         this.enterPortal();
         break;
       }
@@ -396,7 +566,7 @@ export class RunController {
 
   /** A frame without control (gliding in while the land loads): the level's clock still runs */
   wait(dt: number) {
-    if ((this.phase === "explore" || this.phase === "arrive") && !this.items.frozenCombo) this.levelTime += dt;
+    if (!this.previewing && (this.phase === "explore" || this.phase === "arrive") && !this.items.frozenCombo) this.levelTime += dt;
   }
 
   /** A crash costs a life and breaks the gate chain; the last life's crash ends the run. Flight resets the shared boost state. */
@@ -407,6 +577,7 @@ export class RunController {
     this.crashes++;
     this.abilities.crashed();
     this.items.reset();
+    this.charm.reset();
     const chain = this.chain;
     this.chain = 0;
     this.lives--;
@@ -445,10 +616,11 @@ export class RunController {
     this.maxLives = Math.max(this.maxLives, this.lives);
   }
 
-  private notify(text: string, points: number) {
+  /** A toast on screen; `action`: the key it reminds you of, `rarity`: its color (an item picked up) */
+  private notify(text: string, points: number, action?: BindingAction, rarity?: number) {
     this.score += points;
-    this.toast = { text, points, id: ++this.toastId };
-    this.toastTime = 2.6;
+    this.toast = { text, points, id: ++this.toastId, action, rarity };
+    this.toastTime = action ? 3.4 : 2.6;
   }
 
   // --- portals, the upgrade pick and the wormhole -----------------------------------------
@@ -467,7 +639,7 @@ export class RunController {
       return;
     }
     // The offer is drawn now, from this level, so building the next one early doesn't change it
-    this.through = { next: destination(this.seed, this.path), offers: offer(this.seed, this.level, this.picked), built: false };
+    this.through = { next: destination(this.seed, this.path), offers: offer(this.seed, this.level, this.picked, this.playerLevel), built: false };
     this.phase = "portal";
     this.phaseTime = 0;
     this.sparkled = false;
@@ -553,28 +725,35 @@ export class RunController {
     this.ended = true;
     this.phase = completed ? "won" : "lost";
     this.host.freeze(true);
-    this.events.ended?.({
+    this.events.ended?.(this.snapshot(completed));
+  }
+
+  /** The run so far, this level's style and clock included (an adventure left early is reported too) */
+  snapshot(completed = false): RunSummary {
+    const open = !this.styleBanked;
+    return {
       seed: this.seed,
-      score: this.score,
+      score: this.score + (open ? Math.round(this.host.style) : 0),
       completed,
       levels: this.level,
       path: [...this.path],
       upgrades: [...this.picked],
-      timeMs: Math.round(this.totalTime * 1000),
+      timeMs: Math.round((this.totalTime + (open ? this.levelTime : 0)) * 1000),
       gates: this.gates,
       crashes: this.crashes,
       livesLeft: this.lives,
       bestChain: this.bestChain,
-      style: Math.round(this.totalStyle),
-    });
+      style: Math.round(this.totalStyle + (open ? this.host.style : 0)),
+    };
   }
 
   // --- per frame ------------------------------------------------------------------------
 
   frame(dt: number) {
     const { camera, particles } = this.host;
-    this.collection?.frame(dt, camera.position, this.phase === "explore" || this.phase === "arrive", particles);
-    this.phaseTime += dt;
+    this.collection?.frame(dt, camera.position, !this.previewing && (this.phase === "explore" || this.phase === "arrive"), particles);
+    if (!this.previewing && (this.phase === "explore" || this.phase === "arrive")) this.orbs.frame(dt, camera.position, particles);
+    if (!this.previewing) this.phaseTime += dt;
     if (this.toast && (this.toastTime -= dt) <= 0) this.toast = null;
     if (this.stats.flap > 0) this.stamina = Math.min(2 + this.stats.flap, this.stamina + dt / 9);
     if (this.phase === "arrive" && this.phaseTime > 3) this.phase = "explore";
@@ -611,7 +790,7 @@ export class RunController {
       const t = this.phaseTime;
       if (!this.sparkled) {
         this.sparkled = true;
-        screenSparkle(particles, camera, forward, SPARKLE.set(this.host.world.palette.accent));
+        screenSparkle(particles, camera, forward, SPARKLE.set(this.host.world.palette.accent), portalFlash(this.host.world.palette.night));
       }
       veil = t < BLUR_IN ? ease(t / BLUR_IN) : 1 - ease((t - BLUR_IN - 0.1) / BLUR_CLEAR);
       inside = t >= BLUR_IN;
@@ -666,12 +845,12 @@ export class RunController {
     this.wormhole.place(camera, pilot.position, pilot.forward, inside, blend, this.host.pixelHeight);
     this.host.insideWormhole(inside);
     // From inside, the portal you came through is gone too
-    this.group.visible = !inside;
+    this.group.visible = !inside && !this.previewing;
     this.host.veil(veil);
     if (!inside) for (const p of this.portals) p.update(dt, particles, camera.position);
     // The portal hums as you near it, and falls silent once you're through
     let near = 0;
-    if (!inside && (this.phase === "explore" || this.phase === "arrive")) {
+    if (!inside && !this.previewing && (this.phase === "explore" || this.phase === "arrive")) {
       for (const p of this.portals) if (p.open) near = Math.max(near, clamp(1 - p.position.distanceTo(camera.position) / 500, 0, 1));
     }
     this.host.portalHum(near);
@@ -744,12 +923,14 @@ export class RunController {
       abilities,
       upgrades: [...this.picked],
       items: this.items.hud(),
+      charm: this.charm.hud(),
       toast: this.toast,
     };
   }
 
   dispose() {
     this.disposeLevel();
+    this.orbs.dispose();
     this.wormhole.dispose();
     this.finale?.dispose();
     this.group.removeFromParent();

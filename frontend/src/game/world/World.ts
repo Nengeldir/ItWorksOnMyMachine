@@ -73,7 +73,7 @@ export class World {
     this.biome = level.biome;
     this.seed = level.seed;
     this.palette = level.palette;
-    this.course = new Course(this.seed);
+    this.course = new Course(this.seed, level.key.difficulty ?? 0);
     const terrain = this.biome.terrain;
     if (terrain.kind === "legacyIslands") {
       this.legacy = new RockField(this.seed, this.course);
