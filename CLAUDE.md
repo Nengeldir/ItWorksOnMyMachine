@@ -258,6 +258,30 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-12: `pengyue-new`: main plus PengyueW's open pull requests (Claude)
+
+Asked for: a branch from the newest `origin/main` with every change from
+PengyueW's open pull requests that isn't in main yet. #47 (opening autopilot,
+glowing titles) and #54 (final review) are already in main, in newer
+versions. Only #55 (`adventure-economy`) had new work: its seven commits after
+`final-review` were cherry-picked in order, with no merge commits.
+- Conflicts resolved: `backend/profiles.py` (#55's economy constants, main's
+  `rowid` tiebreak when pruning plans), its tests (both kept); `Game.ts`:
+  #55's `CollectionFx` replaces main's `CosmeticSparkles`, which shed the same
+  particles (`cosmetics/sparkles.ts` and its test stay, unused); pets,
+  `PET_LOOKS` and pickup clearance follow main's newer code; the time trial's
+  `RaceResults` gets the XP line.
+- **The journal merged by hand** (`ProfilePanel.tsx`, `.css`): main's `.sheet`
+  layout with #55's figurine (a third column), rarity tiles, powers, lore,
+  unlock levels, charm and pet names. The Market and Hall of Winds are pills at
+  the top left (`menu-nav`), and the pilot pill still opens the journal (the
+  Inventory pill was dropped). Lesson mode is in Settings next to main's
+  left-handed touch option.
+- Docs: README, this file and the audit kept both sides.
+- Verified: `tsc`, lint, build (bundle-size warning), 148 frontend tests
+  (Node 22.14) and 53 backend tests. **Not looked at in a browser**: the
+  merged journal at any size, the Market and Hall pills next to the logo.
+
 ### 2026-10-11: Collection powers, the charm, economy, market, Hall of Winds, orbs, harder levels (Claude)
 
 Asked for, after the final review: pickup effects in rarity colors with
@@ -3286,6 +3310,10 @@ ported to the islands world:
   through islands and gates, no console errors.
 
 ## Next up
+
+- `pengyue-new` (2026-10-12): look at the merged journal (figurine column,
+  rarity tiles, phones) and the Market and Hall pills on the landing page;
+  delete `cosmetics/sparkles.ts` if `CollectionFx` stays.
 
 - Race rooms (2026-10-11): play a two-player race through finish, the 60 s
   grace and a host restart; tune `FINISH_GRACE_MS`. A refused finish (409)

@@ -265,8 +265,6 @@ export const RANGES: Record<string, [number, number, number?]> = {
   gallop: [0, 4],
   stride: [0, 2],
   hoopRange: [0, 150],
-  orbit: [2, 12],
-  roam: [0, 6],
   guideBlend: [0.3, 6],
   orbit: [2, 12],
   roam: [0, 8],
