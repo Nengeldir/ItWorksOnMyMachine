@@ -308,7 +308,9 @@ const shellFragment = /* glsl */ `
 
     // The way out: a soft light far ahead, inside a thin lensed ring
     float glow = exp(-theta * theta * 40.0);
-    float ring = exp(-pow((theta - 0.17) * 34.0, 2.0)) * (0.7 + 0.3 * sin(phi * 3.0 + time * 0.6));
+    // Squared by hand: pow() of a negative base is undefined in GLSL (NaN on Direct3D, which bloom spreads)
+    float edge = (theta - 0.17) * 34.0;
+    float ring = exp(-edge * edge) * (0.7 + 0.3 * sin(phi * 3.0 + time * 0.6));
     col += mix(to, vec3(1.0), 0.35) * glow * 1.6 + mix(to, vec3(1.0), 0.6) * ring * 0.55;
     // Behind you, the dark you came from
     col *= 0.55 + 0.45 * smoothstep(-0.9, 0.2, c);
