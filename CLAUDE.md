@@ -244,6 +244,31 @@ the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
 
+### 2026-10-11: PRs #43 and #47 merged into local main, not pushed (Claude)
+
+Asked for: merge PR #43 (`Pengyue`, `cbd8501`) and PR #47
+(`feature/adventure-title-intro`, `0a2f1bf`) into `main`, without pushing
+to `origin/main` until a playtest. One squashed commit per PR, no merge
+commits (as for PR #46).
+- **#43**: conflicts with main's five newer commits (glass sheets, the
+  performance pass) resolved keeping both: the settings sheet keeps main's
+  glass styling and gains Pengyue's Pilot style and crystals-only rows
+  (`SettingsPanel.tsx`, `.css`); `run/collection.ts` keeps main's fade-in
+  by distance and adds the crystals-only filter; this file's map rows and
+  logs merged by hand. Backend unchanged against main.
+- **#47**: its opening autopilot had already been rebuilt in #43 (handover
+  in place, gates hidden during the glide), so `Game.ts`, `RunSession.ts`
+  and this file keep #43's version; #47's title CSS (it brought back the
+  dark drop shadow) and README line (it described the old reset to the
+  start) were dropped. What #47 adds is its test,
+  `tests/adventure-intro.test.mjs`, rewritten for the current behavior:
+  the preview hides the gates and scores nothing; take-off hands over in
+  place at the rail's speed and grows in only the gates ahead.
+- Verified: build (bundle-size warning), lint and all 130 frontend tests
+  (Node 22.14 with the fixed asynchronous resolver from `adventure-economy`;
+  main's `tests/register.mjs` still fails on Node < 22.15). Not played in a
+  browser: that is the playtest before pushing.
+
 ### 2026-10-11: Performance pass and land that fades in (Claude)
 
 Asked for: the game is compute intensive; smooth the loading (no assets
