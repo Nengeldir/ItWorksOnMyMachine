@@ -159,11 +159,26 @@ export class WorldView {
       this.seaLife = new SeaLife(world, underwater);
       this.group.add(this.shafts.mesh, ...this.seaLife.meshes);
     }
+    // Winged lights drifting along the course between the gates (looks only): two
+    // per gap, above and beside the line, never inside the rock
+    const lights = makeRng(world.seed, "winged-light");
+    const wingedLights: THREE.Vector3[] = [];
+    const rings = world.course.rings;
+    for (let i = 0; i + 1 < rings.length; i++) {
+      for (let k = 0; k < 2; k++) {
+        const z = rings[i].position.z + (rings[i + 1].position.z - rings[i].position.z) * ((k + 1) / 3 + range(lights, -0.08, 0.08));
+        const p = world.course.pointAt(z);
+        p.x += range(lights, -18, 18);
+        p.y += range(lights, 7, 20);
+        if (world.distance(p.x, p.y, p.z) > 4) wingedLights.push(p);
+      }
+    }
     this.gates = new CrystalGates(
       world.seed,
       world.course.rings,
       { ice: new THREE.Color("#e6f7ff").lerp(accent, 0.12), accent },
       sun,
+      wingedLights,
     );
     this.group.add(this.gates.group);
     this.setRings("free", 0);

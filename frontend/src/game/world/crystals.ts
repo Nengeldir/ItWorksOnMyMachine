@@ -228,6 +228,7 @@ const beamFragment = /* glsl */ `
 // pulsing over the next gate, golden over the finish, a faint twinkle over the rest
 const flareVertex = /* glsl */ `
   attribute float gate;
+  attribute float twinkle;
   uniform vec4 gates[GATE_COUNT];
   varying vec2 vUv;
   varying vec4 vGate;
@@ -236,7 +237,7 @@ const flareVertex = /* glsl */ `
   void main() {
     vGate = gates[int(gate + 0.5)];
     vUv = uv;
-    vSeed = gate;
+    vSeed = twinkle;
     // A billboard sized by how much the gate matters
     float size = 2.6 + vGate.y * 4.0 + vGate.w * 2.0;
     vec4 center = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
@@ -310,13 +311,16 @@ export class CrystalGates {
   /** Per gate: the direction it faces now (Resonance can turn it; looks only, the run keeps its own) */
   private readonly facing: THREE.Vector3[];
 
-  constructor(seed: number, rings: Ring[], colors: { ice: THREE.Color; accent: THREE.Color }, sunDirection: THREE.Vector3) {
+  /** `wingedLights`: extra star flares floating along the course (looks only), always lit, never the next gate */
+  constructor(seed: number, rings: Ring[], colors: { ice: THREE.Color; accent: THREE.Color }, sunDirection: THREE.Vector3, wingedLights: THREE.Vector3[] = []) {
     this.rings = rings;
     this.sunDirection = sunDirection;
     this.states = rings.map(() => ({ visible: 1, highlight: 0, passedAt: -1e3 }));
     this.facing = rings.map((r) => r.normal.clone());
     this.gateUniform = rings.map((r) => new THREE.Vector4(1, 0, -1e3, r.finish ? 1 : 0));
-    const defines = { GATE_COUNT: Math.max(1, rings.length) };
+    // One more slot, constant, for the winged lights along the course
+    this.gateUniform.push(new THREE.Vector4(1, 0, -1e3, 0));
+    const defines = { GATE_COUNT: this.gateUniform.length };
     const shared = {
       gates: { value: this.gateUniform },
       time: fxTime,
@@ -430,9 +434,11 @@ export class CrystalGates {
     beams.frustumCulled = false;
     beams.renderOrder = 2;
 
-    // Winged lights: a star flare floating over every gate
+    // Winged lights: a star flare floating over every gate, and a few along the course
+    const flareCount = rings.length + wingedLights.length;
     const flareGeometry = this.geometry(new THREE.PlaneGeometry(1, 1));
-    flareGeometry.setAttribute("gate", new THREE.InstancedBufferAttribute(new Float32Array(rings.map((_, i) => i)), 1));
+    flareGeometry.setAttribute("gate", new THREE.InstancedBufferAttribute(new Float32Array([...rings.map((_, i) => i), ...wingedLights.map(() => rings.length)]), 1));
+    flareGeometry.setAttribute("twinkle", new THREE.InstancedBufferAttribute(new Float32Array(Array.from({ length: flareCount }, (_, i) => i)), 1));
     const flareMaterial = this.material(
       new THREE.ShaderMaterial({
         defines,
@@ -444,11 +450,15 @@ export class CrystalGates {
         blending: THREE.AdditiveBlending,
       }),
     );
-    const flares = new THREE.InstancedMesh(flareGeometry, flareMaterial, Math.max(1, rings.length));
-    flares.count = rings.length;
+    const flares = new THREE.InstancedMesh(flareGeometry, flareMaterial, Math.max(1, flareCount));
+    flares.count = flareCount;
     rings.forEach((ring, i) => {
       tmpMatrix.makeTranslation(ring.position.x, ring.position.y + ring.radius + 2.5, ring.position.z);
       flares.setMatrixAt(i, tmpMatrix);
+    });
+    wingedLights.forEach((p, i) => {
+      tmpMatrix.makeTranslation(p.x, p.y, p.z);
+      flares.setMatrixAt(rings.length + i, tmpMatrix);
     });
     flares.frustumCulled = false;
     flares.renderOrder = 3;

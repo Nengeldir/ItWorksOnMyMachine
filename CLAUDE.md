@@ -285,6 +285,12 @@ Children of the Light; the terrain is untouched for now. Looks only (rule 6).
   every mote into a star). Bloom defaults moved from PR 46's values; see Next up.
   Verified after the merge: tsc, lint, 126 frontend tests (Node 24 in
   Docker), the pilot in flight in the app's browser, no console errors.
+- **Winged lights along the course**: two faint star flares per gap between
+  gates, above and beside the line, kept out of the rock (`WorldView` places
+  them with `world.distance`, `CrystalGates` draws them in the gate flares'
+  instanced draw, one constant uniform slot for them). Looks only, no new draw
+  call. Checked: no errors at night (`/?seed=8`, Verdant Moonlit) or with the
+  wardrobe's astral wings, dawn cape, hat and shoes on the Sky child.
 
 ### 2026-10-10: Rebased PR #46 onto current main, without merge commits (Claude)
 
@@ -2952,8 +2958,7 @@ ported to the islands world:
   joints line up); measure `__bench(2)` in a focused window; settle with the
   team the knobs this branch moved from PR 46's values (bloom 0.45 / radius
   0.4 / halo 0.45 / threshold 1.15 instead of 0.4 / 0.12 / 0.12 / 1.3; wingtip
-  motes large and slow instead of tiny grains); a few winged lights along the
-  course, not only over the gates.
+  motes large and slow instead of tiny grains).
 - **Lives**: look at them in a browser (the `.run-side` column under the
   top bar, narrow screens, the white fade after the last crash, the "Out of
   feathers"
