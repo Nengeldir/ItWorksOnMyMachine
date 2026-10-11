@@ -79,6 +79,8 @@ export interface Upgrade {
   max: number; // stacks
   /** Added to the stats per stack, except drag, sink, stall and proximity, which multiply */
   effect: Partial<RunStats>;
+  /** The strongest abilities wait for experienced pilots: offered from this pilot level (default 1) */
+  minLevel?: number;
 }
 
 export const UPGRADES: readonly Upgrade[] = [
@@ -88,29 +90,29 @@ export const UPGRADES: readonly Upgrade[] = [
   { id: "daredevil", name: "Daredevil", icon: "🔥", kind: "passive", max: 3, effect: { proximity: 1.5, multiplier: 1 }, description: "Skimming the land pushes you much harder, and your style multiplier goes higher." },
   { id: "magnet", name: "Gate magnet", icon: "🧲", kind: "passive", max: 3, effect: { magnet: 5 }, description: "Gates and portals count from further away." },
   { id: "streamline", name: "Streamline", icon: "🏹", kind: "passive", max: 3, effect: { drag: 0.86 }, description: "Less drag: a higher top speed in every dive." },
-  { id: "showoff", name: "Showoff", icon: "✨", kind: "passive", max: 3, effect: { multiplier: 2, gateBonus: 50 }, description: "Bigger style multipliers and more points for every gate." },
-  { id: "spareFeather", name: "Spare feather", icon: "🪶", kind: "passive", max: 3, effect: { lives: 1 }, description: "One more golden feather: the run survives one more crash." },
+  { id: "showoff", name: "Showoff", icon: "✨", kind: "passive", max: 3, effect: { multiplier: 2, gateBonus: 50 }, description: "Bigger style multipliers and more points for every gate.", minLevel: 2 },
+  { id: "spareFeather", name: "Spare feather", icon: "🪶", kind: "passive", max: 3, effect: { lives: 1 }, description: "One more golden feather: the run survives one more crash.", minLevel: 3 },
   // The design list's abilities (CLAUDE.md, "Items and abilities")
   { id: "featherfalling", name: "Featherfalling", icon: "🪶", kind: "passive", max: 2, effect: { featherfalling: 1, sink: 0.55, stall: 0.8, drag: 0.92 }, description: "Gravity lets go a little: you sink far less, stall later and slip through the air." },
-  { id: "skimBooster", name: "Skim-Booster", icon: "⚡", kind: "passive", max: 2, effect: { skimBooster: 1 }, description: "Skimming the land fills you with thrill: your boost refills as long as you stay dangerously close." },
-  { id: "cloudSurf", name: "Cloud-Surfing", icon: "☁️", kind: "passive", max: 1, effect: { cloudSurf: 1 }, description: "Rivers of cloud gather along the line. Surf just over them to refill boost and wingbeats, and pick up speed." },
-  { id: "plunge", name: "Plunging Attack", icon: "☄️", kind: "ability", key: "X", max: 1, effect: { plunge: 1 }, description: "Dive like a falling star. Strike a gate on the way down for a shockwave of bonus points. Pull up to stop." },
-  { id: "windShear", name: "Wind-Shear Dash", icon: "🍃", kind: "ability", key: "Q / E", max: 1, effect: { windShear: 1 }, description: "Your dodge becomes an instant blink: further, faster and ready again sooner." },
+  { id: "skimBooster", name: "Skim-Booster", icon: "⚡", kind: "passive", max: 2, effect: { skimBooster: 1 }, description: "Skimming the land fills you with thrill: your boost refills as long as you stay dangerously close.", minLevel: 2 },
+  { id: "cloudSurf", name: "Cloud-Surfing", icon: "☁️", kind: "passive", max: 1, effect: { cloudSurf: 1 }, description: "Rivers of cloud gather along the line. Surf just over them to refill boost and wingbeats, and pick up speed.", minLevel: 2 },
+  { id: "plunge", name: "Plunging Attack", icon: "☄️", kind: "ability", key: "X", max: 1, effect: { plunge: 1 }, description: "Dive like a falling star. Strike a gate on the way down for a shockwave of bonus points. Pull up to stop.", minLevel: 3 },
+  { id: "windShear", name: "Wind-Shear Dash", icon: "🍃", kind: "ability", key: "Q / E", max: 1, effect: { windShear: 1 }, description: "Your dodge becomes an instant blink: further, faster and ready again sooner.", minLevel: 2 },
   { id: "thermalVision", name: "Thermal Vision", icon: "👁️", kind: "passive", max: 1, effect: { thermalVision: 1 }, description: "Gates, portals, rising air and wind currents glow warm from much further away, even through rock." },
-  { id: "slipstream", name: "Slipstream Rider", icon: "🌬️", kind: "passive", max: 1, effect: { slipstream: 1 }, description: "A spirit manta glides the line ahead of you. Ride right behind it and its wake pulls you along." },
-  { id: "galeForce", name: "Gale Force", icon: "🌀", kind: "ability", key: "G", max: 1, effect: { galeForce: 1 }, description: "Elemental burst: gates charge it. Unleash a wind tunnel ahead that hurls you forward and widens every gate inside." },
-  { id: "acrobatic", name: "Acrobatic Recovery", icon: "🤸", kind: "passive", max: 1, effect: { acrobatic: 1 }, description: "Clip rock with a wingtip and you barrel roll away instead of crashing. Recharges in a few seconds." },
-  { id: "hoverStall", name: "Hover-Stall", icon: "🕊️", kind: "ability", key: "F", max: 1, effect: { hoverStall: 1 }, description: "Stop dead and hover for two seconds to turn on the spot, then launch off where you look." },
-  { id: "moth", name: "Moth's Attraction", icon: "🦋", kind: "passive", max: 1, effect: { moth: 1 }, description: "Spirit moths gather at every gate's heart. The closer to it you pass, the faster you fly out." },
-  { id: "zenith", name: "Zenith Climber", icon: "🌄", kind: "passive", max: 1, effect: { zenith: 1 }, description: "Climbs hold their speed 20% longer: point the nose at the sky and scale the cliffs." },
-  { id: "resonance", name: "Resonance", icon: "🎶", kind: "ability", key: "T", max: 1, effect: { resonance: 1 }, description: "Sing out a wave of light. Every gate it reaches ahead turns to face you." },
-  { id: "leyLine", name: "Ley-Line Surger", icon: "🔮", kind: "passive", max: 1, effect: { leyLine: 1 }, description: "Fly five gates in quick succession to wake a ley line: endless boost until the chain breaks." },
-  { id: "aeroBrake", name: "Aero-Braking", icon: "🪂", kind: "ability", key: "Space", max: 1, effect: { aeroBrake: 1 }, description: "Brake throws your cape and wings forward: a hard stop and much tighter turns, for hairpins." },
-  { id: "draftWeave", name: "Draft-Weaving", icon: "🌪️", kind: "passive", max: 1, effect: { draftWeave: 1 }, description: "Spiral tightly or barrel roll to spin up a little tornado. It shields you from one glancing hit." },
-  { id: "ascension", name: "Ascension", icon: "⬆️", kind: "ability", key: "G", max: 1, effect: { ascension: 1 }, description: "Give up all your forward speed to shoot straight up on a column of wind." },
-  { id: "falcon", name: "Falcon Stance", icon: "🦅", kind: "ability", key: "H", max: 1, effect: { falcon: 1 }, description: "Toggle: wings tucked like a stooping falcon. You fall much faster and go faster, but steer stiffly." },
-  { id: "butterfly", name: "Butterfly Stance", icon: "🌸", kind: "ability", key: "H", max: 1, effect: { butterfly: 1 }, description: "Toggle: cape and wings spread wide. You fall slowest and turn tightest, but slowly." },
-  { id: "echoTrail", name: "Echo-Trail", icon: "➰", kind: "passive", max: 1, effect: { echoTrail: 1 }, description: "You leave a ribbon of light. Close a full circle across it and it becomes a wind ring that hurls you on." },
+  { id: "slipstream", name: "Slipstream Rider", icon: "🌬️", kind: "passive", max: 1, effect: { slipstream: 1 }, description: "A spirit manta glides the line ahead of you. Ride right behind it and its wake pulls you along.", minLevel: 4 },
+  { id: "galeForce", name: "Gale Force", icon: "🌀", kind: "ability", key: "G", max: 1, effect: { galeForce: 1 }, description: "Elemental burst: gates charge it. Unleash a wind tunnel ahead that hurls you forward and widens every gate inside.", minLevel: 6 },
+  { id: "acrobatic", name: "Acrobatic Recovery", icon: "🤸", kind: "passive", max: 1, effect: { acrobatic: 1 }, description: "Clip rock with a wingtip and you barrel roll away instead of crashing. Recharges in a few seconds.", minLevel: 5 },
+  { id: "hoverStall", name: "Hover-Stall", icon: "🕊️", kind: "ability", key: "F", max: 1, effect: { hoverStall: 1 }, description: "Stop dead and hover for two seconds to turn on the spot, then launch off where you look.", minLevel: 3 },
+  { id: "moth", name: "Moth's Attraction", icon: "🦋", kind: "passive", max: 1, effect: { moth: 1 }, description: "Spirit moths gather at every gate's heart. The closer to it you pass, the faster you fly out.", minLevel: 2 },
+  { id: "zenith", name: "Zenith Climber", icon: "🌄", kind: "passive", max: 1, effect: { zenith: 1 }, description: "Climbs hold their speed 20% longer: point the nose at the sky and scale the cliffs.", minLevel: 2 },
+  { id: "resonance", name: "Resonance", icon: "🎶", kind: "ability", key: "T", max: 1, effect: { resonance: 1 }, description: "Sing out a wave of light. Every gate it reaches ahead turns to face you.", minLevel: 4 },
+  { id: "leyLine", name: "Ley-Line Surger", icon: "🔮", kind: "passive", max: 1, effect: { leyLine: 1 }, description: "Fly five gates in quick succession to wake a ley line: endless boost until the chain breaks.", minLevel: 8 },
+  { id: "aeroBrake", name: "Aero-Braking", icon: "🪂", kind: "ability", key: "Space", max: 1, effect: { aeroBrake: 1 }, description: "Brake throws your cape and wings forward: a hard stop and much tighter turns, for hairpins.", minLevel: 3 },
+  { id: "draftWeave", name: "Draft-Weaving", icon: "🌪️", kind: "passive", max: 1, effect: { draftWeave: 1 }, description: "Spiral tightly or barrel roll to spin up a little tornado. It shields you from one glancing hit.", minLevel: 7 },
+  { id: "ascension", name: "Ascension", icon: "⬆️", kind: "ability", key: "G", max: 1, effect: { ascension: 1 }, description: "Give up all your forward speed to shoot straight up on a column of wind.", minLevel: 5 },
+  { id: "falcon", name: "Falcon Stance", icon: "🦅", kind: "ability", key: "H", max: 1, effect: { falcon: 1 }, description: "Toggle: wings tucked like a stooping falcon. You fall much faster and go faster, but steer stiffly.", minLevel: 4 },
+  { id: "butterfly", name: "Butterfly Stance", icon: "🌸", kind: "ability", key: "H", max: 1, effect: { butterfly: 1 }, description: "Toggle: cape and wings spread wide. You fall slowest and turn tightest, but slowly.", minLevel: 4 },
+  { id: "echoTrail", name: "Echo-Trail", icon: "➰", kind: "passive", max: 1, effect: { echoTrail: 1 }, description: "You leave a ribbon of light. Close a full circle across it and it becomes a wind ring that hurls you on.", minLevel: 6 },
 ];
 
 const MULTIPLIED: (keyof RunStats)[] = ["drag", "sink", "stall", "proximity"];
@@ -137,10 +139,16 @@ export function statsFor(picked: readonly UpgradeId[]): RunStats {
   return stats;
 }
 
-/** Three upgrades to choose from at a portal: the same for everyone on the same run and path */
-export function offer(runSeed: number, level: number, picked: readonly UpgradeId[]): Upgrade[] {
+/** The pilot level an upgrade starts being offered at */
+export const upgradeLevel = (upgrade: Upgrade): number => upgrade.minLevel ?? 1;
+
+/**
+ * Three upgrades to choose from at a portal: the same for everyone on the same run and path who
+ * has reached the same pilot level (`playerLevel`; abilities above it are never offered)
+ */
+export function offer(runSeed: number, level: number, picked: readonly UpgradeId[], playerLevel = Infinity): Upgrade[] {
   const rng = makeRng(runSeed, `upgrades/${level}/main`);
-  const open = UPGRADES.filter((u) => picked.filter((p) => p === u.id).length < u.max);
+  const open = UPGRADES.filter((u) => upgradeLevel(u) <= playerLevel && picked.filter((p) => p === u.id).length < u.max);
   // Abilities you don't have yet come up more often early on, so runs get interesting fast
   const weight = (u: Upgrade) => (u.kind === "ability" && !picked.includes(u.id) ? 2 : 1);
   const choices: Upgrade[] = [];

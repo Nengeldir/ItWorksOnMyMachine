@@ -62,10 +62,11 @@ export interface FlightMods {
   turn: number; // multiplies how hard you can steer: pitch rate, turn rate and the load limit (stances, Aero-Braking)
   climb: number; // multiplies gravity's pull along the path while climbing (Zenith Climber)
   ascend: number; // m/s: Ascension's rise straight up (0: none); no flight model while it lasts (`ascendStep`)
+  recharge: number; // multiplies how fast the boost reserve refills (collection powers, food charms)
 }
 
 export function plainMods(): FlightMods {
-  return { drag: 1, sink: 1, stall: 1, proximityBoost: 1, boost: 0, lift: 0, hover: 0, glideLock: false, thrust: 0, dive: 0, diveAngle: 1, hang: false, turn: 1, climb: 1, ascend: 0 };
+  return { drag: 1, sink: 1, stall: 1, proximityBoost: 1, boost: 0, lift: 0, hover: 0, glideLock: false, thrust: 0, dive: 0, diveAngle: 1, hang: false, turn: 1, climb: 1, ascend: 0, recharge: 1 };
 }
 
 /** The shallow dive the glide lock holds (radians below the horizon) */
@@ -409,7 +410,7 @@ export class Flight {
       this.boostCharge = Math.max(0, this.boostCharge - boostInput * dt / p.boostSeconds);
       if (this.boostCharge === 0) { this.exhausted = true; this.boost = 0; }
     } else if (boostInput === 0) {
-      this.boostCharge = Math.min(1, this.boostCharge + p.boostRecharge * dt);
+      this.boostCharge = Math.min(1, this.boostCharge + p.boostRecharge * (mods?.recharge ?? 1) * dt);
     }
     // Glide lock: with pitch let go, ease the nose towards a shallow, efficient glide
     if (mods?.glideLock && Math.abs(input.pitch) < 0.05) {

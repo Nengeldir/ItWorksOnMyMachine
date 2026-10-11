@@ -132,7 +132,7 @@ export class ExploreSession {
         this.store.set({ summary, offers: [], next: null });
         this.game?.victoryLap(dailySeed());
       },
-    }, this.level(biome, mood), Infinity); // the sandbox never runs out of lives
+    }, this.level(biome, mood), { lives: Infinity }); // the sandbox never runs out of lives, and every item and ability is open
   }
 
   pick(id: UpgradeId) {

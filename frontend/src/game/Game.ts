@@ -34,7 +34,10 @@ import { FX, RANGES, RINGS, RUN, TUNING_GROUPS, WATER, loadTuning, resetTuning, 
 import { ABILITY } from "./run/abilities";
 import { PICKUP, PICKUP_PREFS } from "./run/pickups";
 import { ITEM, RUN_ITEMS, type RunItemId } from "./run/items";
-import { RunController, type RunEvents, type RunHost } from "./run/controller";
+import { ORB } from "./run/orbs";
+import { RunController, type RunEvents, type RunHost, type RunOptions } from "./run/controller";
+import type { Equipped } from "./collection/abilities";
+import { type Rarity, rarityIndex } from "./collection/rarity";
 import type { UpgradeId } from "./run/upgrades";
 import type { RunHud } from "./run/run";
 import { type Level, levelId, seedLevel } from "./world/biomes";
@@ -193,11 +196,19 @@ export class Game implements RunHost {
   private readonly avatar: Avatar;
   private readonly companion: Companion;
   private testLook: Appearance | null = null;
+  /** Test mode's charm, tried from the fitting room (undefined: the profile's own) */
+  private testCharm: string | undefined = undefined;
+  /** What the pilot wears and carries: the profile's, or the test fitting room's */
+  private equipped(): Equipped {
+    const own = profileClient.equipped();
+    return { ...(this.testLook ?? own), charm: this.testCharm ?? own.charm ?? "none" };
+  }
   private readonly appearanceChanged = () => {
     const appearance = this.testLook ?? profileClient.appearance();
     this.avatar.setAppearance(appearance);
     this.companion.set(appearance.pet);
     this.sparkles.setAppearance(appearance);
+    this.run?.setEquipped(this.equipped());
   };
   private readonly fx: PilotFx;
   /** Rare cosmetics' own particles (decoration only) */
@@ -344,6 +355,7 @@ export class Game implements RunHost {
       if ((action === "flap" || action === "hover" || action === "plunge" || action === "burst" || action === "resonance" || action === "ascend" || action === "stance") && this.crashedAt === null && !this.glide.active) this.run?.ability(action);
       if (action === "useItem" && this.crashedAt === null && !this.glide.active) this.run?.useItem();
       if (action === "nextItem") this.run?.nextItem();
+      if (action === "charm" && this.crashedAt === null && !this.glide.active) this.run?.useCharm();
     };
     if (options.testMode) {
       this.testPlayback = new TestPlayback(container.parentElement ?? container);
@@ -480,8 +492,11 @@ export class Game implements RunHost {
 
   // --- the roguelike run (RunHost) ---------------------------------------------------
 
-  /** Turns this game into a roguelike run: levels, upgrades, portals (never used for races) */
-  startRun(seed: number, events: RunEvents, initial?: Level, lives?: number) {
+  /**
+   * Turns this game into a roguelike run: levels, upgrades, portals (never used for races).
+   * `options`: lives, the pilot's level and what they wear (the collection's powers)
+   */
+  startRun(seed: number, events: RunEvents, initial?: Level, options: RunOptions = {}) {
     this.run?.dispose();
     this.autopiloting = false;
     this.introAutopilot = false;
@@ -489,7 +504,8 @@ export class Game implements RunHost {
     this.whiteOut(0);
     if (this.paused) this.togglePause();
     this.freeze(false);
-    this.run = new RunController(seed, this, events, lives);
+    this.equipment.clearWorn();
+    this.run = new RunController(seed, this, events, { equipped: this.equipped(), ...options });
     this.run.start(initial);
   }
 
@@ -574,6 +590,13 @@ export class Game implements RunHost {
     this.appearanceChanged();
   }
 
+  /** ?test only: carry a keepsake as the charm (null: back to the profile's own) */
+  testCharmItem(id: string | null) {
+    if (!this.testPlayback) return;
+    this.testCharm = id ?? undefined;
+    this.appearanceChanged();
+  }
+
   unequip(slot: ItemSlot) {
     this.equipment.unequip(slot);
   }
@@ -615,10 +638,14 @@ export class Game implements RunHost {
     }
   }
 
-  stinger(kind: "portal" | "upgrade" | "dash" | "gate" | "finish" | "item") {
+  stinger(kind: "portal" | "upgrade" | "dash" | "gate" | "finish" | "item" | "orb") {
     if (kind === "gate") this.audio.ring();
     else if (kind === "finish") this.audio.finish();
     else this.audio.stinger(kind);
+  }
+
+  treasure(rarity: Rarity) {
+    this.audio.treasure(rarityIndex(rarity));
   }
 
   portalHum(near: number) {
@@ -1001,6 +1028,7 @@ export class Game implements RunHost {
     this.combo = 0;
     this.run?.abilities.reset();
     this.run?.items.reset();
+    this.run?.orbs.reset();
     this.avatar.revive();
     this.avatar.visible = true;
     this.fx.reset();
@@ -1071,7 +1099,7 @@ export class Game implements RunHost {
     if(this.run?.items.invulnerable) part=null;
     else if(this.run?.items.phasing){this.hitLand=false;part=touching(this.others,this.flight.position,this.flight.quaternion,other,hitLocal);}
     else part=this.hitTest(other,distance);
-    if ((part || this.world.lost(y,z)) && this.run?.items.revive(this.flight)) {
+    if ((part || this.world.lost(y,z)) && this.run?.revive(this.flight)) {
       this.prevPosition.copy(this.flight.position);
       this.prevQuaternion.copy(this.flight.quaternion);
       this.prevVelocity.copy(this.flight.velocity);
@@ -1094,7 +1122,7 @@ export class Game implements RunHost {
     } else if (!this.run?.items.frozenCombo && (this.comboIdle += STEP) > 1.2) {
       this.combo = 0;
     }
-    this.style += this.proximity ** 2 * this.flight.speed * STEP * this.multiplier * 0.5;
+    this.style += this.proximity ** 2 * this.flight.speed * STEP * this.multiplier * 0.5 * (this.run?.styleRate ?? 1);
 
     if (this.raceState === "racing") {
       this.recorder.record(this.clock() - this.startAt, this.flight.position, this.flight.quaternion, this.flight.boost, this.flight.brake, this.flight.dodgePhase);
@@ -1137,8 +1165,9 @@ export class Game implements RunHost {
     const abilities = this.run!.abilities;
     const items = this.run!.items;
     const direction = tmp.copy(f.velocity).normalize();
-    // The abilities first (they come back by themselves), then an item that's used up by it
-    const how = abilities.save(part, normal, direction) ?? items.save(part, normal, direction);
+    // The abilities first (they come back by themselves), then an item that's used up by it, then a
+    // collection power that comes back each level (Frost skate)
+    const how = abilities.save(part, normal, direction) ?? items.save(part, normal, direction) ?? this.run!.perkSave(part, normal, direction);
     if (!how) return false;
     if (how === "roll") f.deflect(normal, ABILITY.recoverPush, ABILITY.recoverKeep);
     else if (how === "shield") f.deflect(normal, ABILITY.weavePush, ABILITY.weaveKeep);
@@ -1158,6 +1187,7 @@ export class Game implements RunHost {
       f.dodge(normal.dot(f.right) >= 0 ? 1 : -1, this.recoverRoll, true);
     }
     if (how === "roll" || how === "shield") abilities.saved(how, hitPoint, normal);
+    else if (how === "frost") this.run!.perkSaved(how, hitPoint, normal);
     else items.saved(how, hitPoint, normal);
     return true;
   }
@@ -1264,9 +1294,9 @@ export class Game implements RunHost {
   private barrelRoll(dir: 1 | -1) {
     if (this.crashedAt !== null || this.raceState === "countdown" || this.frozen || !this.view.ready) return;
     // In a run, Wind-Shear Dash turns the dodge into a blink; never while hover-stalling
-    const abilities = this.run?.abilities;
-    if (abilities && (abilities.hang >= 0 || abilities.ascend >= 0)) return;
-    if (this.flight.dodge(dir, abilities ? abilities.dodgeParams() : FLIGHT)) abilities?.dodged(dir, this.flight);
+    const run = this.run;
+    if (run && (run.abilities.hang >= 0 || run.abilities.ascend >= 0)) return;
+    if (this.flight.dodge(dir, run ? run.dodgeParams() : FLIGHT)) run?.dodged(dir, this.flight);
   }
 
   /** A gate was passed: it flares (WorldView), and shards, stars and light burst out of it */
@@ -1604,7 +1634,7 @@ export class Game implements RunHost {
       if (this.run) {
         this.abilityFx.update(dt, this.run.abilities, this.world, this.flight, this.rig.camera, this.passedGate, moving);
         this.abilityFx2.update(dt, this.run.abilities, this.world, this.flight, this.rig.camera, this.passedGate, moving);
-        this.itemFx.update(dt, this.run.items, this.flight, moving);
+        this.itemFx.update(dt, this.run.items, this.flight, moving, this.run.charm);
       } else {
         this.abilityFx.hide();
         this.abilityFx2.hide();
@@ -1698,7 +1728,15 @@ export class Game implements RunHost {
       plunge ||= ability.id === "plunge";
       gale ||= ability.id === "galeForce";
     }
-    this.touch?.sync(this.paused, (!this.autopiloting || this.introAutopilot) && !this.frozen, flap, hover, plunge, gale);
+    const bag = runHud?.items.bag ?? [];
+    const lit = bag[runHud?.items.selected ?? 0];
+    const charm = runHud?.charm;
+    this.touch?.sync(this.paused, (!this.autopiloting || this.introAutopilot) && !this.frozen, {
+      flap, hover, plunge, gale,
+      item: lit && !lit.auto ? lit.icon : undefined,
+      nextItem: bag.length > 1,
+      charm: charm && charm.state !== "passive" ? (charm.state === "burning" || charm.state === "strapping" ? "Rocket off" : "Charm") : undefined,
+    });
     return {
       seed: this.world.seed,
       run: runHud,
@@ -1981,6 +2019,9 @@ export class Game implements RunHost {
     abilities.close();
     const items = gui.addFolder("Run items (not saved)");
     for (const key of Object.keys(ITEM) as (keyof typeof ITEM)[]) items.add(ITEM, key);
+    const orbs = gui.addFolder("Stamina orbs (next level, not saved)");
+    for (const key of Object.keys(ORB) as (keyof typeof ORB)[]) orbs.add(ORB, key);
+    orbs.close();
     const pickups = gui.addFolder("Island pickups (next level, not saved)");
     for(const key of Object.keys(PICKUP) as (keyof typeof PICKUP)[]) pickups.add(PICKUP,key);
     items.close();

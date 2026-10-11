@@ -15,12 +15,12 @@ const makeRun = (lives) => {
   const summaries = [];
   const host = {
     scene: new THREE.Scene(), particles: { emit() {} }, flight, prevPosition: new THREE.Vector3(), camera: new THREE.PerspectiveCamera(),
-    world: { course, seed: 7, biome: { name: "Sky Isles" }, palette: { name: "Alpine", accent: "#fff" }, distance: () => 100 },
+    world: { course, seed: 7, biome: { name: "Sky Isles" }, palette: { name: "Alpine", accent: "#fff", night: 0 }, level: { key: { difficulty: 0 } }, distance: () => 100 },
     view: { ready: true, setRings() {} }, style: 240, pixelHeight: 720, white: 0,
     setLevel() {}, respawnAt() {}, freeze() {}, veil() {}, insideWormhole() {}, whiteOut(k) { this.white = k; },
-    gateBurst() {}, wingbeat() {}, stinger() {}, portalHum() {},
+    gateBurst() {}, wingbeat() {}, stinger() {}, portalHum() {}, treasure() {},
   };
-  const run = new RunController(7, host, { ended: (s) => summaries.push(s) }, lives);
+  const run = new RunController(7, host, { ended: (s) => summaries.push(s) }, { lives });
   run.start();
   return { run, host, summaries };
 };

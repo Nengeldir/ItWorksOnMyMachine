@@ -98,7 +98,8 @@ CATALOG = [
         ("gale", "Zephyr filigree", 1), ("tide", "Pearl tide", 1),
         ("frost", "Glacial cathedral", 2), ("ember", "Phoenix sunrise", 2),
         ("storm", "Thunder sovereign", 2), ("astral", "Constellation wings", 3)]],
-    # Keepsakes: one is carried as the charm, its power on every adventure
+    # Keepsakes: one is carried as the charm, its power on every adventure. The adventure items' rarities
+# match their run rarity (frontend run/items.ts), which is what their power is balanced on
     *[entry("item", asset, name, rarity, "charm") for asset, name, rarity in [
         ("firework", "Giant firework", 2), ("candyWrapped", "Berry candy", 0),
         ("lollipop", "Swirl lollipop", 0), ("starCandy", "Star candy", 1),
@@ -106,15 +107,15 @@ CATALOG = [
         ("wingedHelm", "Winged helm keepsake", 2), ("apple", "Apple", 0),
         ("peach", "Peach", 0), ("grapes", "Grapes", 0),
         ("cherries", "Cherries", 0), ("starfruit", "Starfruit", 1),
-        ("spiritLantern", "Spirit Lantern", 1), ("echoConch", "Echoing Conch", 1),
+        ("spiritLantern", "Spirit Lantern", 1), ("echoConch", "Echoing Conch", 0),
         ("phoenixFeather", "Feather of the Great Phoenix", 3), ("silkRibbon", "Cloud-Spun Silk Ribbon", 1),
         ("vortexGeode", "Vortex Geode", 1), ("aeroBoots", "Aero-Boots of the Adepti", 2),
-        ("stormKite", "Stormcaller's Kite", 2), ("glacialPrism", "Glacial Prism", 2),
-        ("sunNectar", "Sun-Kissed Nectar", 1), ("windTether", "Tether of the Wind Spirit", 2),
-        ("mothCape", "Illusory Moth Cape", 2), ("resonantChimes", "Resonant Chimes", 1),
-        ("crystalUpdraft", "Crystallized Updraft", 2), ("duskHourglass", "Dusk-Weaver's Hourglass", 3),
-        ("electroPrism", "Electro-Charged Prism", 2), ("dragonTear", "Tear of the Dragon", 3),
-        ("anemoCatcher", "Anemo Catcher", 1), ("starflakeShield", "Starflake Shield", 2),
+        ("stormKite", "Stormcaller's Kite", 1), ("glacialPrism", "Glacial Prism", 2),
+        ("sunNectar", "Sun-Kissed Nectar", 0), ("windTether", "Tether of the Wind Spirit", 2),
+        ("mothCape", "Illusory Moth Cape", 3), ("resonantChimes", "Resonant Chimes", 1),
+        ("crystalUpdraft", "Crystallized Updraft", 1), ("duskHourglass", "Dusk-Weaver's Hourglass", 3),
+        ("electroPrism", "Electro-Charged Prism", 2), ("dragonTear", "Tear of the Dragon", 2),
+        ("anemoCatcher", "Anemo Catcher", 0), ("starflakeShield", "Starflake Shield", 2),
         ("gliderWax", "Luminescent Glider Wax", 1)]],
 ]
 BY_KEY = {e["key"]: e for e in CATALOG}

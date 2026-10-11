@@ -55,18 +55,26 @@ export function skyIslesLevel(seed: number): Level {
 
 const SEED_SEARCH = 10_000; // a seed for a given biome turns up in about as many tries as there are maps
 
+/** Levels in a run (run/run.ts RUN_LENGTH, repeated here so the workers' bundle stays small) */
+const RUN_LEVELS = 8;
+
+/** How much harder level `index` of a run is: 0 for the first, 1 for the last (course.ts `Difficulty`) */
+export const runDifficulty = (index: number): number => Math.max(0, Math.min(1, (index - 1) / (RUN_LEVELS - 1)));
+
 /**
  * Level `index` of the run `runSeed` in `biome`: the same map for everyone on the same run seed. Its seed
- * is one that stands for `biome`, so the level is exactly the map a time trial on that seed flies.
+ * is one that stands for `biome`, so the level is the map a time trial on that seed flies, its line
+ * (and the land carved round it) shaped harder the deeper into the run it comes (`runDifficulty`).
  */
 export function runLevel(runSeed: number, index: number, biome: BiomeId): Level {
+  const difficulty = runDifficulty(index);
   // The first level is the very map the run's seed stands for: the card picked in the map select
   const own = seedMap(runSeed);
-  if (index === 1 && own.biome === biome) return makeLevel({ biome, seed: runSeed, mood: own.mood, runSeed, index });
+  if (index === 1 && own.biome === biome) return makeLevel({ biome, seed: runSeed, mood: own.mood, runSeed, index, difficulty });
   for (let k = 0; k < SEED_SEARCH; k++) {
     const seed = 1 + Math.floor(hashToUnit(`run/${runSeed}/${index}/${biome}/${k}`) * 2_147_483_000);
     const map = seedMap(seed);
-    if (map.biome === biome) return makeLevel({ biome, seed, mood: map.mood, runSeed, index });
+    if (map.biome === biome) return makeLevel({ biome, seed, mood: map.mood, runSeed, index, difficulty });
   }
   throw new Error(`No seed stands for ${biome}`);
 }
@@ -91,5 +99,5 @@ export function makeLevel(key: LevelKey): Level {
 
 /** Identifies a level's map, e.g. to cache it or to drop stale worker results */
 export function levelId(key: LevelKey): string {
-  return `${key.biome}:${key.seed}:${key.mood}`;
+  return `${key.biome}:${key.seed}:${key.mood}${key.difficulty ? `:d${key.difficulty.toFixed(3)}` : ""}`;
 }

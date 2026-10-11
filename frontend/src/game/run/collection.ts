@@ -12,12 +12,25 @@ import { capeSpec, type CapeId, type HatId, type ShoeId } from "../cosmetics/cat
 import { PetModel } from "../pets/models";
 import type { PetId } from "../pets/catalog";
 import { Kind, fx, type Particles } from "../particles";
+import { RARITY_STYLE, rarityIndex } from "../collection/rarity";
 
-/** Metres from the nearest hoop centre. These are rules, independent of visual bobbing. */
+/**
+ * Treasures: metres from the nearest hoop centre, further for rarer ones (each band about 1.6
+ * times the last), so the rarest invite the longest detours. Rules, independent of visual bobbing
+ */
 export const COLLECTION_DISTANCE: Record<Rarity, readonly [number, number]> = {
-  common: [8, 13], uncommon: [13, 20], rare: [20, 29], legendary: [29, 45],
+  common: [8, 13], uncommon: [13, 21], rare: [21, 34], legendary: [34, 55],
 };
-export const RARITY_COLOR: Record<Rarity, string> = { common: "#89d9de", uncommon: "#85c797", rare: "#9b8ce3", legendary: "#efba61" };
+/** The shared rarity palette (collection/rarity.ts) */
+export const RARITY_COLOR: Record<Rarity, string> = {
+  common: RARITY_STYLE.common.color, uncommon: RARITY_STYLE.uncommon.color, rare: RARITY_STYLE.rare.color, legendary: RARITY_STYLE.legendary.color,
+};
+/** Wind crystals keep their own cyan, whatever the rarity palette */
+const CRYSTAL_COLOR = "#89d9de";
+/** Crystals sit along the racing line between the hoops: never closer than this to one (m along the course)… */
+const CRYSTAL_HOOP_GAP = 16;
+/** …and this far off the line at most (well inside the 11 m tube carved clear of rock) */
+const CRYSTAL_OFFSET: readonly [number, number] = [1.5, 5];
 export const COLLECTION_RADIUS = 3.2;
 /** Adventure crystals allow a wider fly-by; independent of their animated model size. */
 export const CRYSTAL_RADIUS = 5.2;
@@ -54,19 +67,22 @@ export function placeCollection(world: World, rewards: Reward[]): CollectionPick
   const rings = world.course.rings.filter(r => !r.finish);
   const pickups: CollectionPickup[] = [];
   for (const reward of rewards) {
+    if (reward.kind === "crystal") {
+      const crystal = placeCrystal(world, reward, rings, pickups);
+      if (crystal) pickups.push(crystal);
+      continue;
+    }
     const ring = rings[Math.min(rings.length - 1, Math.floor(reward.anchor * rings.length))];
     if (!ring) continue;
     right.crossVectors(ring.normal, Y).normalize();
     if (right.lengthSq() < .1) right.set(1, 0, 0);
     up.crossVectors(right, ring.normal).normalize();
     const [min, max] = COLLECTION_DISTANCE[reward.rarity];
-    // Crystals sit ahead of the hoop; treasures invite a lateral detour.
+    // Treasures invite a lateral detour from a hoop
     for (let attempt = 0; attempt < 32; attempt++) {
       const a = reward.angle + attempt * 2.39996323;
       const distance = min + (max - min) * ((attempt * .37 + .35) % 1);
-      const position = ring.position.clone();
-      if (reward.kind === "crystal") position.addScaledVector(ring.normal, -distance);
-      else position.addScaledVector(right, Math.cos(a) * distance).addScaledVector(up, Math.sin(a) * distance);
+      const position = ring.position.clone().addScaledVector(right, Math.cos(a) * distance).addScaledVector(up, Math.sin(a) * distance);
       let nearest = Infinity;
       for (const other of rings) nearest = Math.min(nearest, other.position.distanceTo(position));
       if (nearest < min || nearest >= max || world.lost(position.y, position.z)) continue;
@@ -82,6 +98,31 @@ export function placeCollection(world: World, rewards: Reward[]): CollectionPick
     }
   }
   return pickups;
+}
+
+/**
+ * A crystal along the racing line between two hoops: its anchor (0..1) says how far along the
+ * course, its angle where round the line. Moved along a little if a hoop or rock is in the way
+ */
+function placeCrystal(world: World, reward: Reward, rings: { position: THREE.Vector3 }[], placed: CollectionPickup[]): CollectionPickup | null {
+  const course = world.course;
+  const from = course.start.z + 40, to = course.endZ - 60;
+  const tangent = new THREE.Vector3(), side = new THREE.Vector3(), lift = new THREE.Vector3();
+  for (let attempt = 0; attempt < 24; attempt++) {
+    const shift = attempt === 0 ? 0 : (attempt % 2 ? 1 : -1) * Math.ceil(attempt / 2) * 6;
+    const z = from + (to - from) * reward.anchor + shift;
+    if (z < from || z > to || rings.some(ring => Math.abs(ring.position.z - z) < CRYSTAL_HOOP_GAP)) continue;
+    course.tangentAt(z, tangent);
+    side.crossVectors(tangent, Y).normalize();
+    lift.crossVectors(side, tangent).normalize();
+    const a = reward.angle + attempt * 0.9;
+    const reach = CRYSTAL_OFFSET[0] + (CRYSTAL_OFFSET[1] - CRYSTAL_OFFSET[0]) * ((reward.angle * 1.7 + attempt * 0.37) % 1);
+    const position = course.pointAt(z).addScaledVector(side, Math.cos(a) * reach).addScaledVector(lift, Math.sin(a) * reach * 0.6);
+    if (world.lost(position.y, position.z) || placed.some(p => p.position.distanceToSquared(position) < 7 ** 2)) continue;
+    const pickup = { reward, position, normal: tangent.clone(), side: side.clone(), up: lift.clone(), collected: false };
+    if (collectionClear(world, pickup)) return pickup;
+  }
+  return null;
 }
 
 /** The same toon models are used in the world and the inventory's animated preview. */
@@ -102,7 +143,7 @@ export function collectionModel(reward: Pick<Reward, "kind" | "asset" | "rarity"
     group = paintedModel(b);
   } else {
     const b = new Builder();
-    for (let i = 0; i < 3; i++) b.add(new THREE.OctahedronGeometry(.24, 0), RARITY_COLOR[reward.rarity], .5,
+    for (let i = 0; i < 3; i++) b.add(new THREE.OctahedronGeometry(.24, 0), CRYSTAL_COLOR, .5,
       [(i - 1) * .3, i === 1 ? .15 : 0, 0], [0, i * .7, (i - 1) * -.25], [.75, 1.65, .75]);
     group = paintedModel(b);
   }
@@ -137,20 +178,43 @@ export class Collection {
     });
     scene.add(this.group);
   }
-  step(before: THREE.Vector3, after: THREE.Vector3, collect: (reward: Reward) => void, particles: Particles) {
+  /** `reach`: metres added to the pickup radius (the fox, the stargazer hat) */
+  step(before: THREE.Vector3, after: THREE.Vector3, collect: (reward: Reward) => void, particles: Particles, reach = 0) {
     // Respawns and other teleports never sweep across unvisited rewards.
     if (before.distanceToSquared(after) > 20 ** 2) return;
     for (const view of this.views) {
       const { pickup } = view;
-      if (pickup.collected || (PICKUP_PREFS.crystalsOnly && pickup.reward.kind !== "crystal") || !sweptPickup(before, after, pickup.position, pickup.reward.kind === "crystal" ? CRYSTAL_RADIUS : COLLECTION_RADIUS) || !collectionClear(this.world, pickup)) continue;
+      if (pickup.collected || (PICKUP_PREFS.crystalsOnly && pickup.reward.kind !== "crystal") || !sweptPickup(before, after, pickup.position, (pickup.reward.kind === "crystal" ? CRYSTAL_RADIUS : COLLECTION_RADIUS) + reach) || !collectionClear(this.world, pickup)) continue;
       collect(pickup.reward);
       pickup.collected = true; view.root.visible = false;
-      this.color.set(RARITY_COLOR[pickup.reward.rarity]);
-      const count = Math.round((pickup.reward.kind === "crystal" ? 26 : 14) * COLLECTION_FX.burst * particles.budget);
-      for (let i = 0; i < count; i++) {
-        const a = i * Math.PI * 2 / Math.max(1, count);
-        particles.emit(pickup.position, this.velocity.set(Math.cos(a) * 3, 1 + Math.sin(a * 3), Math.sin(a) * 3), fx(.8, .32, this.color, Kind.Star, -1, 2, .8));
-      }
+      this.burst(pickup, particles);
+    }
+  }
+
+  /**
+   * The pickup's burst of light in its rarity's color: a soft flash, a ring of stars, and for rarer
+   * finds more of everything, a column of light and (legendary) a second, wider ring of shards
+   */
+  private burst(pickup: CollectionPickup, particles: Particles) {
+    const crystal = pickup.reward.kind === "crystal";
+    const rarity = crystal ? 0 : rarityIndex(pickup.reward.rarity);
+    this.color.set(crystal ? CRYSTAL_COLOR : RARITY_STYLE[pickup.reward.rarity].light);
+    const budget = COLLECTION_FX.burst * particles.budget;
+    for (let i = 0; i < Math.round((2 + rarity) * budget); i++)
+      particles.emit(pickup.position, this.velocity.set(0, 0.5, 0), fx(0.45 + rarity * 0.1, 1.4 + rarity * 0.7, this.color, Kind.Glow, 0, 3, 1.1 + rarity * 0.25));
+    const count = Math.round((crystal ? 26 : 18 + rarity * 18) * budget);
+    for (let i = 0; i < count; i++) {
+      const a = i * Math.PI * 2 / Math.max(1, count);
+      const speed = 3 + rarity * 1.2;
+      particles.emit(pickup.position, this.velocity.set(Math.cos(a) * speed, 1 + Math.sin(a * 3), Math.sin(a) * speed), fx(.8 + rarity * .15, .32 + rarity * .05, this.color, Kind.Star, -1, 2, .8 + rarity * .3));
+    }
+    for (let i = 0; rarity >= 2 && i < Math.round((rarity === 3 ? 40 : 18) * budget); i++) {
+      this.motePosition.copy(pickup.position).add(this.velocity.set((Math.random() - .5) * 1.2, (Math.random() - .5) * 2, (Math.random() - .5) * 1.2));
+      particles.emit(this.motePosition, this.velocity.set(0, 6 + Math.random() * 10, 0), fx(.7 + Math.random() * .5, .18 + Math.random() * .14, this.color, Kind.Glow, 0, .8, 2));
+    }
+    for (let i = 0; rarity === 3 && i < Math.round(30 * budget); i++) {
+      const a = i * Math.PI * 2 / 30;
+      particles.emit(pickup.position, this.velocity.set(Math.cos(a) * 11, (Math.random() - .5) * 2, Math.sin(a) * 11), fx(1, .4, this.color, Kind.Shard, 2, 1.2, 1.8));
     }
   }
   frame(dt: number, camera: THREE.Vector3, visible: boolean, particles?: Particles) {
@@ -175,7 +239,7 @@ export class Collection {
       root.scale.setScalar((pickup.reward.kind === "crystal" ? COLLECTION_FX.crystalSize : COLLECTION_FX.size) * grown);
       if (particles && pickup.reward.kind === "crystal" && pickup.position.distanceToSquared(camera) < COLLECTION_FX.moteDistance ** 2) {
         view.moteDebt += dt * COLLECTION_FX.crystalMotes * particles.budget;
-        this.color.set(RARITY_COLOR[pickup.reward.rarity]);
+        this.color.set(CRYSTAL_COLOR);
         for (; view.moteDebt >= 1; view.moteDebt--) {
           const a = Math.random() * Math.PI * 2;
           const radius = COLLECTION_FX.crystalSize * (.35 + Math.random() * .2);
