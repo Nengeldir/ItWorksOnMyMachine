@@ -327,7 +327,31 @@ body:has(.menu-backdrop:empty) {
   }
 }
 
-/* Phones and narrow windows: the profile pill sits top left, where the centred logo would run under it,
+/* Inventory, market and the Hall of Winds, top left: words on wide screens, icons on narrow ones */
+.menu-nav {
+  position: fixed;
+  top: 1.5rem;
+  left: 1.5rem;
+  z-index: 3;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.menu-nav button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.65rem 0.95rem;
+  border-radius: 18px;
+}
+
+@media (max-width: 1000px) {
+  .menu-nav { top: 0.75rem; left: 0.75rem; gap: 0.4rem; }
+  .menu-nav button { width: 2.75rem; height: 2.75rem; padding: 0; justify-content: center; border-radius: 50%; }
+  .menu-nav button span { display: none; }
+}
+
+/* Phones and narrow windows: the pills sit top left, where the centred logo would run under them,
    so the page starts below the pills; short screens (phones held sideways) also get a smaller logo */
 @media (max-width: 1000px) {
   .menu {

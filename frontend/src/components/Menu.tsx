@@ -1,4 +1,4 @@
-import { IconDice5, IconMap, IconSettings, IconUser, IconX } from "@tabler/icons-react";
+import { IconBackpack, IconBuildingStore, IconDice5, IconMap, IconSettings, IconTrophy, IconUser, IconX } from "@tabler/icons-react";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { type LeaderboardEntry, type User, getLeaderboard } from "../api";
 import type { Screen } from "../App";
@@ -12,6 +12,8 @@ import { usePaletteTheme } from "../theme";
 import SettingsPanel from "./SettingsPanel";
 import MapSelect, { type MapSelectMode } from "./MapSelect";
 import ProfilePanel from "./ProfilePanel";
+import ShopPanel from "./ShopPanel";
+import LeaderboardPanel from "./LeaderboardPanel";
 import { HelpButton } from "./Help";
 import MenuBackdrop from "./MenuBackdrop";
 import TodaysBest from "./TodaysBest";
@@ -26,7 +28,8 @@ interface MenuProps {
 }
 
 const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
-  const [inventoryOpen, setInventoryOpen] = useState(false);
+  // The landing page's journal, market and hall: one open at a time
+  const [sheet, setSheet] = useState<"inventory" | "shop" | "hall" | null>(null);
   const [daily, setDaily] = useState(() => dailySeed());
   // Today's run has a seed of its own, so it starts on another map than today's course
   const [dailyRun, setDailyRun] = useState(() => dailyRunSeed());
@@ -107,8 +110,14 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
 
   return (
     <main className="menu">
-      <button className="menu-inventory glass" onClick={() => setInventoryOpen(true)}>Profile & inventory</button>
-      {inventoryOpen && <ProfilePanel onClose={() => setInventoryOpen(false)} />}
+      <nav className="menu-nav" aria-label="Your pilot">
+        <button className="glass" onClick={() => setSheet("inventory")} aria-label="Profile and inventory"><IconBackpack size={20} /><span>Inventory</span></button>
+        <button className="glass" onClick={() => setSheet("shop")} aria-label="Lantern Market"><IconBuildingStore size={20} /><span>Market</span></button>
+        <button className="glass" onClick={() => setSheet("hall")} aria-label="Hall of Winds: the leaderboard"><IconTrophy size={20} /><span>Hall of Winds</span></button>
+      </nav>
+      {sheet === "inventory" && <ProfilePanel onClose={() => setSheet(null)} />}
+      {sheet === "shop" && <ShopPanel onClose={() => setSheet(null)} />}
+      {sheet === "hall" && <LeaderboardPanel onClose={() => setSheet(null)} />}
       <MenuBackdrop seed={shown} mode="drift" onSnapshot={keepArt} onShown={setLive} settings={settings} />
 
       <HelpButton className="menu-help" />

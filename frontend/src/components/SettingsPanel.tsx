@@ -42,7 +42,7 @@ export default function SettingsPanel({ settings, onSettings, onClose }: Props) 
     window.addEventListener("keyup", stop, true);
     return () => { window.removeEventListener("keydown", capture, true); window.removeEventListener("keyup", stop, true); el.close(); };
   }, []);
-  const toggle = (key: "invertPitch" | "invertMouse" | "invertGamepad" | "invertTouch" | "reducedMotion" | "muted" | "crystalsOnly", label: string) => (
+  const toggle = (key: "invertPitch" | "invertMouse" | "invertGamepad" | "invertTouch" | "reducedMotion" | "muted" | "crystalsOnly" | "lessonMode", label: string) => (
     <label className="check"><input type="checkbox" checked={!!settings[key]} onChange={e => update({ [key]: e.target.checked })} />{label}</label>
   );
   const slider = (key: "mouseSensitivity" | "deadZone" | "musicVolume" | "effectsVolume", label: string, min: number, max: number, step: number, fallback: number) => (
@@ -86,6 +86,10 @@ export default function SettingsPanel({ settings, onSettings, onClose }: Props) 
     </section>
     <section><h3>Adventure</h3>
       {toggle("crystalsOnly", "Crystal pickups only (hide item and treasure pickups)")}
+    </section>
+    <section><h3>Lesson mode</h3>
+      {toggle("lessonMode", "Lesson mode")}
+      <p className="settings-help">When it's on, pressing <kbd>{keyLabel(bindings.lesson[0] ?? "KeyL")}</kbd> covers the screen with a blank document and holds the game still. The back arrow, Escape or the key again brings you back. Change the key under Keyboard bindings.</p>
     </section>
     <section><h3>Sound</h3>
       {toggle("muted", "Mute all audio")}

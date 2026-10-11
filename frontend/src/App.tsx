@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { defaultBindings, keyboardBinding } from "./game/bindings";
+import LessonCover from "./components/LessonCover";
 import { type User, getMe } from "./api";
 import GameScreen from "./components/GameScreen";
 import { randomSeed } from "./game/rng";
@@ -51,10 +53,36 @@ const App = () => {
   const updateSettings = (next: Settings) => {
     setSettings(next);
     saveSettings(next);
+    // The public pilot page shows the character style chosen here
+    if (next.pilotStyle !== settings.pilotStyle) void profileClient.setStyle(next.pilotStyle ?? 1).catch(() => {});
   };
 
+  // Lesson mode: its key (when turned on in the settings) covers everything with a blank document
+  const [lesson, setLesson] = useState(false);
+  const endLesson = useCallback(() => setLesson(false), []);
+  useEffect(() => {
+    if (!settings.lessonMode) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      // Typing (in the document itself too) types; a dialog waiting for a key to rebind keeps it
+      if (target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "")) return;
+      if (!lesson && document.querySelector("dialog[open]")) return;
+      if (!(settings.bindings ?? defaultBindings()).lesson.includes(keyboardBinding(event))) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setLesson((on) => !on);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [settings, lesson]);
+  const cover = lesson && <LessonCover onBack={endLesson} />;
+
   if (screen.kind === "menu") {
-    return <Menu me={me} settings={settings} onSettings={updateSettings} joinCode={screen.joinCode} go={go} />;
+    return <>
+      <Menu me={me} settings={settings} onSettings={updateSettings} joinCode={screen.joinCode} go={go} />
+      {cover}
+    </>;
   }
   const newcomer = forceTutorial || (me !== null && !me.has_played && tutorialState(me.id) === null);
   const playing = screen.kind === "solo" || screen.kind === "room" || screen.kind === "run";
@@ -77,6 +105,7 @@ const App = () => {
         onTutorialEnd={endTutorial}
       />
       {playing && newcomer && !asked && <FirstFlight onStart={() => answer("started")} onSkip={() => answer("skipped")} />}
+      {cover}
     </>
   );
 };

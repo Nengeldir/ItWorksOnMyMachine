@@ -48,7 +48,7 @@ export function placeOrbs(world: World, level: number): Orb[] {
     const sway = Math.sin(i * 1.7 + world.seed * 0.37) * 4.5;
     const rise = Math.cos(i * 2.3 + world.seed * 0.11) * 1.8;
     const position = course.pointAt(z).addScaledVector(side, sway).addScaledVector(lift, rise);
-    if (world.distance(position.x, position.y, position.z) < 3) continue;
+    if (world.distance(position.x, position.y, position.z) < 3 || course.rings.some((ring) => Math.abs(ring.position.z - position.z) < ORB.hoopGap)) continue;
     orbs.push({ position, phase: (i * 2.399) % (Math.PI * 2), collected: false });
   }
   return orbs;

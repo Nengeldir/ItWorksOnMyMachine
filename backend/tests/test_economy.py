@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 import app as app_module
 from app import app
 from models import User
-from profiles import (ADVENTURES_PER_HOUR, CATALOG, CRYSTALS_PER_RUN, MIN_LEVEL_SECONDS, PRICES, RARITIES,
+from profiles import (ADVENTURES_PER_HOUR, BY_KEY, CATALOG, CRYSTALS_PER_RUN, MIN_LEVEL_SECONDS, PRICES, RARITIES,
                       STARTERS, WHEEL, Profiles, level_progress, reward_plan, shop_offers)
 from store import Store
 
@@ -252,3 +252,24 @@ def test_rate_limit_refuses_bursts_and_forgives_with_time(monkeypatch):
     limit.check("someone-else")
     clock[0] += 61
     limit.check("pilot")
+
+
+def test_keepsakes_match_the_adventure_items_rarity_and_unlock_level():
+    """The server's catalog and the frontend's run items (frontend/src/game/run/items.ts) must agree"""
+    import re
+    from pathlib import Path
+    source = (Path(__file__).resolve().parents[2] / "frontend" / "src" / "game" / "run" / "items.ts").read_text()
+    block = source.split("export const RUN_ITEMS")[1].split("];")[0]
+    by_rarity = [1, 1, 3, 6]
+    checked = 0
+    for line in block.splitlines():
+        found = re.search(r'id: "(\w+)", model: "(\w+)".*?rarity: (\d)', line)
+        if not found or found.group(1) == "cometFirework":
+            continue
+        item, rarity = found.group(1), int(found.group(3))
+        level = re.search(r"minLevel: (\d+)", line)
+        entry = BY_KEY[f"item:{item}"]
+        assert entry["rarity"] == RARITIES[rarity], item
+        assert entry["min_level"] == (int(level.group(1)) if level else by_rarity[rarity]), item
+        checked += 1
+    assert checked == 19
