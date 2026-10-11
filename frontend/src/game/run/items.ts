@@ -3,7 +3,7 @@ import type { Flight, FlightInput, FlightMods, HitPart } from "../flight";
 import type { ItemId } from "../items/models";
 import { clamp, smoothstep } from "../math";
 import { segmentDistanceSq } from "./segments";
-import { placePickups, pickupClear, PICKUP, type Pickup } from "./pickups";
+import { placePickups, pickupClear, PICKUP, PICKUP_PREFS, type Pickup } from "./pickups";
 import type { Course } from "../world/course";
 
 // The design list's items (CLAUDE.md, "Items and abilities"), for runs only:
@@ -258,6 +258,13 @@ export class Items {
     return true;
   }
 
+  /** Test mode only: the oldest item leaves a full bag, so the next one handed out always fits */
+  makeRoom() {
+    if (this.bag.length < ITEM.bag) return;
+    this.bag.shift();
+    this.selected = Math.max(0, this.selected - 1);
+  }
+
   /** The next item in the bag becomes the one to use */
   cycle() {
     if (this.bag.length > 1) this.selected = (this.selected + 1) % this.bag.length;
@@ -434,7 +441,7 @@ export class Items {
     const checkClearance = this.clearanceTime <= 0;
     if (checkClearance) this.clearanceTime = 0.5;
     for (const pickup of this.pickups) {
-      if (pickup.collected) continue;
+      if (pickup.collected || PICKUP_PREFS.crystalsOnly) continue;
       // Trees arrive with streamed land; recheck nearby air as it arrives.
       if (checkClearance && pickup.position.distanceToSquared(flight.position)<200**2)
         pickup.blocked = !pickupClear(this.world!,pickup.position);

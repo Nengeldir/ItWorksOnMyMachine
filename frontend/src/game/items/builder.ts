@@ -71,12 +71,12 @@ export function star(outer: number, inner: number, depth: number, points = 5): T
 }
 
 /** A leaf or feather shape along +y, with a little thickness */
-export function leaf(length: number, width: number, depth = 0.008): THREE.BufferGeometry {
+export function leaf(length: number, width: number, depth = 0.008, segments = 6): THREE.BufferGeometry {
   const shape = new THREE.Shape();
   shape.moveTo(0, 0);
   shape.quadraticCurveTo(width, length * 0.4, 0, length);
   shape.quadraticCurveTo(-width, length * 0.4, 0, 0);
-  return new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, curveSegments: 6 }).translate(0, 0, -depth / 2);
+  return new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, curveSegments: segments }).translate(0, 0, -depth / 2);
 }
 
 const tmpColor = new THREE.Color();

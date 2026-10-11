@@ -353,6 +353,9 @@ export class Avatar {
   private readonly chest = new THREE.Object3D();
   private readonly head = new THREE.Object3D();
   private readonly pony: THREE.Object3D[] = [];
+  /** The two hair-and-eyes styles under the head; one is shown */
+  private readonly styles: THREE.Object3D[] = [];
+  private style: 1 | 2 = 1;
   private readonly left: Side;
   private readonly right: Side;
   private readonly cape: Cloth;
@@ -459,12 +462,12 @@ export class Avatar {
     skeleton.position.y = -0.74;
     this.body.add(skeleton);
 
-    const part = (joint: THREE.Object3D, builder: PartBuilder, material = skinMat) => {
+    const part = (joint: THREE.Object3D, builder: PartBuilder, material = skinMat, outline = true) => {
       const painted = builder.build();
       this.painted.push(painted);
       const mesh = new THREE.Mesh(painted.geometry, material);
       joint.add(mesh);
-      if (ink) {
+      if (ink && outline) {
         const outline = new THREE.Mesh(painted.geometry, ink);
         mesh.add(outline);
         this.outlines.push(outline);
@@ -532,38 +535,82 @@ export class Avatar {
         .add(sphere(0.055, 10, 8), "clothLight", [-0.1, 0.22, 0], [0, 0, 0], [1, 0.85, 0.85]),
     );
 
-    // Head: big and round, with bangs, side locks, a cowlick and a face
+    // Head: big and round, a soft jaw and cheeks under it, and the face drawn on in layers
     this.head.position.set(0, 0.32, 0);
     this.chest.add(this.head);
     const hair: Paint = (p, t, out) => out.copy(p.y > 0.12 && p.z < 0.02 ? t.hairShine : t.hair);
-    const headBuilder = new PartBuilder()
+    const iris: Paint = (_p, t, out) => out.copy(t.eye).lerp(t.cloth, 0.5);
+    const lip: Paint = (_p, t, out) => out.copy(t.blush).lerp(t.eye, 0.35);
+    const nose: Paint = (_p, t, out) => out.copy(t.skin).lerp(t.blush, 0.3);
+    part(this.head, new PartBuilder()
       .add(sphere(0.165, 20, 14), "skin", [0, 0.15, 0], [0, 0, 0], [1, 0.97, 0.98])
-      .add(
-        new THREE.SphereGeometry(0.178, 20, 12, 0, TAU, 0, Math.PI * 0.58),
-        hair,
-        [0, 0.165, 0.008],
-        [0.35, 0, 0],
-      )
-      .add(sphere(0.12, 12, 8), hair, [0, 0.17, 0.07], [0, 0, 0], [1.3, 1.25, 1.1])
-      // Side locks and bangs hang down (cones point up, so flip them)
-      .add(new THREE.ConeGeometry(0.045, 0.17, 8), hair, [0.14, 0.06, -0.035], [Math.PI + 0.1, 0, -0.12])
-      .add(new THREE.ConeGeometry(0.045, 0.17, 8), hair, [-0.14, 0.06, -0.035], [Math.PI + 0.1, 0, 0.12])
-      .add(new THREE.ConeGeometry(0.038, 0.12, 7), hair, [0.065, 0.205, -0.125], [Math.PI + 0.45, 0, 0.3])
-      .add(new THREE.ConeGeometry(0.04, 0.13, 7), hair, [-0.01, 0.21, -0.135], [Math.PI + 0.4, 0, -0.05])
-      .add(new THREE.ConeGeometry(0.034, 0.11, 7), hair, [-0.085, 0.2, -0.12], [Math.PI + 0.45, 0, -0.35])
-      .add(new THREE.ConeGeometry(0.018, 0.14, 6), hair, [0.02, 0.36, -0.01], [-0.7, 0, 0.2])
-      // Eyes with a highlight, blush, a tiny hair clip
-      .add(sphere(0.026, 10, 8), "eye", [0.058, 0.13, -0.148], [0, 0, 0], [0.85, 1.25, 0.5])
-      .add(sphere(0.026, 10, 8), "eye", [-0.058, 0.13, -0.148], [0, 0, 0], [0.85, 1.25, 0.5])
-      .add(sphere(0.008, 6, 5), "white", [0.064, 0.143, -0.16])
-      .add(sphere(0.008, 6, 5), "white", [-0.052, 0.143, -0.16])
-      .add(sphere(0.022, 8, 6), "blush", [0.092, 0.095, -0.128], [0, 0, 0], [1.2, 0.6, 0.4])
-      .add(sphere(0.022, 8, 6), "blush", [-0.092, 0.095, -0.128], [0, 0, 0], [1.2, 0.6, 0.4])
-      .add(new THREE.OctahedronGeometry(0.03, 0), "trim", [0.15, 0.22, -0.04], [0, 0, 0.6], [1, 1.4, 0.6]);
-    part(this.head, headBuilder);
+      // Cheeks and a small rounded chin give the face its front, so it takes light like a sculpted shape
+      .add(sphere(0.13, 18, 12), "skin", [0, 0.09, -0.04], [0, 0, 0], [1.04, 0.84, 0.95])
+      .add(sphere(0.045, 10, 8), "skin", [0.075, 0.085, -0.115], [0, 0, 0], [1, 0.85, 0.7])
+      .add(sphere(0.045, 10, 8), "skin", [-0.075, 0.085, -0.115], [0, 0, 0], [1, 0.85, 0.7]));
+    // Small features without ink, which would swallow them
+    part(this.head, new PartBuilder()
+      .add(sphere(0.013, 8, 6), nose, [0, 0.102, -0.166], [0, 0, 0], [0.85, 0.8, 1.25])
+      .add(new THREE.TorusGeometry(0.017, 0.004, 4, 10, Math.PI * 0.75), lip, [0, 0.066, -0.158], [0.35, 0, Math.PI * 1.125])
+      .add(sphere(0.02, 8, 6), "blush", [0.08, 0.09, -0.143], [0, 0.5, 0], [1.2, 0.6, 0.3])
+      .add(sphere(0.02, 8, 6), "blush", [-0.08, 0.09, -0.143], [0, -0.5, 0], [1.2, 0.6, 0.3]), skinMat, false);
 
-    // A ponytail in two links that swing
-    let parent: THREE.Object3D = this.head;
+    // Two styles, swapped by `setStyle`: 1 has the ponytail, bangs and big lashed eyes; 2 short tousled hair and straighter brows
+    for (const style of [1, 2] as const) {
+      const look = new THREE.Object3D();
+      look.visible = style === 1;
+      this.head.add(look);
+      this.styles.push(look);
+      const one = style === 1;
+      const hairBuilder = new PartBuilder()
+        .add(new THREE.SphereGeometry(0.178, 20, 12, 0, TAU, 0, Math.PI * 0.58), hair, [0, 0.165, 0.008], [0.35, 0, 0]);
+      if (one) {
+        hairBuilder
+          .add(sphere(0.12, 12, 8), hair, [0, 0.17, 0.07], [0, 0, 0], [1.3, 1.25, 1.1])
+          // Side locks and bangs hang down (cones point up, so flip them)
+          .add(new THREE.ConeGeometry(0.045, 0.17, 8), hair, [0.14, 0.06, -0.035], [Math.PI + 0.1, 0, -0.12])
+          .add(new THREE.ConeGeometry(0.045, 0.17, 8), hair, [-0.14, 0.06, -0.035], [Math.PI + 0.1, 0, 0.12])
+          .add(new THREE.ConeGeometry(0.038, 0.12, 7), hair, [0.065, 0.205, -0.125], [Math.PI + 0.45, 0, 0.3])
+          .add(new THREE.ConeGeometry(0.04, 0.13, 7), hair, [-0.01, 0.21, -0.135], [Math.PI + 0.4, 0, -0.05])
+          .add(new THREE.ConeGeometry(0.034, 0.11, 7), hair, [-0.085, 0.2, -0.12], [Math.PI + 0.45, 0, -0.35])
+          .add(new THREE.ConeGeometry(0.018, 0.14, 6), hair, [0.02, 0.36, -0.01], [-0.7, 0, 0.2])
+          // A tiny hair clip
+          .add(new THREE.OctahedronGeometry(0.03, 0), "trim", [0.15, 0.22, -0.04], [0, 0, 0.6], [1, 1.4, 0.6]);
+      } else {
+        hairBuilder
+          .add(sphere(0.115, 12, 8), hair, [0, 0.16, 0.06], [0, 0, 0], [1.32, 1.18, 1.08])
+          // Short side burns and a tousled fringe swept to one side
+          .add(new THREE.ConeGeometry(0.038, 0.1, 7), hair, [0.145, 0.1, -0.03], [Math.PI + 0.1, 0, -0.1])
+          .add(new THREE.ConeGeometry(0.038, 0.1, 7), hair, [-0.145, 0.1, -0.03], [Math.PI + 0.1, 0, 0.1])
+          .add(new THREE.ConeGeometry(0.042, 0.11, 7), hair, [0.075, 0.225, -0.12], [Math.PI + 0.75, 0, 0.55])
+          .add(new THREE.ConeGeometry(0.044, 0.12, 7), hair, [0.005, 0.235, -0.13], [Math.PI + 0.7, 0, 0.35])
+          .add(new THREE.ConeGeometry(0.04, 0.1, 7), hair, [-0.075, 0.225, -0.12], [Math.PI + 0.75, 0, 0.1])
+          // Spikes on the crown and the nape, swept back by the wind
+          .add(new THREE.ConeGeometry(0.04, 0.12, 7), hair, [0.03, 0.33, 0.02], [-0.9, 0, -0.25])
+          .add(new THREE.ConeGeometry(0.04, 0.12, 7), hair, [-0.05, 0.31, 0.06], [-1.2, 0, 0.3])
+          .add(new THREE.ConeGeometry(0.045, 0.11, 7), hair, [0.05, 0.12, 0.15], [-2.4, 0, -0.2])
+          .add(new THREE.ConeGeometry(0.045, 0.11, 7), hair, [-0.05, 0.12, 0.15], [-2.4, 0, 0.2]);
+      }
+      part(look, hairBuilder);
+      // Eyes: a dark almond, a lit iris in its lower half, two highlights, a lash line and a brow
+      const eyes = new PartBuilder();
+      for (const s of [1, -1]) {
+        const x = 0.058 * s, y = one ? 0.13 : 0.128, turn = 0.38 * s;
+        eyes
+          .add(sphere(one ? 0.027 : 0.025, 12, 8), "eye", [x, y, -0.149], [0, turn, 0], one ? [0.85, 1.25, 0.5] : [0.92, 1.02, 0.5])
+          .add(sphere(0.018, 10, 8), iris, [x, y - 0.012, -0.158], [0, turn, 0], [0.85, 0.85, 0.35])
+          .add(sphere(0.008, 6, 5), "white", [x + 0.007 * s, y + 0.013, -0.166])
+          .add(sphere(0.004, 5, 4), "white", [x - 0.008 * s, y - 0.016, -0.166])
+          .add(capsule(0.0045, one ? 0.05 : 0.044), "eye", [x, y + (one ? 0.031 : 0.025), -0.156], [0, turn, Math.PI / 2 - 0.14 * s])
+          .add(capsule(one ? 0.0035 : 0.006, one ? 0.034 : 0.04), "hair", [x + 0.004 * s, y + (one ? 0.06 : 0.05), -0.155], [0, turn, Math.PI / 2 + (one ? 0.2 : 0.05) * s]);
+        // Style 1's lashes flick up at the outer corner
+        if (one) eyes.add(new THREE.ConeGeometry(0.006, 0.022, 5), "eye", [x + 0.026 * s, y + 0.03, -0.148], [0, turn, -1.1 * s]);
+      }
+      part(look, eyes, skinMat, false);
+    }
+
+    // A ponytail in two links that swing (style 1)
+    let parent: THREE.Object3D = this.styles[0];
     const ponyAt: Vec[] = [
       [0, 0.24, 0.13],
       [0, -0.13, 0],
@@ -769,6 +816,13 @@ export class Avatar {
   }
 
   /** Cosmetic meshes live on the animated joints; the flight hitbox never reads them. */
+  /** Style 1 or 2 (hair and eyes); looks only */
+  setStyle(style: 1 | 2) {
+    if (style === this.style) return;
+    this.style = style;
+    this.styles.forEach((look, i) => (look.visible = i + 1 === style));
+  }
+
   setAppearance(appearance: Appearance) {
     if (this.ghost) return;
     if (appearance.wings !== this.appearance.wings) {

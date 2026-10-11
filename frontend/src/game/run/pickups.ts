@@ -2,6 +2,9 @@ import { Vector3 } from "three";
 import { makeRng, range } from "../rng";
 import type { ItemWorld, RunItemInfo, RunItemId } from "./items";
 
+/** Player preference (Settings): show and collect only crystals, no item or treasure pickups */
+export const PICKUP_PREFS = { crystalsOnly: false };
+
 /** Run-only generation: a separate random stream never changes land or race gates. */
 export const PICKUP = {
   spacing: 125,

@@ -26,14 +26,12 @@ import { type ControlSettings, type InputObserver, type TestAction, Input, contr
 import { FX_LIGHT, Kind, Particles, fx, fxTime, sceneryTime } from "./particles";
 import { PilotFx } from "./pilotfx";
 import { INTERPOLATION_DELAY_MS, Pilot, type PilotSample } from "./pilots";
-// import { Trail } from "./trail";
-// import { WINGTIPS, createAirplane } from "./airplane";
 import { clamp } from "./math";
 import { SpeedLines } from "./speedlines";
 import { TOON_LIGHT } from "./toon";
 import { FX, RANGES, RINGS, RUN, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveTuning } from "./tuning";
 import { ABILITY } from "./run/abilities";
-import { PICKUP } from "./run/pickups";
+import { PICKUP, PICKUP_PREFS } from "./run/pickups";
 import { ITEM, RUN_ITEMS, type RunItemId } from "./run/items";
 import { RunController, type RunEvents, type RunHost } from "./run/controller";
 import type { UpgradeId } from "./run/upgrades";
@@ -125,6 +123,8 @@ export interface GameEvents {
   testSpeed?(rate: number): void;
   raceStarted?(): void;
   finished?(result: FinishResult): void;
+  /** The player steered during a run's opening autopilot: hand over (RunSession.begin) */
+  takeOver?(): void;
 }
 
 export interface GameOptions {
@@ -226,6 +226,8 @@ export class Game implements RunHost {
   private white = 0;
   /** After a run: the pilot flies the default map by itself and the player controls nothing */
   private autopiloting = false;
+  /** A run's opening: the pilot glides the racing line until the player steers; no gates, nothing scored */
+  private introAutopilot = false;
   /** Flies the racing line on rails while nobody plays (the chase backdrop, the victory lap) */
   private readonly rails = new Autopilot();
   /** When the white light after the finale began to clear (null: not clearing) */
@@ -324,6 +326,8 @@ export class Game implements RunHost {
       }
       if (this.paused && action !== "mute") return;
       if (action === "mute") this.audio.toggleMute();
+      // Any move during the opening autopilot takes the controls (and the move happens)
+      if (this.introAutopilot && action !== "mute" && action !== "respawn") this.takeOver();
       // On autopilot after a run, nothing else answers
       if (this.autopiloting) return;
       if (action === "respawn") this.respawnNow();
@@ -343,7 +347,9 @@ export class Game implements RunHost {
           if (this.paused) this.togglePause();
           this.run?.testWin();
         } else if (action === "item") {
+          // Every item in turn; a full bag lets its oldest go, so all twenty stay reachable
           const id = RUN_ITEMS[this.nextTestItem++ % RUN_ITEMS.length].id;
+          this.run?.items.makeRoom();
           if (this.run && !this.run.giveItem(id)) this.nextTestItem--;
         } else if (!this.paused && this.crashedAt === null) this.run?.spawnTestPortal();
       };
@@ -360,7 +366,7 @@ export class Game implements RunHost {
     this.softParticles = new Particles(3000, true);
     this.ambient = new Ambient(this.particles, this.softParticles);
     this.avatar = new Avatar(options.color);
-    this.companion = new Companion(this.scene);
+    this.companion = new Companion(this.scene, this.particles);
     this.appearanceChanged();
     window.addEventListener(APPEARANCE_EVENT, this.appearanceChanged);
     this.fx = new PilotFx(this.avatar, options.color, this.particles);
@@ -429,6 +435,8 @@ export class Game implements RunHost {
   /** Call from a click: locks the mouse and starts audio (browsers need a gesture for both) */
   engage = (event?: Event) => {
     if (this.paused) return;
+    // Clicking the view during the opening autopilot takes the controls
+    if (this.introAutopilot) this.takeOver();
     // A finger has no pointer to lock
     if (!this.autopiloting && (event as PointerEvent | undefined)?.pointerType !== "touch") this.input.lockPointer();
     this.audio.start();
@@ -466,6 +474,7 @@ export class Game implements RunHost {
   startRun(seed: number, events: RunEvents, initial?: Level, lives?: number) {
     this.run?.dispose();
     this.autopiloting = false;
+    this.introAutopilot = false;
     this.clearWhiteFrom = null;
     this.whiteOut(0);
     if (this.paused) this.togglePause();
@@ -482,6 +491,7 @@ export class Game implements RunHost {
   victoryLap(seed: number) {
     this.run?.dispose();
     this.run = null;
+    this.introAutopilot = false;
     this.autopiloting = true;
     if (document.pointerLockElement) document.exitPointerLock();
     this.freeze(false);
@@ -490,14 +500,38 @@ export class Game implements RunHost {
     this.clearWhiteFrom = this.elapsed;
   }
 
-  /** Holds the pilot on the start line until the player takes off */
+  /**
+   * A run's opening: the pilot glides the racing line on rails (no gates, nothing scored,
+   * the level clock stopped) until the player steers or takes off. Control is then handed
+   * over where the pilot is, at the rail's speed, and the gates ahead grow in
+   */
   holdRun(hold: boolean) {
     if (this.paused) this.togglePause();
-    this.freeze(hold);
-    if (!hold) {
+    this.freeze(false);
+    if (hold) {
+      this.introAutopilot = this.autopiloting = true;
+      this.input.reset();
+      this.input.releasePointer();
+      this.view.setRings("hidden", 0);
+      this.run?.preview();
+      return;
+    }
+    const preview = this.introAutopilot;
+    this.introAutopilot = this.autopiloting = false;
+    if (!preview) {
       this.respawn(0);
       this.run?.takeOff();
+      return;
     }
+    this.rails.reset();
+    this.run?.takeOff(this.flight.position);
+  }
+
+  /** The player steered (or clicked, or pressed a move) during the opening autopilot */
+  private takeOver() {
+    if (!this.introAutopilot) return;
+    if (this.events.takeOver) this.events.takeOver();
+    else this.holdRun(false);
   }
 
   /** Dev tools: give the running run an upgrade now, e.g. `__game.grant("slipstream")` */
@@ -805,6 +839,8 @@ export class Game implements RunHost {
     this.input.settings = controls;
     this.input.reset();
     this.rig.reducedMotion = !!controls.reducedMotion;
+    this.avatar.setStyle(controls.pilotStyle ?? 1);
+    PICKUP_PREFS.crystalsOnly = !!controls.crystalsOnly;
     this.audio.setPreferences(controls.musicVolume ?? 1, controls.effectsVolume ?? 1,
       controls.muted ?? false);
     const mode = controls.quality ?? "auto";
@@ -1160,6 +1196,8 @@ export class Game implements RunHost {
     const { x, y, z } = this.flight.position;
     const distance = Math.min(this.world.rock.distance(x, y, z), this.world.otherDistance(x, y, z));
     this.proximity = clamp((SCORE_RANGE - distance) / (SCORE_RANGE - 1.5), 0, 1);
+    // The opening glide flies before the gates have grown in
+    if (this.introAutopilot) return;
     const rings = this.world.course.rings;
     for (let i = 0; i < rings.length; i++) {
       if (!this.view.gates.passing(i) && this.crossed(i)) this.gateBurst(i);
@@ -1470,6 +1508,11 @@ export class Game implements RunHost {
     this.sceneryClock+=worldDt;sceneryTime.value=this.sceneryClock;
     this.adaptQuality(realDt);
 
+    if (this.introAutopilot) {
+      // Steering, boost or brake ends the opening autopilot; tilt and sticks need a clear push
+      const probe = this.input.sample(dt);
+      if (Math.abs(probe.pitch) > 0.25 || Math.abs(probe.roll) > 0.25 || (probe.boost ?? 0) > 0.5 || (probe.brake ?? 0) > 0.5) this.takeOver();
+    }
     const selfFlying = this.attract === "chase" || this.autopiloting;
     if (!selfFlying) {
       this.touch?.update();
@@ -1517,6 +1560,12 @@ export class Game implements RunHost {
       if (this.accumulator >= STEP) this.accumulator %= STEP;
     }
     if (selfFlying && this.flight.position.z > this.world.course.endZ + AUTOPILOT_LOOP) this.respawn(0);
+    // The opening glide starts over before the last gates, so taking over always leaves a course to fly
+    if (this.introAutopilot) {
+      const rings = this.world.course.rings;
+      const last = rings[Math.max(0, rings.length - 3)];
+      if (last && tmp.subVectors(this.flight.position, last.position).dot(last.normal) > 0) this.respawn(0);
+    }
 
     // Draw between the last two physics states
     const alpha = clamp(this.accumulator / STEP, 0, 1);
@@ -1638,7 +1687,7 @@ export class Game implements RunHost {
       plunge ||= ability.id === "plunge";
       gale ||= ability.id === "galeForce";
     }
-    this.touch?.sync(this.paused, !this.autopiloting && !this.frozen, flap, hover, plunge, gale);
+    this.touch?.sync(this.paused, (!this.autopiloting || this.introAutopilot) && !this.frozen, flap, hover, plunge, gale);
     return {
       seed: this.world.seed,
       run: runHud,
@@ -1799,7 +1848,6 @@ export class Game implements RunHost {
     this.composerLoading = false;
     if (!this.bloomOn || this.composer) return;
     const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
-    // Half floats keep colors above 1, so only really bright things bloom; 4× MSAA keeps edges clean
     // Half floats keep colors above 1 for the bloom; FX.bloomMsaa sets the antialiasing samples
     const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: FX.bloomMsaa });
     const composer = new EffectComposer(this.renderer, target);

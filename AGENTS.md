@@ -105,6 +105,10 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 
 | Path | What it does |
 | :--- | :--- |
+| `profile/` | Profile types/API client, server-authoritative balances, durable account-scoped pickup outbox and equipped appearance notifications |
+| `game/run/collection.ts` | Adventure-only hoop-distance rarity placement, streamed obstacle clearance, swept collection (5.2 m crystals, 3.2 m treasures), toon crystal/cape tokens, nearby budgeted crystal motes and pickup animation |
+| `game/cosmetics/`, `game/pets/` | Cape/hat/shoe/wing catalogs and toon models; eight detailed bird/mythological pets leading on their own unscored autopilot rail |
+| `components/ProfilePanel.tsx`, `components/CollectionPreview.tsx`, `components/TestCollectionPanel.tsx` | Persistent profile/inventory, equip controls, XP/crystal HUD, animated model preview and unsaved test fitting room |
 | `game/Game.ts` | The game: frame loop, fixed 120 Hz physics steps, race state, ring checks, HUD data, effects wiring (gate bursts, skim spray, gate motes), rendering with optional bloom, adaptive quality, test-only shared time scaling, the `?tune` panel |
 | `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only. `touching()` is the pilot's hitbox (`FLIGHT.hit*`): a ball for the body and a rectangle per wing, tilted up at a dihedral, fixed in the flight frame (never the animated pose), sampled against the distance field with early-outs; `hitboxWorld()` is the same hitbox in world space, which `Game.step` tests against the land drawn (`LandCollider`). `FlightMods` (run upgrades: drag, sink, stall, proximity boost, dash boost, thermal lift, hover, glide lock, `thrust`, a plunge's `dive`, Hover-Stall's `hang`, `turn` for stances and Aero-Braking, Zenith's `climb`, Ascension's `ascend`, a rise on rails in `ascendStep`) are only ever passed in run mode; `flap()`, `launch()`, `deflect()`, `surge()` and a forced `dodge()` are run abilities |
 | `game/avatar.ts` | The pilot: a cel-shaded chibi flyer built from primitives (merged per body part, vertex-colored), a procedural cape and scarf (`Cloth`), two-segment feathered wings, and all its animation: bank lead spring, barrel rolls, flapping driven by effort, bobbing, cloth ripples, limb reactions. Also `createLabel` and `glowTexture` |
@@ -161,6 +165,9 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 Backend (`backend/`): `app.py` endpoints, `rooms.py` race state machine and
 15 Hz SSE relay, `store.py` SQLite runs and ghosts, `models.py` Pydantic models.
 Players never collide, so the server only relays positions.
+`profiles.py` adds account-owned adventure profiles, issued reward manifests,
+claim deduplication, XP progression and equipment in the same SQLite file.
+See `docs/adventure-profile.md` for the four new endpoints and initial balance.
 
 ### Key mechanics
 
@@ -279,6 +286,237 @@ Item 10 completes the first milestone: three air steps, paired feathered boots, 
 ### 2026-10-10: Adventure items (continued)
 
 Resumed the existing item commits (1–3) and completed item 4, Comet Tail Firework: quick back equip, fuse, roaring flame and sparks, stiff bucking steering. Rules stay in run/items.ts; ItemFx only reads them. TypeScript checked; build/lint and complete milestone tests follow. Remaining: items 5–20, deterministic island pickups, two PRs, browser and balance checks.
+
+### 2026-10-10: Adventure title outline and opening autopilot PR #47
+
+- Implemented in `/private/tmp/wind-rider-adventure-intro`, branch
+  `feature/adventure-title-intro`, from main `db8c8f9`; committed as `0a2f1bf`.
+  Original Pengyue source and unfinished lighting edits are preserved.
+- `Game.ts` / `RunSession.ts`: unscored safe-rail autopilot behind Take off;
+  no run progress while waiting. Starting resets flight, camera, inputs, gate
+  visuals, run clock and title timing. `RunHud.css`: thin warm glowing outline
+  on map-transition title lettering. README and tracked CLAUDE.md updated.
+- Build, lint and all 82 frontend tests pass (Node 22.14 asynchronous resolver).
+  Backend untouched. Browser unavailable: cua lists no connected browsers;
+  title readability and handover feel need visual verification.
+- Published [PR #47](https://github.com/Nengeldir/ItWorksOnMyMachine/pull/47)
+  into main. Existing profile/cosmetics PR #43 remains separate. No merge done.
+
+
+### 2026-10-10: Action-specific gold accents for rolls and boosts
+
+- `pilotfx.ts`: barrel rolls now alternate wingtips for fine twin golden arcs,
+  mixing tiny twinkles and flakes. Boost sheds short-lived gold grains with
+  occasional ivory slivers swept backwards; it replaces boost's generic mote
+  density increase. Both use swept poses/subframe births and respect particle
+  budgets, remote-pilot share, stationary gating and ghost brightness.
+- `tuning.ts`: `FX.rollSparkles` (72/s peak) and `boostSparkles` (48/s full boost)
+  adjust density live; README documents both. Grain size/light reuse existing
+  controls. No flight, collision or action-timing changes.
+- Verified build, lint and all four particle regression tests pass. A temporary
+  emitter harness checked glide, boost, roll, combined actions and zero budget:
+  distinct particle mixes, grains at most 0.16 m, bounded brightness and
+  subframe births. Browser visual verification remains unavailable.
+
+
+### 2026-10-10: Gentler portal and gate crossing particles
+
+- `run/portal.ts`: reduced crossing burst count, size, brightness and lifetime;
+  default `RUN.portalFlash` is now 0.25. Nearby portal-rim stars are also smaller,
+  dimmer and less numerous so they do not accumulate into large light blobs.
+- `Game.ts`: crystal-gate crossing bursts use fewer, finer, dimmer shards/stars
+  and scattered small grains around the pilot, replacing the overlapping large
+  glow particles. Crossing detection, camera kick and gameplay are unchanged.
+- Verified frontend build and lint pass. Browser visual verification remains
+  unavailable as noted above; inspect both crossing effects in day/night scenes.
+
+
+### 2026-10-10: Fine wing grains and tighter light halos
+
+- Reproduced frame-batched wing motes with a deterministic `PilotFx` test:
+  multiple births occupied the same wingtip position, particularly at 30 fps.
+  Continuous wingtip, cosmetic, brake and roll emitters now sample the previous
+  and current wing pose and preserve each birth's subframe age in `Particles`.
+  Reset/stationary handling prevents streaks across respawn teleports.
+- Smaller, shorter-lived wing motes and decorated-wing accents, fewer bright
+  stars, and compact, dimmer downstroke/braking puffs replace overlapping blobs.
+  Glow/firefly sprites have a defined core and narrow soft edge; stars retain
+  delicate rays with bounded brightness.
+- Bloom keeps its close glow but reduces the three broadest blur layers, strength,
+  radius and night amplification so lamps/crystals keep their silhouettes.
+  `FX.wingGrainSize`, `wingGrainLight`, `wingPuffSize` and `bloomHalo` are live
+  tuning controls, documented in README. No gameplay or collision changes.
+- Files: `game/pilotfx.ts`, `particles.ts`, `Game.ts`, `tuning.ts`,
+  `tests/pilotfx.test.mjs`, README and this log. Build and lint pass; all 104
+  frontend tests pass using a temporary compatible loader for local Node 22.14
+  (`npm test`'s existing `registerHooks` requires a newer Node).
+- Visual verification remains pending: in-app browser unavailable, and browser/
+  native-app inventory returned no surfaces (Computer Use service startup failed).
+
+
+### 2026-10-10: Clearer crystal pickups and gentler portal crossings
+
+- `run/collection.ts`: adventure crystals grow from 2.2 to 3.8 m, with a
+  deliberate pickup-radius increase from 3.2 to 5.2 m. Nearby crystals emit
+  ten drifting stars per second at full quality within 80 m; their collection
+  burst grows from 14 to 26 stars. Emission respects particle budgets, streamed
+  obstacle clearance, visibility and collection state. Treasure radius stays
+  3.2 m; flight, race gates, placement and reward values are unchanged.
+- `tuning.ts`, `run/portal.ts`, `Game.ts`, `components/Hud.css`: default
+  `RUN.portalFlash` is 0.35, reducing crossing burst count/intensity, overlay
+  sparkle opacity and screen brightening (35% previously, 7% now). Blur,
+  portal timing and finale white-out remain intact. Added crystal size/mote
+  controls and portal flash to `?tune`; updated README and profile docs.
+- Verified frontend production build and lint; all 100 frontend tests pass
+  using Node 22.14's equivalent asynchronous resolver with type stripping.
+  New collection tests cover wider fly-bys and budget/distance/clearance/
+  transition guards. Existing bundle-size warning remains. Backend untouched.
+- Browser visual QA unavailable: cua reports both iab and chrome unavailable.
+  Day/night readability, bloom, crossing comfort and focused frame time remain
+  a manual follow-up in Next up. No commit or deployment performed.
+
+
+### 2026-10-10: Decorated wings, detailed pets and the test fitting room
+
+- Included all eight existing pets (swallow, owl, crane, phoenix, dragon, kirin,
+  fox, griffin). Removed solo flight from the catalog; no-companion is an unequip
+  action. Profile v2 preserves progress and earned pets while adding starter wings.
+- Added eight wing choices: original feathers, prismatic plumage, jade sails,
+  pearl fins, ice blades, phoenix feathers, storm blades and floating star fans.
+  cosmetics/wings.ts builds mirrored merged toon fans on the existing wing joints.
+  Gold shafts, coverts, gems and filigree distinguish their shapes; PilotFx emits
+  budgeted elemental particles. Flight hitboxes and wingtip markers stay unchanged.
+  Finer cape embroidery, colored panels and unique hems.
+- Pets have slimmer proportions, smaller eyes, layered feathers/manes, gilded
+  harnesses and elemental jewels. Autopilot.guide places their own visual Flight
+  on the safe course rail ahead, through hoop centres. It never modifies player
+  flight, collections, gate checks, scores or ghosts.
+- TestCollectionPanel and cosmetics/sandbox.ts expose all 46 choices offline in
+  ?test. Front/rear previews, local flight trials, carry/use/firework controls,
+  unequip and reset; opening pauses, closing restores prior pause state. No profile
+  writes/unlocks. COSMETIC_FX and PET_LOOKS.lead are available through ?tune.
+- Verified production build, lint, 78 frontend tests and 31 backend tests before
+  main integration. New checks cover all nine biomes and every hoop, finite and
+  mirrored wing models, offline sandbox guards and migration without lost pets.
+  Node 22.14 uses the equivalent asynchronous resolver; backend uses the existing
+  temporary Python environment. Bundle-size and Starlette warnings remain.
+  Chrome visual control still fails with unsupported API-key authentication;
+  no visual QA claimed. Merged main through 251d430, including the waterfall
+  fix, ability HUD keys, terrain, tutorial, touch,
+  settings and menu updates, retaining all twenty abilities. Reused the local
+  wardrobe branch's already-resolved integration for overlapping ability/mobile
+  code; its separate local wardrobe UI is not imported. Installed the locked
+  font dependencies added on main. The integrated branch passes 98 frontend
+  tests and 32 backend tests; production build and lint pass. Committed as
+  2123ccc, merged current main, and published
+  [PR #43](https://github.com/Nengeldir/ItWorksOnMyMachine/pull/43)
+  from Pengyue to main. GitHub reports no merge conflicts; review is pending.
+
+
+### 2026-10-10: Cosmetics and pets PR #41
+
+- Built in `/private/tmp/wind-rider-wardrobe`, branch `feature/wardrobe-and-pets`,
+  using `origin/Pengyue` as requested and integrating latest main (`2c67bc2`).
+  Original Pengyue checkout/branch left intact. PR:
+  https://github.com/Nengeldir/ItWorksOnMyMachine/pull/41 (base main).
+- Three feature stages committed separately: five new capes, four hats and
+  four shoe styles with validated persistence; eight animated bird/mythological
+  pets; menu wardrobe with front/rear 3D preview, selection and reset. Two
+  integration commits preserve Pengyue abilities and current-main mobile fixes.
+- Existing cape/scarf/boots and two item helmets were present; no selectable
+  wardrobe/pet system existed. New cosmetics/pets are local, with no flight,
+  collision, scoring, backend or ghost-format changes. Detailed architecture
+  and logs live in the PR's CLAUDE.md/README.md.
+- Verified frontend build/lint and 88 tests. Inspected offline software model
+  projections (not game shaders). Browser unavailable: IAB absent and Chrome
+  API-key authentication rejected. Manual UI/day-night/bloom/performance checks
+  remain. PR includes Pengyue's abilities 11–20 (also in PR #37).
+
+
+### 2026-10-10: Persistent adventure profiles and collection inventory
+
+- Added per-user SQLite progression through the existing portal identity, with
+  stable separate development guest profiles. `backend/profiles.py` stores XP,
+  crystals, inventory, equipped looks, frozen issued reward plans and atomic
+  idempotent claims. Four `/api/profile` endpoints expose it; races are unchanged.
+- `frontend/src/profile/` synchronizes balances and saves per-account issued
+  pickup IDs in an outbox; delayed responses cannot regress newer state. Retries
+  survive reload and response loss without duplicate rewards; separate records
+  avoid different tabs overwriting pending pickups. Disabled storage keeps a
+  visit's in-memory retries. Permanent rejections remain visible for retry.
+- Real `RunSession` adventures issue up to 18 crystal clusters and six treasures
+  per biome. `run/collection.ts` places them with terrain/approach clearance,
+  checks streamed obstacles, and collects by swept fixed-step contact. Crashes,
+  explore/test mode, loading fly-ins and victory autopilot grant nothing extra.
+- Reused cosmetic/pet assets from the local `feature/wardrobe-and-pets` branch,
+  preserving this branch's twenty ability poses. Added crystal cluster/cape-token
+  models, rarity halos, bob/spin, budgeted star bursts, saved equipment and an
+  animated inventory preview. `COLLECTION_FX` and `PET_LOOKS` are in `?tune`.
+- Menu inventory and paused adventure inventory show owned/locked entries,
+  stack counts, equipped selections, XP progress and crystals; the flight HUD
+  shows profile progress and a golden level-up notification. Items are persistent
+  keepsakes; gadgets on the separate items branch remain separate.
+- Balance and rarity are documented in `docs/adventure-profile.md`: 50/32/15/3%
+  treasure rarity; 8–13/13–20/20–29/29–45 m from hoops; 8/20/55/140 XP; level cost
+  100 + 40(L−1) + 5(L−1)², capped at level 100. The older item branch's
+  8/13/20/29 m island heights are explicitly distinguished from hoop distance.
+- Verified production build, lint, 75 frontend tests and 30 backend tests.
+  Tests cover restart persistence, atomic concurrent claims, auth ownership,
+  frozen issued rewards, XP boundaries, catalog/model parity, all nine biome
+  distance bands, streamed obstacle rejection, portal/crash collection guards,
+  response loss/outbox recovery and every cosmetic/pet model. Node 22.14 used
+  an equivalent asynchronous module resolver and `--experimental-strip-types`;
+  extended the checked-in test resolver to handle directory indexes. Backend
+  tests used the existing temporary Python environment (system Python lacks
+  FastAPI/Pydantic). Existing bundle-size and Starlette deprecation warnings.
+- Browser control unavailable: in-app browser absent; Chrome rejects API-key
+  sessions. Real-play balance, desktop/mobile visual QA, sounds and
+  focused-window timing remain unverified. No deployment or git history change.
+
+
+### 2026-10-10: Review PR #33 against current main
+
+- Approved and rebase-merged PR #33 into origin/main at `469a434` after
+  the user authorized unavailable visual verification and a guarded branch
+  history update as an exception to the no-force-push rule.
+- Resolved the change-log conflict with main, preserving the Adventure UX
+  entry and the newer terrain/streaming entries in `CLAUDE.md`.
+- GitHub required the asynchronous stack merge API; the other stack PR (#31)
+  was already merged. Automatic rebase failed, so replayed the two PR commits
+  directly onto main, preserving their authors, with the same reviewed source.
+- Reviewed biome previews, theme updates, checkpoint labels and the settings
+  overlay's pause/input handling. The PR's game changes expose HUD data only.
+- `RunHud.css`: give toast notifications a minimum top offset of 14rem so
+  they stay below the compass moved to 10rem. `GameScreen.css`: move the
+  narrow test panel below it too. This corrects overlapping positions on
+  short screens; inferred from CSS, not visually confirmed.
+- Verified frontend production build, lint and all 64 tests. On local Node
+  22.14, tests use `--experimental-strip-types` and an equivalent asynchronous
+  `module.register` resolver (the checked-in hook needs Node 22.15 or newer).
+  The build succeeds with its existing bundle-size warning. Backend untouched.
+- Browser verification unavailable: Chrome connected, but the control tool
+  rejects the API-key session with `unsupported Codex auth method: apikey`.
+  Follow-up: inspect toasts, compass and the test panel at laptop and phone
+  sizes, plus the three menu tabs, all nine biome previews and in-game settings.
+
+### 2026-10-10: Mobile playtest fixes on PR #32
+
+- Fixed the touch tutorial through real merged input; added Plunge and Gale
+  buttons, signed flat-hold tilt and calibration for both axes, touch upgrade
+  instructions, compact picker/HUD layouts, intro scrolling and thumbstick
+  visibility. Touch help and test controls also work without a keyboard.
+- Restored main's change-log history in the tracked CLAUDE.md, removed the
+  duplicate heading, and integrated main's `a1ca530` terrain changes into the
+  mobile branch. Work is in the managed PR #32 checkout.
+- Verified build, lint and 68 frontend tests. Headless Chrome: all six touch
+  tutorial steps and keyboard tutorial; 844 × 390, 667 × 375 and 1024 × 768
+  layouts; ability actions, pause/resume, simulated tilt, picker, intro scroll,
+  touch help, portrait rotation, victory preview and finale skip.
+- Published `abfd755` and approved PR #32 on that commit; GitHub reports
+  APPROVED and MERGEABLE into main. The PR has not been merged.
+- Hardware checks remain: actual sensor signs and feel, iOS permissions,
+  fullscreen/landscape and wake locks, notch insets and frame time. No real
+  phone or tablet was used.
 
 ### 2026-10-10: The design list's abilities 11 to 20 (Codex)
 
@@ -1914,6 +2152,45 @@ ported to the islands world:
 - Keyboard layouts: update the untracked keyboard test fixtures for item controls and verify AZERTY/QWERTZ/Dvorak on physical keyboards. Rebase validation used explicit character/code pairs; no browser playtest this session.
 
 
+
+- PR #47: visually check title outlines in day/night, opening autopilot and
+  Take off/Enter/touch handover. No connected browser was available.
+
+- Wing grains/light halos and portal/gate crossing bursts: inspect day/night flight, boost, braking and rolls
+  with bloom on/off and decorated wings; inspect action-specific gold roll arcs
+  and boost dust/ivory slivers; check lamp and gate edges in a focused
+  browser. Browser control was unavailable for this change.
+
+
+- Crystal/portal tuning: visually check larger crystal models and drifting stars
+  in day/night with and without bloom; playtest the 5.2 m crystal pickup radius,
+  portal crossing comfort and focused-window frame time. Browser control was
+  unavailable during this change.
+
+- Wings/pet guides/test fitting room: inspect front/rear silhouettes, day/night
+  bloom, detours from the rail, pause/restore and phone layouts; browser control
+  remains unavailable. Measure full outfit and companion frame time in a focused
+  window. Networked remote cosmetics remain a future feature.
+
+- PR #41 wardrobe/pets: desktop/mobile dialog layout and focus, day/night toon
+  lighting and bloom, hair/helmets, pet motion/occlusion and focused frame time.
+  Browser checks could not run. All styles are local and available immediately;
+  networked appearances and earned unlocks are optional follow-ups.
+
+- Profile/inventory: inspect desktop and phone layouts, animated previews,
+  day/night pickups, level-up notification and pause behavior in a browser;
+  control tools were unavailable. Playtest detours and XP balance, audio and
+  focused-window frame time. Future work: a crystal shop, gameplay consumption
+  of stored item keepsakes if desired, adventure retention and server flight
+  validation before a competitive economy. Current claims trust client contact.
+
+
+- PR #33: visually verify compass, toast and test-panel spacing on short
+  screens; browser control failed during review with an API-key auth error.
+
+- PR #32 mobile follow-up: Android Chrome and iOS Safari hardware checks for
+  tilt, permissions, locks, notches and feel; phone room/settings validation.
+
 - Wormhole camera: watch the orbit and the 0.4 s swing back to the chase
   view in a focused window and tune `RUN.orbit*` and `wormholeFlow`; the
   pilot is held still in the wormhole, so its ribbons and motes stay off.
@@ -2109,7 +2386,7 @@ The first playable slice of the roguelike, in order. After each: commit to
 
 Constraints: never break races, ghosts or leaderboards (Sky Isles stays
 frozen); no per-frame allocations; clamp `pow()` and divisions in every
-shader; no backend API changes; no deleting branches or force-pushing.
+shader; no race API changes; profile APIs are authorized by the persistent-profile task; no deleting branches or force-pushing.
 
 ## Roadmap
 

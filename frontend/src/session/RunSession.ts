@@ -69,7 +69,12 @@ export class RunSession {
     if (!this.container) return;
     const generation = ++this.generation;
     try {
-      const adventure = await profileClient.start(this.seed);
+      // Persistent rewards need the server; without it the adventure still flies, collecting nothing
+      // (the profile pill says the profile is unavailable)
+      const adventure = await profileClient.start(this.seed).catch((error: unknown) => {
+        console.warn("Adventure rewards unavailable:", error);
+        return null;
+      });
       if (generation !== this.generation || !this.container) return;
       this.game = new Game(this.container, {
         seed: this.seed,
@@ -77,16 +82,17 @@ export class RunSession {
         clock: () => performance.now(),
         controls: this.settings,
         color: COLOR,
-        events: { hud: (hud) => this.store.set({ hud }) },
+        // Steering during the opening autopilot takes the controls where the pilot is
+        events: { hud: (hud) => this.store.set({ hud }), takeOver: () => this.begin(false) },
       });
       this.game.startRun(this.seed, {
-        rewards: adventure.rewards,
-        collected: reward => profileClient.collect(adventure.token, reward.id),
+        rewards: adventure?.rewards,
+        collected: reward => { if (adventure) profileClient.collect(adventure.token, reward.id); },
         offer: (offers, next) => this.store.set({ stage: "pick", offers, next }),
         arrived: (level, biome) => this.store.set({ arrived: { level, biome, at: performance.now() } }),
         ended: (summary) => this.ended(summary),
       });
-      // Hold still on the start line until take-off
+      // The opening autopilot glides the level until the player steers or takes off
       if (this.store.get().stage === "intro") this.game.holdRun(true);
     } catch (e) {
       if (generation !== this.generation) return;
@@ -113,12 +119,12 @@ export class RunSession {
     this.game?.engage();
   }
 
-  /** Off the intro panel and into the air */
-  begin() {
+  /** Off the intro panel: the controls are yours. `engage`: lock the mouse (needs a click or key event) */
+  begin(engage = true) {
     if (this.store.get().stage !== "intro" || !this.game) return;
     this.store.set({ stage: "flying" });
     this.game?.holdRun(false);
-    this.game?.engage();
+    if (engage) this.game?.engage();
   }
 
   /** Enter during the finale: skip to the white light */
