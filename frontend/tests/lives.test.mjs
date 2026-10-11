@@ -15,7 +15,7 @@ const makeRun = (lives) => {
   const summaries = [];
   const host = {
     scene: new THREE.Scene(), particles: { emit() {} }, flight, prevPosition: new THREE.Vector3(), camera: new THREE.PerspectiveCamera(),
-    world: { course, seed: 7, biome: { name: "Sky Isles" }, palette: { name: "Alpine", accent: "#fff" } },
+    world: { course, seed: 7, biome: { name: "Sky Isles" }, palette: { name: "Alpine", accent: "#fff" }, distance: () => 100 },
     view: { ready: true, setRings() {} }, style: 240, pixelHeight: 720, white: 0,
     setLevel() {}, respawnAt() {}, freeze() {}, veil() {}, insideWormhole() {}, whiteOut(k) { this.white = k; },
     gateBurst() {}, wingbeat() {}, stinger() {}, portalHum() {},

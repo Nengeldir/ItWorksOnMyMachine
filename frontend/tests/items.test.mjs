@@ -35,6 +35,6 @@ test('vortex attracts light and swept collection refills energy',()=>{
  f.boostCharge=0;items.lights.push({position:f.position.clone().add(new Vector3(0,0,5)),energy:true,collected:false});advance(items,f,1/120);f.position.z+=10;advance(items,f,1/120);assert.ok(f.boostCharge>0);
 });
 test('all registered item models have finite toon geometry',()=>{
- assert.equal(new Set(RUN_ITEMS.map(i=>i.id)).size,RUN_ITEMS.length);
+ assert.equal(RUN_ITEMS.length,20);assert.equal(new Set(RUN_ITEMS.map(i=>i.id)).size,RUN_ITEMS.length);
  for(const item of RUN_ITEMS){const model=buildItem(item.model);const mesh=model.children[0];assert.ok(mesh.geometry.boundingSphere.radius>0,item.id);assert.ok([...mesh.geometry.attributes.position.array].every(Number.isFinite),item.id);disposeItem(model);}
 });

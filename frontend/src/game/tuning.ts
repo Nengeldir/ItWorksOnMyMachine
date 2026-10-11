@@ -26,6 +26,8 @@ export const ANIM = {
 /** Trails, particles, wind and screen effects */
 export const FX = {
   boostTrailGlow: 0.45,
+  boostSparkles: 48, // fine gold dust and ivory slivers/second at full boost
+  rollSparkles: 72, // gold twinkles and tiny flakes/second at mid-roll
   brakeWisps: 24, // particles/second at full brake
   trailLength: 1, // multiplier on ribbon length
   trailWidth: 1,
@@ -33,22 +35,26 @@ export const FX = {
   trailShimmer: 0, // light pulses running down the ribbons (restart to apply)
   lightTint: 0.25, // how much of the player's color the light effects keep (Sky's light is warm white)
   bodyTrail: true, // the wide silk ribbon from the cape
-  sparkles: 1, // wingtip motes per metre, as a multiplier
-  flapPuffs: 1, // feather puffs on each downstroke
+  sparkles: 0.65, // wingtip motes per metre, as a multiplier
+  flapPuffs: 0.6, // feather puffs on each downstroke
+  wingGrainSize: 0.1, // metres; small, distinct wingtip motes
+  wingGrainLight: 1.1, // restrained brightness keeps adjacent grains separate
+  wingPuffSize: 0.35, // metres; compact downstroke air, not glowing clouds
   skimDust: 1, // spray from the ground while skimming
   speedLines: 1, // wind streaks at speed
   speedLinesFrom: 45, // m/s where the wind streaks start
   aura: 1, // soft glow around the pilot
+  ink: 0.55, // the pilot's ink outlines: their opacity (0 turns them off; Sky draws none)
+  inkTint: 0.8, // 0: one dark ink everywhere, 1: each part's own color, darkened
   dust: 1, // Sky's winged-light dust in the air, as a multiplier on each biome's rate
   flock: 1, // the flock of light butterflies leading to the next gate (0 hides it)
   wisps: 1, // cloud wisps torn off the wingtips at speed
   wispsFrom: 50, // m/s where the wisps start
   capePulse: 1, // how much the cape's marks and the eyes flare on boost and gate passes
-  ink: 0.55, // the pilot's ink outlines: their opacity (0 turns them off; Sky draws none)
-  inkTint: 0.8, // 0: one dark ink everywhere, 1: each part's own color, darkened
   vignette: 1, // speed vignette at the screen edges
-  bloom: 0.5, // glow strength (0 turns post-processing off)
-  bloomRadius: 0.8, // wide and soft, like Sky's halos
+  bloom: 0.45, // glow strength (0 turns post-processing off)
+  bloomRadius: 0.4, // wide and soft, like Sky's halos
+  bloomHalo: 0.45, // contribution from the widest blur layers
   bloomThreshold: 1.15,
   bloomResolution: 1, // the bloom renders at most at this pixel ratio (its cost grows fast with it)
   bloomMsaa: 2, // antialiasing samples of the bloom's render target
@@ -158,6 +164,7 @@ export const DEEP = {
 
 /** The roguelike run's looks (its rules live in run/run.ts and run/upgrades.ts) */
 export const RUN = {
+  portalFlash: 0.25, // intensity of the crossing sparkles and screen brightening
   tunnelFade: 1.4, // seconds to fade out of the tunnel into the next biome
   compass: 1, // size of the portal compass
   toasts: true, // pop-ups for points and run events
@@ -190,11 +197,23 @@ export const ABILITIES_FX = {
 
 /** How strong the design list's items look (items/fx.ts); what they do is ITEM in run/items.ts */
 export const ITEMS_FX = {
+  pickups: 1, // soft light underneath floating items
+  pickupSize: 2, // model diameter in metres
+  pickupSpot: 7, // spotlight footprint in metres
+  pickupRange: 240, // only nearby models are built and animated
   relics: 1, // lanterns, path markers and relic bursts
   wind: 1, // the Anemo Catcher's updraft
   shield: 1, // the Starflake Shield's aura of ice
   wax: 1, // the Glider Wax's golden wingtip ribbons and glitter
 };
+
+/** Companion movement and scale: looks only, independent of all flight rules. */
+export const PET_LOOKS = { size: 1.8, spacing: 2.9, height: 0.7, trail: 0.8, follow: 8, snapDistance: 30, bob: 0.12, wingbeat: 1, tailSway: 1, lead: 20 };
+/** Small ornaments and particle emission, never the pilot's hitbox. */
+export const COSMETIC_FX = { capeDetail: 1, wingParticles: 22, wingParticleSize: .1 };
+/** Collection models and motion; reward rules live on the server. */
+export const COLLECTION_FX = { bob: 0.5, spin: 0.65, size: 2.2, crystalSize: 3.8, crystalMotes: 10, moteDistance: 80, viewDistance: 240, burst: 1 };
+
 
 /** Music and sound levels */
 export const AUDIO = {
@@ -205,7 +224,7 @@ export const AUDIO = {
   nightMuffle: 0.55, // how much the highs are rolled off at night
 };
 
-const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, STRUCTURES, WATER, DEEP, RUN, AUTOPILOT, ABILITIES_FX, ITEMS_FX, AUDIO } as const;
+const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, STRUCTURES, WATER, DEEP, RUN, AUTOPILOT, ABILITIES_FX, ITEMS_FX, PET_LOOKS, COSMETIC_FX, COLLECTION_FX, AUDIO } as const;
 const DEFAULTS = JSON.parse(JSON.stringify(GROUPS)) as typeof GROUPS;
 const STORAGE_KEY = "windrider.tuning.speed-control-v1";
 
@@ -247,6 +266,18 @@ export function resetTuning() {
 
 /** Slider ranges for the ?tune panel; anything missing gets a range from its default */
 export const RANGES: Record<string, [number, number, number?]> = {
+  size: [0, 3],
+  lead: [8, 45],
+  capeDetail: [0, 2],
+  wingParticles: [0, 50],
+  wingParticleSize: [0.05, 0.5],
+  spacing: [2.5, 4.5],
+  trail: [0, 3],
+  follow: [2, 16],
+  snapDistance: [10, 60],
+  bob: [0, 0.4],
+  wingbeat: [0, 2],
+  tailSway: [0, 2],
   boostSweep: [0, 0.6],
   brakeSweep: [0, 1.2],
   boostTrailGlow: [0, 2],
@@ -274,22 +305,28 @@ export const RANGES: Record<string, [number, number, number?]> = {
   trailGlow: [0, 3],
   trailShimmer: [0, 2],
   lightTint: [0, 1],
+  boostSparkles: [0, 100, 1],
+  rollSparkles: [0, 140, 1],
   sparkles: [0, 4],
   flapPuffs: [0, 4],
+  wingGrainSize: [0.04, 0.25],
+  wingGrainLight: [0.2, 2],
+  wingPuffSize: [0.1, 0.8],
   skimDust: [0, 4],
   speedLines: [0, 3],
   speedLinesFrom: [10, 100],
   aura: [0, 3],
   ink: [0, 1],
+  inkTint: [0, 1],
   dust: [0, 3],
   flock: [0, 1],
   wisps: [0, 3],
   wispsFrom: [20, 90],
   capePulse: [0, 3],
-  inkTint: [0, 1],
   vignette: [0, 2],
   bloom: [0, 2.5],
-  bloomRadius: [0, 1.5],
+  bloomRadius: [0, 1],
+  bloomHalo: [0, 1],
   bloomThreshold: [0.5, 1.5],
   bloomResolution: [0.5, 2, 0.05],
   bloomMsaa: [0, 4, 1],
@@ -339,6 +376,10 @@ export const RANGES: Record<string, [number, number, number?]> = {
   shafts: [0, 3],
   surface: [0, 2],
   life: [0, 3],
+  portalFlash: [0, 1],
+  crystalSize: [2, 6],
+  crystalMotes: [0, 30],
+  moteDistance: [20, 160],
   tunnelFade: [0.3, 4],
   compass: [0.5, 2],
   orbitLap: [8, 60],
@@ -378,5 +419,8 @@ export const TUNING_GROUPS: [string, Group][] = [
   ["Autopilot", AUTOPILOT],
   ["Ability looks", ABILITIES_FX],
   ["Item looks", ITEMS_FX],
+  ["Companions", PET_LOOKS],
+  ["Cosmetic detail", COSMETIC_FX],
+  ["Collection pickups", COLLECTION_FX],
   ["Audio", AUDIO],
 ];

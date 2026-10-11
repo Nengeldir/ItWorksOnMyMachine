@@ -7,7 +7,7 @@ import { Builder, GOLD, GOLD_DEEP, blend, cyl, lathe, leaf, sphere, star } from 
 // is a hand's length or two); `y` is up, `-z` the front. The giant firework
 // (the Comet Tail Firework) is in models.ts.
 
-export type RelicId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots";
+export type RelicId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether" | "mothCape" | "resonantChimes" | "crystalUpdraft" | "duskHourglass" | "electroPrism" | "dragonTear";
 
 const ANEMO = "#5fe6c6";
 const ANEMO_LIGHT = "#c8fff1";
@@ -121,7 +121,80 @@ function aeroBoots(): THREE.BufferGeometry {
  for(const side of [-1,1])for(let i=0;i<3;i++)b.add(leaf(0.08-i*0.016,0.02,0.006),"#f7faff",0.3,[side*0.05,0.08+i*0.012,0.02],[0,side*0.4,side*-1.1]);return b.build();
 }
 
+function stormKite(): THREE.BufferGeometry {
+ const b=new Builder();
+ b.add(new THREE.OctahedronGeometry(0.12,0),"#72bbd8",0.25,[0,0.12,0],[0,0,0],[1,1.4,0.08]);
+ b.add(cyl(0.003,0.003,0.3,6),GOLD,0,[0,0.12,0]);b.add(cyl(0.003,0.003,0.23,6),GOLD,0,[0,0.12,0],[0,0,Math.PI/2]);
+ for(let i=0;i<4;i++)b.add(leaf(0.065,0.015,0.004),i%2 ? "#f8e0a0":"#6abdbd",0,[Math.sin(i)*0.02,-0.015-i*0.047,0],[0,0,Math.PI+Math.sin(i)*0.3]);return b.build();
+}
+
+function glacialPrism(): THREE.BufferGeometry {
+ const b=new Builder();b.add(new THREE.OctahedronGeometry(0.095),"#a3d7f2",0.5,[0,0.08,0],[0,0,0],[0.7,1.6,0.7]);
+ b.add(new THREE.TorusGeometry(0.054,0.007,6,18),GOLD,0.2,[0,0.08,0],[Math.PI/2,0,0]);
+ b.add(star(0.024,0.009,0.009,6),"#effcff",0.8,[0,0.09,-0.06]);return b.build();
+}
+
+function sunNectar(): THREE.BufferGeometry {
+ const b=new Builder();b.add(lathe([[0.001,0],[0.055,0.006],[0.065,0.06],[0.055,0.11],[0.022,0.14],[0.022,0.18],[0.001,0.18]],18),"#ffd16a",0.5);
+ b.add(cyl(0.025,0.024,0.025,10),GOLD_DEEP,0,[0,0.19,0]);
+ for(let j=0;j<6;j++){const a=j*Math.PI/3;b.add(sphere(0.012,8,6),"#fff4c7",0.4,[Math.cos(a)*0.022,0.09+Math.sin(a)*0.022,-0.064]);}b.add(sphere(0.012,8,6),"#f4aa56",0.4,[0,0.09,-0.07]);return b.build();
+}
+
+function windTether(): THREE.BufferGeometry {
+ const b=new Builder();b.add(new THREE.TorusGeometry(0.055,0.008,7,20,Math.PI*1.65),"#e0fff4",0.6,[0,0.08,0],[0,0,0.4]);
+ b.add(cyl(0.018,0.012,0.085,8),GOLD,0.2,[0,0,0]);
+ b.add(new THREE.OctahedronGeometry(0.028),"#74d8c6",0.6,[0,-0.06,0]);return b.build();
+}
+
+function mothCape(): THREE.BufferGeometry {
+ const b=new Builder();
+ for(const side of [-1,1])b.add(leaf(0.18,0.095,0.007),side<0 ? "#bdabd9":"#dbb9d5",0.3,[side*0.01,0.01,0],[0.15,side*0.1,side*-0.5]);
+ b.add(new THREE.TorusGeometry(0.03,0.008,6,18),GOLD,0.2,[0,0.03,-0.01],[Math.PI/2,0,0]);
+ b.add(star(0.018,0.007,0.005,4),"#fff1ce",0.8,[0,0.08,-0.015]);return b.build();
+}
+
+function resonantChimes(): THREE.BufferGeometry {
+ const b=new Builder();b.add(cyl(0.08,0.1,0.025,12),"#d9ebe2",0,[0,0.18,0]);
+ for(let j=0;j<3;j++){const x=(j-1)*0.055;b.add(cyl(0.002,0.002,0.045,5),GOLD,0,[x,0.145,0]);b.add(cyl(0.012,0.012,0.1+j*0.015,8),j%2 ? "#b4dbe4":GOLD,0.2,[x,0.07,0]);}
+ b.add(leaf(0.075,0.024,0.005),"#6bb8ba",0,[0,0.02,0],[0,0,Math.PI]);return b.build();
+}
+
+function crystalUpdraft(): THREE.BufferGeometry {
+ const b=new Builder();b.add(new THREE.OctahedronGeometry(0.08),"#a5e2d9",0.7,[0,0.07,0],[0,0,0],[1,1.4,1]);
+ for(let j=0;j<3;j++)b.add(new THREE.TorusGeometry(0.055+j*0.012,0.006,5,18),j%2 ? GOLD:"#ecfff7",0.5,[0,0.035+j*0.028,0],[Math.PI/2,j*0.4,0]);return b.build();
+}
+
+function duskHourglass(): THREE.BufferGeometry {
+ const b=new Builder();
+ for(const y of [0,0.2])b.add(cyl(0.067,0.067,0.018,12),GOLD,0.2,[0,y,0]);
+ for(let j=0;j<4;j++){const a=j*Math.PI/2;b.add(cyl(0.004,0.004,0.2,6),GOLD_DEEP,0,[Math.cos(a)*0.055,0.1,Math.sin(a)*0.055]);}
+ b.add(cyl(0.05,0.012,0.08,12),"#d1b6e5",0.4,[0,0.145,0]);b.add(cyl(0.012,0.05,0.08,12),"#afc3e9",0.4,[0,0.055,0]);
+ b.add(cyl(0.003,0.003,0.06,6),"#ffe9a3",0.8,[0,0.1,0]);return b.build();
+}
+
+function electroPrism(): THREE.BufferGeometry {
+ const b=new Builder();b.add(new THREE.OctahedronGeometry(0.09),"#a786da",0.55,[0,0.08,0],[0,0,0],[0.8,1.5,0.8]);
+ for(let j=0;j<3;j++)b.add(new THREE.TorusGeometry(0.05,0.006,5,16),j%2 ? "#e4c5ff":GOLD,0.6,[0,0.04+j*0.035,0],[Math.PI/2,j*0.6,0]);
+ b.add(star(0.025,0.005,0.006,4),"#fff3be",1,[0,0.08,-0.065],[0,0,0.4]);return b.build();
+}
+
+function dragonTear(): THREE.BufferGeometry {
+ const b=new Builder();b.add(lathe([[0.001,0],[0.055,0.008],[0.075,0.055],[0.065,0.09],[0.035,0.15],[0.001,0.23]],20),"#5dadd5",0.5);
+ b.add(new THREE.TorusGeometry(0.055,0.008,6,20),GOLD,0.25,[0,0.06,0],[Math.PI/2,0,0]);
+ b.add(star(0.025,0.01,0.01,4),"#c0f3ff",0.9,[0,0.065,-0.068]);return b.build();
+}
+
 export const RELIC_BUILDERS: Record<RelicId, () => THREE.BufferGeometry> = {
+  dragonTear,
+  electroPrism,
+  duskHourglass,
+  crystalUpdraft,
+  resonantChimes,
+  mothCape,
+  windTether,
+  sunNectar,
+  glacialPrism,
+  stormKite,
   aeroBoots,
   vortexGeode,
   silkRibbon,

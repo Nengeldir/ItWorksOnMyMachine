@@ -3,6 +3,7 @@ import type { Flight, FlightInput, FlightMods, HitPart } from "../flight";
 import type { ItemId } from "../items/models";
 import { clamp, smoothstep } from "../math";
 import { segmentDistanceSq } from "./segments";
+import { placePickups, pickupClear, PICKUP, type Pickup } from "./pickups";
 import type { Course } from "../world/course";
 
 // The design list's items (CLAUDE.md, "Items and abilities"), for runs only:
@@ -28,6 +29,30 @@ export const ITEM = {
   lightEnergy: 0.15,
   bootTime: 0.4,
   bootLift: 32,
+  kiteTime: 5,
+  kiteLift: 18,
+  prismTime: 5,
+  nectarStamina: 9,
+  tetherTime: 1.5,
+  tetherRange: 110,
+  tetherPull: 85,
+  phaseTime: 3,
+  chimeTime: 12,
+  chimeWiden: 5,
+  padTime: 15,
+  padDepth: 120,
+  padRadius: 6,
+  padHeight: 8,
+  padSpeed: 48,
+  hourglassTime: 4,
+  worldSlow: 0.25,
+  electroTime: 12,
+  electroGap: 1.5,
+  electroNear: 0.55,
+  electroBonus: 120,
+  electroRange: 35,
+  tearTime: 6,
+  tearThrust: 25,
   bag: 3, // items carried at once
   // Anemo Catcher: a bottled updraft
   updraftTime: 1.6, // seconds
@@ -51,7 +76,7 @@ export const ITEM = {
   fireWobble: 0.45, // how hard it yanks the controls about
 };
 
-export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots";
+export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether" | "mothCape" | "resonantChimes" | "crystalUpdraft" | "duskHourglass" | "electroPrism" | "dragonTear";
 
 /** How an item saved the pilot from a hit */
 export type ItemSave = "starflake";
@@ -90,12 +115,32 @@ export const RUN_ITEMS: readonly RunItemInfo[] = [
   { id: "silkRibbon", model: "silkRibbon", name: "Cloud-Spun Silk Ribbon", icon: "🎀", rarity: 1, charges: 1, description: "Ten seconds of much tighter turns for threading narrow canyons." },
   { id: "vortexGeode", model: "vortexGeode", name: "Vortex Geode", icon: "💎", rarity: 1, charges: 1, description: "For six seconds, a gentle vortex draws nearby loose light and energy into you." },
   { id: "aeroBoots", model: "aeroBoots", name: "Aero-Boots of the Adepti", icon: "🥾", rarity: 2, charges: 3, description: "Three steps on the air. Each press gives a quick upward correction." },
+  { id: "stormKite", model: "stormKite", name: "Stormcaller's Kite", icon: "🪁", rarity: 1, charges: 1, description: "An enchanted kite catches the high wind and tows you upward for five seconds." },
+  { id: "glacialPrism", model: "glacialPrism", name: "Glacial Prism", icon: "🧊", rarity: 2, charges: 1, description: "Freeze the adventure level timer and the decay of your skim combo for five seconds." },
+  { id: "sunNectar", model: "sunNectar", name: "Sun-Kissed Nectar", icon: "🌼", rarity: 0, charges: 1, description: "Drink golden nectar to refill your boost reserve and wingbeat stamina immediately." },
+  { id: "windTether", model: "windTether", name: "Tether of the Wind Spirit", icon: "🪝", rarity: 2, charges: 1, description: "A hook of light pulls you into a sharp swing around a nearby gate. Find an anchor within 110 metres." },
+  { id: "mothCape", model: "mothCape", name: "Illusory Moth Cape", icon: "🦋", rarity: 3, charges: 1, description: "Become a spirit for three seconds and pass through rock. Trees, water and the abyss still matter." },
+  { id: "resonantChimes", model: "resonantChimes", name: "Resonant Chimes", icon: "🎐", rarity: 1, charges: 1, description: "For twelve seconds, each gate sends a shockwave that widens the next gate." },
+  { id: "crystalUpdraft", model: "crystalUpdraft", name: "Crystallized Updraft", icon: "🌪️", rarity: 1, charges: 1, description: "Drop a wind trampoline on the surface below. Dip toward it to bounce high into the sky." },
+  { id: "duskHourglass", model: "duskHourglass", name: "Dusk-Weaver's Hourglass", icon: "⌛", rarity: 3, charges: 1, description: "For four seconds, scenery and the spirit manta move at a quarter pace while your flight stays normal." },
+  { id: "electroPrism", model: "electroPrism", name: "Electro-Charged Prism", icon: "⚡", rarity: 2, charges: 1, description: "Near misses release chain lightning and score bonus points for twelve seconds." },
+  { id: "dragonTear", model: "dragonTear", name: "Tear of the Dragon", icon: "💧", rarity: 2, charges: 1, description: "Hold the use button to dive straight down, for up to six seconds. Release to regain normal flight." },
 ];
 
 export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.id === id)!;
 
 /** How long each item's effect lasts once used (seconds) */
 const DURATION: Record<RunItemId, () => number> = {
+  dragonTear: () => ITEM.tearTime,
+  electroPrism: () => ITEM.electroTime,
+  duskHourglass: () => ITEM.hourglassTime,
+  crystalUpdraft: () => ITEM.padTime,
+  resonantChimes: () => ITEM.chimeTime,
+  mothCape: () => ITEM.phaseTime,
+  windTether: () => ITEM.tetherTime,
+  sunNectar: () => 0.8,
+  glacialPrism: () => ITEM.prismTime,
+  stormKite: () => ITEM.kiteTime,
   aeroBoots: () => ITEM.bootTime,
   vortexGeode: () => ITEM.vortexTime,
   silkRibbon: () => ITEM.ribbonTime,
@@ -109,7 +154,7 @@ const DURATION: Record<RunItemId, () => number> = {
 };
 
 /** Effects that move the pilot: they end on a crash or a respawn */
-const FLIGHT_EFFECTS: RunItemId[] = ["anemoCatcher", "cometFirework", "silkRibbon", "aeroBoots"];
+const FLIGHT_EFFECTS: RunItemId[] = ["anemoCatcher", "cometFirework", "silkRibbon", "aeroBoots", "stormKite", "windTether", "dragonTear"];
 
 /** A push along the path, fading out as the speed nears its own top speed */
 const push = (amount: number, top: number, speed: number) => amount * clamp((top - speed) / 15, 0, 1);
@@ -122,6 +167,7 @@ export interface Carried {
 /** What a level gives the items: its seed, the racing line and the solid world */
 export interface ItemWorld {
   readonly seed: number;
+  readonly rock?: { distance(x: number, y: number, z: number): number };
   readonly course: Course;
   distance(x: number, y: number, z: number): number;
 }
@@ -141,12 +187,14 @@ export class Items {
   /** Seconds since each item's effect began (absent: not under way) */
   readonly active = new Map<RunItemId, number>();
   /** One-off moments, counted so the looks can tell a new one happened */
-  readonly cue = { pickup: 0, use: 0, full: 0, auto: 0, shatter: 0, phoenix: 0 };
+  readonly cue = { pickup: 0, use: 0, full: 0, auto: 0, shatter: 0, phoenix: 0, chime: 0, bounce: 0, lightning: 0 };
   /** The item last picked up, and last used */
   picked: RunItemId | null = null;
   used: RunItemId | null = null;
   /** Bonus points earned since the controller last took them */
   points = 0;
+  /** Wingbeat stamina to hand back to the controller. */
+  restore = 0;
   /** Bumped when the level changes, so the looks rebuild what depends on it */
   version = 0;
   /** Where the last save happened, and the surface's normal there */
@@ -155,6 +203,14 @@ export class Items {
   readonly lights: { position: THREE.Vector3; energy: boolean; collected: boolean }[] = [];
   readonly ghostGates: { position: THREE.Vector3; normal: THREE.Vector3; radius: number; collected: boolean }[] = [];
   readonly path: THREE.Vector3[] = [];
+  readonly pickups: Pickup[] = [];
+  private clearanceTime = 0;
+  chimeTarget = -1;
+  readonly boltTargets: THREE.Vector3[] = [];
+  private electroWait = 0;
+  readonly pad = new THREE.Vector3();
+  private readonly up = new THREE.Vector3(0,1,0);
+  readonly anchor = new THREE.Vector3();
   readonly previous = new THREE.Vector3();
   private sampled = false;
   private readonly crossing = new THREE.Vector3();
@@ -165,10 +221,13 @@ export class Items {
   setLevel(world: ItemWorld) {
     this.world = world;
     this.active.clear();
+    this.chimeTarget=-1;
     this.version++;
     this.sampled = false;
     this.ghostGates.length = 0;
     this.lights.length = 0;
+    this.pickups.splice(0, this.pickups.length, ...placePickups(world, RUN_ITEMS));
+    this.clearanceTime = 0;
     for(const ring of world.course.rings) for(let j=0;j<3;j++){
       const position=world.course.pointAt(ring.position.z-30+j*8).add(new THREE.Vector3((j-1)*3,1,0));
       if(world.distance(position.x,position.y,position.z)>3) this.lights.push({position,energy:j===1,collected:false});
@@ -235,6 +294,31 @@ export class Items {
       if (!this.path.length) return false;
     }
     if(id === "aeroBoots" && this.active.has(id)) return false;
+    if(id === "sunNectar"){ flight.refillBoost(1); this.restore=ITEM.nectarStamina; }
+    if(id === "windTether"){
+      let found=false, nearest=ITEM.tetherRange**2;
+      for(const ring of this.world?.course.rings ?? []){
+        const distance=ring.position.distanceToSquared(flight.position);
+        if(distance<9 || distance>=nearest)continue;
+        let clear=true;
+        for(let t=0.1;t<1;t+=0.1){this.crossing.lerpVectors(flight.position,ring.position,t);if(this.world!.distance(this.crossing.x,this.crossing.y,this.crossing.z)<2){clear=false;break;}}
+        if(clear){this.anchor.copy(ring.position);nearest=distance;found=true;}
+      }
+      if(!found)return false;
+    }
+    if(id === "crystalUpdraft"){
+      if(!this.world)return false;
+      let found=false;
+      for(let down=2;down<ITEM.padDepth;down+=2){
+        const y=flight.position.y-down;
+        if(this.world.distance(flight.position.x,y,flight.position.z)<=0){
+          let low=y,high=y+2;
+          for(let j=0;j<8;j++){const middle=(low+high)/2;if(this.world.distance(flight.position.x,middle,flight.position.z)>0) high=middle;else low=middle;}
+          this.pad.set(flight.position.x,high+0.2,flight.position.z);found=true;break;
+        }
+      }
+      if(!found)return false;
+    }
     // ITEM STARTS
     // A shield already up would be wasted
     if (id === "starflakeShield" && this.active.has(id)) return false;
@@ -260,6 +344,25 @@ export class Items {
     }
   }
 
+  /** Bounce before the next flight step can collide with the surface. */
+  beforeFlight(flight: Flight) {
+    if(!this.active.has("crystalUpdraft"))return;
+    const height=flight.position.y-this.pad.y;
+    const horizontal=(flight.position.x-this.pad.x)**2+(flight.position.z-this.pad.z)**2;
+    if(height>=0 && height<=ITEM.padHeight && horizontal<=ITEM.padRadius**2 && flight.velocity.y<0){
+      flight.place(flight.position,this.up,ITEM.padSpeed,0);
+      this.active.delete("crystalUpdraft");this.cue.bounce++;
+    }
+  }
+
+  /** A gate passed under the chimes widens the following gate. */
+  gate(index: number) {
+    if(this.active.has("resonantChimes")){this.chimeTarget=index+1;this.cue.chime++;}
+  }
+  widening(index: number): number {
+    return this.active.has("resonantChimes") && index===this.chimeTarget ? ITEM.chimeWiden : 0;
+  }
+
   /** A carried Phoenix feather revives from terrain or the abyss onto the clear course tube. */
   revive(flight: Flight): boolean {
     const index = this.bag.findIndex(c => c.id === "phoenixFeather");
@@ -274,6 +377,12 @@ export class Items {
     this.cue.phoenix++;
     return true;
   }
+
+  get worldRate(): number { return this.active.has("duskHourglass") ? ITEM.worldSlow : 1; }
+
+  get phasing(): boolean { return this.active.has("mothCape"); }
+
+  get frozenCombo(): boolean { return this.active.has("glacialPrism"); }
 
   get invulnerable(): boolean { return this.active.has("phoenixFeather"); }
 
@@ -321,9 +430,43 @@ export class Items {
         else this.points+=ITEM.lightBonus;
       }
     }
+    this.clearanceTime -= dt;
+    const checkClearance = this.clearanceTime <= 0;
+    if (checkClearance) this.clearanceTime = 0.5;
+    for (const pickup of this.pickups) {
+      if (pickup.collected) continue;
+      // Trees arrive with streamed land; recheck nearby air as it arrives.
+      if (checkClearance && pickup.position.distanceToSquared(flight.position)<200**2)
+        pickup.blocked = !pickupClear(this.world!,pickup.position);
+      const touching = !pickup.blocked && (this.sampled ? segmentDistanceSq(pickup.position,this.previous,flight.position) : pickup.position.distanceToSquared(flight.position)) <= PICKUP.radius**2;
+      if (touching && (this.bag.length<ITEM.bag || !pickup.touching)) pickup.collected = this.give(pickup.id);
+      pickup.touching = touching;
+    }
     this.previous.copy(flight.position); this.sampled = true;
     if(this.active.has("silkRibbon")) mods.turn *= ITEM.ribbonTurn;
     if(this.active.has("aeroBoots")) { mods.lift += ITEM.bootLift; mods.hover = Math.max(mods.hover,0.8); }
+    if(this.active.has("stormKite")){ mods.lift+=ITEM.kiteLift; mods.hover=Math.max(mods.hover,0.7); mods.turn*=0.8; }
+    if(this.active.has("windTether")) {
+      if(flight.position.distanceToSquared(this.anchor)<9) this.active.delete("windTether");
+      else flight.pullToward(this.anchor,dt,ITEM.tetherPull);
+    }
+    this.electroWait=Math.max(0,this.electroWait-dt);
+    if(this.active.has("electroPrism") && proximity>ITEM.electroNear && flight.speed>20 && this.electroWait===0){
+      this.electroWait=ITEM.electroGap;this.cue.lightning++;this.points+=ITEM.electroBonus;
+      this.boltTargets.length=0;
+      for(const light of this.lights){
+        if(!light.collected && light.position.distanceToSquared(flight.position)<ITEM.electroRange**2 && this.boltTargets.length<3){
+          this.boltTargets.push(light.position.clone());light.collected=true;
+          if(light.energy)flight.refillBoost(ITEM.lightEnergy);else this.points+=ITEM.lightBonus;
+        }
+      }
+      if(!this.boltTargets.length)this.boltTargets.push(flight.position.clone().add(new THREE.Vector3(0,-Math.max(3,(1-proximity)*12),0)));
+    }
+    const tear=this.time("dragonTear");
+    if(tear>=0){
+      if((input.use ?? 0)<=0 && tear>0.05)this.active.delete("dragonTear");
+      else { mods.dive=1;mods.diveAngle=Math.PI/2;mods.thrust+=ITEM.tearThrust;mods.turn*=0.6; }
+    }
     // ITEM RULES
     // Anemo Catcher: the bottled updraft lifts the path and holds the speed while it lasts
     const updraft = this.time("anemoCatcher");

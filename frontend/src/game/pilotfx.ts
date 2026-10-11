@@ -2,7 +2,8 @@ import * as THREE from "three";
 import type { Avatar } from "./avatar";
 import { Kind, type Particles, fx } from "./particles";
 import { Trail } from "./trail";
-import { FX } from "./tuning";
+import { FX, COSMETIC_FX } from "./tuning";
+import { wingSpec } from "./cosmetics/catalog";
 import { smoothstep } from "./math";
 
 const tipL = new THREE.Vector3();
@@ -42,16 +43,25 @@ export class PilotFx {
   private readonly ghost: boolean;
   private readonly head = new THREE.Color();
   private readonly body = new THREE.Color();
-  private readonly gold = new THREE.Color("#ffe4b0");
+  private readonly gold = new THREE.Color("#ffe2ad");
+  private readonly ivory = new THREE.Color("#fff4d6");
   private debtL = 0;
   private debtR = 0;
   private spiralDebt = 0;
+  private boostDebt = 0;
+  private rollGrain = 0;
+  private boostGrain = 0;
   private readonly velocity = new THREE.Vector3();
   private readonly center = new THREE.Vector3();
   private moving = true;
   private brakeDebt = 0;
   private wispDebt = 0;
   private wispSide = false;
+  private wingDebt = 0;
+  private readonly previousL = new THREE.Vector3();
+  private readonly previousR = new THREE.Vector3();
+  private readonly previousCenter = new THREE.Vector3();
+  private hasPrevious = false;
 
   constructor(avatar: Avatar, color: string, particles: Particles | null, options: PilotFxOptions = {}) {
     this.avatar = avatar;
@@ -83,7 +93,9 @@ export class PilotFx {
 
   reset() {
     this.trails.forEach((t) => t.reset());
-    this.debtL = this.debtR = this.spiralDebt = this.brakeDebt = this.wispDebt = 0;
+    this.hasPrevious = false;
+    this.debtL = this.debtR = this.spiralDebt = this.boostDebt = this.brakeDebt = this.wingDebt = this.wispDebt = 0;
+    this.rollGrain = this.boostGrain = 0;
   }
 
   hide() {
@@ -114,14 +126,37 @@ export class PilotFx {
       ? THREE.MathUtils.clamp(0.08 + (speed - 25) / 90 + proximity * 0.25, 0, 0.45) * (this.ghost ? 0.4 : 1)
       : 0;
 
+    if (!this.hasPrevious || !moving) this.rememberPose();
     const particles = this.particles;
-    if (!particles || dt <= 0 || !moving) return;
+    if (!particles || dt <= 0 || !moving) {
+      this.rememberPose();
+      return;
+    }
     const budget = particles.budget * this.share;
-    this.brakeDebt += dt * FX.brakeWisps * avatar.brake * budget;
+    const style = avatar.wingStyle;
+    if (style !== "classic") {
+      const wingRate = COSMETIC_FX.wingParticles * budget * (style === "astral" ? 1.5 : 1);
+      this.wingDebt += dt * wingRate;
+      color.set(wingSpec(style).accent);
+      for (; this.wingDebt >= 1; this.wingDebt--) {
+        const age = (this.wingDebt - 1) / wingRate;
+        const left = Math.random() < .5;
+        this.sampleTip(left ? tipL : tipR, left ? this.previousL : this.previousR, age, dt);
+        jitter.lerpVectors(this.center, this.previousCenter, age / dt);
+        at.lerp(jitter, rand(0, .65));
+        particles.emit(at, vel.copy(velocity).multiplyScalar(.08), fx(.55, COSMETIC_FX.wingParticleSize * rand(.75, 1.15), color,
+          style === "astral" ? Kind.Star : style === "frost" || style === "storm" ? Kind.Shard : style === "tide" ? Kind.Bubble : Kind.Glow, -.3, 1.5, .9), age);
+      }
+    }
+    const brakeRate = FX.brakeWisps * avatar.brake * budget;
+    this.brakeDebt += dt * brakeRate;
     for (; this.brakeDebt >= 1; this.brakeDebt--) {
-      particles.emit(Math.random() < 0.5 ? tipL : tipR,
+      const age = (this.brakeDebt - 1) / brakeRate;
+      const left = Math.random() < 0.5;
+      this.sampleTip(left ? tipL : tipR, left ? this.previousL : this.previousR, age, dt);
+      particles.emit(at,
         vel.copy(velocity).multiplyScalar(0.12),
-        fx(0.35, 0.7, this.head, Kind.Wisp, 0, 2, 0.5));
+        fx(0.3, FX.wingPuffSize, this.head, Kind.Wisp, 0, 2, 0.25), age);
     }
 
     // Cloud wisps: at speed the wingtips tear soft puffs of cloud that hang in the air behind you
@@ -139,33 +174,77 @@ export class PilotFx {
     }
 
     // Light motes shed from the wingtips: few and large, drifting up slowly like Sky's winged light
-    const rate = (4 + speed * 0.35) * FX.sparkles * budget * (1 + proximity + avatar.boost);
+    const rate = (4 + speed * 0.35) * FX.sparkles * budget * (1 + proximity);
     this.debtL += rate * dt;
     this.debtR += rate * dt;
-    for (; this.debtL >= 1; this.debtL--) this.mote(tipL);
-    for (; this.debtR >= 1; this.debtR--) this.mote(tipR);
+    for (; this.debtL >= 1; this.debtL--) this.mote(tipL, this.previousL, (this.debtL - 1) / rate, dt);
+    for (; this.debtR >= 1; this.debtR--) this.mote(tipR, this.previousR, (this.debtR - 1) / rate, dt);
 
-    // A spiral of stars while rolling
+    // Boost: small gold dust with occasional ivory slivers, swept backwards.
+    // Sample each birth along the wing movement, never a bright batch at one point.
+    const boostRate = FX.boostSparkles * avatar.boost * budget;
+    this.boostDebt += boostRate * dt;
+    for (; this.boostDebt >= 1; this.boostDebt--) {
+      const age = (this.boostDebt - 1) / boostRate;
+      const grain = this.boostGrain++;
+      const left = grain % 2 === 0;
+      this.sampleTip(left ? tipL : tipR, left ? this.previousL : this.previousR, age, dt);
+      jitter.lerpVectors(this.center, this.previousCenter, age / dt);
+      at.lerp(jitter, rand(0, 0.3)).addScaledVector(span, rand(-0.08, 0.08));
+      const sliver = grain % 3 === 0;
+      particles.emit(at,
+        vel.copy(velocity).multiplyScalar(-0.08).addScaledVector(span, (left ? -1 : 1) * rand(0.3, 1)),
+        fx(rand(0.25, 0.5), FX.wingGrainSize * (sliver ? rand(1.1, 1.5) : rand(0.7, 1.1)),
+          sliver ? this.ivory : this.gold, sliver ? Kind.Shard : Kind.Glow, 0, 1.5,
+          FX.wingGrainLight * (this.ghost ? 0.6 : 0.95)), age);
+    }
+    if (avatar.boost <= 0) this.boostDebt = 0;
+
+    // Rolling wingtips leave two fine golden arcs: twinkles mixed with tiny flakes.
     if (barrel > 0) {
-      this.spiralDebt += 140 * barrel * budget * dt;
+      const spiralRate = FX.rollSparkles * barrel * budget;
+      this.spiralDebt += spiralRate * dt;
       for (; this.spiralDebt >= 1; this.spiralDebt--) {
-        const tip = Math.random() < 0.5 ? tipL : tipR;
+        const age = (this.spiralDebt - 1) / spiralRate;
+        const grain = this.rollGrain++;
+        const left = grain % 2 === 0;
+        const flake = grain % 3 === 0;
+        this.sampleTip(left ? tipL : tipR, left ? this.previousL : this.previousR, age, dt);
         particles.emit(
-          at.copy(tip).addScaledVector(span, rand(-0.2, 0.2)),
+          at.addScaledVector(span, rand(-0.08, 0.08)),
           vel.copy(velocity).multiplyScalar(0.1).addScaledVector(span, rand(-1, 1)),
-          fx(rand(0.7, 1.2), rand(0.35, 0.6), this.gold, Kind.Star, 0, 2, 2.6),
+          fx(rand(0.45, 0.75), FX.wingGrainSize * rand(1, 1.6), this.gold,
+            flake ? Kind.Shard : Kind.Star, 0, 2, FX.wingGrainLight * (this.ghost ? 0.6 : 1.1)),
+          age,
         );
       }
+    } else {
+      this.spiralDebt = 0;
     }
+    this.rememberPose();
   }
 
-  private mote(tip: THREE.Vector3) {
-    const star = Math.random() < 0.55;
+  private rememberPose() {
+    this.previousL.copy(tipL);
+    this.previousR.copy(tipR);
+    this.previousCenter.copy(this.center);
+    this.hasPrevious = true;
+  }
+
+  private sampleTip(tip: THREE.Vector3, previous: THREE.Vector3, age: number, dt: number) {
+    at.lerpVectors(tip, previous, THREE.MathUtils.clamp(age / dt, 0, 1));
+  }
+
+  private mote(tip: THREE.Vector3, previous: THREE.Vector3, age: number, dt: number) {
+    const star = Math.random() < 0.45;
+    this.sampleTip(tip, previous, age, dt);
     color.copy(this.head).lerp(this.body, Math.random());
     this.particles!.emit(
-      at.set(tip.x + rand(-0.25, 0.25), tip.y + rand(-0.25, 0.25), tip.z + rand(-0.25, 0.25)),
+      at.add(jitter.set(rand(-0.16, 0.16), rand(-0.16, 0.16), rand(-0.16, 0.16))),
       vel.copy(this.velocity).multiplyScalar(0.08).add(jitter.set(rand(-0.7, 0.7), rand(-0.2, 0.9), rand(-0.7, 0.7))),
-      fx(rand(1.2, 2.4), star ? rand(0.45, 0.8) : rand(0.3, 0.55), color, star ? Kind.Star : Kind.Glow, -0.45, 2.2, this.ghost ? 0.7 : rand(1.1, 1.7)),
+      fx(rand(1.2, 2.4), FX.wingGrainSize * (star ? rand(4.5, 8) : rand(3, 5.5)), color,
+        star ? Kind.Star : Kind.Glow, -0.45, 2.2, FX.wingGrainLight * (this.ghost ? 0.6 : rand(1, 1.5))),
+      age,
     );
   }
 
@@ -173,7 +252,7 @@ export class PilotFx {
   private downstroke(strength: number) {
     const particles = this.particles;
     if (!particles || FX.flapPuffs <= 0 || !this.moving) return;
-    const count = Math.round((4 + strength * 12) * FX.flapPuffs * particles.budget * this.share);
+    const count = Math.round((2 + strength * 6) * FX.flapPuffs * particles.budget * this.share);
     down.set(0, -1, 0).applyQuaternion(this.avatar.group.quaternion);
     for (let i = 0; i < count; i++) {
       const tip = i % 2 ? tipL : tipR;
@@ -188,8 +267,8 @@ export class PilotFx {
           .multiplyScalar(rand(3, 6) * strength + 1)
           .addScaledVector(this.velocity, 0.25),
         wisp
-          ? fx(rand(0.5, 0.8), rand(0.8, 1.4), this.head, Kind.Wisp, 0, 3, 0.5)
-          : fx(rand(0.6, 1), rand(0.25, 0.45), this.gold, Kind.Star, 0, 2, 2),
+          ? fx(rand(0.3, 0.5), FX.wingPuffSize * rand(0.7, 1.2), this.head, Kind.Wisp, 0, 3, 0.25)
+          : fx(rand(0.4, 0.7), FX.wingGrainSize * rand(1.2, 1.8), this.gold, Kind.Star, 0, 2, FX.wingGrainLight),
       );
     }
   }

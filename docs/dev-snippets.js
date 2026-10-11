@@ -63,14 +63,14 @@ window.__shot = async (view, ms = 4000) => {
 // tree colliders (trees), collision distances (dist) and rings. trees, dist and
 // rings must never change, or recorded ghosts stop matching their maps; mesh may
 // change when the looks do. Expected (trees, dist and rings since the Sky Isles
-// port; mesh since the rock collides as drawn, 2026-10-10):
-//   1: mesh bbf7b0a1 trees f4f3226a dist 9086de69 rings 583fd555 (Winter)
-//   7: mesh df8c6ea1 trees fb4fc91d dist 6aab8c08 rings c8cc2d15 (Misty pines)
-//  42: mesh d9c31b5b trees 112f6564 dist 3b43c006 rings 40f33295 (Misty pines)
+// port; mesh since the mesh cleanup replaced snapping, 2026-10-10):
+//   1: mesh 4cb2746a trees f4f3226a dist 9086de69 rings 583fd555 (Winter)
+//   7: mesh a1696d0a trees fb4fc91d dist 6aab8c08 rings c8cc2d15 (Misty pines)
+//  42: mesh 3a723711 trees 112f6564 dist 3b43c006 rings 40f33295 (Misty pines)
 window.__raceHashes = async () => {
   const v = Date.now();
   const { World } = await import(`/src/game/world/World.ts?t=${v}`);
-  const { raceLevel } = await import(`/src/game/world/biomes/index.ts?t=${v}`);
+  const { skyIslesLevel } = await import(`/src/game/world/biomes/index.ts?t=${v}`);
   const { meshChunk, rockChunks } = await import(`/src/game/world/mesher.ts?t=${v}`);
   const fnv = (h, arr) => {
     const u = new Uint32Array(arr.buffer, arr.byteOffset, arr.length);
@@ -82,7 +82,7 @@ window.__raceHashes = async () => {
   };
   const out = {};
   for (const seed of [1, 7, 42]) {
-    const w = new World(raceLevel(seed));
+    const w = new World(skyIslesLevel(seed));
     const chunks = rockChunks(w).sort((a, b) => a.key - b.key);
     let h = 2166136261;
     let t = 2166136261;

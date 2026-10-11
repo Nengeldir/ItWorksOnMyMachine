@@ -6,6 +6,7 @@ import { type BiomeId, runLevel } from "../game/world/biomes";
 import type { Settings } from "../storage";
 import type { InputObserver } from "../game/input";
 import { Store } from "./store";
+import { profileClient } from "../profile/client";
 
 const COLOR = "#e04f4a"; // Sky's red cape
 const BEST_KEY = "windrider.runs";
@@ -42,6 +43,7 @@ export class RunSession {
   private settings: Settings;
   private container: HTMLElement | null = null;
   private game: Game | null = null;
+  private generation = 0;
 
   constructor(seed: number, settings: Settings) {
     this.seed = seed;
@@ -60,12 +62,15 @@ export class RunSession {
 
   mount(container: HTMLElement) {
     this.container = container;
-    this.create();
+    void this.create();
   }
 
-  private create() {
+  private async create() {
     if (!this.container) return;
+    const generation = ++this.generation;
     try {
+      const adventure = await profileClient.start(this.seed);
+      if (generation !== this.generation || !this.container) return;
       this.game = new Game(this.container, {
         seed: this.seed,
         level: runLevel(this.seed, 1, runOrder(this.seed)[0]),
@@ -75,6 +80,8 @@ export class RunSession {
         events: { hud: (hud) => this.store.set({ hud }) },
       });
       this.game.startRun(this.seed, {
+        rewards: adventure.rewards,
+        collected: reward => profileClient.collect(adventure.token, reward.id),
         offer: (offers, next) => this.store.set({ stage: "pick", offers, next }),
         arrived: (level, biome) => this.store.set({ arrived: { level, biome, at: performance.now() } }),
         ended: (summary) => this.ended(summary),
@@ -82,12 +89,14 @@ export class RunSession {
       // Hold still on the start line until take-off
       if (this.store.get().stage === "intro") this.game.holdRun(true);
     } catch (e) {
+      if (generation !== this.generation) return;
       console.error(e);
       this.store.set({ error: `The game couldn't start: ${(e as Error).message}` });
     }
   }
 
   unmount() {
+    this.generation++;
     this.game?.dispose();
     this.game = null;
     this.container = null;
@@ -106,7 +115,7 @@ export class RunSession {
 
   /** Off the intro panel and into the air */
   begin() {
-    if (this.store.get().stage !== "intro") return;
+    if (this.store.get().stage !== "intro" || !this.game) return;
     this.store.set({ stage: "flying" });
     this.game?.holdRun(false);
     this.game?.engage();
@@ -127,8 +136,14 @@ export class RunSession {
   again() {
     this.game?.dispose();
     this.game = null;
-    this.store.set({ stage: "flying", summary: null, offers: [], arrived: null, best: bestRun(this.seed) });
-    this.create();
+    this.store.set({ stage: "flying", summary: null, offers: [], arrived: null, hud: null, error: null, best: bestRun(this.seed) });
+    void this.create();
+  }
+
+  retry() {
+    if (this.game) return;
+    this.store.set({ error: null });
+    void this.create();
   }
 
   private ended(summary: RunSummary) {

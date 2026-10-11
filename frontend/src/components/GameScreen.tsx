@@ -5,6 +5,7 @@ import { holdGame } from "../game/hold";
 import { formatTime, ordinal, untilTomorrow } from "../format";
 import { controlsBlocked } from "../game/input";
 import { dailySeed } from "../game/rng";
+import { keyboardBinding } from "../game/bindings";
 import { webglAvailable } from "../game/webgl";
 import { BIOMES, type BiomeId } from "../game/world/biomes";
 import { RUN } from "../game/tuning";
@@ -22,6 +23,8 @@ import Coach from "./Coach";
 import { HelpButton } from "./Help";
 import SettingsPanel from "./SettingsPanel";
 import Hud from "./Hud";
+import { ProfileStatus } from "./ProfilePanel";
+import TestCollectionPanel from "./TestCollectionPanel";
 import Leaderboard from "./Leaderboard";
 import MapSelect from "./MapSelect";
 import "./GameScreen.css";
@@ -49,7 +52,7 @@ function useHotkeys(keys: Record<string, () => void>) {
   const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
     const target = event.target as HTMLElement | null;
     if (event.defaultPrevented || controlsBlocked() || target?.isContentEditable || (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
-    const action = keys[event.code];
+    const action = keys[keyboardBinding(event)];
     if (!action || event.repeat) return;
     // Otherwise Enter would also click whichever button still has focus
     event.preventDefault();
@@ -340,6 +343,7 @@ const RoomScreen = ({ code, seed, settings, onSettings, onExit, tutorial, onTuto
 // --- Explore ---------------------------------------------------------------------
 
 const ExploreScreen = ({ biome, seed, settings, onSettings, onExit, testMode = false }: ScreenProps & { biome: BiomeId; seed: number; testMode?: boolean }) => {
+  const [collectionOpen, setCollectionOpen] = useState(false);
   const [session] = useState(() => new ExploreSession(biome, seed, settings, testMode));
   const ref = useMountedSession(session, settings);
   const { hud, error, biome: current, mood, track, playing, speed, offers, next, summary } = useSyncExternalStore(session.store.subscribe, session.store.get);
@@ -399,6 +403,7 @@ const ExploreScreen = ({ biome, seed, settings, onSettings, onExit, testMode = f
         </>}
         {testMode && <>
           <h3>Test mode · nothing saved</h3>
+          <button onClick={() => { session.beginCollectionPreview(); setCollectionOpen(true); }}>Try items, pets & cosmetics</button>
           <div className="debug-row touch-only">
             <button onClick={() => session.testAction("portal")}>Portal</button>
             <button onClick={() => session.testAction("win")}>Victory</button>
@@ -415,6 +420,7 @@ const ExploreScreen = ({ biome, seed, settings, onSettings, onExit, testMode = f
       {testMode && phase === "finale" && <div className="finale-skip" onClick={() => session.skip()}>
         <kbd>Enter</kbd> <span className="no-touch">skip</span><span className="touch-only">Skip</span>
       </div>}
+      {testMode && collectionOpen && <TestCollectionPanel session={session} onClose={() => { setCollectionOpen(false); session.endCollectionPreview(); }} />}
       {testMode && offers.length > 0 && !hud?.paused && <UpgradePicker offers={offers} next={next} onPick={(id) => session.pick(id)} />}
       {testMode && summary && <FinishScreen testMode summary={summary} best={null} onAgain={() => session.again()} onMenu={onExit} />}
     </div>
@@ -452,6 +458,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onT
     <div className="game">
       <div ref={ref} className="game-view" />
       {/* Nothing but the wormhole while passing through a portal */}
+      {(hud?.paused || stage === "intro" || stage === "summary" || run?.phase === "explore" || run?.phase === "arrive") && <ProfileStatus paused={hud?.paused} />}
       {hud && (hud.paused || (stage !== "intro" && stage !== "pick" && stage !== "summary" && run?.phase !== "portal" && run?.phase !== "finale" && run?.phase !== "won")) && <Hud hud={hud} settings={settings} showStyle />}
       {run && stage !== "intro" && stage !== "summary" && stage !== "pick" && run.phase !== "finale" && run.phase !== "won" && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
       {run?.phase === "finale" && (
@@ -469,12 +476,12 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onT
           controls={{ settings, onSettings, muted: !!hud?.muted }}
         />
       )}
-      {error && <div className="banner">{error}</div>}
+      {error && <div className="banner">{error} <button onClick={() => session.retry()}>Try again</button></div>}
 
       {stage === "intro" && !error && (
         <ReadyCard>
-          <button className="primary start-cta" onClick={() => session.begin()}>
-            Take off <kbd>Enter</kbd>
+          <button className="primary start-cta" disabled={!hud} onClick={() => session.begin()}>
+            {hud ? "Take off" : "Opening your adventure…"} <kbd>Enter</kbd>
           </button>
         </ReadyCard>
       )}
@@ -517,11 +524,8 @@ const GalleryScreen = ({ onExit }: { onExit: () => void }) => {
     <div className="game">
       <div ref={ref} className="game-view" />
       <TopBar title="Item gallery" onExit={onExit} />
-      <aside className="panel glass gallery-panel">
-        <header className="panel-head">
-          <small>Models and animations{demo ? " · demo playing" : ""}</small>
-          <h2>Items</h2>
-        </header>
+      <Panel className="gallery-panel" head={<><small>Models and animations{demo ? " · demo playing" : ""}</small><h2>Items</h2></>}>
+
         <p className="hint">Preview the models here. Adventure items have their own effects in a run.</p>
         <div className="gallery-items">
           {ITEMS.map((item) => (
@@ -537,7 +541,7 @@ const GalleryScreen = ({ onExit }: { onExit: () => void }) => {
           <button onClick={() => act((g) => g.thrust(false))}>Off</button>
           <button onClick={() => act((g) => g.clear())}>Put away</button>
         </div>
-      </aside>
+      </Panel>
     </div>
   );
 };

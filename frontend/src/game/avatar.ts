@@ -2,10 +2,14 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { outlineMaterial, toonMaterial } from "./toon";
 import { ATMOSPHERE } from "./world/atmosphere";
-import { ANIM, FX } from "./tuning";
+import { ANIM, FX, COSMETIC_FX } from "./tuning";
 import { clamp, smoothstep } from "./math";
 import { DISSOLVE_AT, type DeathKind, WING_POINTS } from "./death";
 import type { ItemSlot } from "./items/models";
+import { capeSpec, type CapeId, type WingId } from "./cosmetics/catalog";
+import { buildWing } from "./cosmetics/wings";
+import type { Appearance } from "./cosmetics/storage";
+import { buildHat, buildShoe, disposeModel } from "./cosmetics/models";
 
 // The pilot: a small cel-shaded flyer with Genshin / Sky proportions (a big
 // head, slim limbs), a Sky-style cape that spreads into wings, and
@@ -27,10 +31,10 @@ interface Tones {
   hairShine: THREE.Color;
   tunic: THREE.Color;
   tunicShade: THREE.Color;
-  cape: THREE.Color; // the player's color: the cape and its wings, outside
+  cape: THREE.Color; // the player's color (or a wardrobe cape's): the cape and its wings, outside
   capeInner: THREE.Color; // the lighter inside of the cape
   capeDark: THREE.Color;
-  trim: THREE.Color; // pale gold, only for the cape's light marks (they glow)
+  trim: THREE.Color; // pale gold: the cape's light marks and the wardrobe's emblems (they glow)
   eye: THREE.Color; // the eyes are lights (above 1, so they bloom)
   tip: THREE.Color; // the wings' edges (they glow at night)
 }
@@ -326,6 +330,9 @@ export interface AvatarOptions {
 }
 
 interface Side {
+  innerMesh: THREE.Mesh;
+  outerMesh: THREE.Mesh;
+  boot: THREE.Mesh;
   shoulder: THREE.Object3D;
   elbow: THREE.Object3D;
   hip: THREE.Object3D;
@@ -367,6 +374,12 @@ export class Avatar {
   private readonly left: Side;
   private readonly right: Side;
   private readonly cape: Cloth;
+  private capeId: CapeId = "classic";
+  private hat: THREE.Group | null = null;
+  private shoes: THREE.Group[] = [];
+  private appearance: Appearance = { cape: "classic", hat: "none", shoes: "classic", wings: "classic", pet: "none" };
+  private wingModels: ReturnType<typeof buildWing>[] = [];
+  get wingStyle(): WingId { return this.appearance.wings; }
   private readonly scarf: Cloth[];
   // Conservative bounds of the animated legs, reused for cloth self-collision.
   private readonly clothObstacles: { mesh: THREE.Mesh; local: THREE.Box3; bounds: THREE.Box3 }[] = [];
@@ -483,6 +496,7 @@ export class Avatar {
     const clothObstacle = (mesh: THREE.Mesh) => {
       mesh.geometry.computeBoundingBox();
       this.clothObstacles.push({ mesh, local: mesh.geometry.boundingBox!.clone(), bounds: new THREE.Box3() });
+      return mesh;
     };
 
     // Pelvis: the bell of the tunic, wide and plain like a Sky child's
@@ -600,15 +614,16 @@ export class Avatar {
       const knee = new THREE.Object3D();
       knee.position.set(0, -0.29, 0);
       hip.add(knee);
-      clothObstacle(part(
+      // The shin and its pointed toes, like a dancer's (the wardrobe's shoes replace it)
+      const boot = clothObstacle(part(
         knee,
         new PartBuilder()
           .add(capsule(0.04, 0.18), "body", [0, -0.13, 0])
-          // Pointed toes, like a dancer's
           .add(capsule(0.034, 0.08), "body", [0, -0.3, -0.012], [0.25, 0, 0]),
       ));
 
-      // Wings: the cape itself, as in Sky, in two panels that bend at the wrist
+      // Wings: the cape itself, as in Sky, in two panels that bend at the wrist (the
+      // wardrobe's wings hide them and hang their own models on the same joints)
       const wing = new THREE.Object3D();
       wing.position.set(0.05 * s, 0.17, 0.15);
       wing.rotation.order = "YZX";
@@ -616,7 +631,7 @@ export class Avatar {
       // The panels lie along +x; the left wing's are turned round (a rotation keeps the ink hull right)
       const mirror: Vec = [0, s > 0 ? 0 : Math.PI, 0];
       const panelPaint = (reach: number): Paint => (p, t, out) => {
-        // The outside in the player's color, the inside lighter; the far edges catch the light
+        // The outside in the cape's color, the inside lighter; the far edges catch the light
         const edge = smoothstep(0.55, 1, Math.hypot(p.x, p.y) / reach);
         out.copy(p.z > 0 ? t.cape : t.capeInner).lerp(t.tip, edge * 0.7);
         return edge * 0.6;
@@ -624,7 +639,7 @@ export class Avatar {
       const inner = new PartBuilder()
         .add(panel(0.6, 0.5, 0.42, 2), panelPaint(0.75), [0, 0, 0], mirror)
         .add(capsule(0.016, 0.52), "capeDark", [0.28 * s, 0.015, 0.004], [0, 0, Math.PI / 2 - 0.1 * s]);
-      part(wing, inner, wingMat);
+      const innerMesh = part(wing, inner, wingMat);
       const wingOuter = new THREE.Object3D();
       wingOuter.position.set(0.56 * s, 0.03, 0);
       wingOuter.rotation.order = "YZX";
@@ -632,7 +647,7 @@ export class Avatar {
       const outer = new PartBuilder()
         .add(panel(1, 0.56, 0.06, 3, 0.1), panelPaint(1), [0, 0, 0], mirror)
         .add(capsule(0.013, 0.45), "capeDark", [0.24 * s, 0.03, 0.004], [0, 0, Math.PI / 2 - 0.1 * s]);
-      part(wingOuter, outer, wingMat);
+      const outerMesh = part(wingOuter, outer, wingMat);
       const tip = new THREE.Object3D();
       tip.position.set(1 * s, 0.1, 0);
       wingOuter.add(tip);
@@ -640,7 +655,7 @@ export class Avatar {
       trail.position.set(0.02 * s, -0.56, 0);
       wingOuter.add(trail);
 
-      return { shoulder, elbow, hip, knee, wing, wingOuter, tip, trail };
+      return { shoulder, elbow, hip, knee, wing, wingOuter, tip, trail, boot, innerMesh, outerMesh };
     };
     this.right = makeSide(1);
     this.left = makeSide(-1);
@@ -665,17 +680,33 @@ export class Avatar {
     this.feet = [foot(this.right), foot(this.left)];
     this.slots = { back, head: crown, hand, feet: this.feet[0] };
 
-    // The cape: wide, long and rippling, in the player's color, with a column of
-    // light marks down the back (Sky's wing energy) that glow
+    // The cape: wide, long and rippling, in the cape's color. The Sky cape (the
+    // wardrobe's "classic") is plain with a column of light marks down the back
+    // (its wing energy) that glow; the wardrobe's other capes keep their emblems
     this.cape = new Cloth(
-      10,
-      16,
+      18,
+      24,
       (u, v, t, out) => {
-        const row = Math.round(v * 16);
-        const mark = Math.abs(u) < 0.15 && row >= 5 && row <= 11 && row % 2 === 1;
-        out.copy(mark ? t.trim : t.cape).lerp(t.capeDark, mark ? 0 : (1 - smoothstep(0, 0.25, v)) * 0.35);
-        if (!mark) out.lerp(t.tip, smoothstep(0.82, 1, v) * 0.6);
-        return mark ? 1 : smoothstep(0.9, 1, v) * 0.3;
+        const spec = capeSpec(this.capeId), pattern = spec.pattern;
+        if (pattern === "diamond") {
+          const row = Math.round(v * 24);
+          const mark = Math.abs(u) < 0.1 && row >= 7 && row <= 15 && row % 2 === 1;
+          out.copy(mark ? t.trim : t.cape).lerp(t.capeDark, mark ? 0 : (1 - smoothstep(0, 0.25, v)) * 0.35);
+          if (!mark) out.lerp(t.tip, smoothstep(0.82, 1, v) * 0.6);
+          return mark ? 1 : smoothstep(0.9, 1, v) * 0.3;
+        }
+        const diamond = Math.abs(u) * 1.25 + Math.abs(v - 0.42) * 3.2 < 0.42;
+        const sun = Math.hypot(u * 0.7, (v - 0.4) * 2) < 0.19 || (v > 0.22 && v < 0.58 && Math.abs(Math.sin(Math.atan2(v - 0.4, u * 0.35) * 8)) < 0.17 && Math.hypot(u * 0.7, (v - 0.4) * 2) < 0.3);
+        const leaf = Math.abs(u) < 0.05 || Math.abs(Math.abs(u) - (v * 3 % 1) * 0.8) < 0.06;
+        const stars = (Math.abs(u - 0.42) + Math.abs(v - 0.3) * 4 < 0.18) || (Math.abs(u + 0.35) + Math.abs(v - 0.58) * 4 < 0.18) || diamond;
+        const feathers = Math.abs((u * 3 + v * 4) % 1) < 0.12;
+        const emblem = pattern === "sun" ? sun : pattern === "leaf" ? leaf : pattern === "stars" ? stars : pattern === "feathers" ? feathers : diamond;
+        const hem = v > 0.95 || (v > 0.86 && v < 0.89) || (pattern === "border" && Math.abs(u) > 0.84);
+        const embroidery = Math.abs(Math.abs(u) - (0.73 + 0.06 * Math.sin(v * 24))) < 0.045;
+        const panel = pattern === "stars" ? 0.28 * Math.sin(u * 5 + v * 9) : pattern === "feathers" ? 0.22 * Math.cos(u * 12 - v * 8) : 0.08 * Math.cos(u * 9);
+        const lit = hem || emblem || embroidery;
+        out.copy(lit ? t.trim : t.cape).lerp(t.capeInner, lit ? 0 : Math.max(0, panel)).lerp(t.capeDark, lit ? 0 : smoothstep(0.2, 1, v) * 0.35);
+        return lit ? 1 : 0;
       },
       clothMat,
     );
@@ -724,13 +755,57 @@ export class Avatar {
   }
 
   private repaint() {
-    for (const painted of this.painted) applyPaint(painted, this.tones);
+    for (const painted of this.painted) {
+      if (painted === this.cape.painted && this.capeId !== "classic") {
+        const spec = capeSpec(this.capeId), capeTones = tonesFor(spec.color!);
+        capeTones.trim.set(spec.trim);
+        applyPaint(painted, capeTones);
+      } else applyPaint(painted, this.tones);
+    }
   }
 
   setColor(color: string) {
     this.tones = tonesFor(color);
     this.repaint();
   }
+
+  /** Cosmetic meshes live on the animated joints; the flight hitbox never reads them. */
+  setAppearance(appearance: Appearance) {
+    if (this.ghost) return;
+    if (appearance.wings !== this.appearance.wings) {
+      this.wingModels.forEach(model => model.dispose()); this.wingModels = [];
+      for (const [side, sign] of [[this.left, -1], [this.right, 1]] as const) {
+        side.innerMesh.visible = side.outerMesh.visible = appearance.wings === "classic";
+        if (appearance.wings !== "classic") {
+          const model = buildWing(appearance.wings, sign);
+          side.wing.add(model.inner); side.wingOuter.add(model.outer); this.wingModels.push(model);
+        }
+      }
+    }
+    if (appearance.hat !== this.appearance.hat) {
+      if (this.hat) disposeModel(this.hat);
+      this.hat = appearance.hat === "none" ? null : buildHat(appearance.hat);
+      if (this.hat) this.slots.head.add(this.hat);
+    }
+    if (appearance.shoes !== this.appearance.shoes) {
+      this.shoes.forEach(disposeModel);
+      this.shoes = [];
+      for (const [side, sign] of [[this.left, -1], [this.right, 1]] as const) {
+        side.boot.visible = appearance.shoes === "classic";
+        if (appearance.shoes !== "classic") {
+          const shoe = buildShoe(appearance.shoes, sign);
+          side.knee.add(shoe); this.shoes.push(shoe);
+        }
+      }
+    }
+    this.capeId = appearance.cape;
+    this.appearance = { ...appearance };
+    this.repaint();
+    this.applyPose(0);
+  }
+
+  /** A carried helmet takes priority over the wardrobe hat. */
+  showCosmeticHat(visible: boolean) { if (this.hat) this.hat.visible = visible; }
 
   /** Wingtip positions in world space (call after update) */
   wingtips(left: THREE.Vector3, right: THREE.Vector3) {
@@ -969,13 +1044,15 @@ export class Avatar {
       obstacle.bounds.copy(obstacle.local).applyMatrix4(this.clothMatrix);
     }
     this.capeShape = (u, v, out) => {
-      const width = 0.11 + 0.2 * Math.pow(v, 0.8) * spread;
+      const spec = capeSpec(this.capeId);
+      const width = (0.11 + 0.2 * Math.pow(v, 0.8) * spread) * spec.width;
+      const scallop = (spec.pattern === "leaf" ? .075 * Math.cos(u * Math.PI * 3) : spec.pattern === "feathers" ? .085 * Math.cos(u * Math.PI * 5) : spec.pattern === "sun" ? .18 * (1 - Math.abs(u)) : spec.pattern === "stars" ? .08 * Math.cos(u * Math.PI * 2) : spec.pattern === "border" ? -.065 * (1 - u * u) : 0) * COSMETIC_FX.capeDetail;
       const w =
         wave * Math.pow(v, 1.3) * Math.sin(TAU * 1.3 * v - ct + u * 0.7) +
         wave * 0.35 * v * Math.sin(TAU * 2.4 * v - ct * 1.7 + u * 2.1);
       out.set(
         u * width + leanX * v * v + Math.sin(ct * 0.6 + v * 3) * 0.03 * v * v * A.clothWave,
-        0.245 - v * 1.18,
+        0.245 - v * 1.18 * spec.length + scallop * Math.pow(v, 6),
         0.085 + 0.06 * v + 0.12 * v * v + 0.05 * (1 - u * u) * v + w - pitch * v * v,
       );
       this.clearCloth(out);
@@ -1108,6 +1185,18 @@ export class Avatar {
     this.updateCloth(A.clothWave * 0.16, wave(3, 0) * 0.35, -0.3 + wave(4, 1) * 0.3);
   }
 
+  /** Run-only spirit cape: translucent toon body and ink; normal opacity is restored on exit. */
+  spectral(amount: number) {
+    if(this.ghost)return;
+    for(const material of this.materials){
+      if(material===this.aura.material)continue;
+      const transparent=amount>0;
+      if(material.transparent!==transparent){material.transparent=transparent;material.needsUpdate=true;}
+      material.opacity=1-amount*0.65;
+      material.depthWrite=!transparent;
+    }
+  }
+
   /** A ghost's opacity, 0..1 (Wind-Shear Dash's afterimages fade out); solid pilots ignore it */
   fade(opacity: number) {
     if (!this.ghost) return;
@@ -1125,6 +1214,9 @@ export class Avatar {
   }
 
   dispose() {
+    this.wingModels.forEach(model => model.dispose());
+    if (this.hat) disposeModel(this.hat);
+    this.shoes.forEach(disposeModel);
     this.painted.forEach((p) => p.geometry.dispose());
     this.materials.forEach((m) => m.dispose());
   }

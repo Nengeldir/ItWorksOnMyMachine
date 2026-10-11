@@ -9,6 +9,9 @@ import { Ambient } from "./ambient";
 import { Autopilot } from "./autopilot";
 import { GameAudio } from "./audio";
 import { Avatar } from "./avatar";
+import { APPEARANCE_EVENT, validateAppearance, type Appearance } from "./cosmetics/storage";
+import { profileClient } from "../profile/client";
+import { Companion } from "./pets/companion";
 import { CameraRig } from "./camera";
 import { DISSOLVE_AT, type DeathKind, DeathFall, classifyCrash, fieldNormal } from "./death";
 import { Debris } from "./effects";
@@ -20,7 +23,7 @@ import { ItemFx } from "./items/fx";
 import type { ItemId, ItemSlot } from "./items/models";
 import { type GhostData, GhostRecorder, type GhostRun, ghostSamples } from "./ghost";
 import { type ControlSettings, type InputObserver, type TestAction, Input, controlsBlocked } from "./input";
-import { FX_LIGHT, Kind, Particles, fx, fxTime } from "./particles";
+import { FX_LIGHT, Kind, Particles, fx, fxTime, sceneryTime } from "./particles";
 import { PilotFx } from "./pilotfx";
 import { INTERPOLATION_DELAY_MS, Pilot, type PilotSample } from "./pilots";
 // import { Trail } from "./trail";
@@ -29,8 +32,9 @@ import { clamp } from "./math";
 import { SpeedLines } from "./speedlines";
 import { INK, TOON_LIGHT } from "./toon";
 import { LightFlock } from "./skyfx";
-import { FX, RANGES, RINGS, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveTuning } from "./tuning";
+import { FX, RANGES, RINGS, RUN, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveTuning } from "./tuning";
 import { ABILITY } from "./run/abilities";
+import { PICKUP } from "./run/pickups";
 import { ITEM, RUN_ITEMS, type RunItemId } from "./run/items";
 import { RunController, type RunEvents, type RunHost } from "./run/controller";
 import type { UpgradeId } from "./run/upgrades";
@@ -189,6 +193,13 @@ export class Game implements RunHost {
   private readonly renderVelocity = new THREE.Vector3();
   private readonly prevQuaternion = new THREE.Quaternion();
   private readonly avatar: Avatar;
+  private readonly companion: Companion;
+  private testLook: Appearance | null = null;
+  private readonly appearanceChanged = () => {
+    const appearance = this.testLook ?? profileClient.appearance();
+    this.avatar.setAppearance(appearance);
+    this.companion.set(appearance.pet);
+  };
   private readonly fx: PilotFx;
   /** What the pilot carries (models and animations only, for now) */
   private readonly equipment: Equipment;
@@ -212,6 +223,7 @@ export class Game implements RunHost {
   /** Blur and sparkles over the screen while passing through a portal */
   private readonly portalVeil: HTMLDivElement;
   private veilAmount = 0;
+  private veilFlash = -1;
   /** White light over everything (the end of a run's finale) */
   private readonly whiteLight: HTMLDivElement;
   private white = 0;
@@ -286,6 +298,7 @@ export class Game implements RunHost {
   private accumulator = 0;
   private lastFrame = 0;
   private elapsed = 0;
+  private sceneryClock = 0;
   private readonly testPlayback?: TestPlayback;
   private lastHud = 0;
   private frame = 0;
@@ -352,6 +365,9 @@ export class Game implements RunHost {
     this.softParticles = new Particles(3000, true);
     this.ambient = new Ambient(this.particles, this.softParticles);
     this.avatar = new Avatar(options.color);
+    this.companion = new Companion(this.scene);
+    this.appearanceChanged();
+    window.addEventListener(APPEARANCE_EVENT, this.appearanceChanged);
     this.fx = new PilotFx(this.avatar, options.color, this.particles, { soft: this.softParticles });
     this.flock = new LightFlock();
     if (!this.attract) {
@@ -407,7 +423,10 @@ export class Game implements RunHost {
     // Lets browser tests drive the game in development
     if (import.meta.env.DEV) {
       Object.assign(window, { __game: this, __fxTime: fxTime, __tuning: Object.fromEntries(TUNING_GROUPS) });
-      void import("./devtools").then(({ installDevtools }) => installDevtools());
+      const itemShot = new URLSearchParams(location.search).get("itemShot");
+      void import("./devtools").then(({ installDevtools }) => {
+        if((window as unknown as {__game: Game}).__game===this)installDevtools(itemShot);
+      });
     }
   }
 
@@ -510,6 +529,13 @@ export class Game implements RunHost {
     this.equipment.equip(id);
   }
 
+  /** ?test only, local to this Game: no inventory writes or unlock checks. */
+  testAppearance(look: Appearance | null) {
+    if (!this.testPlayback) return;
+    this.testLook = look ? validateAppearance(look) : null;
+    this.appearanceChanged();
+  }
+
   unequip(slot: ItemSlot) {
     this.equipment.unequip(slot);
   }
@@ -551,7 +577,7 @@ export class Game implements RunHost {
     }
   }
 
-  stinger(kind: "portal" | "upgrade" | "dash" | "gate" | "finish") {
+  stinger(kind: "portal" | "upgrade" | "dash" | "gate" | "finish" | "item") {
     if (kind === "gate") this.audio.ring();
     else if (kind === "finish") this.audio.finish();
     else this.audio.stinger(kind);
@@ -562,6 +588,10 @@ export class Game implements RunHost {
   }
 
   veil(amount: number) {
+    if (this.veilFlash !== RUN.portalFlash) {
+      this.veilFlash = RUN.portalFlash;
+      this.portalVeil.style.setProperty("--portal-flash", RUN.portalFlash.toFixed(3));
+    }
     if (Math.abs(amount - this.veilAmount) < 0.002) return;
     this.veilAmount = amount;
     this.portalVeil.style.setProperty("--veil", amount.toFixed(3));
@@ -582,6 +612,7 @@ export class Game implements RunHost {
   insideWormhole(on: boolean) {
     if (this.inWormhole === on) return;
     this.inWormhole = on;
+    if (on && this.companion.group) this.companion.group.visible = false;
     this.view.group.visible = !on;
     this.abilityFx.group.visible = !on;
     this.abilityFx2.group.visible = !on;
@@ -884,6 +915,8 @@ export class Game implements RunHost {
     this.abilityFx2.dispose();
     this.itemFx.dispose();
     this.equipment.dispose();
+    window.removeEventListener(APPEARANCE_EVENT, this.appearanceChanged);
+    this.companion.dispose();
     this.avatar.dispose();
     this.particles.dispose();
     this.softParticles.dispose();
@@ -985,6 +1018,7 @@ export class Game implements RunHost {
     this.prevPosition.copy(this.flight.position);
     this.prevQuaternion.copy(this.flight.quaternion);
     this.prevVelocity.copy(this.flight.velocity);
+    this.run?.items.beforeFlight(this.flight);
     // In a run, some items take the controls a little (the input scored and recorded stays the player's)
     this.flight.step(STEP, this.run ? this.run.steer(input) : input, this.proximity * this.proximity, FLIGHT, this.run ? this.run.flightMods : null);
 
@@ -995,7 +1029,10 @@ export class Game implements RunHost {
     // The hitbox: a ball for the body, a rectangle for each wing (flight.ts). The land collides as
     // drawn once it is on screen (before that, as the distance field), trees and water by their fields.
     // In a run, Acrobatic Recovery can turn a clipped wingtip into a roll away from the rock
-    const part = this.run?.items.invulnerable ? null : this.hitTest(other, distance);
+    let part: HitPart | null;
+    if(this.run?.items.invulnerable) part=null;
+    else if(this.run?.items.phasing){this.hitLand=false;part=touching(this.others,this.flight.position,this.flight.quaternion,other,hitLocal);}
+    else part=this.hitTest(other,distance);
     if ((part || this.world.lost(y,z)) && this.run?.items.revive(this.flight)) {
       this.prevPosition.copy(this.flight.position);
       this.prevQuaternion.copy(this.flight.quaternion);
@@ -1016,7 +1053,7 @@ export class Game implements RunHost {
     if (this.proximity > 0.15) {
       this.combo += STEP;
       this.comboIdle = 0;
-    } else if ((this.comboIdle += STEP) > 1.2) {
+    } else if (!this.run?.items.frozenCombo && (this.comboIdle += STEP) > 1.2) {
       this.combo = 0;
     }
     this.style += this.proximity ** 2 * this.flight.speed * STEP * this.multiplier * 0.5;
@@ -1216,7 +1253,7 @@ export class Game implements RunHost {
     const crystals = this.view.gates.crystalPositions(index, this.crystalPoints);
     for (const p of crystals) {
       const outward = tmp.subVectors(p, ring.position).normalize();
-      for (let k = 0; k < Math.round(3 * amount); k++) {
+      for (let k = 0; k < Math.round(2 * amount); k++) {
         this.particles.emit(
           at.copy(p).addScaledVector(outward, rand(-0.6, 0.6)),
           vel
@@ -1224,22 +1261,22 @@ export class Game implements RunHost {
             .multiplyScalar(rand(5, 15))
             .addScaledVector(forward, rand(2, 6) + this.flight.speed * 0.15)
             .add(tmp2.set(rand(-2, 2), rand(-2, 2), rand(-2, 2))),
-          fx(rand(1, 1.9), rand(0.45, 0.95), k % 2 ? WARM : tint, Kind.Shard, 4, 1.1, 2.8),
+          fx(rand(0.7, 1.2), rand(0.22, 0.45), k % 2 ? WARM : tint, Kind.Shard, 4, 1.1, 1.5),
         );
       }
     }
-    // Stars around the rim and a puff of light around the pilot
-    for (let k = 0; k < Math.round(70 * amount); k++) {
+    // Fine stars around the rim and scattered grains around the pilot
+    for (let k = 0; k < Math.round(48 * amount); k++) {
       const p = crystals[k % crystals.length];
       at.lerpVectors(ring.position, p, rand(0.85, 1.05));
       tmp.subVectors(at, ring.position).normalize();
-      this.particles.emit(at, vel.copy(tmp).multiplyScalar(rand(1, 5)).addScaledVector(forward, rand(-2, 4)), fx(rand(1.2, 2.2), rand(0.6, 1.2), tint, Kind.Star, -0.5, 1.5, 3));
+      this.particles.emit(at, vel.copy(tmp).multiplyScalar(rand(1, 5)).addScaledVector(forward, rand(-2, 4)), fx(rand(0.7, 1.2), rand(0.22, 0.45), tint, Kind.Star, -0.5, 1.5, 1.5));
     }
-    for (let k = 0; k < Math.round(30 * amount); k++) {
+    for (let k = 0; k < Math.round(18 * amount); k++) {
       this.particles.emit(
-        this.flight.position,
+        at.copy(this.flight.position).add(tmp2.set(rand(-0.6, 0.6), rand(-0.6, 0.6), rand(-0.6, 0.6))),
         vel.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize().multiplyScalar(rand(4, 10)).addScaledVector(this.flight.velocity, 0.6),
-        fx(rand(0.5, 0.9), rand(0.5, 1.1), WARM, Kind.Glow, 0, 3, 2),
+        fx(rand(0.4, 0.65), rand(0.12, 0.25), WARM, Kind.Glow, 0, 3, 1),
       );
     }
   }
@@ -1450,10 +1487,15 @@ export class Game implements RunHost {
     fxTime.value = this.elapsed;
     INK.opacity.value = FX.ink;
     INK.tint.value = FX.inkTint;
+    const worldDt=dt * (this.run?.items.worldRate ?? 1);
+    this.sceneryClock+=worldDt;sceneryTime.value=this.sceneryClock;
     this.adaptQuality(realDt);
 
     const selfFlying = this.attract === "chase" || this.autopiloting;
-    if (!selfFlying) this.input0 = this.input.sample(dt);
+    if (!selfFlying) {
+      this.touch?.update();
+      this.input0 = this.input.sample(dt);
+    }
     if (this.clearWhiteFrom !== null) {
       // The white after the finale clears once the map is there (or after a few seconds)
       if (this.view.ready || this.elapsed - this.clearWhiteFrom > 4) {
@@ -1556,6 +1598,8 @@ export class Game implements RunHost {
       this.deathEffects(dt);
       this.rig.fall(body.position, dt, this.field);
     }
+    this.avatar.showCosmeticHat(this.equipment.wearing("head") === null);
+    this.companion.update(dt, body, !crashed && !this.inWormhole && !waiting && this.attract !== "drift", this.world.course, this.flight.speed);
     this.debris.update(dt);
 
     const flockMoving = !crashed && this.attract !== "drift" && this.raceState !== "countdown" && !waiting && !this.inWormhole;
@@ -1563,7 +1607,7 @@ export class Game implements RunHost {
 
     const camera = this.rig.camera;
     camera.updateMatrixWorld();
-    this.view.update(camera, dt, crashed ? undefined : this.flight.velocity);
+    this.view.update(camera, worldDt, crashed ? undefined : this.flight.velocity);
     this.run?.frame(dt);
     if (!this.inWormhole) {
       this.gateMotes(dt);
@@ -1571,7 +1615,7 @@ export class Game implements RunHost {
     }
     const flying = !crashed && this.raceState !== "countdown" && !waiting && this.attract !== "drift";
     this.speedLines.update(dt, body.position, flying ? this.flight.velocity : tmp.set(0, 0, 0), camera, this.particles.budget);
-    if (!this.inWormhole) this.ambient.update(dt, camera.position, flying ? this.flight.velocity : tmp.set(0, 0, 0), this.particles.budget);
+    if (!this.inWormhole) this.ambient.update(worldDt, camera.position, flying ? this.flight.velocity : tmp.set(0, 0, 0), this.particles.budget);
 
     const liveTime = t - INTERPOLATION_DELAY_MS;
     this.live.forEach((pilot) => pilot.update(liveTime, dt, camera.position));
@@ -1744,9 +1788,14 @@ export class Game implements RunHost {
     this.softParticles.setViewport(this.renderer.domElement.height, camera.fov);
     if (this.bloomOn && !this.composer) void this.createComposer();
     if (this.bloomOn && this.composer && this.bloomPass) {
-      this.bloomPass.strength = FX.bloom * (1 + this.world.palette.night * 0.6);
+      this.bloomPass.strength = FX.bloom * (1 + this.world.palette.night * 0.25);
       this.bloomPass.radius = FX.bloomRadius;
       this.bloomPass.threshold = FX.bloomThreshold;
+      // Radius alone still includes the broad low-resolution blur layers.
+      // Keep a close glow; suppress those layers so lamps retain their silhouette.
+      for (let i = 0; i < this.bloomPass.bloomTintColors.length; i++) {
+        this.bloomPass.bloomTintColors[i].setScalar(i < 2 ? 1 : FX.bloomHalo);
+      }
       this.composer.render();
     } else {
       this.renderer.render(this.scene, camera);
@@ -1859,7 +1908,10 @@ export class Game implements RunHost {
     abilities.close();
     const items = gui.addFolder("Run items (not saved)");
     for (const key of Object.keys(ITEM) as (keyof typeof ITEM)[]) items.add(ITEM, key);
+    const pickups = gui.addFolder("Island pickups (next level, not saved)");
+    for(const key of Object.keys(PICKUP) as (keyof typeof PICKUP)[]) pickups.add(PICKUP,key);
     items.close();
+    pickups.close();
 
     for (const [title, group] of TUNING_GROUPS) {
       const folder = gui.addFolder(title);
