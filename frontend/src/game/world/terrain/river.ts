@@ -1,6 +1,6 @@
 import { smoothstep } from "../../math";
 import { type Rng, range } from "../../rng";
-import { BLOCK, type Course } from "../course";
+import type { Course } from "../course";
 import { fbm, type Noise } from "./noise";
 
 // A valley floor that steps down along the racing line, and the water that
@@ -43,32 +43,18 @@ export interface Fall {
 
 const EDGE = 4; // metres over which a step drops
 
-/** One block of an endless line's steps: its pools, and the fall at the end of each (into the next block's, for the last) */
-export interface StepSection {
-  pools: Pool[];
-  falls: Fall[];
-}
-
 /** The stepped floor, and optionally a river in it */
 export class Steps {
-  /** Every pool, in order (an endless line: none here, see `section`) */
   readonly pools: Pool[] = [];
   readonly falls: Fall[] = [];
   readonly river: RiverSpec | null;
   private readonly course: Course;
   private readonly noise: Noise;
-  private readonly spec: StepSpec;
-  /** An endless line: each block's pools come from the block's own stream */
-  private readonly blockRng: ((block: number) => Rng) | null;
-  private readonly blocks = new Map<number, Pool[]>();
 
-  constructor(course: Course, spec: StepSpec, river: RiverSpec | null, rng: Rng, noise: Noise, blockRng: ((block: number) => Rng) | null = null) {
+  constructor(course: Course, spec: StepSpec, river: RiverSpec | null, rng: Rng, noise: Noise) {
     this.course = course;
     this.river = river;
     this.noise = noise;
-    this.spec = spec;
-    this.blockRng = course.endless ? blockRng : null;
-    if (this.blockRng) return;
     const from = course.start.z - 700;
     const to = course.endZ + 1000;
     for (let z = from; z < to; ) {
@@ -83,66 +69,6 @@ export class Steps {
       const b = this.pools[i + 1];
       this.falls.push({ z: a.z1, top: a.level, bottom: b.level, width: Math.min(a.width, b.width) * 0.8 });
     }
-  }
-
-  /** An endless line: block `b`'s pools, the last one ending exactly at the block's end (a fall there) */
-  private blockPools(b: number): Pool[] {
-    let pools = this.blocks.get(b);
-    if (!pools) {
-      pools = [];
-      const rng = this.blockRng!(b);
-      const { spec, river } = this;
-      const end = (b + 1) * BLOCK;
-      for (let z = b * BLOCK; z < end; ) {
-        let z1 = Math.min(end, z + range(rng, spec.length[0], spec.length[1]));
-        // No sliver of a pool against the block's end
-        if (end - z1 < spec.length[0] * 0.5) z1 = end;
-        const width = river ? range(rng, river.width[0], river.width[1]) : 0;
-        const lake = river && rng() < river.lakes ? range(rng, 0.8, 1.6) : 0;
-        pools.push({ z0: z, z1, level: this.course.y(z1) - spec.clearance, width, lake });
-        z = z1;
-      }
-      this.blocks.set(b, pools);
-    }
-    return pools;
-  }
-
-  /** An endless line: block `b`'s pools and the fall at the end of each */
-  section(b: number): StepSection {
-    const pools = this.blockPools(b);
-    const falls = pools.map((a, i) => {
-      const next = pools[i + 1] ?? this.blockPools(b + 1)[0];
-      return { z: a.z1, top: a.level, bottom: next.level, width: Math.min(a.width, next.width) * 0.8 };
-    });
-    return { pools, falls };
-  }
-
-  // The pool `locate` found, and the ones either side (no arrays: this runs for every ground sample)
-  private here!: Pool;
-  private before: Pool | undefined;
-  private after: Pool | undefined;
-
-  /** Finds the pool at z and its neighbours (an endless line's from the neighbouring blocks at the ends) */
-  private locate(z: number) {
-    if (!this.blockRng) {
-      const i = this.index(z);
-      this.before = this.pools[i - 1];
-      this.here = this.pools[i];
-      this.after = this.pools[i + 1];
-      return;
-    }
-    const b = Math.floor(z / BLOCK);
-    const pools = this.blockPools(b);
-    let lo = 0;
-    let hi = pools.length - 1;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (pools[mid].z1 <= z) lo = mid + 1;
-      else hi = mid;
-    }
-    this.before = lo > 0 ? pools[lo - 1] : this.blockPools(b - 1).at(-1);
-    this.here = pools[lo];
-    this.after = lo + 1 < pools.length ? pools[lo + 1] : this.blockPools(b + 1)[0];
   }
 
   private index(z: number): number {
@@ -160,18 +86,18 @@ export class Steps {
   }
 
   pool(z: number): Pool {
-    if (!this.blockRng) return this.pools[this.index(z)];
-    this.locate(z);
-    return this.here;
+    return this.pools[this.index(z)];
   }
 
   /** Floor height along the line: flat steps, dropping over a few metres at each fall */
   level(z: number): number {
-    this.locate(z);
-    const { before: prev, here: pool, after: next } = this;
+    const i = this.index(z);
+    const pool = this.pools[i];
+    const next = this.pools[i + 1];
     if (next && z > pool.z1 - EDGE) {
       return pool.level + (next.level - pool.level) * smoothstep(pool.z1 - EDGE, pool.z1 + EDGE, z);
     }
+    const prev = this.pools[i - 1];
     if (prev && z < pool.z0 + EDGE) {
       return prev.level + (pool.level - prev.level) * smoothstep(pool.z0 - EDGE, pool.z0 + EDGE, z);
     }

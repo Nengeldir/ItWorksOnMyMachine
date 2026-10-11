@@ -259,8 +259,8 @@ export interface LevelKey {
   mood: number; // index into the biome's moods
   runSeed: number; // 0 outside a run
   index: number; // level number in the run (0 outside a run)
-  /** Zen: the line and its land go on for ever (generator-v2 biomes only) */
-  endless?: boolean;
+  /** Zen: an open world, with no line and land every way (generator-v2 biomes only) */
+  open?: boolean;
 }
 
 export interface Level {

@@ -3,6 +3,7 @@ import { smoothstep } from "../../math";
 import { hash3 } from "../../rng";
 import type { FloraSpecies, StructureSpec } from "../biomes/types";
 import { TUBE_RADIUS } from "../course";
+import { type Area, CELL, cellIndex, cellsIn } from "../open";
 import { Plant } from "../trees";
 import { STRUCTURE_INFO, structuresOf } from "../structures/kinds";
 import { fbm } from "../terrain/noise";
@@ -73,7 +74,8 @@ const LANDMARKS = new WeakMap<World, Map<number, number[] | null>>();
 /**
  * A landmark's site in one stretch (`band`) of the course: of every candidate
  * within `lateral` metres of the line that can stand, the one with the lowest
- * draw. Worked out once per world: [x, y, z, height, gi, gk], or null
+ * draw. In an open world, `band` is a cell (`cellIndex`), and the candidates are
+ * all of the cell's. Worked out once per world: [x, y, z, height, gi, gk], or null
  */
 function landmark(
   world: World,
@@ -84,17 +86,22 @@ function landmark(
   lateral: number,
   salt: number,
   siteAt: (index: number, gi: number, gk: number) => [number, number, number, number] | null,
+  area: Area | null = null,
 ): number[] | null {
   let cache = LANDMARKS.get(world);
   if (!cache) LANDMARKS.set(world, (cache = new Map()));
-  const key = index * 4096 + band + 2048;
+  const key = area ? index * 1e10 + band : index * 4096 + band + 2048;
   const known = cache.get(key);
   if (known !== undefined) return known;
   let best: number[] | null = null;
   let draw = Infinity;
-  for (let gk = Math.ceil((band * length) / step - 0.5); (gk + 0.5) * step < (band + 1) * length; gk++) {
+  const z0 = area ? area.z0 : band * length;
+  const z1 = area ? area.z1 : (band + 1) * length;
+  for (let gk = Math.ceil(z0 / step - 0.5); (gk + 0.5) * step < z1; gk++) {
     const cx = world.course.x((gk + 0.5) * step);
-    for (let gi = Math.floor((cx - lateral) / step); gi <= Math.floor((cx + lateral) / step); gi++) {
+    const gi0 = area ? Math.ceil(area.x0 / step - 0.5) : Math.floor((cx - lateral) / step);
+    const gi1 = area ? Math.ceil(area.x1 / step - 0.5) - 1 : Math.floor((cx + lateral) / step);
+    for (let gi = gi0; gi <= gi1; gi++) {
       const d = hash3(gi, gk, salt + 6);
       if (d >= draw) continue;
       const site = siteAt(index, gi, gk);
@@ -128,9 +135,11 @@ export function placeFlora(world: World, box: Box, withTufts: boolean): { plants
   const anyShapes = field.shapes.filter((s) => s.max.x >= box.x0 && s.min.x <= box.x1 && s.max.z >= box.z0 && s.min.z <= box.z1 && s.max.y >= box.y0 - 2 && s.min.y <= box.y1);
   const shapesAt = (x: number, z: number) => anyShapes.some((s) => x >= s.min.x - 2 && x <= s.max.x + 2 && z >= s.min.z - 2 && z <= s.max.z + 2);
   const surfaceOk = (x: number, y: number, z: number, near: boolean) => !near || !surfaces[field.surfaceAt(x, y, z)]?.bare;
+  const water = world.openWater;
   const inWater = (x: number, y: number, z: number) => {
     const sea = world.seaAt(z);
     if (sea !== null && y < sea + 0.8) return true;
+    if (water && y < water.level + 0.8) return true;
     if (!steps) return false;
     const lateral = Math.abs(x - steps.center(z)) - steps.width(z) / 2;
     return lateral < 1.5 && y < steps.level(z) + 1.5;
@@ -138,6 +147,7 @@ export function placeFlora(world: World, box: Box, withTufts: boolean): { plants
   const nearWater = (x: number, y: number, z: number) => {
     const sea = world.seaAt(z);
     if (sea !== null && y < sea + 4) return true;
+    if (water && y < water.level + 4) return true;
     if (!steps) return false;
     const lateral = Math.abs(x - steps.center(z)) - steps.width(z) / 2;
     return lateral < 14 && y < steps.level(z) + 5;
@@ -152,9 +162,9 @@ export function placeFlora(world: World, box: Box, withTufts: boolean): { plants
   const ground = field.ground;
   const structures = structuresOf(world.biome);
   const start = world.course.start;
-  /** Which way a structure faces: the racing line, or anywhere */
+  /** Which way a structure faces: the racing line, or anywhere (an open world has no line) */
   const yawAt = (spec: StructureSpec, x: number, z: number, gi: number, gk: number, s0: number) =>
-    spec.where?.facing ? Math.atan2(world.course.x(z) - x, 0.001) + (hash3(gi, gk, s0 + 4) - 0.5) * 0.5 : hash3(gi, gk, s0 + 4) * Math.PI * 2;
+    spec.where?.facing && !world.open ? Math.atan2(world.course.x(z) - x, 0.001) + (hash3(gi, gk, s0 + 4) - 0.5) * 0.5 : hash3(gi, gk, s0 + 4) * Math.PI * 2;
   /** Candidate (gi, gk) of a structure's grid: [x, y, z, height] if it can stand there, or null */
   const siteAt = (index: number, gi: number, gk: number): [number, number, number, number] | null => {
     const spec = structures[index];
@@ -195,7 +205,7 @@ export function placeFlora(world: World, box: Box, withTufts: boolean): { plants
     const above = y - world.course.y(z);
     if (where?.above && (above < where.above[0] || above > where.above[1])) return null;
     const lateral = Math.abs(x - world.course.x(z));
-    if (where?.lateral && (lateral < where.lateral[0] || lateral > where.lateral[1])) return null;
+    if (where?.lateral && !world.open && (lateral < where.lateral[0] || lateral > where.lateral[1])) return null;
     const sea = world.seaAt(z);
     const depth = sea !== null ? sea - y : -1;
     if (where?.water ? depth < where.water[0] || depth > where.water[1] : inWater(x, y, z)) return null;
@@ -245,6 +255,18 @@ export function placeFlora(world: World, box: Box, withTufts: boolean): { plants
       const yaw = yawAt(spec, x, z, gi, gk, s0);
       plants.push(veg.species.length + index, x, y - 0.1, z, height, height, yaw, hash3(gi, gk, s0 + 5));
     };
+    if (spec.landmark && world.open) {
+      // An open world: one per cell (when its draw says so), the candidate with the lowest draw that can stand
+      const reach = info.foot * spec.height[1] + 1.5 + SITE_MARGIN;
+      for (const area of cellsIn(box.x0 - reach, box.z0 - reach, box.x1 + reach, box.z1 + reach)) {
+        if (hash3(area.cx, area.cz, s0 + 7) > spec.chance) continue;
+        const found = landmark(world, index, cellIndex(area.cx, area.cz), CELL, step, 0, s0, siteAt, area);
+        if (!found) continue;
+        if (found[0] < box.x0 - reach || found[0] >= box.x1 + reach || found[2] < box.z0 - reach || found[2] >= box.z1 + reach) continue;
+        place([found[0], found[1], found[2], found[3]], found[4], found[5]);
+      }
+      continue;
+    }
     if (spec.landmark) {
       // One per stretch of the course: the candidate with the lowest draw that can stand
       const reach = info.foot * spec.height[1] + 1.5 + SITE_MARGIN;

@@ -22,15 +22,15 @@ the last ring.
   Gale Force, a spirit manta to draft behind, Resonance, Ascension and the
   falcon and butterfly gliding stances). Today's run has its own seed,
   apart from today's course.
-- **Zen:** one map that never ends. Its valley winds on for ever, forwards
-  and backwards, made as you fly; no clock, no score, nothing saved. Fly
-  anywhere in the valley's width; a crash puts you back in the air close to
+- **Zen:** one map that never ends, every way: valleys, rivers, mountains
+  and islands made around you as you fly, wherever you go; no gates, no
+  clock, no score, nothing saved. A crash puts you back in the air close to
   where you tumbled. Every map but Sky Isles (its race generator is frozen).
 
 All modes share one pool of maps: a seed stands for one of the nine
 biomes, its layout and its light, the same in a time trial, a room and an
-adventure level (Zen's endless land is laid out a block at a time, so it
-has the map's look, not that course's exact layout).
+adventure level (Zen's open world has the map's look and light, not that
+course's layout).
 
 Built on the VIScon hackathon template: React + Three.js in the browser,
 FastAPI behind Caddy on the team VM.

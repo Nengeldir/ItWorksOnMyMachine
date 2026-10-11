@@ -1,8 +1,8 @@
 import * as THREE from "three";
-import { type Rng, makeRng, range } from "../rng";
+import { makeRng, range } from "../rng";
 import { ATMOSPHERE } from "./atmosphere";
-import { BLOCK } from "./course";
 import type { World } from "./World";
+import { type Area, perCell } from "./open";
 
 // Soft clouds for the generator-v2 biomes: each cloud a cluster of puffs drawn
 // as camera-facing billboards in one instanced draw call. Puffs are lit from
@@ -71,28 +71,16 @@ const fragmentShader = /* glsl */ `
   }
 `;
 
-/** Metres of z a level's clouds are spread over, and its banks across the line */
-const CLOUD_SPREAD = 4160;
-const BANK_SPREAD = 1980;
-
-/** A count spread over `spread` metres, for one block of an endless line: its share, rounded at random */
-export function blockShare(rng: Rng, count: number, spread: number): number {
-  const expected = (count * BLOCK) / spread;
-  return Math.floor(expected) + (rng() < expected % 1 ? 1 : 0);
-}
-
 export class SoftClouds {
   readonly mesh: THREE.Mesh;
 
-  /** A level's clouds; or, given `block`, that block of an endless line's share of them */
-  constructor(world: World, count: number, lift: number, banks: number, block: number | null = null) {
+  /**
+   * A level's clouds; or, given an open world's cell, its share of them (as many per square metre,
+   * anywhere in it, no banks: there is no line to put them across)
+   */
+  constructor(world: World, count: number, lift: number, banks: number, area: Area | null = null) {
     const { course, seed, palette } = world;
-    const rng = makeRng(seed, block === null ? "soft clouds" : `soft clouds/${block}`);
-    if (block !== null) {
-      count = blockShare(rng, count, CLOUD_SPREAD);
-      banks = blockShare(rng, banks, BANK_SPREAD);
-    }
-    const along = (from: number, to: number) => (block === null ? range(rng, from, to) : range(rng, block * BLOCK, (block + 1) * BLOCK));
+    const rng = makeRng(seed, area ? `soft clouds/${area.key}` : "soft clouds");
     const puffs: number[] = [];
     const shades: number[] = [];
     const cloud = (cx: number, cy: number, cz: number, width: number, height: number, n: number) => {
@@ -104,14 +92,18 @@ export class SoftClouds {
         shades.push(v, rng());
       }
     };
+    if (area) {
+      count = perCell(rng, count, 900);
+      banks = 0;
+    }
     for (let i = 0; i < count; i++) {
-      const z = along(course.start.z - 500, course.endZ + 1300);
+      const z = area ? range(rng, area.z0, area.z1) : range(rng, course.start.z - 500, course.endZ + 1300);
       const width = range(rng, 110, 260);
-      cloud(course.x(z) + range(rng, -900, 900), course.y(z) + range(rng, 160, 380) + lift, z, width, width * range(rng, 0.3, 0.45), 6 + Math.floor(rng() * 6));
+      cloud(area ? range(rng, area.x0, area.x1) : course.x(z) + range(rng, -900, 900), course.y(z) + range(rng, 160, 380) + lift, z, width, width * range(rng, 0.3, 0.45), 6 + Math.floor(rng() * 6));
     }
     // Banks across the racing line: fly straight through them
     for (let i = 0; i < banks; i++) {
-      const z = along(course.start.z + 200, course.endZ - 100);
+      const z = range(rng, course.start.z + 200, course.endZ - 100);
       const width = range(rng, 120, 200);
       cloud(course.x(z) + range(rng, -40, 40), course.y(z) - width * 0.12, z, width, width * 0.35, 10);
     }

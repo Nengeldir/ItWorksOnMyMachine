@@ -18,9 +18,9 @@ const BLEND = 6;
 /** Distances are exact up to this far from the land (proximity scoring needs ~12 m) */
 const REACH = 16;
 const CELL = 40;
-/** An endless line's shapes are also filed by z in bins this long, for whole blocks and columns */
-const BIN = 128;
-/** An endless line's land is made at least this far either side of whatever is asked for */
+/** An open world's shapes are also filed in square bins this wide, for whole blocks and columns */
+const BIN = 256;
+/** An open world's land is made at least this far around whatever is asked for */
 export const GROW_MARGIN = 640;
 
 export class TerrainField {
@@ -34,15 +34,15 @@ export class TerrainField {
   private readonly groundRough: number;
   /** Each shape's place in the land: cells keep their shapes in this order, so every worker blends them alike */
   private readonly order = new Map<Shape, number>();
-  /** Order for the next shape added (an endless line sets it per block, so blocks can come in any order) */
+  /** Order for the next shape added (an open world sets it per cell, so cells can come in any order) */
   nextOrder = 0;
   /**
-   * An endless line: makes the land from z0 to z1 (`World.ensure`), called before a query reaches
-   * past what is made (`madeFrom`..`madeTo`). Null for a course, whose land is all made up front.
+   * An open world: makes the land around a rectangle (`World.ensure`), called before a query
+   * reaches past `ready`. Null for a level, whose land is all made up front.
    */
-  grow: ((z0: number, z1: number) => void) | null = null;
-  madeFrom = 0;
-  madeTo = 0;
+  grow: ((x0: number, z0: number, x1: number, z1: number) => void) | null = null;
+  /** An open world: x0, z0, x1, z1 of where everything within `GROW_MARGIN` is made (set by `World.ensure`) */
+  readonly ready = [0, 0, -1, -1];
   private readonly bins = new Map<number, Shape[]>();
 
   constructor(course: Course, ground: Ground | null, groundSurface: number, noise: Noise) {
@@ -69,10 +69,38 @@ export class TerrainField {
         }
       }
     }
-    if (this.grow) {
-      for (let b = Math.floor((shape.min.z - REACH) / BIN); b <= Math.floor((shape.max.z + REACH) / BIN); b++) this.file(this.bins, b, shape);
-    }
+    if (this.grow) this.eachBin(shape, (key) => this.file(this.bins, key, shape));
     return true;
+  }
+
+  /** An open world: takes shapes out again (a cell let go far behind) */
+  remove(gone: Set<Shape>) {
+    if (!gone.size) return;
+    const drop = (lists: Map<number, Shape[]>, key: number) => {
+      const list = lists.get(key);
+      if (!list) return;
+      const kept = list.filter((shape) => !gone.has(shape));
+      if (kept.length) lists.set(key, kept);
+      else lists.delete(key);
+    };
+    for (const shape of gone) {
+      for (let ix = Math.floor((shape.min.x - REACH) / CELL); ix <= Math.floor((shape.max.x + REACH) / CELL); ix++) {
+        for (let iy = Math.floor((shape.min.y - REACH) / CELL); iy <= Math.floor((shape.max.y + REACH) / CELL); iy++) {
+          for (let iz = Math.floor((shape.min.z - REACH) / CELL); iz <= Math.floor((shape.max.z + REACH) / CELL); iz++) drop(this.cells, cellKey(ix, iy, iz));
+        }
+      }
+      this.eachBin(shape, (key) => drop(this.bins, key));
+      this.order.delete(shape);
+    }
+    let kept = 0;
+    for (const shape of this.shapes) if (!gone.has(shape)) this.shapes[kept++] = shape;
+    this.shapes.length = kept;
+  }
+
+  private eachBin(shape: Shape, visit: (key: number) => void) {
+    for (let bx = Math.floor((shape.min.x - REACH) / BIN); bx <= Math.floor((shape.max.x + REACH) / BIN); bx++) {
+      for (let bz = Math.floor((shape.min.z - REACH) / BIN); bz <= Math.floor((shape.max.z + REACH) / BIN); bz++) visit(binKey(bx, bz));
+    }
   }
 
   /** Adds a shape to a list, keeping the list in the shapes' order (appended, on a course) */
@@ -88,24 +116,27 @@ export class TerrainField {
     list.splice(i, 0, shape);
   }
 
-  /** An endless line: makes sure the land around z0..z1 is made */
-  private reach(z0: number, z1: number) {
-    if (this.grow && (z0 - GROW_MARGIN < this.madeFrom || z1 + GROW_MARGIN > this.madeTo)) this.grow(z0, z1);
+  /** An open world: makes sure the land around the rectangle is made */
+  private reach(x0: number, z0: number, x1: number, z1: number) {
+    const r = this.ready;
+    if (this.grow && (x0 < r[0] || z0 < r[1] || x1 > r[2] || z1 > r[3])) this.grow(x0, z0, x1, z1);
   }
 
-  /** An endless line's shapes near z0..z1 (boxes not checked), in their order */
-  private shapesAlong(z0: number, z1: number): Shape[] {
+  /** An open world's shapes near the rectangle (boxes not checked), in their order */
+  private shapesIn(x0: number, z0: number, x1: number, z1: number): Shape[] {
     const found = new Set<Shape>();
-    for (let b = Math.floor(z0 / BIN); b <= Math.floor(z1 / BIN); b++) {
-      const list = this.bins.get(b);
-      if (list) for (const shape of list) found.add(shape);
+    for (let bx = Math.floor(x0 / BIN); bx <= Math.floor(x1 / BIN); bx++) {
+      for (let bz = Math.floor(z0 / BIN); bz <= Math.floor(z1 / BIN); bz++) {
+        const list = this.bins.get(binKey(bx, bz));
+        if (list) for (const shape of list) found.add(shape);
+      }
     }
     return [...found].sort((a, b) => this.order.get(a)! - this.order.get(b)!);
   }
 
   /** Signed distance to the land, positive in the air */
   distance(x: number, y: number, z: number): number {
-    this.reach(z, z);
+    this.reach(x, z, x, z);
     let d = EMPTY;
     let nearest = Infinity;
     let rough = 0;
@@ -142,7 +173,7 @@ export class TerrainField {
 
   /** Which surface the land nearest to a point is painted with */
   surfaceAt(x: number, y: number, z: number): number {
-    this.reach(z, z);
+    this.reach(x, z, x, z);
     let nearest = this.ground ? this.ground.distance(x, y, z) : Infinity;
     let surface = this.groundSurface;
     const list = this.cells.get(cellKey(Math.floor(x / CELL), Math.floor(y / CELL), Math.floor(z / CELL)));
@@ -166,8 +197,8 @@ export class TerrainField {
    */
   fill(ox: number, oy: number, oz: number, step: number, n: number, out: Float32Array): boolean {
     const span = step * (n - 1);
-    this.reach(oz, oz + span);
-    const shapes = (this.grow ? this.shapesAlong(oz - REACH, oz + span + REACH) : this.shapes).filter(
+    this.reach(ox, oz, ox + span, oz + span);
+    const shapes = (this.grow ? this.shapesIn(ox - REACH, oz - REACH, ox + span + REACH, oz + span + REACH) : this.shapes).filter(
       (s) =>
         s.max.x + REACH >= ox && s.min.x - REACH <= ox + span &&
         s.max.y + REACH >= oy && s.min.y - REACH <= oy + span &&
@@ -237,11 +268,11 @@ export class TerrainField {
 
   /** Lowest and highest land over a rectangle, or null if there is none */
   columnRange(x0: number, z0: number, x1: number, z1: number): [number, number] | null {
-    this.reach(z0, z1);
+    this.reach(x0, z0, x1, z1);
     let lo = Infinity;
     let hi = -Infinity;
     if (this.ground) [lo, hi] = this.ground.range(x0, z0, x1, z1);
-    for (const s of this.grow ? this.shapesAlong(z0, z1) : this.shapes) {
+    for (const s of this.grow ? this.shapesIn(x0, z0, x1, z1) : this.shapes) {
       if (s.max.x < x0 || s.min.x > x1 || s.max.z < z0 || s.min.z > z1) continue;
       if (s.min.y < lo) lo = s.min.y;
       if (s.max.y > hi) hi = s.max.y;
@@ -250,8 +281,12 @@ export class TerrainField {
   }
 }
 
+function binKey(bx: number, bz: number): number {
+  return (bx + 65536) * 131072 + (bz + 65536);
+}
+
 function cellKey(ix: number, iy: number, iz: number): number {
-  // ±65536 cells (2600 km) on each axis: an endless line goes a long way
+  // ±65536 cells (2600 km) on each axis: an open world goes a long way
   return ((ix + 65536) * 131072 + (iy + 65536)) * 131072 + (iz + 65536);
 }
 

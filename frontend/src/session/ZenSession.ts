@@ -12,9 +12,9 @@ export interface ZenState {
 }
 
 /**
- * Zen: one map flown for ever. Its line and land go on in both directions (an endless level, made
- * a block at a time), there's no clock and no score, nothing is saved, and a crash puts you back in
- * the air near where you tumbled.
+ * Zen: one map flown for ever, as an open world: no line, no gates, land every way (made a cell at
+ * a time around you, see `world/open.ts`). There's no clock and no score, nothing is saved, and a
+ * crash puts you back in the air near where you tumbled.
  */
 export class ZenSession {
   readonly level: Level;

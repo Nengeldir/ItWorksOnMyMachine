@@ -102,7 +102,8 @@ export interface HudState {
   biomeName: string;
   paletteName: string;
   /** Zen: the level goes on for ever, and a crash puts you back nearby */
-  endless: boolean;
+  /** Zen's open world: a crash brings you back nearby */
+  openWorld: boolean;
   palette: Palette; // the level's lighting mood: the UI takes its colors from it
   speedKmh: number;
   boostCharge: number;
@@ -977,7 +978,7 @@ export class Game implements RunHost {
 
   private respawnNow() {
     if (this.raceState === "countdown") return;
-    if (this.world.endless) {
+    if (this.world.open) {
       this.respawn(0, this.zenSpawn());
       return;
     }
@@ -992,7 +993,8 @@ export class Game implements RunHost {
   /**
    * Zen: where to come back after a crash (or on asking to respawn): near where the tumble rolled
    * to, a little on along the way it rolled, in open air, setting off that way if it's clear (else
-   * along the line). Fell into the abyss, or no room anywhere near: back on the line at that z.
+   * the way you were facing). Fell into the abyss, or no room anywhere near: straight up from
+   * there to the first open air.
    */
   private zenSpawn(): { position: THREE.Vector3; direction: THREE.Vector3 } {
     const crashed = this.crashedAt !== null;
@@ -1001,7 +1003,9 @@ export class Game implements RunHost {
     const way = crashed ? from.clone().sub(this.crashFrom).setY(0) : this.flight.velocity.clone().setY(0);
     if (crashed && way.lengthSq() < 4) way.copy(this.crashHeading);
     const { course } = this.world;
-    const along = course.tangentAt(from.z).setY(0).normalize();
+    const along = this.flight.forward.clone().setY(0);
+    if (along.lengthSq() < 0.01) along.copy(course.startDirection);
+    along.normalize();
     if (way.lengthSq() < 0.01) way.copy(along);
     way.normalize();
     const world = this.world;
@@ -1024,8 +1028,10 @@ export class Game implements RunHost {
         }
       }
     }
-    // The line is always clear of rock: just above it, where you were
-    return { position: course.pointAt(from.z).add(new THREE.Vector3(0, 4, 0)), direction: course.tangentAt(from.z) };
+    // Straight up from there (from y = 0 out of the abyss) to the first open air
+    spot.set(from.x, Math.max(from.y, course.y(from.z)), from.z);
+    for (let i = 0; i < 80 && !room(spot); i++) spot.y += 12;
+    return { position: spot, direction: along };
   }
 
   /**
@@ -1701,7 +1707,7 @@ export class Game implements RunHost {
       seed: this.world.seed,
       run: runHud,
       biomeName: this.world.biome.name,
-      endless: this.world.endless,
+      openWorld: this.world.open,
       paletteName: this.world.palette.name,
       palette: this.world.palette,
       boostCharge: this.flight.boostCharge,

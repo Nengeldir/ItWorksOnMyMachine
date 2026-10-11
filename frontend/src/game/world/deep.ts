@@ -1,12 +1,11 @@
 import * as THREE from "three";
 import { sceneryTime as fxTime } from "../particles";
 import { makeRng, range } from "../rng";
-import { blockShare } from "./clouds";
-import { BLOCK } from "./course";
 import { TOON_LIGHT } from "../toon";
 import { ATMOSPHERE } from "./atmosphere";
 import type { UnderwaterSpec } from "./biomes/types";
 import type { World } from "./World";
+import { type Area, perCell } from "./open";
 
 // What makes a level read as under the sea, besides the surface overhead and
 // the ripples of light on the land (both in atmosphere.ts): shafts of light
@@ -278,25 +277,20 @@ function jellyGeometry(): THREE.InstancedBufferGeometry {
   return geometry;
 }
 
-/** Metres of z a level's sea life is spread over */
-const LIFE_SPREAD = 2440;
-
 /** Schools of fish and drifting jellyfish along a level's course, placed from its seed */
 export class SeaLife {
   readonly meshes: THREE.Mesh<THREE.InstancedBufferGeometry, THREE.ShaderMaterial>[] = [];
   private readonly glow = { value: 0 };
 
-  /** A level's sea life; or, given `block`, that block of an endless line's share of it */
-  constructor(world: World, spec: UnderwaterSpec, block: number | null = null) {
+  /** A level's sea life; or, given an open world's cell, its share of it (anywhere in the cell) */
+  constructor(world: World, spec: UnderwaterSpec, area: Area | null = null) {
     const { course } = world;
-    const rng = makeRng(world.seed, block === null ? "sea life" : `sea life/${block}`);
-    const shoals = block === null ? spec.shoals : blockShare(rng, spec.shoals, LIFE_SPREAD);
-    const jellyfish = block === null ? spec.jellyfish : blockShare(rng, spec.jellyfish, LIFE_SPREAD);
-    /** Open water beside the racing line with `room` metres clear of the rock all round, or null */
+    const rng = makeRng(world.seed, area ? `sea life/${area.key}` : "sea life");
+    /** Open water beside the racing line (anywhere in an open world's cell) with `room` metres clear of the rock all round, or null */
     const spot = (lateral: [number, number], rise: [number, number], room: number): [number, number, number] | null => {
       for (let tries = 0; tries < 6; tries++) {
-        const z = block === null ? range(rng, course.start.z - 60, course.endZ + 200) : range(rng, block * BLOCK, (block + 1) * BLOCK);
-        const x = course.x(z) + (rng() < 0.5 ? -1 : 1) * range(rng, lateral[0], lateral[1]);
+        const z = area ? range(rng, area.z0, area.z1) : range(rng, course.start.z - 60, course.endZ + 200);
+        const x = area ? range(rng, area.x0, area.x1) : course.x(z) + (rng() < 0.5 ? -1 : 1) * range(rng, lateral[0], lateral[1]);
         const y = course.y(z) + range(rng, rise[0], rise[1]);
         if (world.rock.distance(x, y, z) > room) return [x, y, z];
       }
@@ -307,6 +301,9 @@ export class SeaLife {
     const swim: number[] = [];
     const tint: number[] = [];
     const color = new THREE.Color();
+    // An open world's cell: as many per square metre as beside a level's line
+    const shoals = area ? perCell(rng, spec.shoals, 170) : spec.shoals;
+    const jellyfish = area ? perCell(rng, spec.jellyfish, 170) : spec.jellyfish;
     for (let i = 0; i < shoals; i++) {
       const radius = range(rng, 5, 15);
       const at = spot([12, 170], [-16, 40], radius + 4);

@@ -12,6 +12,13 @@ import { type RiverSpec, type StepSpec, Steps } from "./river";
 // 3D noise on steep slopes adds overhangs. As a distance field it is
 // (y - h) / sqrt(1 + |∇h|²), which stays close to the true distance on slopes,
 // so proximity scoring works on hillsides as well as on the flat.
+//
+// An open world (Zen) has no line: the same valleys, hills and mountains are
+// measured from the middle of the nearest valley instead, in a network of
+// valleys meandering every way (where a slow, warped noise crosses zero). Its
+// floor is level, `depth` under y = 0, and a river (or lava, ice…) runs along
+// every valley's middle at one water level (`waterLevel`), pooling into lakes
+// where the floor dips: no steps, no falls.
 
 export interface GroundSpec {
   depth: number; // valley floor below the racing line (when there are no steps)
@@ -34,6 +41,18 @@ export interface GroundSpec {
 
 /** Metres either side of the river where its banks rise to the valley floor */
 const BANK_WIDTH = 12;
+/** Open world: metres per unit of the valley noise (valleys come about 2 to 4 km apart) */
+const VALLEY_SCALE = 2600;
+/** Open world: metres the valleys are pushed about by, so they meander */
+const VALLEY_WARP = 420;
+/** Open world: the valley noise's slope is taken as at least this (per metre), so saddles don't go infinitely far */
+const VALLEY_SLOPE_MIN = 0.00012;
+/**
+ * Open world: the distance from a valley eases off from this many metres to at most `VALLEY_FAR`,
+ * so the land between valleys is like a level's mountains at the edge of its corridor, no higher
+ */
+const VALLEY_EASE = 600;
+const VALLEY_FAR = 1000;
 
 export class Ground {
   readonly spec: GroundSpec;
@@ -42,15 +61,19 @@ export class Ground {
   private readonly noise: Noise;
   private readonly flatLevel: number;
   private readonly mountainReach: number;
+  /** An open world (no line: valleys every way) */
+  readonly open: boolean;
+  /** An open world's water: the level its rivers and lakes stand at, if it has any */
+  readonly waterLevel: number | null;
 
-  /** `blockRng`: an endless line's steps come a block at a time, from each block's own stream */
-  constructor(course: Course, spec: GroundSpec, rng: Rng, noise: Noise, blockRng: ((block: number) => Rng) | null = null) {
+  constructor(course: Course, spec: GroundSpec, rng: Rng, noise: Noise) {
     this.course = course;
-    // A flat floor needs the line's lowest point: an endless line has none, so its floor follows the line
-    this.spec = course.endless && spec.level !== null ? { ...spec, level: null } : spec;
+    this.spec = spec;
     this.noise = noise;
-    this.steps = spec.steps ? new Steps(course, spec.steps, spec.river, rng, noise, blockRng) : null;
-    this.flatLevel = this.spec.level === null ? 0 : course.y(course.endZ) + this.spec.level;
+    this.open = course.open;
+    this.steps = spec.steps && !this.open ? new Steps(course, spec.steps, spec.river, rng, noise) : null;
+    this.flatLevel = spec.level === null ? 0 : this.open ? spec.level : course.y(course.endZ) + spec.level;
+    this.waterLevel = this.open && spec.river ? (spec.level ?? -spec.depth) - spec.river.bank : null;
     this.mountainReach = spec.mountains ? spec.mountains.from - 120 : Infinity;
   }
 
@@ -63,7 +86,7 @@ export class Ground {
   heightAt(x: number, z: number, lineX: number, lineY: number): number {
     const s = this.spec;
     const n = this.noise.n2;
-    const a = Math.abs(x - lineX);
+    const a = this.open ? this.valleyDistance(x, z) : Math.abs(x - lineX);
     const smooth = s.level !== null ? this.flatLevel : lineY - s.depth;
     let ref = smooth;
     const steps = this.steps;
@@ -75,7 +98,7 @@ export class Ground {
     const edge = a - s.valley + 25 * n(x * 0.004, z * 0.004);
     const side = Math.max(0, edge);
     let h = ref + s.wall * side + s.wallCurve * side * side;
-    if (s.falloff) h -= s.falloff.drop * smoothstep(s.falloff.from, s.falloff.from + 320, a);
+    if (s.falloff && !this.open) h -= s.falloff.drop * smoothstep(s.falloff.from, s.falloff.from + 320, a);
     if (s.floorHills) h += s.floorHills * fbm(n, x / 45, z / 45, 2);
     if (s.hills) {
       const grow = smoothstep(s.valley * 0.4, s.valley + 70, a);
@@ -105,6 +128,18 @@ export class Ground {
       const open = 1 - smoothstep(0, c.width / c.spacing, crack);
       if (open > 0) h -= c.depth * open * smoothstep(s.valley + 30, s.valley - 10, a) * (0.6 + 0.4 * n(x / 30, z / 50));
     }
+    if (this.waterLevel !== null && s.river) {
+      // The river along the valley's middle, widening with a slow noise and now and then into a lake
+      const r = s.river;
+      const lake = s.river.lakes > 0 ? smoothstep(1 - s.river.lakes * 1.2, 1, 0.5 + 0.5 * n(x / 900 - 4.2, z / 900 + 8.6)) : 0;
+      const w = (r.width[0] + (r.width[1] - r.width[0]) * (0.5 + 0.5 * n(x / 400 + 1.7, z / 400 - 3.3))) * (0.5 + lake * 1.6);
+      if (a < w + BANK_WIDTH) {
+        const level = this.waterLevel;
+        const channel =
+          a < w ? level - 0.4 - r.bed * (1 - (a / w) ** 2) : level - 0.4 + (r.bank + 0.4) * smoothstep(w, w + BANK_WIDTH, a);
+        if (channel < h) h = channel;
+      }
+    }
     if (steps && s.river) {
       const r = s.river;
       const w = steps.width(z) / 2;
@@ -117,6 +152,22 @@ export class Ground {
       }
     }
     return h;
+  }
+
+  /** Open world: metres to the middle of the nearest valley, where the warped valley noise crosses zero */
+  private valleyDistance(x: number, z: number): number {
+    const v = this.valleyNoise(x, z);
+    const gx = this.valleyNoise(x + 6, z) - v;
+    const gz = this.valleyNoise(x, z + 6) - v;
+    const a = Math.abs(v) / Math.max(Math.hypot(gx, gz) / 6, VALLEY_SLOPE_MIN);
+    return a < VALLEY_EASE ? a : VALLEY_EASE + (VALLEY_FAR - VALLEY_EASE) * Math.tanh((a - VALLEY_EASE) / (VALLEY_FAR - VALLEY_EASE));
+  }
+
+  private valleyNoise(x: number, z: number): number {
+    const n = this.noise.n2;
+    const wx = x + VALLEY_WARP * n(x / 1500 + 5.3, z / 1500 - 2.1);
+    const wz = z + VALLEY_WARP * n(x / 1500 - 7.7, z / 1500 + 4.4);
+    return n(wx / VALLEY_SCALE + 31.7, wz / VALLEY_SCALE - 12.9);
   }
 
   /** Signed distance to the ground, with overhangs carved into steep slopes */

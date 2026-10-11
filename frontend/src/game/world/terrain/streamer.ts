@@ -16,9 +16,9 @@ import { KEY_SPAN, NODE_SIZE, type TerrainMesh, VOXEL, nodeKey } from "./mesh";
 // replacements have arrived (and the other way round when merging), so the land
 // never shows holes or two levels at once.
 //
-// An endless line (Zen) has no footprint to cover up front: columns of root
-// nodes are planted around the camera as it goes and dug up far behind it, and
-// land is loaded in a cone ahead of where you fly. Behind you it counts further
+// An open world (Zen) has no footprint to cover up front: columns of root
+// nodes are planted around the camera, every way, as it goes and dug up far
+// behind it, and land is loaded in a cone ahead of where you fly. Behind you it counts further
 // away (`TERRAIN.coneBehind`), so it stays coarse and is asked for last.
 
 export const LOD_LEVELS = 4;
@@ -74,9 +74,8 @@ export class LandStreamer {
   private cacheBytes = 0;
   private desired: Node[] = [];
   private readonly wanted: { node: Node; d: number }[] = [];
-  /** An endless line: the root columns planted so far, by column */
+  /** An open world: the root columns planted so far, by column */
   private readonly columns: Map<number, Node[]> | null;
-  private readonly extent: number;
   /** Where you are flying (unit, horizontal), for the cone; zero when still */
   private readonly heading = new THREE.Vector3();
   private readonly toNode = new THREE.Vector3();
@@ -90,8 +89,7 @@ export class LandStreamer {
     const field = world.land!;
     const { course } = world;
     const extent = field.ground?.spec.extent ?? 900;
-    this.extent = extent;
-    this.columns = world.endless ? new Map() : null;
+    this.columns = world.open ? new Map() : null;
     if (this.columns) return;
     const size = NODE_SIZE << ROOT_LOD;
     // The land's footprint: the course from before the start to past the end, out to its extent either side
@@ -229,7 +227,7 @@ export class LandStreamer {
 
   /**
    * The cone: how much further than it is a node counts, by where it lies from where you fly.
-   * 1 ahead and close by; up to `TERRAIN.coneBehind` straight behind. Only on an endless line.
+   * 1 ahead and close by; up to `TERRAIN.coneBehind` straight behind. Only in an open world.
    */
   private behind(node: Node, d: number, at: THREE.Vector3): number {
     if (!this.columns || d < CONE_NEAR || this.heading.lengthSq() === 0) return 1;
@@ -418,35 +416,25 @@ export class LandStreamer {
    */
   covers(x: number, y: number, z: number): boolean {
     for (const root of this.roots) if (inside(root.box, x, y, z)) return this.coveredIn(root, x, y, z);
-    // An endless line's land not planted yet: the field stands in, where there is land at all
-    if (this.columns) return Math.abs(x - this.world.course.x(z)) > this.extent;
+    // An open world's land not planted yet: the field stands in
+    if (this.columns) return false;
     return true;
   }
 
   /**
-   * An endless line: plants root columns within sight of `at` (inside the land's corridor along the
-   * line), and digs up the ones left far behind, meshes, plants and colliders with them
+   * An open world: plants root columns within sight of `at`, every way, and digs up the ones left
+   * far behind, meshes, plants and colliders with them
    */
   private plant(at: THREE.Vector3) {
     const columns = this.columns!;
     const size = NODE_SIZE << ROOT_LOD;
     const reach = TERRAIN.viewDistance + size;
-    const course = this.world.course;
     for (let ix = Math.floor((at.x - reach) / size); ix <= Math.floor((at.x + reach) / size); ix++) {
       for (let iz = Math.floor((at.z - reach) / size); iz <= Math.floor((at.z + reach) / size); iz++) {
         const key = nodeKey(ROOT_LOD, ix, 0, iz);
         if (columns.has(key) || rectDistance(at, ix, iz, size) > reach) continue;
-        // Only where the corridor of land along the line reaches
-        const z0 = iz * size;
-        let lo = Infinity;
-        let hi = -Infinity;
-        for (const z of [z0, z0 + size / 2, z0 + size]) {
-          lo = Math.min(lo, course.x(z));
-          hi = Math.max(hi, course.x(z));
-        }
         const nodes: Node[] = [];
         columns.set(key, nodes);
-        if ((ix + 1) * size < lo - this.extent || ix * size > hi + this.extent) continue;
         const range = this.columnRange(ROOT_LOD, ix, iz);
         if (!range) continue;
         for (let iy = Math.floor(range[0] / size); iy <= Math.floor(range[1] / size); iy++) {
