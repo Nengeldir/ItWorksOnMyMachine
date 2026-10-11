@@ -15,7 +15,8 @@ const TUTORIAL_KEY = "windrider.tutorial";
 export function defaultSettings(): Settings {
   return { nickname: "", invertPitch: false, invertMouse: false, invertGamepad: false, invertTouch: false,
     mouseSensitivity: 2, bindings: defaultBindings(), deadZone: 0.12,
-    reducedMotion: false, quality: "auto", musicVolume: 1, effectsVolume: 1, muted: false };
+    reducedMotion: false, quality: "auto", musicVolume: 1, effectsVolume: 1, muted: false,
+    pilotStyle: 1, crystalsOnly: false };
 }
 
 /** Keys handed to new actions whose default keys a player has already bound to something else */
@@ -63,6 +64,7 @@ export function normalizeSettings(value: unknown): Settings {
     invertTouch: flag("invertTouch"),
     deadZone: number("deadZone", 0, 0.4, 0.12), reducedMotion: flag("reducedMotion"), muted: flag("muted"),
     musicVolume: number("musicVolume", 0, 1, 1), effectsVolume: number("effectsVolume", 0, 1, 1),
+    pilotStyle: saved.pilotStyle === 2 ? 2 : 1, crystalsOnly: flag("crystalsOnly"),
     quality: ["auto","high","medium","low"].includes(String(saved.quality)) ? saved.quality as Settings["quality"] : "auto",
   };
 }
