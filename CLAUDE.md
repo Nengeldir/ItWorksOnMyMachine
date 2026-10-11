@@ -315,6 +315,16 @@ Children of the Light; the terrain is untouched for now. Looks only (rule 6).
   already pick to stand out in that scene), saturation 0.6 to 0.85, lightness
   0.5, by `FX.pilotTheme` (1; 0 = the player's own color). A room's assigned
   color is themed the same way for yourself; others see your assigned color.
+- **Pass 4, the wings and the set** (asked: the cyan was loud; cape, wings and
+  scarf were one color and merged; the cape-panel wings looked cheap): the
+  theme color is calmer (saturation 0.55 to 0.7, lightness 0.46); the tones
+  are a set (`tonesFor`: the wings a neighbouring hue and lighter, their
+  roots darker, tips pale; the scarf the palest; a short mantle in the wing
+  tone with a gold hem over the cape's top, `Avatar.mantle`, the cape's
+  shape at 36% height lifted 2.5 cm); the wings are layered feathers again
+  (`feather()`: thick plates with drooping tips, gold quills; five
+  secondaries and four coverts on the arm, five primaries and three coverts
+  on the hand), the wardrobe's wing models still replace them.
 
 ### 2026-10-10: Rebased PR #46 onto current main, without merge commits (Claude)
 

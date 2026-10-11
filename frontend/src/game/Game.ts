@@ -806,7 +806,7 @@ export class Game implements RunHost {
    */
   private themePilot() {
     themeAccent.set(this.world.palette.accent).getHSL(themeHsl);
-    themeAccent.setHSL(themeHsl.h, Math.min(0.85, Math.max(0.6, themeHsl.s)), 0.5);
+    themeAccent.setHSL(themeHsl.h, Math.min(0.7, Math.max(0.55, themeHsl.s)), 0.46);
     const themed = themeColor.set(this.baseColor).lerp(themeAccent, FX.pilotTheme).getStyle();
     this.avatar.setColor(themed);
     this.fx.setColor(themed);

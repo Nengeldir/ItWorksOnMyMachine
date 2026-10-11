@@ -36,7 +36,11 @@ interface Tones {
   capeDark: THREE.Color;
   trim: THREE.Color; // pale gold: the cape's light marks and the wardrobe's emblems (they glow)
   eye: THREE.Color; // the eyes are lights (above 1, so they bloom)
-  tip: THREE.Color; // the wings' edges (they glow at night)
+  tip: THREE.Color; // the cape's edges (they glow at night)
+  wing: THREE.Color; // the wings, a neighbouring hue, lighter than the cape
+  wingDark: THREE.Color; // their roots and bones
+  wingTip: THREE.Color; // their tips, pale (they glow at night)
+  scarf: THREE.Color; // the scarf, the palest of the set
 }
 
 type ToneName = keyof Tones;
@@ -65,6 +69,11 @@ function tonesFor(color: string): Tones {
     trim: new THREE.Color("#f6c35a"),
     eye: new THREE.Color(1.7, 1.5, 1.1),
     tip: cape.clone().lerp(cream, 0.72),
+    // The set: the wings a neighbouring hue and lighter, the scarf palest, so the three read apart yet belong together
+    wing: new THREE.Color().setHSL((hsl.h + 0.07) % 1, Math.min(0.65, Math.max(0.4, hsl.s * 0.85)), 0.62),
+    wingDark: new THREE.Color().setHSL((hsl.h + 0.05) % 1, Math.min(0.7, Math.max(0.45, hsl.s * 0.9)), 0.44),
+    wingTip: new THREE.Color().setHSL((hsl.h + 0.08) % 1, 0.5, 0.78).lerp(cream, 0.35),
+    scarf: new THREE.Color().setHSL((hsl.h + 1 - 0.06) % 1, 0.45, 0.82),
   };
 }
 
@@ -152,40 +161,21 @@ function applyPaint({ geometry, ranges }: Painted, tones: Tones) {
 }
 
 /**
- * A panel of the winged cape, lying along +x from its root: a slightly convex
- * leading edge ahead (+y) and a trailing edge behind (-y) cut into rounded
- * lobes, `rootDepth` deep at the root and `tipDepth` at the tip, which sits at
- * (length, tipY). A little thickness, so it has edges to ink
+ * A feather: a leaf-shaped plate with a little thickness, lying along +x from
+ * its root, its tip drooping a little so a fan of them reads as plumage, not a card
  */
-function camberAt(x: number, y: number, length: number, rootDepth: number): number {
-  // The sheet droops behind and the tip curls up a little: cloth with volume, not a card
-  const behind = Math.max(0, -y) / rootDepth;
-  return -0.11 * behind * behind + 0.05 * Math.pow(Math.max(0, x) / length, 2);
-}
-
-function panel(length: number, rootDepth: number, tipDepth: number, lobes: number, tipY = 0, side: 1 | -1 = 1): THREE.BufferGeometry {
+function feather(length: number, width: number): THREE.BufferGeometry {
   const shape = new THREE.Shape();
-  shape.moveTo(0, 0.03);
-  shape.quadraticCurveTo(length * 0.5, 0.06 + tipY * 0.5, length, tipY);
-  // Back along the trailing edge in lobes, each bulging behind the chord between its corners
-  let x0 = length;
-  let y0 = tipY;
-  for (let i = 1; i <= lobes; i++) {
-    const f = i / lobes;
-    const x1 = length * (1 - f);
-    const y1 = -(tipDepth + (rootDepth - tipDepth) * f);
-    const bulge = (rootDepth * 0.5) / lobes + 0.04;
-    shape.quadraticCurveTo((x0 + x1) / 2, (y0 + y1) / 2 - bulge, x1, y1);
-    x0 = x1;
-    y0 = y1;
-  }
+  shape.moveTo(0, -width * 0.45);
+  shape.quadraticCurveTo(length * 0.55, -width * 0.8, length, 0);
+  shape.quadraticCurveTo(length * 0.55, width * 0.8, 0, width * 0.45);
   shape.closePath();
-  const geometry = new THREE.ExtrudeGeometry(shape, { depth: 0.03, bevelEnabled: false, curveSegments: 3 });
-  geometry.translate(0, 0, -0.015);
-  // The camber is applied for `side` so that, turned round for the left wing, both droop the same way
+  const geometry = new THREE.ExtrudeGeometry(shape, { depth: 0.024, bevelEnabled: false, curveSegments: 3 });
+  geometry.translate(0, 0, -0.012);
   const position = geometry.getAttribute("position") as THREE.BufferAttribute;
   for (let i = 0; i < position.count; i++) {
-    position.setZ(i, position.getZ(i) + side * camberAt(position.getX(i), position.getY(i), length, rootDepth));
+    const f = Math.max(0, position.getX(i)) / length;
+    position.setZ(i, position.getZ(i) - 0.07 * f * f);
   }
   geometry.computeVertexNormals();
   return geometry;
@@ -416,6 +406,8 @@ export class Avatar {
   private readonly left: Side;
   private readonly right: Side;
   private readonly cape: Cloth;
+  /** A short shoulder cape in the wing tone, laid over the top of the cape */
+  private readonly mantle: Cloth;
   private capeId: CapeId = "classic";
   private hat: THREE.Group | null = null;
   private shoes: THREE.Group[] = [];
@@ -664,39 +656,57 @@ export class Avatar {
           .add(capsule(0.034, 0.08), "body", [0, -0.3, -0.012], [0.25, 0, 0]),
       ));
 
-      // Wings: the cape itself, as in Sky, in two panels that bend at the wrist (the
-      // wardrobe's wings hide them and hang their own models on the same joints)
+      // Wings: layered feathers in the wing tones (coverts over secondaries on the arm,
+      // primaries on the hand), each a thick plate with a gold quill and a drooping tip;
+      // the wardrobe's wings hide them and hang their own models on the same joints
       const wing = new THREE.Object3D();
-      wing.position.set(0.05 * s, 0.17, 0.15);
+      wing.position.set(0.05 * s, 0.17, 0.13);
       wing.rotation.order = "YZX";
       this.chest.add(wing);
-      // The panels lie along +x; the left wing's are turned round (a rotation keeps the ink hull right)
-      const mirror: Vec = [0, s > 0 ? 0 : Math.PI, 0];
-      const panelPaint = (reach: number, length: number, rootDepth: number): Paint => (p, t, out) => {
-        // The outside in the cape's color, the inside lighter (told apart under the camber); the far edges catch the light
-        const edge = smoothstep(0.55, 1, Math.hypot(p.x, p.y) / reach);
-        const outside = p.z - camberAt(Math.abs(p.x), p.y, length, rootDepth) > 0;
-        out.copy(outside ? t.cape : t.capeInner).lerp(t.tip, edge * 0.7);
-        return edge * 0.6;
+      const featherPaint = (length: number): Paint => (p, t, out) => {
+        // Darker at the root, the wing tone along the vane, pale at the tip (which glows at night)
+        const d = Math.hypot(p.x, p.y) / length;
+        out.copy(t.wingDark).lerp(t.wing, smoothstep(0, 0.35, d)).lerp(t.wingTip, smoothstep(0.55, 1, d));
+        return smoothstep(0.7, 1, d) * 0.5;
       };
-      // A rolled leading edge gives each panel a thick front
-      const inner = new PartBuilder()
-        .add(panel(0.6, 0.5, 0.42, 2, 0, s), panelPaint(0.75, 0.6, 0.5), [0, 0, 0], mirror)
-        .add(capsule(0.026, 0.52), "capeDark", [0.28 * s, 0.035, 0.012], [0, 0, Math.PI / 2 - 0.1 * s]);
+      // A feather at `at`, pointing along `angle`, with its quill on top
+      const plume = (builder: PartBuilder, length: number, width: number, at: Vec, angle: number, quill: boolean) => {
+        builder.add(feather(length, width), featherPaint(length), at, [0, 0, angle]);
+        if (quill) {
+          builder.add(capsule(0.009, length * 0.72), "trim", [at[0] + Math.cos(angle) * length * 0.42, at[1] + Math.sin(angle) * length * 0.42, at[2] + 0.015], [0, 0, angle - Math.PI / 2]);
+        }
+      };
+      const turned = (a: number) => (s > 0 ? a : Math.PI - a);
+      // The arm: a rolled leading edge, five secondaries hanging back from it, four coverts over their roots
+      const inner = new PartBuilder().add(capsule(0.024, 0.5), "wingDark", [0.27 * s, 0.03, 0.01], [0, 0, Math.PI / 2 - 0.12 * s]);
+      for (let i = 0; i < 5; i++) {
+        plume(inner, 0.52 + i * 0.03, 0.15, [(0.06 + i * 0.1) * s, 0.02 + i * 0.008, 0.004 * i], turned(-0.85 - i * 0.16), true);
+      }
+      for (let i = 0; i < 4; i++) {
+        plume(inner, 0.26, 0.11, [(0.1 + i * 0.1) * s, 0.03, 0.03 + 0.003 * i], turned(-0.95 - i * 0.18), false);
+      }
       const innerMesh = part(wing, inner, wingMat);
       const wingOuter = new THREE.Object3D();
-      wingOuter.position.set(0.56 * s, 0.03, 0);
+      wingOuter.position.set(0.54 * s, 0.07, 0);
       wingOuter.rotation.order = "YZX";
       wing.add(wingOuter);
-      const outer = new PartBuilder()
-        .add(panel(1, 0.56, 0.06, 3, 0.1, s), panelPaint(1, 1, 0.56), [0, 0, 0], mirror)
-        .add(capsule(0.022, 0.45), "capeDark", [0.24 * s, 0.06, 0.012], [0, 0, Math.PI / 2 - 0.1 * s]);
+      // The hand: five long primaries fanning from the wrist, three coverts over them
+      const outer = new PartBuilder().add(capsule(0.018, 0.3), "wingDark", [0.15 * s, -0.02, 0.01], [0, 0, Math.PI / 2 + 0.25 * s]);
+      const primaries = 5;
+      for (let i = 0; i < primaries; i++) {
+        plume(outer, 0.98 - i * 0.1, 0.17, [(0.05 + i * 0.045) * s, -0.02 * i, 0.004 * i], turned(0.12 - i * 0.3), true);
+      }
+      for (let i = 0; i < 3; i++) {
+        plume(outer, 0.3, 0.12, [(0.06 + i * 0.05) * s, -0.01 - 0.02 * i, 0.03], turned(-0.1 - i * 0.35), false);
+      }
       const outerMesh = part(wingOuter, outer, wingMat);
       const tip = new THREE.Object3D();
-      tip.position.set(1 * s, 0.1, 0);
+      tip.position.set((0.05 + 0.98 * Math.cos(0.12)) * s, 0.98 * Math.sin(0.12), 0);
       wingOuter.add(tip);
+      const last = 0.12 - (primaries - 1) * 0.3;
+      const lastLength = 0.98 - (primaries - 1) * 0.1;
       const trail = new THREE.Object3D();
-      trail.position.set(0.02 * s, -0.56, 0);
+      trail.position.set((0.05 + (primaries - 1) * 0.045 + lastLength * Math.cos(last)) * s, -0.02 * (primaries - 1) + lastLength * Math.sin(last), 0);
       wingOuter.add(trail);
 
       return { shoulder, elbow, hip, knee, wing, wingOuter, tip, trail, boot, innerMesh, outerMesh };
@@ -763,16 +773,28 @@ export class Avatar {
       }),
     );
     this.chest.add(this.cape.lining!);
+    // The mantle: the top of the cape again, a little above it, in the wing tone with a gold hem
+    this.mantle = new Cloth(
+      10,
+      6,
+      (_u, v, t, out) => {
+        const hem = v > 0.88;
+        out.copy(hem ? t.trim : t.wing).lerp(t.wingDark, hem ? 0 : (1 - v) * 0.3);
+        return hem ? 0.6 : 0;
+      },
+      clothMat,
+    );
+    this.painted.push(this.mantle.painted);
+    this.chest.add(this.mantle.mesh);
 
-    // Two scarf tails cut from the cape's cloth, streaming from the neck over the cape,
-    // paling towards their tips like the wings' edges (and glowing there at night)
+    // Two scarf tails in the set's palest tone, streaming from the neck over the mantle and cape
     this.scarf = [0, 1].map(() => {
       const tail = new Cloth(
         1,
         12,
         (_u, v, t, out) => {
-          out.copy(t.cape).lerp(t.tip, smoothstep(0.3, 1, v) * 0.7);
-          return smoothstep(0.6, 1, v) * 0.5;
+          out.copy(t.scarf).lerp(t.wingTip, smoothstep(0.4, 1, v) * 0.5);
+          return smoothstep(0.7, 1, v) * 0.4;
         },
         clothMat,
       );
@@ -1109,19 +1131,24 @@ export class Avatar {
       this.clearCloth(out);
     };
     this.cape.update(this.capeShape);
+    this.mantle.update((u, v, out) => {
+      this.capeShape(u, v * 0.36, out);
+      out.z += 0.025;
+    });
     this.scarf.forEach((cloth, i) => {
       const tail = i === 0 ? -1 : 1;
       const length = i === 0 ? 0.78 : 0.66;
       cloth.update((u, v, out) => {
         const phase = TAU * 1.8 * v - ct * 1.35 + tail * 1.3;
         out.set(
-          tail * (0.035 + 0.1 * v) + u * 0.03 + leanX * v * 1.2 + Math.sin(phase * 0.7) * 0.05 * v * A.clothWave,
+          tail * (0.035 + 0.1 * v) + u * 0.045 + leanX * v * 1.2 + Math.sin(phase * 0.7) * 0.05 * v * A.clothWave,
           0.27 - v * length,
           0.13 + 0.08 * v + 0.16 * v * v + wave * 1.4 * v * Math.sin(phase) - pitch * v,
         );
         this.clearCloth(out);
       });
       cloth.keepAbove(this.cape, 0.02);
+      cloth.keepAbove(this.mantle, 0.02);
     });
   }
 
