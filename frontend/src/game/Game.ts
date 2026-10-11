@@ -12,6 +12,7 @@ import { Avatar } from "./avatar";
 import { APPEARANCE_EVENT, validateAppearance, type Appearance } from "./cosmetics/storage";
 import { profileClient } from "../profile/client";
 import { Companion } from "./pets/companion";
+import { CosmeticSparkles } from "./cosmetics/sparkles";
 import { CameraRig } from "./camera";
 import { DISSOLVE_AT, type DeathKind, DeathFall, classifyCrash, fieldNormal } from "./death";
 import { Debris } from "./effects";
@@ -26,8 +27,6 @@ import { type ControlSettings, type InputObserver, type TestAction, Input, contr
 import { FX_LIGHT, Kind, Particles, fx, fxTime, sceneryTime } from "./particles";
 import { PilotFx } from "./pilotfx";
 import { INTERPOLATION_DELAY_MS, Pilot, type PilotSample } from "./pilots";
-// import { Trail } from "./trail";
-// import { WINGTIPS, createAirplane } from "./airplane";
 import { clamp } from "./math";
 import { SpeedLines } from "./speedlines";
 import { TOON_LIGHT } from "./toon";
@@ -198,8 +197,11 @@ export class Game implements RunHost {
     const appearance = this.testLook ?? profileClient.appearance();
     this.avatar.setAppearance(appearance);
     this.companion.set(appearance.pet);
+    this.sparkles.setAppearance(appearance);
   };
   private readonly fx: PilotFx;
+  /** Rare cosmetics' own particles (decoration only) */
+  private readonly sparkles: CosmeticSparkles;
   /** What the pilot carries (models and animations only, for now) */
   private readonly equipment: Equipment;
   /** What the run's abilities look like (game/abilities/) */
@@ -354,7 +356,9 @@ export class Game implements RunHost {
           if (this.paused) this.togglePause();
           this.run?.testWin();
         } else if (action === "item") {
+          // Every item in turn; a full bag lets its oldest go, so all twenty stay reachable
           const id = RUN_ITEMS[this.nextTestItem++ % RUN_ITEMS.length].id;
+          this.run?.items.makeRoom();
           if (this.run && !this.run.giveItem(id)) this.nextTestItem--;
         } else if (!this.paused && this.crashedAt === null) this.run?.spawnTestPortal();
       };
@@ -372,6 +376,7 @@ export class Game implements RunHost {
     this.ambient = new Ambient(this.particles, this.softParticles);
     this.avatar = new Avatar(options.color);
     this.companion = new Companion(this.scene, this.particles);
+    this.sparkles = new CosmeticSparkles(this.avatar, this.particles);
     this.appearanceChanged();
     window.addEventListener(APPEARANCE_EVENT, this.appearanceChanged);
     this.fx = new PilotFx(this.avatar, options.color, this.particles);
@@ -1594,6 +1599,7 @@ export class Game implements RunHost {
       // Frozen on the start line or in the tunnel: no motes, or they pile up into a glowing ball
       const moving = this.raceState !== "countdown" && !waiting;
       this.fx.update(dt, this.flight.speed, this.flight.velocity, this.smoothProximity, moving);
+      this.sparkles.update(dt, this.flight.velocity, moving && !this.inWormhole && !this.attract);
       this.skimSpray(dt);
       if (this.run) {
         this.abilityFx.update(dt, this.run.abilities, this.world, this.flight, this.rig.camera, this.passedGate, moving);

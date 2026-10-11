@@ -118,6 +118,8 @@ export class ItemFx {
   private readonly waxTrails: Trail[];
   private waxShown = 0;
   private glitterDebt = 0;
+  // Comet Tail Firework: the rocket this item strapped on (a firework worn any other way is left alone)
+  private ownFirework = false;
 
   constructor(scene: THREE.Scene, avatar: Avatar, equipment: Equipment, particles: Particles, host: ItemFxHost) {
     this.avatar = avatar;
@@ -177,8 +179,15 @@ export class ItemFx {
     this.gliderWax(dt, items, flight, budget);
     this.relics.group.visible = true;
     this.relics.update(dt, items, flight, flying);
-    this.equipment.setThrust(items.burn);
-    if (items.time("cometFirework") < 0 && this.equipment.wearing("back") === "firework") this.equipment.unequip("back");
+    // Only the rocket the Comet Tail item put on burns and comes off with it: one put on from
+    // the test fitting room (or any other way) keeps its own flame and stays on the back
+    if (this.ownFirework) {
+      if (this.equipment.wearing("back") !== "firework") this.ownFirework = false;
+      else if (items.time("cometFirework") < 0) {
+        this.equipment.unequip("back");
+        this.ownFirework = false;
+      } else this.equipment.setThrust(items.burn);
+    }
     this.updateWaves(dt);
     this.rings.end();
   }
@@ -267,6 +276,7 @@ export class ItemFx {
       this.shieldT = 0;
     } else if (id === "cometFirework") {
       this.equipment.equip("firework", true);
+      this.ownFirework = true;
       this.host.sound("uncork");
       this.host.kick(9);
     } else if (id === "gliderWax") {

@@ -31,6 +31,9 @@ const Y = new THREE.Vector3(0, 1, 0);
 const CLEARANCE_PROBES = [[0,0,0],[-4,0,0],[4,0,0],[0,2,0],[0,-2,0],[0,0,-8],[0,0,8]];
 
 /** Recheck streamed trees and structures without changing their placement. */
+/** Seconds between re-checks of a shown pickup's clearance (streamed land can block it) */
+const CLEAR_REFRESH = 0.5;
+
 export function collectionClear(world: World, pickup: CollectionPickup): boolean {
   for (const [x, y, z] of CLEARANCE_PROBES) {
     approach.copy(pickup.position).addScaledVector(pickup.side, x).addScaledVector(pickup.up, y).addScaledVector(pickup.normal, z);
@@ -109,7 +112,7 @@ export function collectionModel(reward: Pick<Reward, "kind" | "asset" | "rarity"
 export class Collection {
   readonly group = new THREE.Group();
   readonly pickups: CollectionPickup[];
-  private readonly views: { pickup: CollectionPickup; model: ReturnType<typeof collectionModel>; root: THREE.Group; moteDebt: number }[];
+  private readonly views: { pickup: CollectionPickup; model: ReturnType<typeof collectionModel>; root: THREE.Group; moteDebt: number; clear: boolean; clearAge: number }[];
   private time = 0;
   private readonly color = new THREE.Color();
   private readonly velocity = new THREE.Vector3();
@@ -129,7 +132,8 @@ export class Collection {
       // A gilded halo reads without bloom; geometry follows the same light as all toon models.
       const halo = paintedModel(new Builder().add(new THREE.TorusGeometry(.75, .025, 5, 24), RARITY_COLOR[pickup.reward.rarity], .35, [0, -.65, 0], [Math.PI / 2, 0, 0]));
       root.add(halo); this.group.add(root);
-      return { pickup, model, root, moteDebt: 0 };
+      // Clearance (seven distance-field probes) is refreshed every CLEAR_REFRESH s, not every frame
+      return { pickup, model, root, moteDebt: 0, clear: false, clearAge: Infinity };
     });
     scene.add(this.group);
   }
@@ -158,7 +162,11 @@ export class Collection {
       const far = pickup.position.distanceTo(camera);
       root.visible = !pickup.collected && !(PICKUP_PREFS.crystalsOnly && pickup.reward.kind !== "crystal") && far < COLLECTION_FX.viewDistance;
       if (!root.visible) continue;
-      root.visible = collectionClear(this.world, pickup);
+      if ((view.clearAge += dt) >= CLEAR_REFRESH) {
+        view.clear = collectionClear(this.world, pickup);
+        view.clearAge = 0;
+      }
+      root.visible = view.clear;
       if (!root.visible) continue;
       root.position.y = pickup.position.y + Math.sin(this.time * 2 + pickup.reward.angle) * COLLECTION_FX.bob;
       root.rotation.y = this.time * COLLECTION_FX.spin;

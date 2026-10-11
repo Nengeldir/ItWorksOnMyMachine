@@ -306,3 +306,30 @@ body:has(.menu-backdrop:empty) {
     padding: 0.4rem 0 0 0.3rem;
   }
 }
+
+/* Phones and narrow windows: the profile pill sits top left, where the centred logo would run under it,
+   so the page starts below the pills; short screens (phones held sideways) also get a smaller logo */
+@media (max-width: 1000px) {
+  .menu {
+    padding-top: 4.75rem;
+  }
+
+  .menu-title {
+    margin-top: 0;
+  }
+}
+
+@media (max-height: 520px) {
+  .menu {
+    gap: 1rem;
+  }
+
+  .menu-title h1 {
+    font-size: 2.75rem;
+  }
+
+  .menu-title p {
+    margin-top: 0.3rem;
+    font-size: 0.95rem;
+  }
+}

@@ -9,6 +9,8 @@ from store import Store
 RARITIES = ["common", "uncommon", "rare", "legendary"]
 XP = [8, 20, 55, 140]
 DUPLICATE_CRYSTALS = [2, 5, 15, 40]
+# Adventure plans kept per pilot (older ones and their claims are deleted)
+KEEP_ADVENTURES = 40
 DEFAULT_EQUIPPED = {"cape": "classic", "hat": "none", "shoes": "classic", "wings": "classic", "pet": "none"}
 
 
@@ -156,6 +158,13 @@ class Profiles:
         with self.store.lock, self.store.db:
             self.store.db.execute("INSERT INTO adventures (token, user_id, seed, created_at, plan) VALUES (?, ?, ?, ?, ?)",
                                   (token, user.id, seed, int(time.time()), json.dumps(plan)))
+            # Keep each pilot's latest adventures only: older plans and their claims are no longer needed
+            old = [row["token"] for row in self.store.db.execute(
+                "SELECT token FROM adventures WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT -1 OFFSET ?",
+                (user.id, KEEP_ADVENTURES))]
+            for stale in old:
+                self.store.db.execute("DELETE FROM adventure_claims WHERE token = ?", (stale,))
+                self.store.db.execute("DELETE FROM adventures WHERE token = ?", (stale,))
         return {"token": token, "seed": seed, "rewards": plan}
 
     def claim(self, user, token, pickups):

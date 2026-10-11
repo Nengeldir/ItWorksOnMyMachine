@@ -6,6 +6,7 @@ services:
         required: false
     environment:
       DATA_DIR: /app/data # leaderboards, ghosts and adventure profiles, kept in the volume below
+      TRUST_USER_HEADERS: "1" # logins come from the VIScon portal's headers; never expose port 8080 without it
     volumes:
       - game-data:/app/data
     restart: unless-stopped
