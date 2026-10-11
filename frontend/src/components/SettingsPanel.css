@@ -9,6 +9,8 @@
 .settings-dialog select { width: 100%; margin-top: .35rem; padding: .55rem .7rem; border-radius: 12px; border: 1px solid var(--glass-border); background: rgba(255,255,255,.75); color: var(--ink); font: inherit; }
 .settings-dialog .sheet-panel > button { margin-top: .4rem; }
 .settings-dialog .listening { background: var(--ink); color: #fff; border-color: var(--ink); }
+.settings-dialog .style-choice { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin-top: .4rem; }
+.settings-dialog .style-choice .selected { background: var(--ink); color: #fff; border-color: var(--ink); font-weight: 700; }
 .binding-list { display: grid; gap: .45rem; margin-bottom: .8rem; }
 .binding-row { display: grid; grid-template-columns: minmax(7rem,1fr) minmax(5rem,1fr) minmax(5rem,1fr) 1.8rem; gap: .35rem; align-items: center; font-size: .85rem; }
 .binding-row button { padding: .4rem .5rem; border-radius: 10px; font-size: .85rem; }

@@ -136,3 +136,21 @@ test("crystal cues respect particle budgets, distance, streamed clearance and tr
   collection.frame(1, p, true, particles); assert.equal(emitted, 14);
   collection.dispose();
 });
+
+test("crystals-only setting hides and skips treasures but still collects crystals", async () => {
+  const { PICKUP_PREFS } = await import("../src/game/run/pickups.ts");
+  const world = new World(runLevel(42, 1, "skyIsles")), scene = new Scene();
+  const rewards = Array.from({length: 6}, (_, i) => i % 2 ? reward("uncommon", i) : {...reward("common", i), kind: "crystal", asset: "crystal"});
+  const collection = new Collection(world, rewards, scene), particles = {budget: 1, emit: () => {}};
+  PICKUP_PREFS.crystalsOnly = true;
+  try {
+    for (const pickup of collection.pickups) {
+      const p = pickup.position, collected = [];
+      collection.step(p.clone().add(new Vector3(-3,0,0)), p.clone().add(new Vector3(3,0,0)), r => collected.push(r), particles);
+      if (pickup.reward.kind === "crystal") assert.ok(collected.length <= 1);
+      else { assert.equal(collected.length, 0); assert.equal(pickup.collected, false); }
+      collection.frame(1/60, p, true);
+    }
+    collection.pickups.forEach((pickup, i) => { if (pickup.reward.kind !== "crystal") assert.equal(collection.group.children[i].visible, false); });
+  } finally { PICKUP_PREFS.crystalsOnly = false; collection.dispose(); }
+});

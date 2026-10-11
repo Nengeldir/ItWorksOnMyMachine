@@ -43,7 +43,7 @@ export default function SettingsPanel({ settings, onSettings, onClose }: Props) 
     window.addEventListener("keyup", stop, true);
     return () => { window.removeEventListener("keydown", capture, true); window.removeEventListener("keyup", stop, true); el.close(); };
   }, []);
-  const toggle = (key: "invertPitch" | "invertMouse" | "invertGamepad" | "invertTouch" | "reducedMotion" | "muted", label: string) => (
+  const toggle = (key: "invertPitch" | "invertMouse" | "invertGamepad" | "invertTouch" | "reducedMotion" | "muted" | "crystalsOnly", label: string) => (
     <label className="check"><input type="checkbox" checked={!!settings[key]} onChange={e => update({ [key]: e.target.checked })} />{label}</label>
   );
   const slider = (key: "mouseSensitivity" | "deadZone" | "musicVolume" | "effectsVolume", label: string, min: number, max: number, step: number, fallback: number) => (
@@ -82,6 +82,17 @@ export default function SettingsPanel({ settings, onSettings, onClose }: Props) 
         {bindings[action][1] && <button className="binding-remove" aria-label={`Remove ${ACTION_LABELS[action]} alternate key`} onClick={() => update({bindings:{...bindings,[action]:[bindings[action][0]]}})}>×</button>}
       </div>)}</div>
       <button onClick={() => { const defaults = defaultSettings(); update({bindings:defaultBindings(),mouseSensitivity:2,invertPitch:false,invertMouse:false,invertGamepad:false,invertTouch:false,deadZone:defaults.deadZone}); setWaiting(null); setMessage("Flight controls reset."); }}>Reset controls</button>
+    </section>
+    <section className="sheet-panel"><h3>Pilot</h3>
+      <div className="field"><span>Character style</span>
+        <div className="style-choice" role="radiogroup" aria-label="Character style">
+          {([1, 2] as const).map(style => <button key={style} role="radio" aria-checked={(settings.pilotStyle ?? 1) === style}
+            className={(settings.pilotStyle ?? 1) === style ? "selected" : ""} onClick={() => update({ pilotStyle: style })}>Style {style}</button>)}
+        </div>
+      </div>
+    </section>
+    <section className="sheet-panel"><h3>Adventure</h3>
+      {toggle("crystalsOnly", "Crystal pickups only (hide item and treasure pickups)")}
     </section>
     <section className="sheet-panel"><h3>Sound</h3>
       {toggle("muted", "Mute all audio")}

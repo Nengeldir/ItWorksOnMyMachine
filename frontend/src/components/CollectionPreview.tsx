@@ -4,18 +4,30 @@ import { Avatar } from "../game/avatar";
 import { collectionModel } from "../game/run/collection";
 import type { Appearance } from "../game/cosmetics/storage";
 import type { Collectible } from "../profile/types";
+import { loadSettings } from "../storage";
 
-/** One renderer for the selected entry, with graceful text fallback if WebGL is unavailable. */
+// One renderer (one WebGL context) shared by every preview, for the whole page. A context per
+// selection was never freed by dispose(): after about 16 picks the browser dropped the oldest
+// context, which is the game's, and the flight behind the fitting room went dead.
+let shared: THREE.WebGLRenderer | null = null;
+function previewRenderer(): THREE.WebGLRenderer {
+  if (!shared) {
+    shared = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    shared.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+    shared.outputColorSpace = THREE.SRGBColorSpace;
+  }
+  return shared;
+}
+
+/** The shared renderer draws the selected entry, with graceful text fallback if WebGL is unavailable. */
 export default function CollectionPreview({ item, appearance, rear = false }: { item: Collectible; appearance: Appearance; rear?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const container = ref.current!;
     let renderer: THREE.WebGLRenderer;
-    try { renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true }); }
+    try { renderer = previewRenderer(); }
     catch { container.dataset.unavailable = "true"; return; }
     delete container.dataset.unavailable;
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
     const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(38, 1, .01, 100);
     const light = new THREE.DirectionalLight("#fff1d4", 3); light.position.set(-3, 5, -4);
     scene.add(light, new THREE.HemisphereLight("#d9ecff", "#7f6e94", 2));
@@ -24,6 +36,7 @@ export default function CollectionPreview({ item, appearance, rear = false }: { 
     let model: ReturnType<typeof collectionModel> | null = null;
     if (item.slot && item.kind !== "pet") {
       avatar = new Avatar("#c47f9d");
+      avatar.setStyle(loadSettings().pilotStyle ?? 1);
       avatar.setAppearance({ ...appearance, [item.slot]: item.asset });
       avatar.update(.01, 24, 0); root.add(avatar.group);
     } else if (item.asset !== "none") {
@@ -54,7 +67,12 @@ export default function CollectionPreview({ item, appearance, rear = false }: { 
       renderer.render(scene, camera); frame = requestAnimationFrame(loop);
     };
     frame = requestAnimationFrame(loop);
-    return () => { cancelAnimationFrame(frame); observer.disconnect(); avatar?.dispose(); model?.dispose(); renderer.dispose(); renderer.domElement.remove(); };
+    return () => {
+      cancelAnimationFrame(frame); observer.disconnect(); avatar?.dispose(); model?.dispose();
+      // Keep the context; free this scene's GPU buffers and programs only
+      renderer.renderLists.dispose();
+      if (renderer.domElement.parentElement === container) renderer.domElement.remove();
+    };
   }, [item, appearance, rear]);
   return <div className="collection-preview" ref={ref} role="img" aria-label={`Animated preview of ${item.name}`}>
     <span className="preview-error">3D preview unavailable</span>

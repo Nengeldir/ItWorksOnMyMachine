@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { glowTexture } from "../avatar";
 import type { Particles } from "../particles";
 import { RARITIES, runItem, type Items } from "../run/items";
-import type { Pickup } from "../run/pickups";
+import { PICKUP_PREFS, type Pickup } from "../run/pickups";
 import { ITEMS_FX } from "../tuning";
 import { smoothstep } from "../math";
 import { ItemDisplay } from "./equip";
@@ -41,7 +41,7 @@ export class PickupView {
       // Grows in over the last stretch of the range instead of popping up at its edge
       const grown=1-smoothstep(ITEMS_FX.pickupRange*0.8,ITEMS_FX.pickupRange,far);
       let display=this.displays.get(pickup);
-      if(pickup.collected || pickup.blocked || !near || count>=24){
+      if(pickup.collected || pickup.blocked || !near || count>=24 || PICKUP_PREFS.crystalsOnly){
         if(display){display.dispose();this.displays.delete(pickup);}continue;
       }
       const rarity=runItem(pickup.id).rarity;

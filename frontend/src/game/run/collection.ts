@@ -4,6 +4,7 @@ import type { WingId } from "../cosmetics/catalog";
 import type { Reward, Rarity } from "../../profile/types";
 import { COLLECTION_FX } from "../tuning";
 import { smoothstep } from "../math";
+import { PICKUP_PREFS } from "./pickups";
 import type { World } from "../world/World";
 import { Builder, buildItem, leaf, star, type ItemId } from "../items/models";
 import { buildHat, buildShoe, disposeModel, paintedModel } from "../cosmetics/models";
@@ -137,7 +138,7 @@ export class Collection {
     if (before.distanceToSquared(after) > 20 ** 2) return;
     for (const view of this.views) {
       const { pickup } = view;
-      if (pickup.collected || !sweptPickup(before, after, pickup.position, pickup.reward.kind === "crystal" ? CRYSTAL_RADIUS : COLLECTION_RADIUS) || !collectionClear(this.world, pickup)) continue;
+      if (pickup.collected || (PICKUP_PREFS.crystalsOnly && pickup.reward.kind !== "crystal") || !sweptPickup(before, after, pickup.position, pickup.reward.kind === "crystal" ? CRYSTAL_RADIUS : COLLECTION_RADIUS) || !collectionClear(this.world, pickup)) continue;
       collect(pickup.reward);
       pickup.collected = true; view.root.visible = false;
       this.color.set(RARITY_COLOR[pickup.reward.rarity]);
@@ -155,7 +156,7 @@ export class Collection {
     for (const view of this.views) {
       const { pickup, model, root } = view;
       const far = pickup.position.distanceTo(camera);
-      root.visible = !pickup.collected && far < COLLECTION_FX.viewDistance;
+      root.visible = !pickup.collected && !(PICKUP_PREFS.crystalsOnly && pickup.reward.kind !== "crystal") && far < COLLECTION_FX.viewDistance;
       if (!root.visible) continue;
       root.visible = collectionClear(this.world, pickup);
       if (!root.visible) continue;

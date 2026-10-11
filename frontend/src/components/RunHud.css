@@ -399,7 +399,15 @@
   transform: translate(-50%, -50%);
   text-align: center;
   pointer-events: none;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
+  /* The ink lettering gets a thin border of warm light and a soft glow, so it reads on dark maps too */
+  --title-edge: rgba(255, 244, 214, 0.92);
+  --title-glow: rgba(255, 226, 160, 0.55);
+  -webkit-text-stroke: 0.6px var(--title-edge);
+  paint-order: stroke fill;
+  text-shadow:
+    0 0 1px var(--title-edge),
+    0 0 6px var(--title-glow),
+    0 0 18px color-mix(in srgb, var(--title-glow) 60%, transparent);
   animation: run-title 3.4s ease-out both;
 }
 
@@ -411,6 +419,7 @@
 }
 
 .run-title h2 {
+  -webkit-text-stroke-width: 1.6px;
   font-size: clamp(2.4rem, 7vw, 4.6rem);
   font-weight: 900;
   font-style: italic;

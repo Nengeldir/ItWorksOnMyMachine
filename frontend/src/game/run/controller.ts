@@ -186,6 +186,8 @@ export class RunController {
   /** The last portal's cutscene */
   private finale: Finale | null = null;
   private collection: Collection | null = null;
+  /** The opening autopilot is flying (see preview) */
+  private previewing = false;
   private readonly collected = (reward: Reward) => {
     this.events.collected?.(reward);
     this.host.stinger("item");
@@ -231,11 +233,33 @@ export class RunController {
     this.loadLevel(initial?.biome.id ?? runOrder(this.seed)[0], initial);
   }
 
-  /** Taking off from the intro: the title card plays from here */
-  takeOff() {
+  /**
+   * The opening autopilot: the level waits (no clock, no gates, no pickups, no portal)
+   * while the pilot glides the racing line on its own
+   */
+  preview() {
+    this.previewing = true;
+    this.group.visible = false;
+  }
+
+  /**
+   * Taking off from the intro: the title card plays from here. `at`: where the opening
+   * autopilot handed over; gates already behind it are skipped (never scored) and a crash
+   * comes back after them
+   */
+  takeOff(at?: THREE.Vector3) {
+    this.previewing = false;
+    this.group.visible = true;
     this.phase = "arrive";
     this.phaseTime = 0;
     this.levelTime = 0;
+    let next = 0;
+    if (at) {
+      const rings = this.host.world.course.rings;
+      while (next < rings.length - 1 && tmp.subVectors(at, rings[next].position).dot(rings[next].normal) > 0) this.passed.add(next++);
+      this.lastGate = next;
+    }
+    this.host.view.setRings("race", next);
   }
 
   // --- levels --------------------------------------------------------------------
@@ -396,7 +420,7 @@ export class RunController {
 
   /** A frame without control (gliding in while the land loads): the level's clock still runs */
   wait(dt: number) {
-    if ((this.phase === "explore" || this.phase === "arrive") && !this.items.frozenCombo) this.levelTime += dt;
+    if (!this.previewing && (this.phase === "explore" || this.phase === "arrive") && !this.items.frozenCombo) this.levelTime += dt;
   }
 
   /** A crash costs a life and breaks the gate chain; the last life's crash ends the run. Flight resets the shared boost state. */
@@ -573,8 +597,8 @@ export class RunController {
 
   frame(dt: number) {
     const { camera, particles } = this.host;
-    this.collection?.frame(dt, camera.position, this.phase === "explore" || this.phase === "arrive", particles);
-    this.phaseTime += dt;
+    this.collection?.frame(dt, camera.position, !this.previewing && (this.phase === "explore" || this.phase === "arrive"), particles);
+    if (!this.previewing) this.phaseTime += dt;
     if (this.toast && (this.toastTime -= dt) <= 0) this.toast = null;
     if (this.stats.flap > 0) this.stamina = Math.min(2 + this.stats.flap, this.stamina + dt / 9);
     if (this.phase === "arrive" && this.phaseTime > 3) this.phase = "explore";
@@ -666,12 +690,12 @@ export class RunController {
     this.wormhole.place(camera, pilot.position, pilot.forward, inside, blend, this.host.pixelHeight);
     this.host.insideWormhole(inside);
     // From inside, the portal you came through is gone too
-    this.group.visible = !inside;
+    this.group.visible = !inside && !this.previewing;
     this.host.veil(veil);
     if (!inside) for (const p of this.portals) p.update(dt, particles, camera.position);
     // The portal hums as you near it, and falls silent once you're through
     let near = 0;
-    if (!inside && (this.phase === "explore" || this.phase === "arrive")) {
+    if (!inside && !this.previewing && (this.phase === "explore" || this.phase === "arrive")) {
       for (const p of this.portals) if (p.open) near = Math.max(near, clamp(1 - p.position.distanceTo(camera.position) / 500, 0, 1));
     }
     this.host.portalHum(near);
