@@ -1,5 +1,4 @@
 import type { RunItemId } from "../run/items";
-import type { Rarity } from "./rarity";
 
 // What collecting gives you beyond looks. Every pet and every cosmetic of
 // rare rarity or better carries a passive power while equipped, and every
@@ -201,6 +200,3 @@ export function charmOf(equipped: Equipped): { id: string; use: CharmUse; power:
   const power = powerOf(`item:${equipped.charm}`);
   return power?.charm ? { id: equipped.charm, use: power.charm, power } : null;
 }
-
-/** Whether a collectible's power depends on rarity: shown in the inventory as "Rare power", etc. */
-export const POWER_RARITIES: readonly Rarity[] = ["rare", "legendary"];
