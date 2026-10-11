@@ -86,3 +86,13 @@
   .win-rays, .win-icon, .spin-button:not(:disabled), .confetti i { animation: none; }
   .confetti { display: none; }
 }
+
+/* Phones held sideways: tighter, the wheel beside its odds */
+@media (max-height: 520px) {
+  .shop-dialog { padding: .7rem 1rem; max-height: calc(100dvh - .6rem); }
+  .shop-header h2 { margin: 0 0 .2rem; font-size: 1.2rem; }
+  .shop-offer .collection-preview, .shop-icon { height: 90px; }
+  .wheel-row { grid-template-columns: minmax(0, 220px) 1fr; }
+  .wheel { max-width: 220px; }
+  .wheel-odds { font-size: .7rem; gap: .1rem; }
+}

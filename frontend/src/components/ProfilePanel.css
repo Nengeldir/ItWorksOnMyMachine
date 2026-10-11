@@ -92,9 +92,17 @@
   .collection-notice { bottom: 11rem; }
   .profile-flight { top: 5rem; bottom: auto; width: 105px; padding: .5rem; font-size: .7rem; }
 }
-/* Phones held sideways: little height, so the figure sits beside the treasure */
+/* Phones held sideways: little height, so the header folds up and the figure shrinks */
 @media (max-height: 520px) {
-  .profile-figure .minifigure { height: 160px; }
-  .collection-preview { height: 130px; }
+  .profile-dialog { padding: .7rem 1rem; max-height: calc(100dvh - .6rem); }
+  .profile-header h2 { margin: 0 0 .2rem; font-size: 1.2rem; }
+  .profile-stats { padding: .2rem 0; gap: .6rem; font-size: .85rem; }
+  .profile-xp { margin-bottom: .4rem; gap: .2rem; font-size: .8rem; }
+  .profile-xp small { display: none; }
+  .profile-figure { grid-template-columns: 120px 1fr; padding: .3rem; }
+  .profile-figure .minifigure { height: 140px; }
+  .collection-preview { height: 120px; }
+  .inventory-grid { max-height: 240px; }
+  .profile-dialog footer p:first-child { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .collection-notice { animation: none; } }
