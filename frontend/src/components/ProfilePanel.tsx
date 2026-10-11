@@ -1,12 +1,42 @@
-import { type CSSProperties, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { type FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { IconBook2, IconDiamond, IconLock, IconRotate, IconSparkles, IconX } from "@tabler/icons-react";
 import { profileClient } from "../profile/client";
-import { RARITY_COLOR } from "../game/run/collection";
+import type { Collectible, Profile } from "../profile/types";
+import { RARITY_STYLE } from "../game/collection/rarity";
+import { powerOf } from "../game/collection/abilities";
+import { collectibleIcon } from "../game/collection/icons";
+import { playVoice } from "../game/collection/sounds";
+import { CAPES, HATS, SHOES, WINGS } from "../game/cosmetics/catalog";
+import { PETS } from "../game/pets/catalog";
+import { RUN_ITEMS } from "../game/run/items";
+import { loadSettings } from "../storage";
+import { boundKeys } from "./keys";
 import CollectionPreview from "./CollectionPreview";
-import { KIND_ICON } from "./kindIcons";
+import Minifigure from "./Minifigure";
+import { rarityStyle } from "./rarity";
 import "./ProfilePanel.css";
 
-const tabs = ["All", "Cosmetics", "Pets", "Items"] as const;
+const tabs = ["All", "Cosmetics", "Pets", "Keepsakes"] as const;
+
+/** A collectible's own description (its look or its adventure item's effect) */
+function lore(item: Collectible): string | undefined {
+  const lists: Record<string, readonly { id: string; description: string }[]> = { cape: CAPES, hat: HATS, shoes: SHOES, wings: WINGS, pet: PETS };
+  if (item.kind === "item") return RUN_ITEMS.find((run) => run.model === item.asset || run.id === item.asset)?.description;
+  return lists[item.kind]?.find((entry) => entry.id === item.asset)?.description;
+}
+
+/** Where an entry stands for this pilot */
+function status(item: Collectible, profile: Profile): { owned: boolean; text: string; locked: boolean } {
+  const owned = !!profile.inventory[item.key];
+  const slot = item.slot;
+  if (owned) {
+    if (slot === "charm" && profile.equipped.charm === item.asset) return { owned, text: "Carried as charm", locked: false };
+    if (slot && slot !== "charm" && profile.equipped[slot] === item.asset) return { owned, text: "Equipped", locked: false };
+    return { owned, text: "Collected", locked: false };
+  }
+  const level = item.min_level ?? 1;
+  return level > profile.level ? { owned, text: `Unlocks at level ${level}`, locked: true } : { owned, text: "Undiscovered", locked: false };
+}
 
 /** The pilot the journal belongs to, from the landing page: their name, which a guest can change here */
 export interface JournalPilot {
@@ -16,8 +46,9 @@ export interface JournalPilot {
 }
 
 /**
- * The adventure journal: who you are (name, level, crystals, experience), then everything you can
- * collect, by kind, with a turning preview of the one picked. A sheet like the settings (index.css).
+ * The adventure journal: who you are (name, level, crystals, experience, the figurine in everything
+ * equipped), then everything you can collect, by kind, with a turning preview, its lore and power.
+ * A sheet like the settings (index.css).
  */
 export default function ProfilePanel({ onClose, pilot }: { onClose: () => void; pilot?: JournalPilot }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -28,6 +59,7 @@ export default function ProfilePanel({ onClose, pilot }: { onClose: () => void; 
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [rear, setRear] = useState(true);
+  const [petName, setPetName] = useState("");
   useEffect(() => {
     const el = dialog.current!; el.showModal();
     // A guest without a name (an invite opens the journal for it) starts typing it straight away
@@ -41,18 +73,35 @@ export default function ProfilePanel({ onClose, pilot }: { onClose: () => void; 
     (tab === "All" || (tab === "Cosmetics" ? ["cape", "hat", "shoes", "wings"].includes(item.kind) : item.kind === (tab === "Pets" ? "pet" : "item"))) &&
     (!ownedOnly || profile.inventory[item.key])) ?? [];
   const item = profile?.catalog.find(e => e.key === selected);
-  const count = item && profile ? profile.inventory[item.key] ?? 0 : 0;
-  const equipped = item?.slot && profile?.equipped[item.slot] === item.asset;
-  const equip = async () => {
-    if (!item?.slot) return;
+  const state = item && profile ? status(item, profile) : null;
+  const power = item ? powerOf(item.key) : null;
+  const discovered = profile ? profile.catalog.filter(e => profile.inventory[e.key]).length : 0;
+  const charmKey = boundKeys("charm")[0]?.[0] ?? "K";
+
+  const pick = (entry: Collectible) => {
+    setSelected(entry.key);
+    setRear(entry.kind === "cape" || entry.kind === "wings");
+    setMessage("");
+    setPetName(entry.kind === "pet" ? profile?.pet_names[entry.asset] ?? "" : "");
+    // Things with a power have a voice of their own
+    const voice = powerOf(entry.key)?.voice;
+    if (voice) playVoice(voice, 0.7);
+  };
+  const act = async (work: () => Promise<unknown>, done: string) => {
     setSaving(true); setMessage("");
-    try { await profileClient.equip(item.slot, item.asset); setMessage(`${item.name} equipped.`); }
+    try { await work(); setMessage(done); }
     catch (error) { setMessage((error as Error).message); }
     finally { setSaving(false); }
   };
+  const equip = () => item?.slot && act(() => profileClient.equip(item.slot!, item.asset), item.slot === "charm" ? `${item.name} is your charm now.` : `${item.name} equipped.`);
+  const rename = (event: FormEvent) => {
+    event.preventDefault();
+    if (item?.kind === "pet") void act(() => profileClient.namePet(item.asset, petName.trim()), petName.trim() ? `Your ${item.name} is called ${petName.trim()} now.` : "Name cleared.");
+  };
+  const equipped = !!state && (state.text === "Equipped" || state.text === "Carried as charm");
   const title = pilot ? pilot.name || "Guest" : profile?.name ?? "Your journal";
   const xp = profile ? (profile.next_level_xp ? profile.level_xp / profile.next_level_xp : 1) : 0;
-  const rarity = (r: keyof typeof RARITY_COLOR) => ({ "--rarity": RARITY_COLOR[r] }) as CSSProperties;
+  const charm = profile && profile.equipped.charm !== "none" ? profile.catalog.find(e => e.key === `item:${profile.equipped.charm}`) : undefined;
   return <dialog ref={dialog} className="profile-dialog sheet" aria-labelledby="profile-title" onCancel={e => { e.preventDefault(); onClose(); }}>
     <header className="sheet-head">
       <span className="overlay-badge"><IconBook2 size={22} /></span>
@@ -66,6 +115,7 @@ export default function ProfilePanel({ onClose, pilot }: { onClose: () => void; 
         <div className="journal-chips">
           <span className="chip"><IconSparkles size={15} /> Level {profile.level}</span>
           <span className="chip"><IconDiamond size={15} /> {profile.crystals.toLocaleString()} crystals</span>
+          <span className="chip">{discovered} / {profile.catalog.length} discovered</span>
           <span className="journal-xp">{profile.next_level_xp ? `${profile.level_xp} / ${profile.next_level_xp} XP to level ${profile.level + 1}` : "Maximum level reached"}</span>
         </div>
         <div className="meter" role="progressbar" aria-label="Experience" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(xp * 100)}><span style={{ width: `${Math.round(xp * 100)}%` }} /></div>
@@ -77,36 +127,54 @@ export default function ProfilePanel({ onClose, pilot }: { onClose: () => void; 
       <div className="journal-toolbar">
         <div className="segmented" role="tablist" aria-label="Collection">{tabs.map(t => <button key={t} role="tab" aria-selected={t === tab} onClick={() => setTab(t)}>{t}</button>)}</div>
         <label className="journal-filter"><input type="checkbox" checked={ownedOnly} onChange={e => setOwnedOnly(e.target.checked)} /> Collected only</label>
-        {tab === "Pets" && <button className="journal-unequip" disabled={saving || profile.equipped.pet === "none"} onClick={() => {
-          setSaving(true); void profileClient.equip("pet", "none").then(() => setMessage("Companion unequipped."))
-            .catch(error => setMessage((error as Error).message)).finally(() => setSaving(false));
-        }}>Unequip companion</button>}
       </div>
       <div className="journal-body">
+        {/* The pilot as they fly now: everything equipped, the companion at their shoulder */}
+        <aside className="journal-figure sheet-panel">
+          <Minifigure appearance={profile.equipped} style={loadSettings().pilotStyle ?? 1} label={`${profile.name} in their equipped outfit`} />
+          <p className="figure-caption">{profile.equipped.pet !== "none" && profile.pet_names[profile.equipped.pet] ? `with ${profile.pet_names[profile.equipped.pet]}` : "Your pilot"}</p>
+          {charm && <p className="figure-charm" style={rarityStyle(charm)}>{collectibleIcon("item", profile.equipped.charm)} Charm: {charm.name}</p>}
+        </aside>
         <div className="journal-grid" role="tabpanel" aria-label={`${tab} collection`}>
           {entries.map(entry => {
-            const quantity = profile.inventory[entry.key] ?? 0;
-            return <button key={entry.key} className={`journal-card ${quantity ? "owned" : "locked"}`} aria-pressed={entry.key === selected} style={rarity(entry.rarity)}
-              onClick={() => { setSelected(entry.key); setRear(entry.kind === "cape" || entry.kind === "wings"); setMessage(""); }}>
-              <span className="journal-icon" aria-hidden="true">{KIND_ICON[entry.kind]}</span>
-              <b>{entry.name}</b>
-              <small><i className="journal-rarity" /> {entry.kind} · {entry.rarity}</small>
-              <span className="journal-state">{quantity ? entry.kind === "item" ? `×${quantity}` : entry.slot && profile.equipped[entry.slot] === entry.asset ? "Equipped" : "Collected" : <><IconLock size={12} /> Undiscovered</>}</span>
+            const s = status(entry, profile);
+            return <button key={entry.key} className={`journal-card rarity-${entry.rarity} ${s.owned ? "owned" : "locked"}`} aria-pressed={entry.key === selected} style={rarityStyle(entry)}
+              onClick={() => pick(entry)}>
+              <span className="journal-icon" aria-hidden="true">{collectibleIcon(entry.kind, entry.asset)}</span>
+              {powerOf(entry.key) && <span className="journal-power" title="Has a power">✦</span>}
+              <b>{entry.kind === "pet" && profile.pet_names[entry.asset] ? profile.pet_names[entry.asset] : entry.name}</b>
+              <small><i className="journal-rarity" /> {entry.kind === "item" ? "keepsake" : entry.kind} · {entry.rarity}</small>
+              <span className="journal-state">{s.owned ? s.text : <><IconLock size={12} /> {s.text}</>}</span>
             </button>;
           })}
           {!entries.length && <p className="journal-empty">No discoveries here yet. Follow the crystals and look beside the hoops.</p>}
         </div>
-        {item && <aside className="journal-detail sheet-panel">
+        {item && state && <aside className={`journal-detail sheet-panel rarity-${item.rarity}`} style={rarityStyle(item)}>
           <div className="journal-preview"><CollectionPreview item={item} appearance={profile.equipped} rear={rear} />
-            <button className="journal-turn" onClick={() => setRear(!rear)} aria-label={rear ? "View front" : "View back"} title={rear ? "View front" : "View back"}><IconRotate size={18} /></button></div>
+            {item.kind !== "item" && item.kind !== "pet" && <button className="journal-turn" onClick={() => setRear(!rear)} aria-label={rear ? "View front" : "View back"} title={rear ? "View front" : "View back"}><IconRotate size={18} /></button>}</div>
           <h3>{item.name}</h3>
-          <div className="journal-chips"><span className="chip" style={rarity(item.rarity)}><i className="journal-rarity" /> {item.rarity}</span><span className="chip">{item.kind}</span></div>
-          <p>{count ? item.kind === "item" ? `${count} keepsakes collected` : "In your collection" : "Find this on an adventure"}</p>
-          {item.slot && <button className="primary" disabled={!count || equipped || saving} onClick={() => void equip()}>{saving ? "Saving…" : equipped ? "Equipped" : count ? "Equip" : "Undiscovered"}</button>}
-          <small>{item.kind === "item" ? "Kept in your journal. Adventure abilities are chosen at portals." : "A new look for your next flight."}</small>
+          <div className="journal-chips"><span className="chip"><i className="journal-rarity" /> {RARITY_STYLE[item.rarity].name}</span><span className="chip">{item.kind === "item" ? "keepsake" : item.kind}</span></div>
+          {lore(item) && <p className="journal-lore">{lore(item)}</p>}
+          {power && <div className="journal-power-card">
+            <b>✦ {power.name}</b>
+            <p>{power.description}</p>
+            <small>{item.kind === "item"
+              ? power.charm?.kind === "passive" ? "Works all adventure while carried as your charm." : `Carry it as your charm and press ${charmKey} on an adventure.`
+              : "Works on adventures while equipped."}</small>
+          </div>}
+          <p className="journal-detail-state">{state.locked ? <><IconLock size={13} /> {state.text}: it won't turn up before then.</> : state.owned ? state.text : "Find it on an adventure, at the market or on the wheel."}</p>
+          {item.slot && <button className="primary" disabled={!state.owned || equipped || saving} onClick={() => void equip()}>
+            {saving ? "Saving…" : equipped ? state.text : !state.owned ? "Not yet yours" : item.slot === "charm" ? "Carry as charm" : "Equip"}</button>}
+          {equipped && (item.slot === "pet" || item.slot === "charm") && <button disabled={saving} onClick={() => void act(() => profileClient.equip(item.slot!, "none"), item.slot === "pet" ? "Companion resting at home." : "Charm put away.")}>
+            {item.slot === "pet" ? "Leave at home" : "Put the charm away"}</button>}
+          {item.kind === "pet" && state.owned && <form className="pet-name" onSubmit={rename}>
+            <label htmlFor="pet-name">Name your companion</label>
+            <div><input id="pet-name" value={petName} maxLength={20} placeholder={item.name} onChange={e => setPetName(e.target.value)} />
+              <button type="submit" disabled={saving}>Save</button></div>
+          </form>}
         </aside>}
       </div>
-      <footer className="journal-foot"><p>Crystals grant XP. Rarer discoveries sit farther from hoops. Duplicate cosmetics and pets become crystals.</p>
+      <footer className="journal-foot"><p>Crystals and gates grant XP. Each rarity is three times rarer than the last, and sits farther from the hoops. Duplicates become crystals.</p>
         <p role="status">{message || error || (loading ? "Refreshing…" : "")}</p>
         {error && <button onClick={() => void profileClient.refresh().catch(() => {})}>Retry saving / refresh</button>}</footer>
     </>}
@@ -130,7 +198,9 @@ export function ProfileStatus({ paused = false }: { paused?: boolean }) {
       {error && <small role="status">{error}</small>}
       {paused && <button onClick={() => setOpen(true)}>Inventory</button>}
     </div>
-    {notice && notice.id !== dismissedNotice && <div key={notice.id} className={`collection-notice glass ${notice.levelUp ? "level-up" : ""}`} role="status">{notice.text}</div>}
+    {notice && notice.id !== dismissedNotice && <div key={notice.id}
+      className={`collection-notice glass ${notice.levelUp ? "level-up" : ""} ${notice.duplicate ? "duplicate" : ""} ${notice.rarity ? `rarity-${notice.rarity}` : ""}`}
+      style={notice.rarity ? rarityStyle({ rarity: notice.rarity }) : undefined} role="status">{notice.text}</div>}
     {open && <ProfilePanel onClose={() => setOpen(false)} />}
   </>;
 }

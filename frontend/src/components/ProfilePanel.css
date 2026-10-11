@@ -1,7 +1,7 @@
 /* The adventure journal (and the test sandbox's fitting room): a wide sheet (index.css). Only the grid of
    discoveries scrolls; the header, the pilot panel and the toolbar stay put. */
 .profile-dialog.sheet {
-  width: min(60rem, calc(100vw - 2rem));
+  width: min(72rem, calc(100vw - 2rem));
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
@@ -101,7 +101,7 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 1fr 15.5rem;
+  grid-template-columns: 13rem minmax(0, 1fr) 16.5rem;
   gap: 0.85rem;
 }
 
@@ -267,12 +267,22 @@
   height: 190px;
   width: 100%;
   display: grid;
-  place-items: center;
+  place-items: stretch;
   overflow: hidden;
+  position: relative;
 }
 
 .collection-preview canvas {
   display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.collection-preview .preview-error {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
 }
 
 .collection-preview:not([data-unavailable]) .preview-error {
@@ -321,6 +331,74 @@
   }
 }
 
+/* The figurine: the pilot in everything equipped, the companion at their side (drag to turn) */
+.journal-figure {
+  align-self: start;
+  text-align: center;
+  background: radial-gradient(ellipse at 50% 70%, #fff7e6 0%, transparent 70%), var(--ink-06);
+}
+
+.figure-caption {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--ink-70);
+}
+
+.figure-charm {
+  margin: 0.4rem 0 0;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--rarity) 70%, transparent);
+}
+
+.minifigure { position: relative; height: 300px; width: 100%; cursor: grab; touch-action: pan-y; outline: none; border-radius: 18px; }
+.minifigure.dragging { cursor: grabbing; }
+.minifigure:focus-visible { box-shadow: 0 0 0 3px #506ee4; }
+.minifigure canvas { display: block; width: 100%; height: 100%; }
+.minifigure-hint { position: absolute; bottom: 0.3rem; left: 0; right: 0; font-size: 0.65rem; color: var(--ink-70); pointer-events: none; }
+.minifigure:not([data-unavailable]) .preview-error { display: none; }
+
+/* Rarity: common carries no color; uncommon sky blue, rare violet, legendary gold */
+.journal-card { position: relative; }
+.journal-card:not(.rarity-common) { border-color: color-mix(in srgb, var(--rarity) 80%, transparent); background: linear-gradient(160deg, color-mix(in srgb, var(--rarity) 22%, transparent), rgba(255, 255, 255, 0.6) 70%); }
+.journal-card.rarity-rare { box-shadow: 0 0 14px color-mix(in srgb, var(--rarity) 30%, transparent); }
+.journal-card.rarity-legendary { box-shadow: 0 0 20px color-mix(in srgb, var(--rarity) 45%, transparent), inset 0 0 12px color-mix(in srgb, var(--rarity) 25%, transparent); }
+.journal-card.locked { opacity: 0.62; filter: saturate(0.7); }
+.journal-card .journal-icon { font-size: 1.3rem; }
+.journal-power { position: absolute; top: 0.5rem; right: 0.6rem; font-size: 0.8rem; color: var(--rarity-deep); }
+.journal-card.rarity-common .journal-power { color: var(--ink-70); }
+
+.journal-detail:not(.rarity-common) { border: 1px solid color-mix(in srgb, var(--rarity) 75%, transparent); background: linear-gradient(180deg, color-mix(in srgb, var(--rarity) 18%, transparent), var(--ink-06) 55%); }
+.journal-detail.rarity-legendary { box-shadow: 0 0 26px color-mix(in srgb, var(--rarity) 35%, transparent); }
+.journal-detail .journal-lore { font-style: italic; }
+.journal-power-card { width: 100%; text-align: left; background: color-mix(in srgb, var(--rarity) 14%, #ffffff80); border-radius: 14px; padding: 0.6rem 0.7rem; }
+.journal-power-card b { color: var(--rarity-deep); }
+.journal-detail .journal-power-card p { margin: 0.3rem 0; color: var(--ink); }
+.journal-detail-state { display: flex; align-items: center; justify-content: center; gap: 0.3rem; }
+.pet-name { width: 100%; display: grid; gap: 0.3rem; text-align: left; font-size: 0.78rem; }
+.pet-name div { display: flex; gap: 0.3rem; }
+.pet-name input { flex: 1; min-width: 0; padding: 0.45rem 0.6rem; border-radius: 10px; border: 1px solid var(--ink-12); }
+
+/* Narrower: the figurine above the collection and the selected treasure */
+@media (max-width: 1000px) and (min-width: 651px) {
+  .journal-body { grid-template-columns: minmax(0, 1fr) 15.5rem; }
+  .journal-figure { grid-column: 1 / -1; display: grid; grid-template-columns: 10rem 1fr; align-items: center; gap: 0.5rem; text-align: left; }
+  .journal-figure .minifigure { height: 180px; grid-row: span 3; }
+}
+
+@media (max-width: 650px) {
+  .journal-figure { display: grid; grid-template-columns: 8rem 1fr; align-items: center; gap: 0.5rem; text-align: left; }
+  .journal-figure .minifigure { height: 160px; grid-row: span 3; }
+  .journal-detail { grid-row: 2; }
+}
+
+/* Phones held sideways: little height */
+@media (max-height: 520px) {
+  .minifigure { height: 160px; }
+  .collection-preview { height: 130px; }
+}
+
 /* --- In flight: the profile pill and the collection notice --------------------------------------- */
 .profile-flight { position: absolute; right: 1rem; top: 5rem; z-index: 5; width: 170px; padding: .65rem .8rem; border-radius: 18px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem; font-size: .78rem; }
 .profile-flight span { display: inline-flex; align-items: center; gap: .4rem; }
@@ -329,6 +407,8 @@
 .profile-flight button { width: 100%; padding: .35rem; }
 .collection-notice { position: absolute; left: 50%; bottom: 6rem; transform: translateX(-50%); max-width: min(500px, 85vw); border-radius: 18px; padding: .8rem 1.1rem; z-index: 12; text-align: center; font-size: .85rem; pointer-events: none; animation: collection-arrive .45s ease-out; }
 .collection-notice.level-up { border: 1px solid #dcb565; box-shadow: 0 0 26px #e3bf7140; }
+.collection-notice[class*="rarity-"]:not(.rarity-common) { border: 1px solid color-mix(in srgb, var(--rarity) 80%, transparent); box-shadow: 0 0 24px color-mix(in srgb, var(--rarity) 40%, transparent); }
+.collection-notice.duplicate { font-style: italic; }
 @keyframes collection-arrive { from { opacity: 0; transform: translate(-50%, 12px) scale(.94); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
 @media (max-width: 650px) { .collection-notice { bottom: 11rem; } }
 @media (prefers-reduced-motion: reduce) { .collection-notice { animation: none; } }

@@ -453,9 +453,10 @@ export class Avatar {
    * throws the head back and the arms open (Resonance), `flare` rears up
    * with cape and wings thrown forward (Aero-Braking), `falcon` tucks the
    * wings back like a stooping falcon, `butterfly` spreads cape and wings
-   * wide on slow, deep beats (the gliding stances)
+   * wide on slow, deep beats (the gliding stances), `stand` stands upright on the ground with wings
+   * folded down the back and arms at the sides (the inventory's figurine and pilot pages; never in flight)
    */
-  readonly stance = { tuck: 0, hover: 0, cast: 0, surf: 0, climb: 0, sing: 0, flare: 0, falcon: 0, butterfly: 0 };
+  readonly stance = { tuck: 0, hover: 0, cast: 0, surf: 0, climb: 0, sing: 0, flare: 0, falcon: 0, butterfly: 0, stand: 0 };
   /** How far each wing (left, right) is folded in during a crash, to keep it out of rock it is wedged against (0..1) */
   private readonly folded = [0, 0];
   /** A crash playing out: the body flails, then goes limp (Game moves `group`) */
@@ -1076,19 +1077,50 @@ export class Avatar {
     this.pony[0].rotation.set(-1.25 + this.pitchRate * 0.1 + sway * 0.5, 0, -turn * 0.4 + sway);
     this.pony[1].rotation.set(0.25 + sway * 0.4, 0, sway * 1.2);
 
+    // Standing (the figurine): every joint eases into an upright, relaxed pose
+    if (st.stand > 0) this.standPose(st.stand, t);
+
     // Aura breathes with the flaps and burns brighter when skimming
     const auraMat = this.aura.material as THREE.SpriteMaterial;
     auraMat.opacity = (0.14 + 0.08 * Math.max(0, stroke) * this.effort + proximity * 0.25) * FX.aura * (1 + ATMOSPHERE.night.value * 1.5);
     this.aura.visible = auraMat.opacity > 0.01;
 
     if (!this.detailed && dt > 0) return;
-    this.clothTime += dt * (4.5 + this.speed * 0.11) * A.clothSpeed;
+    this.clothTime += dt * (4.5 + this.speed * 0.11) * A.clothSpeed * (1 - st.stand * 0.7);
     this.updateCloth(
-      A.clothWave * (0.075 + slow01(this.speed) * 0.05) * (1 + st.flare * 1.5 + st.butterfly * 0.6) * (1 - st.falcon * 0.6),
+      A.clothWave * (0.075 + slow01(this.speed) * 0.05) * (1 + st.flare * 1.5 + st.butterfly * 0.6) * (1 - st.falcon * 0.6) * (1 - st.stand * 0.75),
       -this.lean * 0.3 - turn * 0.15,
-      this.pitchRate * 0.12 - this.climb * 0.12 + st.flare * 0.75 - st.falcon * 0.2,
-      1 + st.butterfly * 1.6 + st.flare * 0.4 - st.falcon * 0.3,
+      this.pitchRate * 0.12 - this.climb * 0.12 + st.flare * 0.75 - st.falcon * 0.2 + st.stand * 0.1,
+      1 + st.butterfly * 1.6 + st.flare * 0.4 - st.falcon * 0.3 - st.stand * 0.35,
     );
+  }
+
+  /** Blends the pose towards standing on the ground, by `k` (0..1); a slow breath keeps it alive */
+  private standPose(k: number, t: number) {
+    const breath = Math.sin(t * 1.6);
+    const to = (o: THREE.Object3D, x: number, y: number, z: number) =>
+      o.rotation.set(o.rotation.x + (x - o.rotation.x) * k, o.rotation.y + (y - o.rotation.y) * k, o.rotation.z + (z - o.rotation.z) * k);
+    // Upright: the rig turns the prone flying body up on its feet, without the flight's bob
+    this.rig.rotation.x += (Math.PI / 2 - this.rig.rotation.x) * k;
+    this.rig.rotation.z *= 1 - k;
+    this.rig.position.multiplyScalar(1 - k);
+    this.rig.scale.setScalar(SCALE);
+    to(this.chest, 0.02 + breath * 0.012, 0, 0);
+    to(this.head, 0.06 + breath * 0.01, Math.sin(t * 0.5) * 0.12, 0);
+    this.pelvis.rotation.set(this.pelvis.rotation.x * (1 - k), this.pelvis.rotation.y * (1 - k), this.pelvis.rotation.z * (1 - k));
+    for (const [side, s] of [[this.right, 1], [this.left, -1]] as [Side, 1 | -1][]) {
+      // Wings folded behind the back like a resting bird's, the outer half curving down; they lift with each breath
+      to(side.wing, 0, -(1.22 + breath * 0.03) * s, -0.42 * s);
+      to(side.wingOuter, 0, -0.38 * s, -0.3 * s);
+      // Arms at the sides, elbows soft; legs straight, a little apart
+      to(side.shoulder, 0, -0.08 * s, (0.16 + breath * 0.01) * s);
+      to(side.elbow, 0, 0, 0.18 * s);
+      to(side.hip, 0, 0, 0.04 * s);
+      to(side.knee, -0.04, 0, 0);
+    }
+    // The ponytail hangs down instead of streaming back
+    to(this.pony[0], -0.25 + Math.sin(t * 1.1) * 0.05, 0, Math.sin(t * 0.8) * 0.06);
+    to(this.pony[1], 0.1, 0, 0);
   }
 
   /** Moves the cape and scarf: `wave` ripple size, `leanX` sideways swing, `pitch` lift of the hem, `spread` how wide it fans */
@@ -1104,6 +1136,8 @@ export class Avatar {
       this.clothMatrix.multiplyMatrices(this.clothInverse, obstacle.mesh.matrixWorld);
       obstacle.bounds.copy(obstacle.local).applyMatrix4(this.clothMatrix);
     }
+    // Standing, the cape drapes down the back instead of streaming out to its full length
+    const drape = 1 - this.stance.stand * 0.38;
     this.capeShape = (u, v, out) => {
       const spec = capeSpec(this.capeId);
       const width = (0.11 + 0.2 * Math.pow(v, 0.8) * spread) * spec.width;
@@ -1113,7 +1147,7 @@ export class Avatar {
         wave * 0.35 * v * Math.sin(TAU * 2.4 * v - ct * 1.7 + u * 2.1);
       out.set(
         u * width + leanX * v * v + Math.sin(ct * 0.6 + v * 3) * 0.03 * v * v * A.clothWave,
-        0.245 - v * 1.18 * spec.length + scallop * Math.pow(v, 6),
+        0.245 - v * 1.18 * spec.length * drape + scallop * Math.pow(v, 6),
         0.085 + 0.06 * v + 0.12 * v * v + 0.05 * (1 - u * u) * v + w - pitch * v * v,
       );
       this.clearCloth(out);

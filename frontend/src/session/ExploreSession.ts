@@ -170,6 +170,8 @@ export class ExploreSession {
     this.previewLook = look; this.game?.testAppearance(look);
   }
   previewItem(id: ItemId) { if (this.testMode) this.game?.equip(id); }
+  /** Carry a keepsake as the charm in this test run (null: the profile's own) */
+  previewCharm(id: string | null) { if (this.testMode) this.game?.testCharmItem(id); }
   previewUseItem() { if (this.testMode) this.game?.useItem(); }
   previewThrust(on: boolean) { if (this.testMode) this.game?.thrust(on ? 1 : 0); }
   clearPreviewItems() {

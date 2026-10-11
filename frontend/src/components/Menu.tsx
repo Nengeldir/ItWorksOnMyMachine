@@ -1,4 +1,4 @@
-import { IconDiamond, IconDice5, IconMap, IconSettings, IconUser } from "@tabler/icons-react";
+import { IconBuildingStore, IconDiamond, IconDice5, IconMap, IconSettings, IconTrophy, IconUser } from "@tabler/icons-react";
 import { type FormEvent, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { type LeaderboardEntry, type User, getLeaderboard } from "../api";
 import type { Screen } from "../App";
@@ -13,6 +13,8 @@ import { usePaletteTheme } from "../theme";
 import SettingsPanel from "./SettingsPanel";
 import MapSelect, { type MapSelectMode } from "./MapSelect";
 import ProfilePanel from "./ProfilePanel";
+import ShopPanel from "./ShopPanel";
+import LeaderboardPanel from "./LeaderboardPanel";
 import { HelpButton } from "./Help";
 import MenuBackdrop from "./MenuBackdrop";
 import TodaysBest from "./TodaysBest";
@@ -45,7 +47,7 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
   const [board, setBoard] = useState<LeaderboardEntry[]>([]);
   const best = useMemo(() => bestRun(dailyRun), [dailyRun]);
   // The journal is the pilot's own page (name, level, collection); an invite opens it to pick a name first
-  const [panel, setPanel] = useState<"none" | "settings" | "journal">(joinCode && !settings.nickname ? "journal" : "none");
+  const [panel, setPanel] = useState<"none" | "settings" | "journal" | "shop" | "hall">(joinCode && !settings.nickname ? "journal" : "none");
   const { profile } = useSyncExternalStore(profileClient.store.subscribe, profileClient.store.get);
   useEffect(() => void profileClient.initialize(), []);
   const [countdown, setCountdown] = useState(untilTomorrow);
@@ -110,6 +112,13 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
 
   return (
     <main className="menu">
+      {/* The Lantern Market and the Hall of Winds (the journal opens from the pilot pill) */}
+      <nav className="menu-nav" aria-label="Market and leaderboard">
+        <button className="glass" onClick={() => setPanel("shop")} aria-label="Lantern Market"><IconBuildingStore size={20} /><span>Market</span></button>
+        <button className="glass" onClick={() => setPanel("hall")} aria-label="Hall of Winds: the leaderboard"><IconTrophy size={20} /><span>Hall of Winds</span></button>
+      </nav>
+      {panel === "shop" && <ShopPanel onClose={() => setPanel("none")} />}
+      {panel === "hall" && <LeaderboardPanel onClose={() => setPanel("none")} />}
       <MenuBackdrop seed={shown} mode="drift" onSnapshot={keepArt} onShown={setLive} settings={settings} />
 
       <HelpButton className="menu-help" />

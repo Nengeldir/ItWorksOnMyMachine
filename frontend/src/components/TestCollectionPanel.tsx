@@ -6,6 +6,7 @@ import type { ItemId } from "../game/items/models";
 import type { ExploreSession } from "../session/ExploreSession";
 import CollectionPreview from "./CollectionPreview";
 import { KIND_ICON } from "./kindIcons";
+import { powerOf } from "../game/collection/abilities";
 import "./ProfilePanel.css";
 
 /** A local fitting room in ?test. No profile API writes, even for locked discoveries. */
@@ -45,11 +46,12 @@ export default function TestCollectionPanel({ session, onClose }: { session: Exp
         <button className="journal-turn" onClick={() => setRear(!rear)} aria-label={rear ? "View front" : "View back"} title={rear ? "View front" : "View back"}><IconRotate size={18} /></button></div>
       <h3>{item.name}</h3>
       <button className="primary" onClick={trySelected}>{item.kind === "item" ? "Carry item" : "Try in flight"}</button>
+      {item.kind === "item" && powerOf(item.key)?.charm && <button onClick={() => session.previewCharm(item.asset)}>Carry as charm ({powerOf(item.key)!.name})</button>}
       {item.kind === "item" && <><button onClick={() => session.previewUseItem()}>Use held item</button>
         {item.asset === "firework" && <button onClick={() => { session.previewThrust(!flame); setFlame(!flame); }}>{flame ? "Extinguish" : "Light firework"}</button>}</>}
       <small>Resume to watch the equipped model animate.</small></aside></div>
     <footer className="journal-toolbar"><button onClick={() => { const next = { ...look, pet: "none" as const }; setLook(next); session.previewAppearance(next); }}>Unequip pet</button>
       <button onClick={() => { session.clearPreviewItems(); setFlame(false); }}>Put items away</button>
-      <button onClick={() => { session.previewAppearance(null); setLook(profileClient.appearance()); session.clearPreviewItems(); setFlame(false); }}>Restore profile look</button></footer>
+      <button onClick={() => { session.previewAppearance(null); session.previewCharm(null); setLook(profileClient.appearance()); session.clearPreviewItems(); setFlame(false); }}>Restore profile look</button></footer>
   </dialog>;
 }
