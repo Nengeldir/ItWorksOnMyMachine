@@ -38,3 +38,9 @@ test('all registered item models have finite toon geometry',()=>{
  assert.equal(RUN_ITEMS.length,20);assert.equal(new Set(RUN_ITEMS.map(i=>i.id)).size,RUN_ITEMS.length);
  for(const item of RUN_ITEMS){const model=buildItem(item.model);const mesh=model.children[0];assert.ok(mesh.geometry.boundingSphere.radius>0,item.id);assert.ok([...mesh.geometry.attributes.position.array].every(Number.isFinite),item.id);disposeItem(model);}
 });
+test('test mode makes room: the oldest item leaves a full bag so every item stays reachable',()=>{
+ const items=setup();for(const id of ['anemoCatcher','starflakeShield','gliderWax'])items.give(id);
+ assert.equal(items.give('cometFirework'),false);items.selected=2;items.makeRoom();
+ assert.deepEqual(items.bag.map(c=>c.id),['starflakeShield','gliderWax']);assert.equal(items.current.id,'gliderWax');
+ assert.ok(items.give('cometFirework'));assert.equal(items.bag.length,3);items.makeRoom();items.makeRoom();items.makeRoom();items.makeRoom();assert.equal(items.bag.length,2);
+});

@@ -26,8 +26,6 @@ import { type ControlSettings, type InputObserver, type TestAction, Input, contr
 import { FX_LIGHT, Kind, Particles, fx, fxTime, sceneryTime } from "./particles";
 import { PilotFx } from "./pilotfx";
 import { INTERPOLATION_DELAY_MS, Pilot, type PilotSample } from "./pilots";
-// import { Trail } from "./trail";
-// import { WINGTIPS, createAirplane } from "./airplane";
 import { clamp } from "./math";
 import { SpeedLines } from "./speedlines";
 import { TOON_LIGHT } from "./toon";
@@ -349,7 +347,9 @@ export class Game implements RunHost {
           if (this.paused) this.togglePause();
           this.run?.testWin();
         } else if (action === "item") {
+          // Every item in turn; a full bag lets its oldest go, so all twenty stay reachable
           const id = RUN_ITEMS[this.nextTestItem++ % RUN_ITEMS.length].id;
+          this.run?.items.makeRoom();
           if (this.run && !this.run.giveItem(id)) this.nextTestItem--;
         } else if (!this.paused && this.crashedAt === null) this.run?.spawnTestPortal();
       };
@@ -1848,7 +1848,6 @@ export class Game implements RunHost {
     this.composerLoading = false;
     if (!this.bloomOn || this.composer) return;
     const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
-    // Half floats keep colors above 1, so only really bright things bloom; 4× MSAA keeps edges clean
     // Half floats keep colors above 1 for the bloom; FX.bloomMsaa sets the antialiasing samples
     const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: FX.bloomMsaa });
     const composer = new EffectComposer(this.renderer, target);
