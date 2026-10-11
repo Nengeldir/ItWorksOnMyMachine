@@ -44,7 +44,10 @@ export const FX = {
   speedLines: 1, // wind streaks at speed
   speedLinesFrom: 45, // m/s where the wind streaks start
   aura: 1, // soft glow around the pilot
-  ink: 0.55, // the pilot's ink outlines: their opacity (0 turns them off; Sky draws none)
+  ink: 0, // the pilot's ink outlines: their opacity (off: the land, Sky, AER and Omno draw none)
+  toonFlat: 1, // the pilot, cosmetics and items shaded face by face, like the land
+  toonFacet: 0.1, // when flat: each face a little lighter or darker, like the land's painted facets
+  toonSoft: 1, // five soft light bands instead of three hard ones
   inkTint: 0.8, // 0: one dark ink everywhere, 1: each part's own color, darkened
   dust: 1, // Sky's winged-light dust in the air, as a multiplier on each biome's rate
   flock: 1, // the flock of light butterflies leading to the next gate (0 hides it)
@@ -317,6 +320,9 @@ export const RANGES: Record<string, [number, number, number?]> = {
   speedLinesFrom: [10, 100],
   aura: [0, 3],
   ink: [0, 1],
+  toonFlat: [0, 1, 1],
+  toonFacet: [0, 0.4],
+  toonSoft: [0, 1, 1],
   inkTint: [0, 1],
   dust: [0, 3],
   flock: [0, 1],

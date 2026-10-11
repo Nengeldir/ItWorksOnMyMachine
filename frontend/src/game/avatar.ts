@@ -157,7 +157,13 @@ function applyPaint({ geometry, ranges }: Painted, tones: Tones) {
  * lobes, `rootDepth` deep at the root and `tipDepth` at the tip, which sits at
  * (length, tipY). A little thickness, so it has edges to ink
  */
-function panel(length: number, rootDepth: number, tipDepth: number, lobes: number, tipY = 0): THREE.BufferGeometry {
+function camberAt(x: number, y: number, length: number, rootDepth: number): number {
+  // The sheet droops behind and the tip curls up a little: cloth with volume, not a card
+  const behind = Math.max(0, -y) / rootDepth;
+  return -0.11 * behind * behind + 0.05 * Math.pow(Math.max(0, x) / length, 2);
+}
+
+function panel(length: number, rootDepth: number, tipDepth: number, lobes: number, tipY = 0, side: 1 | -1 = 1): THREE.BufferGeometry {
   const shape = new THREE.Shape();
   shape.moveTo(0, 0.03);
   shape.quadraticCurveTo(length * 0.5, 0.06 + tipY * 0.5, length, tipY);
@@ -174,15 +180,21 @@ function panel(length: number, rootDepth: number, tipDepth: number, lobes: numbe
     y0 = y1;
   }
   shape.closePath();
-  const geometry = new THREE.ExtrudeGeometry(shape, { depth: 0.012, bevelEnabled: false, curveSegments: 6 });
-  geometry.translate(0, 0, -0.006);
+  const geometry = new THREE.ExtrudeGeometry(shape, { depth: 0.03, bevelEnabled: false, curveSegments: 3 });
+  geometry.translate(0, 0, -0.015);
+  // The camber is applied for `side` so that, turned round for the left wing, both droop the same way
+  const position = geometry.getAttribute("position") as THREE.BufferAttribute;
+  for (let i = 0; i < position.count; i++) {
+    position.setZ(i, position.getZ(i) + side * camberAt(position.getX(i), position.getY(i), length, rootDepth));
+  }
+  geometry.computeVertexNormals();
   return geometry;
 }
 
-const sphere = (r: number, w = 14, h = 10) => new THREE.SphereGeometry(r, w, h);
-const capsule = (r: number, length: number) => new THREE.CapsuleGeometry(r, length, 4, 10, 1);
-const cyl = (top: number, bottom: number, h: number, n = 10) => new THREE.CylinderGeometry(top, bottom, h, n, 1);
-const lathe = (profile: [number, number][], n = 14) =>
+const sphere = (r: number, w = 9, h = 7) => new THREE.SphereGeometry(r, w, h);
+const capsule = (r: number, length: number) => new THREE.CapsuleGeometry(r, length, 3, 7, 1);
+const cyl = (top: number, bottom: number, h: number, n = 8) => new THREE.CylinderGeometry(top, bottom, h, n, 1);
+const lathe = (profile: [number, number][], n = 10) =>
   new THREE.LatheGeometry(
     profile.map(([r, y]) => new THREE.Vector2(r, y)),
     n,
@@ -210,6 +222,11 @@ class Cloth {
   private readonly cols: number;
   private readonly rows: number;
   private readonly point = new THREE.Vector3();
+  private readonly uv: THREE.BufferAttribute;
+  /** A second sheet a little under this one, for cloth with thickness (the cape's lighter inside) */
+  lining: THREE.Mesh | null = null;
+  private liningOffset = 0;
+  private readonly normal = new THREE.Vector3();
   private readonly clearance: Float32Array;
   private readonly ribbonTriangle = new THREE.Triangle();
   private readonly surfaceTriangle = new THREE.Triangle();
@@ -228,6 +245,7 @@ class Cloth {
       for (let c = 0; c <= cols; c++) uv.set([(c / cols) * 2 - 1, r / rows, 0], (r * (cols + 1) + c) * 3);
     }
     const uvAttribute = new THREE.BufferAttribute(uv, 3);
+    this.uv = uvAttribute;
     geometry.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(uv.length), 3));
     geometry.setAttribute("glow", new THREE.Float32BufferAttribute(new Float32Array(uv.length / 3), 1));
     (geometry.getAttribute("position") as THREE.BufferAttribute).setUsage(THREE.DynamicDrawUsage);
@@ -256,6 +274,30 @@ class Cloth {
     }
     position.needsUpdate = true;
     this.mesh.geometry.computeVertexNormals();
+    if (this.lining) {
+      // The lining follows, pushed a little under the sheet along its normals
+      const normal = this.mesh.geometry.getAttribute("normal") as THREE.BufferAttribute;
+      const under = this.lining.geometry.getAttribute("position") as THREE.BufferAttribute;
+      for (let i = 0; i < position.count; i++) {
+        this.normal.fromBufferAttribute(normal, i);
+        under.setXYZ(i, position.getX(i) - this.normal.x * this.liningOffset, position.getY(i) - this.normal.y * this.liningOffset, position.getZ(i) - this.normal.z * this.liningOffset);
+      }
+      under.needsUpdate = true;
+      this.lining.geometry.computeVertexNormals();
+    }
+  }
+
+  /** Gives the cloth a lining `offset` under it, painted by its own (u, v) paint; returns what to paint */
+  addLining(material: THREE.Material, offset: number, paint: (u: number, v: number, tones: Tones, out: THREE.Color) => number | void): Painted {
+    const geometry = this.mesh.geometry.clone();
+    (geometry.getAttribute("position") as THREE.BufferAttribute).setUsage(THREE.DynamicDrawUsage);
+    this.lining = new THREE.Mesh(geometry, material);
+    this.lining.frustumCulled = false;
+    this.liningOffset = offset;
+    return {
+      geometry,
+      ranges: [{ start: 0, count: geometry.getAttribute("position").count, paint: (_p, tones, out, i) => paint(this.uv.getX(i), this.uv.getY(i), tones, out) }],
+    };
   }
 
   /** Lift ribbons above another cloth mesh, including crossings between vertices. */
@@ -557,16 +599,16 @@ export class Avatar {
       out.copy(t.hair).lerp(t.hairShine, smoothstep(0.12, 0.3, p.y));
     };
     const headBuilder = new PartBuilder()
-      .add(sphere(0.165, 20, 14), "body", [0, 0.15, 0], [0, 0, 0], [1, 0.97, 0.98])
+      .add(sphere(0.165, 12, 9), "body", [0, 0.15, 0], [0, 0, 0], [1, 0.97, 0.98])
       .add(sphere(0.024, 10, 8), "eye", [0.056, 0.14, -0.152], [0, 0, 0], [0.8, 1.4, 0.5])
       .add(sphere(0.024, 10, 8), "eye", [-0.056, 0.14, -0.152], [0, 0, 0], [0.8, 1.4, 0.5])
       // A cap of hair, a fringe of puffs, side locks over the ears, a tuft on top
-      .add(new THREE.SphereGeometry(0.188, 20, 12, 0, TAU, 0, Math.PI * 0.62), hair, [0, 0.168, 0.012], [0.3, 0, 0])
-      .add(sphere(0.08, 12, 9), hair, [0.095, 0.215, -0.1], [0, 0, 0], [1.15, 0.95, 1])
-      .add(sphere(0.08, 12, 9), hair, [-0.095, 0.215, -0.1], [0, 0, 0], [1.15, 0.95, 1])
-      .add(sphere(0.075, 12, 9), hair, [0, 0.245, -0.115], [0, 0, 0], [1.2, 0.9, 1])
-      .add(sphere(0.06, 12, 9), hair, [0.15, 0.12, -0.02], [0, 0, 0.2], [0.8, 1.5, 0.9])
-      .add(sphere(0.06, 12, 9), hair, [-0.15, 0.12, -0.02], [0, 0, -0.2], [0.8, 1.5, 0.9])
+      .add(new THREE.SphereGeometry(0.188, 12, 8, 0, TAU, 0, Math.PI * 0.62), hair, [0, 0.168, 0.012], [0.3, 0, 0])
+      .add(sphere(0.08, 8, 6), hair, [0.095, 0.215, -0.1], [0, 0, 0], [1.15, 0.95, 1])
+      .add(sphere(0.08, 8, 6), hair, [-0.095, 0.215, -0.1], [0, 0, 0], [1.15, 0.95, 1])
+      .add(sphere(0.075, 8, 6), hair, [0, 0.245, -0.115], [0, 0, 0], [1.2, 0.9, 1])
+      .add(sphere(0.06, 8, 6), hair, [0.15, 0.12, -0.02], [0, 0, 0.2], [0.8, 1.5, 0.9])
+      .add(sphere(0.06, 8, 6), hair, [-0.15, 0.12, -0.02], [0, 0, -0.2], [0.8, 1.5, 0.9])
       .add(sphere(0.05, 10, 8), hair, [0.03, 0.33, 0.02], [0, 0, 0], [1.3, 0.8, 1.1]);
     part(this.head, headBuilder);
 
@@ -630,23 +672,25 @@ export class Avatar {
       this.chest.add(wing);
       // The panels lie along +x; the left wing's are turned round (a rotation keeps the ink hull right)
       const mirror: Vec = [0, s > 0 ? 0 : Math.PI, 0];
-      const panelPaint = (reach: number): Paint => (p, t, out) => {
-        // The outside in the cape's color, the inside lighter; the far edges catch the light
+      const panelPaint = (reach: number, length: number, rootDepth: number): Paint => (p, t, out) => {
+        // The outside in the cape's color, the inside lighter (told apart under the camber); the far edges catch the light
         const edge = smoothstep(0.55, 1, Math.hypot(p.x, p.y) / reach);
-        out.copy(p.z > 0 ? t.cape : t.capeInner).lerp(t.tip, edge * 0.7);
+        const outside = p.z - camberAt(Math.abs(p.x), p.y, length, rootDepth) > 0;
+        out.copy(outside ? t.cape : t.capeInner).lerp(t.tip, edge * 0.7);
         return edge * 0.6;
       };
+      // A rolled leading edge gives each panel a thick front
       const inner = new PartBuilder()
-        .add(panel(0.6, 0.5, 0.42, 2), panelPaint(0.75), [0, 0, 0], mirror)
-        .add(capsule(0.016, 0.52), "capeDark", [0.28 * s, 0.015, 0.004], [0, 0, Math.PI / 2 - 0.1 * s]);
+        .add(panel(0.6, 0.5, 0.42, 2, 0, s), panelPaint(0.75, 0.6, 0.5), [0, 0, 0], mirror)
+        .add(capsule(0.026, 0.52), "capeDark", [0.28 * s, 0.035, 0.012], [0, 0, Math.PI / 2 - 0.1 * s]);
       const innerMesh = part(wing, inner, wingMat);
       const wingOuter = new THREE.Object3D();
       wingOuter.position.set(0.56 * s, 0.03, 0);
       wingOuter.rotation.order = "YZX";
       wing.add(wingOuter);
       const outer = new PartBuilder()
-        .add(panel(1, 0.56, 0.06, 3, 0.1), panelPaint(1), [0, 0, 0], mirror)
-        .add(capsule(0.013, 0.45), "capeDark", [0.24 * s, 0.03, 0.004], [0, 0, Math.PI / 2 - 0.1 * s]);
+        .add(panel(1, 0.56, 0.06, 3, 0.1, s), panelPaint(1, 1, 0.56), [0, 0, 0], mirror)
+        .add(capsule(0.022, 0.45), "capeDark", [0.24 * s, 0.06, 0.012], [0, 0, Math.PI / 2 - 0.1 * s]);
       const outerMesh = part(wingOuter, outer, wingMat);
       const tip = new THREE.Object3D();
       tip.position.set(1 * s, 0.1, 0);
@@ -712,6 +756,13 @@ export class Avatar {
     );
     this.painted.push(this.cape.painted);
     this.chest.add(this.cape.mesh);
+    // A lining under the cape, in the lighter inside color: the cloth has thickness, seen at its edges and when it ripples
+    this.painted.push(
+      this.cape.addLining(clothMat, 0.03, (_u, v, t, out) => {
+        out.copy(t.capeInner).lerp(t.tip, smoothstep(0.82, 1, v) * 0.6);
+      }),
+    );
+    this.chest.add(this.cape.lining!);
 
     // Two scarf tails cut from the cape's cloth, streaming from the neck over the cape,
     // paling towards their tips like the wings' edges (and glowing there at night)

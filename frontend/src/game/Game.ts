@@ -30,7 +30,7 @@ import { INTERPOLATION_DELAY_MS, Pilot, type PilotSample } from "./pilots";
 // import { WINGTIPS, createAirplane } from "./airplane";
 import { clamp } from "./math";
 import { SpeedLines } from "./speedlines";
-import { INK, TOON_LIGHT } from "./toon";
+import { INK, TOON_LIGHT, syncToonStyle } from "./toon";
 import { LightFlock } from "./skyfx";
 import { FX, RANGES, RINGS, RUN, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveTuning } from "./tuning";
 import { ABILITY } from "./run/abilities";
@@ -1487,6 +1487,7 @@ export class Game implements RunHost {
     fxTime.value = this.elapsed;
     INK.opacity.value = FX.ink;
     INK.tint.value = FX.inkTint;
+    syncToonStyle(FX.toonFlat > 0.5, FX.toonFacet, FX.toonSoft > 0.5);
     const worldDt=dt * (this.run?.items.worldRate ?? 1);
     this.sceneryClock+=worldDt;sceneryTime.value=this.sceneryClock;
     this.adaptQuality(realDt);

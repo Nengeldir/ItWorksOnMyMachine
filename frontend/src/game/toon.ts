@@ -42,6 +42,45 @@ export interface ToonOptions {
 
 const NO_PULSE = { value: 0 };
 
+/** The pilot family's style (FX.toonFlat, toonFacet, toonSoft), shared by every toon material */
+export const TOON_STYLE = { facet: { value: 0 } };
+const toonMaterials = new Set<THREE.MeshToonMaterial>();
+let flatShading = false;
+let softBands = false;
+
+/** Five soft light bands, closer to the land's Lambert shading than the three hard ones */
+let soft: THREE.DataTexture | null = null;
+function softGradient(): THREE.DataTexture {
+  if (!soft) {
+    const steps = new Uint8Array([118, 118, 118, 255, 150, 150, 150, 255, 185, 185, 185, 255, 222, 222, 222, 255, 255, 255, 255, 255]);
+    soft = new THREE.DataTexture(steps, 5, 1, THREE.RGBAFormat);
+    soft.minFilter = THREE.NearestFilter;
+    soft.magFilter = THREE.NearestFilter;
+    soft.generateMipmaps = false;
+    soft.needsUpdate = true;
+  }
+  return soft;
+}
+
+/**
+ * Applies the ?tune style to every toon material at once (the pilot, the
+ * wardrobe's cosmetics, items, ability models): `flat` shades face by face like
+ * the land (a recompile), `facet` gives each face its own shade, `soft` swaps
+ * the three hard bands for five soft ones
+ */
+export function syncToonStyle(flat: boolean, facet: number, soft: boolean) {
+  TOON_STYLE.facet.value = facet;
+  if (flat === flatShading && soft === softBands) return;
+  flatShading = flat;
+  softBands = soft;
+  for (const material of toonMaterials) {
+    // MeshToonMaterial's types don't list flatShading, but the renderer reads it on any material (FLAT_SHADED)
+    (material as THREE.MeshToonMaterial & { flatShading: boolean }).flatShading = flat;
+    material.gradientMap = soft ? softGradient() : toonGradient();
+    material.needsUpdate = true;
+  }
+}
+
 /** A toon material with vertex colors and a rim light that wraps the silhouette */
 export function toonMaterial(options: ToonOptions = {}): THREE.MeshToonMaterial {
   const ghost = !!options.ghost;
@@ -54,6 +93,10 @@ export function toonMaterial(options: ToonOptions = {}): THREE.MeshToonMaterial 
     depthWrite: !ghost,
     emissive: options.emissive ?? 0x000000,
   });
+  (material as THREE.MeshToonMaterial & { flatShading: boolean }).flatShading = flatShading;
+  if (softBands) material.gradientMap = softGradient();
+  toonMaterials.add(material);
+  material.addEventListener("dispose", () => toonMaterials.delete(material));
   const rim = { value: options.rim ?? 0.45 };
   const rimColor = { value: new THREE.Color(options.rimColor ?? "#fff4e0") };
   material.onBeforeCompile = (shader) => {
@@ -63,9 +106,10 @@ export function toonMaterial(options: ToonOptions = {}): THREE.MeshToonMaterial 
     shader.uniforms.toonGlow = TOON_LIGHT.glow;
     shader.uniforms.toonTime = TOON_LIGHT.time;
     shader.uniforms.toonPulse = options.pulse ?? NO_PULSE;
+    shader.uniforms.toonFacet = TOON_STYLE.facet;
     shader.vertexShader = shader.vertexShader
-      .replace("void main() {", "attribute float glow;\nvarying float vGlow;\nvoid main() {")
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGlow = glow;");
+      .replace("void main() {", "attribute float glow;\nvarying float vGlow;\nvarying vec3 vFacetPos;\nvoid main() {")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGlow = glow;\nvFacetPos = position;");
     shader.fragmentShader = shader.fragmentShader
       .replace(
         "void main() {",
@@ -75,8 +119,23 @@ export function toonMaterial(options: ToonOptions = {}): THREE.MeshToonMaterial 
         uniform float toonGlow;
         uniform float toonTime;
         uniform float toonPulse;
+        uniform float toonFacet;
         varying float vGlow;
+        varying vec3 vFacetPos;
         void main() {`,
+      )
+      .replace(
+        "#include <normal_fragment_begin>",
+        `#include <normal_fragment_begin>
+        #ifdef FLAT_SHADED
+        {
+          // Every face its own shade, a little lighter or darker, like the land's painted facets
+          // (from the face's normal in the model's own space, so it never changes with the camera)
+          vec3 facetNormal = normalize(cross(dFdx(vFacetPos), dFdy(vFacetPos)));
+          float facet = fract(sin(dot(floor(facetNormal * 37.0 + 0.5), vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+          diffuseColor.rgb *= 1.0 + (facet - 0.5) * toonFacet;
+        }
+        #endif`,
       )
       .replace(
         "#include <emissivemap_fragment>",

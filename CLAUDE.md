@@ -291,6 +291,24 @@ Children of the Light; the terrain is untouched for now. Looks only (rule 6).
   instanced draw, one constant uniform slot for them). Looks only, no new draw
   call. Checked: no errors at night (`/?seed=8`, Verdant Moonlit) or with the
   wardrobe's astral wings, dawn cape, hat and shoes on the Sky child.
+- **Pass 3, shaded like the land, and thickness** (asked by the user: the pilot
+  and cosmetics shouldn't look pasted on; the back view read like a paper
+  plane). `toon.ts` keeps a registry of every toon material (pilot, wardrobe,
+  items, abilities) and `syncToonStyle` applies one style to all: `FX.toonFlat`
+  (face-by-face shading like the land, default on), `FX.toonFacet` (each face a
+  little lighter or darker, from the face normal in model space so it never
+  flickers with the camera), `FX.toonSoft` (five soft bands instead of three
+  hard). Ink default 0.35. Thickness: the wing panels are 3 cm thick and
+  cambered (the trailing edge droops, the tip curls up; the outside/inside
+  paint is told apart under the camber), a rolled leading edge, and the cape
+  has a lining 3 cm under it in the inside color (`Cloth.addLining`, one more
+  mesh, 864 tris).
+  Looked at how games with flat low-poly land draw their people (AER, Omno,
+  Grow Home, Lonely Mountains: shaded flat like the land, no outlines, facets
+  of the same size as the land's, strong simple silhouettes; Sable draws lines
+  but on everything), so: ink off by default, flat on, and the pilot's
+  primitives are chunkier (spheres 9x7, capsules 7 sides, lathes 10, panel
+  curves 3 segments) to match the land's facet size.
 
 ### 2026-10-10: Rebased PR #46 onto current main, without merge commits (Claude)
 
