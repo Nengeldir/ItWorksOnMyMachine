@@ -5,8 +5,10 @@ import pytest
 
 from rooms import (
     COUNTDOWN_MS,
+    FINISH_GRACE_MS,
     PLAYER_TIMEOUT_MS,
     RACE_TIMEOUT_MS,
+    RACER_DROPPED_MS,
     Listener,
     Room,
     RoomError,
@@ -52,6 +54,8 @@ def test_race_runs_from_countdown_to_results():
     room = Room("ABC", now=T0)
     alice = room.join("u1", "Alice", now=T0)
     bob = room.join("u2", "Bob", now=T0)
+    for player in (alice, bob):
+        player.listeners.add(Listener())
 
     room.start(now=T0)
     assert room.phase == "countdown"
@@ -83,6 +87,7 @@ def test_finish_faster_than_race_clock_is_rejected():
 def test_late_joiners_spectate_and_race_times_out():
     room = Room("ABC", now=T0)
     alice = room.join("u1", "Alice", now=T0)
+    alice.listeners.add(Listener())
     room.start(now=T0)
     late = room.join("u2", "Late", now=T0 + 1)
     room.tick(T0 + COUNTDOWN_MS)
@@ -144,3 +149,81 @@ def test_rejoin_resumes_a_disconnected_player():
     other_tab = room.join("u1", "Alice", now=T0 + 2000)
     assert other_tab is not first
     assert len(room.players) == 2
+
+
+def racing_room(*names: str) -> tuple[Room, list]:
+    """A room whose pilots all have a stream open, with the race just under way"""
+    room = Room("ABC", now=T0)
+    players = [room.join(f"u{i}", name, now=T0) for i, name in enumerate(names)]
+    for player in players:
+        player.listeners.add(Listener())
+    room.start(now=T0)
+    room.tick(T0 + COUNTDOWN_MS)
+    return room, players
+
+
+def test_first_pilot_in_is_host_and_it_passes_on():
+    room = Room("ABC", now=T0)
+    alice = room.join("u1", "Alice", now=T0)
+    bob = room.join("u2", "Bob", now=T0)
+    carol = room.join("u3", "Carol", now=T0)
+    carol.listeners.add(Listener())
+    assert room.info(T0)["host"] == alice.id
+
+    # Bob has no stream open, so Carol is the one who can act as host
+    room.leave(alice, now=T0)
+    assert room.host_id == carol.id
+    room.leave(carol, now=T0)
+    assert room.host_id == bob.id
+    room.leave(bob, now=T0)
+    assert room.host_id is None
+    assert room.join("u4", "Dave", now=T0).id == room.host_id
+
+
+def test_only_the_host_restarts_a_running_race():
+    room, [alice, bob] = racing_room("Alice", "Bob")
+    start = room.start_at
+    room.finish(alice, 40_000, now=start + 40_000)
+
+    with pytest.raises(RoomError):
+        room.restart(bob, now=start + 41_000)
+    room.restart(alice, now=start + 41_000)
+    assert room.phase == "countdown"
+    assert room.start_at == start + 41_000 + COUNTDOWN_MS
+    assert room.results == [] and alice.finish_ms is None
+    assert alice.racing and bob.racing
+
+    # From the lobby it starts the next race like anyone's Start
+    room.tick(room.start_at)
+    room.finish(alice, 30_000, now=room.start_at + 30_000)
+    room.finish(bob, 31_000, now=room.start_at + 31_000)
+    assert room.phase == "lobby"
+    room.restart(alice, now=room.start_at + 40_000)
+    assert room.phase == "countdown"
+
+
+def test_race_is_called_a_while_after_the_first_finish():
+    room, [alice, bob] = racing_room("Alice", "Bob")
+    start = room.start_at
+    room.finish(alice, 40_000, now=start + 40_000)
+
+    room.tick(start + 40_000 + FINISH_GRACE_MS)
+    assert room.phase == "racing"
+    room.tick(start + 40_000 + FINISH_GRACE_MS + 1)
+    assert room.phase == "lobby"
+    assert not bob.racing and [r["name"] for r in room.results] == ["Alice"]
+
+
+def test_a_dropped_racer_does_not_hold_the_race_up():
+    room, [alice, bob] = racing_room("Alice", "Bob")
+    start = room.start_at
+    room.finish(alice, 40_000, now=start + 40_000)
+
+    # Bob's stream closes: a blip is forgiven, silence is not
+    bob.listeners.clear()
+    bob.last_seen = start + 41_000
+    room.tick(start + 41_000 + RACER_DROPPED_MS)
+    assert room.phase == "racing"
+    room.tick(start + 41_000 + RACER_DROPPED_MS + 1)
+    assert room.phase == "lobby"
+    assert bob.id in room.players  # still in the room, for the next race

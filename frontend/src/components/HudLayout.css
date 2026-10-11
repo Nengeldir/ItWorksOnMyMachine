@@ -176,3 +176,5 @@ html.touch .game.race-layout.left-handed .touch-button[aria-label="Brake"] { gri
   html.touch .game.race-layout.left-handed .topbar { left: var(--hud-left); }
   html.touch .game.race-layout.left-handed .topbar-end { left: auto; right: 0; }
 }
+/* The room's roster hangs under the start pill */
+.game.race-layout .room-roster { top: calc(max(.5rem, env(safe-area-inset-top)) + 5.2rem); max-height: calc(100% - 14rem); }

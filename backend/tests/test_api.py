@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 
 import app as app_module
 from app import app, rooms
-from rooms import COUNTDOWN_MS
+from rooms import COUNTDOWN_MS, Listener
 
 client = TestClient(app, headers={"X-Flight-Rules": "speed-control-v3"})
 
@@ -42,6 +42,8 @@ def test_room_flow():
 
     assert client.post("/api/rooms/RACE1/start", json={"token": token}).status_code == 204
     room = rooms.rooms["RACE1"]
+    # A racer with no stream open counts as dropped, so give this one a stream
+    room.players[joined["id"]].listeners.add(Listener())
     room.start_at -= COUNTDOWN_MS + 60_000  # pretend the race has been running for a minute
     room.tick(room.start_at + COUNTDOWN_MS + 60_000)
 
@@ -53,6 +55,14 @@ def test_room_flow():
 
     board = client.get("/api/leaderboard", params={"seed": room.seed, "client_id": "c1"}).json()
     assert board[0]["name"] == "Ace Pilot" and board[0]["is_me"]
+
+    # The first pilot in is the host and may restart; anyone else may not
+    assert client.get("/api/rooms/RACE1").json()["host"] == joined["id"]
+    guest = client.post("/api/rooms/RACE1/join", json={"client_id": "c2"}).json()
+    assert client.post("/api/rooms/RACE1/restart", json={"token": guest["token"]}).status_code == 409
+    assert client.post("/api/rooms/RACE1/restart", json={"token": token}).status_code == 204
+    assert client.get("/api/rooms/RACE1").json()["phase"] == "countdown"
+    assert client.post("/api/rooms/RACE1/leave", json={"token": guest["token"]}).status_code == 204
 
     assert client.post("/api/rooms/RACE1/leave", json={"token": token}).status_code == 204
     assert client.get("/api/rooms/RACE1").json()["players"] == []

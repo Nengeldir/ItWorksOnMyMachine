@@ -265,6 +265,12 @@ Trackmania. That keeps the backend small, and it works over plain HTTP:
   replace unsent ones.
 - **Up:** each client POSTs its position, rotation, speed and ring count every
   66 ms, skipping a send while the previous one is still in flight.
+- **Ending a race:** it ends when every racer has finished, 60 s after the
+  first finish, or 240 s after the start. A racer whose connection is gone
+  for 5 s is no longer waited for, and is removed from the room after 15 s.
+- **The host:** the first pilot in the room (it passes on when they leave).
+  The host can restart a running or finished race for everyone (Restart race
+  while paused, or Enter once finished). The lobby lists the pilots present.
 - **Smooth remote players:** clients draw others 120 ms in the past and
   interpolate between snapshots, extrapolating briefly when one is late.
 - **Same start for everyone:** clients estimate the server clock from a few
@@ -505,6 +511,7 @@ All routes start with `/api`; interactive docs are at `/api/docs`.
 | `GET`  | `/api/rooms/{code}/stream` | SSE: room events and position snapshots                  |
 | `POST` | `/api/rooms/{code}/state`  | Your position, rotation, speed and rings passed          |
 | `POST` | `/api/rooms/{code}/start`  | Start a race (5 s countdown)                             |
+| `POST` | `/api/rooms/{code}/restart`| Host only: call the race off, new countdown for everyone |
 | `POST` | `/api/rooms/{code}/map`    | Another map: `seed` if given, else random (lobby only)   |
 | `POST` | `/api/rooms/{code}/finish` | Report your finish time and ghost                        |
 | `POST` | `/api/rooms/{code}/leave`  | Leave the room                                           |

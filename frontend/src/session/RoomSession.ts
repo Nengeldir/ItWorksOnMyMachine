@@ -119,8 +119,9 @@ export class RoomSession {
       const slot = info.players.filter((p) => p.racing).findIndex((p) => p.id === selfId);
       game.startCountdown(info.start_at, Math.max(0, slot));
       this.store.set({ lastPlace: null });
-    } else if (!raceOn && this.inRace) {
-      // Race over (everyone finished or time ran out): back to free flight where you are
+    } else if (this.inRace && (!raceOn || !me?.racing)) {
+      // Race over (everyone finished, it was called, or time ran out), or the server lost us and we
+      // came back as a new pilot who sits this one out: back to free flight where you are
       this.inRace = false;
       game.freeFlight(false);
     }
@@ -161,6 +162,10 @@ export class RoomSession {
 
   start() {
     this.client?.start().catch((e: Error) => this.flash(e.message));
+  }
+
+  restart() {
+    this.client?.restart().catch((e: Error) => this.flash(e.message));
   }
 
   newMap(seed?: number) {

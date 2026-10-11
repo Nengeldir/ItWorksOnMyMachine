@@ -454,3 +454,6 @@ pyrightconfig.json
 
 ### Game data (SQLite leaderboards when running the backend locally) ###
 backend/data/
+
+### Local gameplay recordings ###
+footage/

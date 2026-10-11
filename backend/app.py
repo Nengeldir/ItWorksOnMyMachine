@@ -218,6 +218,15 @@ async def start_race(code: str, body: TokenRequest):
         raise room_error(e)
 
 
+@app.post("/api/rooms/{code}/restart", status_code=status.HTTP_204_NO_CONTENT)
+async def restart_race(code: str, body: TokenRequest):
+    room, player = room_player(code, body.token)
+    try:
+        room.restart(player)
+    except RoomError as e:
+        raise room_error(e)
+
+
 @app.post("/api/rooms/{code}/map", status_code=status.HTTP_204_NO_CONTENT)
 async def new_map(code: str, body: MapRequest):
     room, _ = room_player(code, body.token)
