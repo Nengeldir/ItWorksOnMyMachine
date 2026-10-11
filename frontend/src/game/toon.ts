@@ -43,7 +43,7 @@ export interface ToonOptions {
 const NO_PULSE = { value: 0 };
 
 /** The pilot family's style (FX.toonFlat, toonFacet, toonSoft), shared by every toon material */
-export const TOON_STYLE = { facet: { value: 0 } };
+export const TOON_STYLE = { facet: { value: 0 }, axis: { value: 0 } };
 const toonMaterials = new Set<THREE.MeshToonMaterial>();
 let flatShading = false;
 let softBands = false;
@@ -68,8 +68,9 @@ function softGradient(): THREE.DataTexture {
  * the land (a recompile), `facet` gives each face its own shade, `soft` swaps
  * the three hard bands for five soft ones
  */
-export function syncToonStyle(flat: boolean, facet: number, soft: boolean) {
+export function syncToonStyle(flat: boolean, facet: number, soft: boolean, axis = 0) {
   TOON_STYLE.facet.value = facet;
+  TOON_STYLE.axis.value = axis;
   if (flat === flatShading && soft === softBands) return;
   flatShading = flat;
   softBands = soft;
@@ -107,6 +108,7 @@ export function toonMaterial(options: ToonOptions = {}): THREE.MeshToonMaterial 
     shader.uniforms.toonTime = TOON_LIGHT.time;
     shader.uniforms.toonPulse = options.pulse ?? NO_PULSE;
     shader.uniforms.toonFacet = TOON_STYLE.facet;
+    shader.uniforms.toonAxis = TOON_STYLE.axis;
     shader.vertexShader = shader.vertexShader
       .replace("void main() {", "attribute float glow;\nvarying float vGlow;\nvarying vec3 vFacetPos;\nvoid main() {")
       .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGlow = glow;\nvFacetPos = position;");
@@ -120,6 +122,7 @@ export function toonMaterial(options: ToonOptions = {}): THREE.MeshToonMaterial 
         uniform float toonTime;
         uniform float toonPulse;
         uniform float toonFacet;
+        uniform float toonAxis;
         varying float vGlow;
         varying vec3 vFacetPos;
         void main() {`,
@@ -145,9 +148,15 @@ export function toonMaterial(options: ToonOptions = {}): THREE.MeshToonMaterial 
       .replace(
         "#include <opaque_fragment>",
         `{
+          // Monument Valley's block shading (toonAxis): every face takes one of four tones by the way it
+          // faces in the world (top, the two sides, the underside), whatever the sun does
+          vec3 worldNormal = inverseTransformDirection(normal, viewMatrix);
+          float side = worldNormal.x * 0.7 + worldNormal.z * 0.3;
+          float tone = worldNormal.y > 0.45 ? 1.0 : worldNormal.y < -0.45 ? 0.58 : side > 0.0 ? 0.86 : 0.72;
+          outgoingLight = mix(outgoingLight, diffuseColor.rgb * tone + totalEmissiveRadiance, toonAxis);
           float facing = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
           float rimBand = smoothstep(0.55, 0.75, 1.0 - facing);
-          outgoingLight += rimColor * toonRimColor * rimBand * rimStrength;
+          outgoingLight += rimColor * toonRimColor * rimBand * rimStrength * (1.0 - toonAxis);
         }
         #include <opaque_fragment>`,
       );

@@ -81,7 +81,8 @@ test("stopping emission and resetting do not draw a particle bridge after a tele
   effects.update(.1, 60, velocity, 0, false);
   assert.equal(emitted.length, 0);
   effects.reset();
-  effects.update(.1, 60, velocity, 0);
+  // Sparse motes (the Monument Valley preset) can take a few frames before one is born
+  for (let i = 0; i < 5; i++) effects.update(.1, 60, velocity, 0);
   assert.ok(emitted.length > 0);
   assert.ok(emitted.every(p => Math.abs(p.position.z - 500) <= .16));
   emitted.length = 0;

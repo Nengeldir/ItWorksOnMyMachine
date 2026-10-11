@@ -326,6 +326,22 @@ Children of the Light; the terrain is untouched for now. Looks only (rule 6).
   secondaries and four coverts on the arm, five primaries and three coverts
   on the hand), the wardrobe's wing models still replace them. The wardrobe's
   and the items' ink is the pilot's tinted ink too, so `FX.ink` governs all of it.
+- **Pass 5, towards Monument Valley** (asked: match Monument Valley as much as
+  possible, on this branch only): `FX.pilotLook` 1 builds an Ida-like figure
+  instead of the Sky child (`AvatarOptions.look`): a plain white dress cone,
+  a bodice, a faceless pale head under a tall pointed hat with a band in the
+  cape's color, stubby white arms, two folded paper pennants per wing
+  (`pennant()`, flat, two-toned), a flat cape with a pale hem, no scarf or
+  mantle, no hair; the Sky child stays behind `pilotLook` 0 (reload to
+  rebuild). `FX.toonAxis` (1) is Monument Valley's block shading in
+  `toonMaterial`: one of four tones per face by its world direction (top,
+  two sides, underside), the rim light off with it. The theme color turns
+  pastel for the figure (saturation 0.4 to 0.55, lightness 0.66). A minimal
+  VFX preset: no cape ribbon, thinner dimmer wingtip ribbons, fewer motes and
+  dust, no flock, half the wisps and speed lines, bloom 0.35 / 0.3 / 0.3.
+  Research: ustwo's rules are restraint ("justify every polygon"), isometric
+  clean forms, a small pastel palette per screen judged as a color script,
+  basic lighting, every screen a picture; the land is the team's and stays.
 
 ### 2026-10-10: Rebased PR #46 onto current main, without merge commits (Claude)
 

@@ -806,7 +806,9 @@ export class Game implements RunHost {
    */
   private themePilot() {
     themeAccent.set(this.world.palette.accent).getHSL(themeHsl);
-    themeAccent.setHSL(themeHsl.h, Math.min(0.7, Math.max(0.55, themeHsl.s)), 0.46);
+    // The Monument Valley figure wears pastel: paler and softer than the Sky child's cloth
+    if (FX.pilotLook > 0.5) themeAccent.setHSL(themeHsl.h, Math.min(0.55, Math.max(0.4, themeHsl.s * 0.8)), 0.66);
+    else themeAccent.setHSL(themeHsl.h, Math.min(0.7, Math.max(0.55, themeHsl.s)), 0.46);
     const themed = themeColor.set(this.baseColor).lerp(themeAccent, FX.pilotTheme).getStyle();
     this.avatar.setColor(themed);
     this.fx.setColor(themed);
@@ -1507,7 +1509,7 @@ export class Game implements RunHost {
     fxTime.value = this.elapsed;
     INK.opacity.value = FX.ink;
     INK.tint.value = FX.inkTint;
-    syncToonStyle(FX.toonFlat > 0.5, FX.toonFacet, FX.toonSoft > 0.5);
+    syncToonStyle(FX.toonFlat > 0.5, FX.toonFacet, FX.toonSoft > 0.5, FX.toonAxis);
     const worldDt=dt * (this.run?.items.worldRate ?? 1);
     this.sceneryClock+=worldDt;sceneryTime.value=this.sceneryClock;
     this.adaptQuality(realDt);

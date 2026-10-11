@@ -41,6 +41,8 @@ interface Tones {
   wingDark: THREE.Color; // their roots and bones
   wingTip: THREE.Color; // their tips, pale (they glow at night)
   scarf: THREE.Color; // the scarf, the palest of the set
+  dress: THREE.Color; // Monument Valley: the figure's white dress and hat
+  dressShade: THREE.Color;
 }
 
 type ToneName = keyof Tones;
@@ -74,6 +76,8 @@ function tonesFor(color: string): Tones {
     wingDark: new THREE.Color().setHSL((hsl.h + 0.05) % 1, Math.min(0.7, Math.max(0.45, hsl.s * 0.9)), 0.44),
     wingTip: new THREE.Color().setHSL((hsl.h + 0.08) % 1, 0.5, 0.78).lerp(cream, 0.35),
     scarf: new THREE.Color().setHSL((hsl.h + 1 - 0.06) % 1, 0.45, 0.82),
+    dress: new THREE.Color("#f7f2ea"),
+    dressShade: new THREE.Color("#e4dccf"),
   };
 }
 
@@ -158,6 +162,17 @@ function applyPaint({ geometry, ranges }: Painted, tones: Tones) {
   }
   color.needsUpdate = true;
   glow.needsUpdate = true;
+}
+
+/** A flat four-cornered paper pennant with a little thickness, in the x-y plane (Monument Valley's wings) */
+function pennant(corners: [number, number][]): THREE.BufferGeometry {
+  const shape = new THREE.Shape();
+  corners.forEach(([x, y], i) => (i === 0 ? shape.moveTo(x, y) : shape.lineTo(x, y)));
+  shape.closePath();
+  const geometry = new THREE.ExtrudeGeometry(shape, { depth: 0.02, bevelEnabled: false });
+  geometry.translate(0, 0, -0.01);
+  geometry.computeVertexNormals();
+  return geometry;
 }
 
 /**
@@ -359,6 +374,8 @@ class Cloth {
 
 export interface AvatarOptions {
   ghost?: boolean;
+  /** "monument": the Monument Valley figure (default from FX.pilotLook); "sky": the Sky child */
+  look?: "sky" | "monument";
 }
 
 interface Side {
@@ -500,6 +517,7 @@ export class Avatar {
     this.ghost = !!options.ghost;
     this.tones = tonesFor(color);
     const ghost = this.ghost;
+    const monument = (options.look ?? (FX.pilotLook > 0.5 ? "monument" : "sky")) === "monument";
     const pulse = this.pulse;
     const skinMat = this.material(toonMaterial({ ghost, pulse }));
     const clothMat = this.material(toonMaterial({ ghost, side: THREE.DoubleSide, rim: 0.3, pulse }));
@@ -536,53 +554,84 @@ export class Avatar {
     // Pelvis: the bell of the tunic, wide and plain like a Sky child's
     this.pelvis.position.set(0, 0.74, 0);
     skeleton.add(this.pelvis);
-    part(
-      this.pelvis,
-      new PartBuilder().add(
-        lathe([
-          [0.001, 0.07],
-          [0.1, 0.07],
-          [0.118, -0.02],
-          [0.138, -0.11],
-          [0.142, -0.135],
-          [0.001, -0.135],
-        ]),
-        (p, t, out) => {
-          out.copy(t.tunic).lerp(t.tunicShade, p.y < -0.125 ? 0.6 : 0);
-        },
-        [0, 0, 0],
-        [0, 0, 0],
-        [1, 1, 0.82],
-      ),
-    );
+    if (monument) {
+      // Monument Valley: a plain white dress, a cone from the waist to the hem, as Ida wears
+      part(
+        this.pelvis,
+        new PartBuilder().add(
+          lathe([
+            [0.001, 0.08],
+            [0.09, 0.08],
+            [0.16, -0.4],
+            [0.001, -0.4],
+          ], 8),
+          (p, t, out) => {
+            out.copy(t.dress).lerp(t.dressShade, p.y < -0.39 ? 1 : 0);
+          },
+          [0, 0, 0],
+          [0, 0, 0],
+          [1, 1, 0.9],
+        ),
+      );
+    } else {
+      part(
+        this.pelvis,
+        new PartBuilder().add(
+          lathe([
+            [0.001, 0.07],
+            [0.1, 0.07],
+            [0.118, -0.02],
+            [0.138, -0.11],
+            [0.142, -0.135],
+            [0.001, -0.135],
+          ]),
+          (p, t, out) => {
+            out.copy(t.tunic).lerp(t.tunicShade, p.y < -0.125 ? 0.6 : 0);
+          },
+          [0, 0, 0],
+          [0, 0, 0],
+          [1, 1, 0.82],
+        ),
+      );
+    }
 
     // Chest: the tunic, a soft collar, the dark neck, round shoulders
     this.chest.position.set(0, 0.06, 0);
     this.pelvis.add(this.chest);
-    part(
-      this.chest,
-      new PartBuilder()
-        .add(
-          lathe([
-            [0.001, -0.02],
-            [0.1, -0.02],
-            [0.088, 0.06],
-            [0.102, 0.15],
-            [0.114, 0.21],
-            [0.08, 0.26],
-            [0.03, 0.285],
-            [0.001, 0.285],
-          ]),
-          "tunic",
-          [0, 0, 0],
-          [0, 0, 0],
-          [1, 1, 0.8],
-        )
-        .add(new THREE.TorusGeometry(0.05, 0.018, 6, 16), "tunicShade", [0, 0.27, 0], [Math.PI / 2, 0, 0], [1, 1, 0.9])
-        .add(cyl(0.034, 0.038, 0.07, 10), "body", [0, 0.3, 0])
-        .add(sphere(0.055, 10, 8), "tunic", [0.1, 0.22, 0], [0, 0, 0], [1, 0.85, 0.85])
-        .add(sphere(0.055, 10, 8), "tunic", [-0.1, 0.22, 0], [0, 0, 0], [1, 0.85, 0.85]),
-    );
+    if (monument) {
+      // The bodice: the same white, narrowing to the neck
+      part(
+        this.chest,
+        new PartBuilder()
+          .add(lathe([[0.001, -0.02], [0.092, -0.02], [0.08, 0.14], [0.06, 0.25], [0.03, 0.285], [0.001, 0.285]], 8), "dress", [0, 0, 0], [0, 0, 0], [1, 1, 0.85])
+          .add(cyl(0.03, 0.034, 0.07, 8), "dress", [0, 0.3, 0]),
+      );
+    } else {
+      part(
+        this.chest,
+        new PartBuilder()
+          .add(
+            lathe([
+              [0.001, -0.02],
+              [0.1, -0.02],
+              [0.088, 0.06],
+              [0.102, 0.15],
+              [0.114, 0.21],
+              [0.08, 0.26],
+              [0.03, 0.285],
+              [0.001, 0.285],
+            ]),
+            "tunic",
+            [0, 0, 0],
+            [0, 0, 0],
+            [1, 1, 0.8],
+          )
+          .add(new THREE.TorusGeometry(0.05, 0.018, 6, 16), "tunicShade", [0, 0.27, 0], [Math.PI / 2, 0, 0], [1, 1, 0.9])
+          .add(cyl(0.034, 0.038, 0.07, 10), "body", [0, 0.3, 0])
+          .add(sphere(0.055, 10, 8), "tunic", [0.1, 0.22, 0], [0, 0, 0], [1, 0.85, 0.85])
+          .add(sphere(0.055, 10, 8), "tunic", [-0.1, 0.22, 0], [0, 0, 0], [1, 0.85, 0.85]),
+      );
+    }
 
     // Head: the dark face of a Sky child with two lights for eyes, under fluffy white hair
     this.head.position.set(0, 0.32, 0);
@@ -590,7 +639,13 @@ export class Avatar {
     const hair: Paint = (p, t, out) => {
       out.copy(t.hair).lerp(t.hairShine, smoothstep(0.12, 0.3, p.y));
     };
-    const headBuilder = new PartBuilder()
+    const headBuilder = monument
+      ? // Monument Valley: a plain pale head with no face, under a tall pointed hat with a band in the cape's color
+        new PartBuilder()
+          .add(sphere(0.13, 10, 8), "dress", [0, 0.13, 0])
+          .add(new THREE.ConeGeometry(0.15, 0.5, 8), "dress", [0, 0.44, 0])
+          .add(new THREE.CylinderGeometry(0.152, 0.158, 0.04, 8, 1, true), "cape", [0, 0.215, 0])
+      : new PartBuilder()
       .add(sphere(0.165, 12, 9), "body", [0, 0.15, 0], [0, 0, 0], [1, 0.97, 0.98])
       .add(sphere(0.024, 10, 8), "eye", [0.056, 0.14, -0.152], [0, 0, 0], [0.8, 1.4, 0.5])
       .add(sphere(0.024, 10, 8), "eye", [-0.056, 0.14, -0.152], [0, 0, 0], [0.8, 1.4, 0.5])
@@ -614,8 +669,10 @@ export class Avatar {
       const joint = new THREE.Object3D();
       joint.position.set(...ponyAt[i]);
       parent.add(joint);
-      const builder = new PartBuilder().add(sphere(0.065 - i * 0.018, 10, 8), hair, [0, -0.065, 0], [0, 0, 0], [1, 1.5, 0.9]);
-      part(joint, builder);
+      if (!monument) {
+        const builder = new PartBuilder().add(sphere(0.065 - i * 0.018, 10, 8), hair, [0, -0.065, 0], [0, 0, 0], [1, 1.5, 0.9]);
+        part(joint, builder);
+      }
       this.pony.push(joint);
       parent = joint;
     }
@@ -627,18 +684,22 @@ export class Avatar {
       this.chest.add(shoulder);
       part(
         shoulder,
-        new PartBuilder()
-          .add(sphere(0.052, 10, 8), "tunic", [0, -0.02, 0])
-          .add(capsule(0.04, 0.11), "tunic", [0, -0.085, 0]),
+        monument
+          ? new PartBuilder().add(capsule(0.03, 0.14), "dress", [0, -0.09, 0])
+          : new PartBuilder()
+              .add(sphere(0.052, 10, 8), "tunic", [0, -0.02, 0])
+              .add(capsule(0.04, 0.11), "tunic", [0, -0.085, 0]),
       );
       const elbow = new THREE.Object3D();
       elbow.position.set(0, -0.19, 0);
       shoulder.add(elbow);
       part(
         elbow,
-        new PartBuilder()
-          .add(capsule(0.03, 0.13), "body", [0, -0.08, 0])
-          .add(sphere(0.036, 10, 8), "body", [0, -0.19, 0], [0, 0, 0], [0.75, 1.15, 0.45]),
+        monument
+          ? new PartBuilder().add(capsule(0.026, 0.14), "dress", [0, -0.09, 0])
+          : new PartBuilder()
+              .add(capsule(0.03, 0.13), "body", [0, -0.08, 0])
+              .add(sphere(0.036, 10, 8), "body", [0, -0.19, 0], [0, 0, 0], [0.75, 1.15, 0.45]),
       );
 
       const hip = new THREE.Object3D();
@@ -656,57 +717,79 @@ export class Avatar {
           .add(capsule(0.034, 0.08), "body", [0, -0.3, -0.012], [0.25, 0, 0]),
       ));
 
-      // Wings: layered feathers in the wing tones (coverts over secondaries on the arm,
-      // primaries on the hand), each a thick plate with a gold quill and a drooping tip;
-      // the wardrobe's wings hide them and hang their own models on the same joints
+      // Wings. Monument Valley: two folded paper pennants per side (a wide quad on the arm, a
+      // long triangle on the hand), flat and two-toned. Sky: layered feathers in the wing
+      // tones (coverts over secondaries on the arm, primaries on the hand), each a thick plate
+      // with a gold quill and a drooping tip. The wardrobe's wings hide either and hang their
+      // own models on the same joints
       const wing = new THREE.Object3D();
       wing.position.set(0.05 * s, 0.17, 0.13);
       wing.rotation.order = "YZX";
       this.chest.add(wing);
-      const featherPaint = (length: number): Paint => (p, t, out) => {
-        // Darker at the root, the wing tone along the vane, pale at the tip (which glows at night)
-        const d = Math.hypot(p.x, p.y) / length;
-        out.copy(t.wingDark).lerp(t.wing, smoothstep(0, 0.35, d)).lerp(t.wingTip, smoothstep(0.55, 1, d));
-        return smoothstep(0.7, 1, d) * 0.5;
-      };
-      // A feather at `at`, pointing along `angle`, with its quill on top
-      const plume = (builder: PartBuilder, length: number, width: number, at: Vec, angle: number, quill: boolean) => {
-        builder.add(feather(length, width), featherPaint(length), at, [0, 0, angle]);
-        if (quill) {
-          builder.add(capsule(0.009, length * 0.72), "trim", [at[0] + Math.cos(angle) * length * 0.42, at[1] + Math.sin(angle) * length * 0.42, at[2] + 0.015], [0, 0, angle - Math.PI / 2]);
-        }
-      };
-      const turned = (a: number) => (s > 0 ? a : Math.PI - a);
-      // The arm: a rolled leading edge, five secondaries hanging back from it, four coverts over their roots
-      const inner = new PartBuilder().add(capsule(0.024, 0.5), "wingDark", [0.27 * s, 0.03, 0.01], [0, 0, Math.PI / 2 - 0.12 * s]);
-      for (let i = 0; i < 5; i++) {
-        plume(inner, 0.52 + i * 0.03, 0.15, [(0.06 + i * 0.1) * s, 0.02 + i * 0.008, 0.004 * i], turned(-0.85 - i * 0.16), true);
-      }
-      for (let i = 0; i < 4; i++) {
-        plume(inner, 0.26, 0.11, [(0.1 + i * 0.1) * s, 0.03, 0.03 + 0.003 * i], turned(-0.95 - i * 0.18), false);
-      }
-      const innerMesh = part(wing, inner, wingMat);
       const wingOuter = new THREE.Object3D();
-      wingOuter.position.set(0.54 * s, 0.07, 0);
       wingOuter.rotation.order = "YZX";
       wing.add(wingOuter);
-      // The hand: five long primaries fanning from the wrist, three coverts over them
-      const outer = new PartBuilder().add(capsule(0.018, 0.3), "wingDark", [0.15 * s, -0.02, 0.01], [0, 0, Math.PI / 2 + 0.25 * s]);
-      const primaries = 5;
-      for (let i = 0; i < primaries; i++) {
-        plume(outer, 0.98 - i * 0.1, 0.17, [(0.05 + i * 0.045) * s, -0.02 * i, 0.004 * i], turned(0.12 - i * 0.3), true);
-      }
-      for (let i = 0; i < 3; i++) {
-        plume(outer, 0.3, 0.12, [(0.06 + i * 0.05) * s, -0.01 - 0.02 * i, 0.03], turned(-0.1 - i * 0.35), false);
-      }
-      const outerMesh = part(wingOuter, outer, wingMat);
       const tip = new THREE.Object3D();
-      tip.position.set((0.05 + 0.98 * Math.cos(0.12)) * s, 0.98 * Math.sin(0.12), 0);
-      wingOuter.add(tip);
-      const last = 0.12 - (primaries - 1) * 0.3;
-      const lastLength = 0.98 - (primaries - 1) * 0.1;
       const trail = new THREE.Object3D();
-      trail.position.set((0.05 + (primaries - 1) * 0.045 + lastLength * Math.cos(last)) * s, -0.02 * (primaries - 1) + lastLength * Math.sin(last), 0);
+      let innerMesh: THREE.Mesh;
+      let outerMesh: THREE.Mesh;
+      if (monument) {
+        const mirror: Vec = [0, s > 0 ? 0 : Math.PI, 0];
+        const pennantPaint: Paint = (p, t, out) => {
+          out.copy(p.z > 0 ? t.wing : t.wingDark);
+        };
+        const inner = new PartBuilder()
+          .add(pennant([[0, 0.04], [0.56, 0.02], [0.5, -0.4], [0, -0.46]]), pennantPaint, [0, 0, 0], mirror)
+          .add(capsule(0.016, 0.54), "wingDark", [0.28 * s, 0.03, 0.012], [0, 0, Math.PI / 2 - 0.08 * s]);
+        innerMesh = part(wing, inner, wingMat);
+        wingOuter.position.set(0.52 * s, 0.03, 0);
+        const outer = new PartBuilder()
+          .add(pennant([[0, 0.04], [0.98, 0.1], [0.3, -0.5], [0, -0.4]]), pennantPaint, [0, 0, 0], mirror)
+          .add(capsule(0.013, 0.5), "wingDark", [0.26 * s, 0.06, 0.012], [0, 0, Math.PI / 2 - 0.1 * s]);
+        outerMesh = part(wingOuter, outer, wingMat);
+        tip.position.set(0.98 * s, 0.1, 0);
+        trail.position.set(0.3 * s, -0.5, 0);
+      } else {
+        const featherPaint = (length: number): Paint => (p, t, out) => {
+          // Darker at the root, the wing tone along the vane, pale at the tip (which glows at night)
+          const d = Math.hypot(p.x, p.y) / length;
+          out.copy(t.wingDark).lerp(t.wing, smoothstep(0, 0.35, d)).lerp(t.wingTip, smoothstep(0.55, 1, d));
+          return smoothstep(0.7, 1, d) * 0.5;
+        };
+        // A feather at `at`, pointing along `angle`, with its quill on top
+        const plume = (builder: PartBuilder, length: number, width: number, at: Vec, angle: number, quill: boolean) => {
+          builder.add(feather(length, width), featherPaint(length), at, [0, 0, angle]);
+          if (quill) {
+            builder.add(capsule(0.009, length * 0.72), "trim", [at[0] + Math.cos(angle) * length * 0.42, at[1] + Math.sin(angle) * length * 0.42, at[2] + 0.015], [0, 0, angle - Math.PI / 2]);
+          }
+        };
+        const turned = (a: number) => (s > 0 ? a : Math.PI - a);
+        // The arm: a rolled leading edge, five secondaries hanging back from it, four coverts over their roots
+        const inner = new PartBuilder().add(capsule(0.024, 0.5), "wingDark", [0.27 * s, 0.03, 0.01], [0, 0, Math.PI / 2 - 0.12 * s]);
+        for (let i = 0; i < 5; i++) {
+          plume(inner, 0.52 + i * 0.03, 0.15, [(0.06 + i * 0.1) * s, 0.02 + i * 0.008, 0.004 * i], turned(-0.85 - i * 0.16), true);
+        }
+        for (let i = 0; i < 4; i++) {
+          plume(inner, 0.26, 0.11, [(0.1 + i * 0.1) * s, 0.03, 0.03 + 0.003 * i], turned(-0.95 - i * 0.18), false);
+        }
+        innerMesh = part(wing, inner, wingMat);
+        wingOuter.position.set(0.54 * s, 0.07, 0);
+        // The hand: five long primaries fanning from the wrist, three coverts over them
+        const outer = new PartBuilder().add(capsule(0.018, 0.3), "wingDark", [0.15 * s, -0.02, 0.01], [0, 0, Math.PI / 2 + 0.25 * s]);
+        const primaries = 5;
+        for (let i = 0; i < primaries; i++) {
+          plume(outer, 0.98 - i * 0.1, 0.17, [(0.05 + i * 0.045) * s, -0.02 * i, 0.004 * i], turned(0.12 - i * 0.3), true);
+        }
+        for (let i = 0; i < 3; i++) {
+          plume(outer, 0.3, 0.12, [(0.06 + i * 0.05) * s, -0.01 - 0.02 * i, 0.03], turned(-0.1 - i * 0.35), false);
+        }
+        outerMesh = part(wingOuter, outer, wingMat);
+        tip.position.set((0.05 + 0.98 * Math.cos(0.12)) * s, 0.98 * Math.sin(0.12), 0);
+        const last = 0.12 - (primaries - 1) * 0.3;
+        const lastLength = 0.98 - (primaries - 1) * 0.1;
+        trail.position.set((0.05 + (primaries - 1) * 0.045 + lastLength * Math.cos(last)) * s, -0.02 * (primaries - 1) + lastLength * Math.sin(last), 0);
+      }
+      wingOuter.add(tip);
       wingOuter.add(trail);
 
       return { shoulder, elbow, hip, knee, wing, wingOuter, tip, trail, boot, innerMesh, outerMesh };
@@ -742,6 +825,11 @@ export class Avatar {
       24,
       (u, v, t, out) => {
         const spec = capeSpec(this.capeId), pattern = spec.pattern;
+        if (monument && pattern === "diamond") {
+          // Monument Valley: one flat color, a thin pale hem
+          out.copy(v > 0.95 ? t.wing : t.cape);
+          return 0;
+        }
         if (pattern === "diamond") {
           const row = Math.round(v * 24);
           const mark = Math.abs(u) < 0.1 && row >= 7 && row <= 15 && row % 2 === 1;
@@ -802,6 +890,11 @@ export class Avatar {
       this.chest.add(tail.mesh);
       return tail;
     });
+    if (monument) {
+      // Nothing flutters on the figure but the cape
+      this.mantle.mesh.visible = false;
+      this.scarf.forEach((tail) => (tail.mesh.visible = false));
+    }
 
     // A soft glow around the body, like a Sky child's light
     this.aura = new THREE.Sprite(

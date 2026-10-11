@@ -30,35 +30,37 @@ export const FX = {
   rollSparkles: 72, // gold twinkles and tiny flakes/second at mid-roll
   brakeWisps: 24, // particles/second at full brake
   trailLength: 1, // multiplier on ribbon length
-  trailWidth: 1,
-  trailGlow: 1, // brightness of the ribbons
+  trailWidth: 0.7,
+  trailGlow: 0.6, // brightness of the ribbons
   trailShimmer: 0, // light pulses running down the ribbons (restart to apply)
   lightTint: 0.25, // how much of the player's color the light effects keep (Sky's light is warm white)
-  bodyTrail: true, // the wide silk ribbon from the cape
-  sparkles: 0.65, // wingtip motes per metre, as a multiplier
+  bodyTrail: false, // the wide silk ribbon from the cape
+  sparkles: 0.3, // wingtip motes per metre, as a multiplier
   flapPuffs: 0.6, // feather puffs on each downstroke
   wingGrainSize: 0.1, // metres; small, distinct wingtip motes
   wingGrainLight: 1.1, // restrained brightness keeps adjacent grains separate
   wingPuffSize: 0.35, // metres; compact downstroke air, not glowing clouds
   skimDust: 1, // spray from the ground while skimming
-  speedLines: 1, // wind streaks at speed
+  speedLines: 0.5, // wind streaks at speed
   speedLinesFrom: 45, // m/s where the wind streaks start
   aura: 1, // soft glow around the pilot
   ink: 0, // the pilot's ink outlines: their opacity (off: the land, Sky, AER and Omno draw none)
+  pilotLook: 1, // 1: the Monument Valley figure (white dress, pointed hat, pennant wings), 0: the Sky child; reload to rebuild
+  toonAxis: 1, // Monument Valley's block shading: one tone per face direction, whatever the sun does
   toonFlat: 1, // the pilot, cosmetics and items shaded face by face, like the land
-  toonFacet: 0.1, // when flat: each face a little lighter or darker, like the land's painted facets
+  toonFacet: 0.04, // when flat: each face a little lighter or darker, like the land's painted facets
   toonSoft: 1, // five soft light bands instead of three hard ones
   inkTint: 0.8, // 0: one dark ink everywhere, 1: each part's own color, darkened
-  dust: 1, // Sky's winged-light dust in the air, as a multiplier on each biome's rate
-  flock: 1, // the flock of light butterflies leading to the next gate (0 hides it)
-  wisps: 1, // cloud wisps torn off the wingtips at speed
+  dust: 0.5, // Sky's winged-light dust in the air, as a multiplier on each biome's rate
+  flock: 0, // the flock of light butterflies leading to the next gate (0 hides it)
+  wisps: 0.5, // cloud wisps torn off the wingtips at speed
   wispsFrom: 50, // m/s where the wisps start
-  capePulse: 1, // how much the cape's marks and the eyes flare on boost and gate passes
+  capePulse: 0.5, // how much the cape's marks and the eyes flare on boost and gate passes
   pilotTheme: 1, // the pilot's cloth takes the level's accent hue (the gates' color, made to stand out in that scene)
   vignette: 1, // speed vignette at the screen edges
-  bloom: 0.45, // glow strength (0 turns post-processing off)
-  bloomRadius: 0.4, // wide and soft, like Sky's halos
-  bloomHalo: 0.45, // contribution from the widest blur layers
+  bloom: 0.35, // glow strength (0 turns post-processing off)
+  bloomRadius: 0.3, // soft, but restrained: Monument Valley barely glows
+  bloomHalo: 0.3, // contribution from the widest blur layers
   bloomThreshold: 1.15,
   bloomResolution: 1, // the bloom renders at most at this pixel ratio (its cost grows fast with it)
   bloomMsaa: 2, // antialiasing samples of the bloom's render target
@@ -321,6 +323,8 @@ export const RANGES: Record<string, [number, number, number?]> = {
   speedLinesFrom: [10, 100],
   aura: [0, 3],
   ink: [0, 1],
+  pilotLook: [0, 1, 1],
+  toonAxis: [0, 1],
   toonFlat: [0, 1, 1],
   toonFacet: [0, 0.4],
   toonSoft: [0, 1, 1],
