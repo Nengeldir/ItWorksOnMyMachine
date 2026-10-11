@@ -15,7 +15,7 @@ import type { WorldView } from "../world/WorldView";
 import { Abilities, type AbilityPress } from "./abilities";
 import { Finale } from "./finale";
 import { Items, type RunItemId, runItem } from "./items";
-import { Portal, Wormhole, WormholeCamera, screenSparkle } from "./portal";
+import { Portal, Wormhole, WormholeCamera, portalFlash, screenSparkle } from "./portal";
 import {
   CHAIN_MAX,
   GATE_POINTS,
@@ -725,20 +725,26 @@ export class RunController {
     this.ended = true;
     this.phase = completed ? "won" : "lost";
     this.host.freeze(true);
-    this.events.ended?.({
+    this.events.ended?.(this.snapshot(completed));
+  }
+
+  /** The run so far, this level's style and clock included (an adventure left early is reported too) */
+  snapshot(completed = false): RunSummary {
+    const open = !this.styleBanked;
+    return {
       seed: this.seed,
-      score: this.score,
+      score: this.score + (open ? Math.round(this.host.style) : 0),
       completed,
       levels: this.level,
       path: [...this.path],
       upgrades: [...this.picked],
-      timeMs: Math.round(this.totalTime * 1000),
+      timeMs: Math.round((this.totalTime + (open ? this.levelTime : 0)) * 1000),
       gates: this.gates,
       crashes: this.crashes,
       livesLeft: this.lives,
       bestChain: this.bestChain,
-      style: Math.round(this.totalStyle),
-    });
+      style: Math.round(this.totalStyle + (open ? this.host.style : 0)),
+    };
   }
 
   // --- per frame ------------------------------------------------------------------------
@@ -784,7 +790,7 @@ export class RunController {
       const t = this.phaseTime;
       if (!this.sparkled) {
         this.sparkled = true;
-        screenSparkle(particles, camera, forward, SPARKLE.set(this.host.world.palette.accent));
+        screenSparkle(particles, camera, forward, SPARKLE.set(this.host.world.palette.accent), portalFlash(this.host.world.palette.night));
       }
       veil = t < BLUR_IN ? ease(t / BLUR_IN) : 1 - ease((t - BLUR_IN - 0.1) / BLUR_CLEAR);
       inside = t >= BLUR_IN;

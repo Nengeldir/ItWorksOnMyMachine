@@ -26,8 +26,8 @@ export const ANIM = {
 /** Trails, particles, wind and screen effects */
 export const FX = {
   boostTrailGlow: 0.45,
-  boostSparkles: 48, // fine gold dust and ivory slivers/second at full boost
-  rollSparkles: 72, // gold twinkles and tiny flakes/second at mid-roll
+  boostSparkles: 60, // fine gold dust and ivory slivers/second at full boost
+  rollSparkles: 90, // gold twinkles and tiny flakes/second at mid-roll
   brakeWisps: 24, // particles/second at full brake
   trailLength: 1, // multiplier on ribbon length
   trailWidth: 1,
@@ -155,7 +155,8 @@ export const DEEP = {
 
 /** The roguelike run's looks (its rules live in run/run.ts and run/upgrades.ts) */
 export const RUN = {
-  portalFlash: 0.25, // intensity of the crossing sparkles and screen brightening
+  portalFlash: 0.25, // intensity of the crossing sparkles and screen brightening…
+  portalNightDim: 0.35, // …this much gentler under a night sky (dark maps make the same flash glare)
   tunnelFade: 1.4, // seconds to fade out of the tunnel into the next biome
   compass: 1, // size of the portal compass
   toasts: true, // pop-ups for points and run events
@@ -199,7 +200,8 @@ export const ITEMS_FX = {
 };
 
 /** Companion movement and scale: looks only, independent of all flight rules. */
-export const PET_LOOKS = { size: 1.8, spacing: 2.9, height: 0.7, trail: 0.8, follow: 8, snapDistance: 30, bob: 0.12, wingbeat: 1, tailSway: 1, lead: 9, sparkle: 1, gallop: 1.6, stride: 1, hoopRange: 60, guideBlend: 1.5 };
+/** `spacing`: the orbit's radius (m), `orbit`: seconds per lap, `roam`: seconds of free play after a hoop, `follow`: the spring's stiffness */
+export const PET_LOOKS = { size: 1.8, spacing: 3.2, height: 0.5, trail: 0.8, follow: 6, snapDistance: 30, bob: 0.12, wingbeat: 1, tailSway: 1, lead: 9, sparkle: 1, gallop: 1.6, stride: 1, hoopRange: 60, guideBlend: 1.5, orbit: 5.5, roam: 2.4 };
 /** Small ornaments and particle emission, never the pilot's hitbox. */
 export const COSMETIC_FX = { capeDetail: 1, wingParticles: 22, wingParticleSize: .1 };
 /** Collection models and motion; reward rules live on the server. */
@@ -262,6 +264,8 @@ export const RANGES: Record<string, [number, number, number?]> = {
   gallop: [0, 4],
   stride: [0, 2],
   hoopRange: [0, 150],
+  orbit: [2, 12],
+  roam: [0, 6],
   guideBlend: [0.3, 6],
   capeDetail: [0, 2],
   wingParticles: [0, 50],
@@ -364,6 +368,7 @@ export const RANGES: Record<string, [number, number, number?]> = {
   surface: [0, 2],
   life: [0, 3],
   portalFlash: [0, 1],
+  portalNightDim: [0, 0.8],
   crystalSize: [2, 6],
   crystalMotes: [0, 30],
   moteDistance: [20, 160],
