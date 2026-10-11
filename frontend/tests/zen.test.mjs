@@ -80,6 +80,16 @@ test('the ground keeps to the heights of a level, with rivers in its valleys', (
   }
 });
 
+test('valleys never jump: the land eases up from them, no cliff off a flat floor', () => {
+  const ground = open('aurora', 5).land.ground;
+  let worst = 0;
+  for (let x = -4_000; x < 4_000; x += 10) {
+    const z = x * 0.37 + 900;
+    worst = Math.max(worst, Math.abs(ground.valleyDistance(x + 10, z) - ground.valleyDistance(x, z)));
+  }
+  assert.ok(worst < 80, `distance from a valley jumped ${worst.toFixed(0)} m in 10 m`);
+});
+
 test('a lagoon is a level sea everywhere, its islets and stacks standing in it', () => {
   const world = open('lagoon', 4);
   for (const z of [0, -2_000, 9_000]) assert.equal(world.seaAt(z), -24, `sea at ${z}`);

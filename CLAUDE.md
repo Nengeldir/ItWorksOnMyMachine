@@ -245,10 +245,14 @@ puts you back nearby, the same map select. Other modes build their maps
 exactly as before (`course`, `ground`, `river`, `recipes`, `water`,
 `clouds`, `deep` are main's plus open branches).
 - Open world (`open.ts`, `LevelKey.open`, `zenLevel`, `zenSeed`; no Sky
-  Isles): `Course.open` has no line (y = 0, no gates, no tube); the ground's
-  valleys, hills and mountains are measured from a warped network of
-  valleys (eased to a level's corridor-edge heights), a river or lava along
-  each at one level (`openWater`). Land, island falls, water, clouds, the
+  Isles): `Course.open` has no line (y = 0, no gates, no tube). The ground
+  (`Ground.openHeight`) blends like Minecraft's continentalness: a slow
+  warped region noise for lowland or range, hills growing into foothills,
+  a range's shoulder, ridged peaks only at its core; a warped network of
+  valleys carved through it all (sides as wide as the land is high, a
+  river or lava along each at one level, `openWater`). Asked for: no
+  mountains rising sheer off flat land; 300 m-high land now lies about
+  550 to 800 m (median) from the nearest plain. Land, island falls, water, clouds, the
   cloud sea and sea life come per 1 km cell from the cell's own streams
   (`buildLandCell`, `World.ensure`, `field.grow`/`remove`), the same in
   any order; past 120 cells the furthest go. Landmarks one per cell.
@@ -258,10 +262,11 @@ exactly as before (`course`, `ground`, `river`, `recipes`, `water`,
   facing the way it rolled; else straight up to open air.
 - UI: Zen tab, `MapSelect` mode `zen`, `ZenScreen` with a title that drifts
   in once.
-- Verified: tsc, lint, 134 frontend tests (`zen.test.mjs`: any cell order,
-  cells let go and back the same, heights and water per biome, streaming
-  sideways). Browser: Verdant and Archipelago 3 to 15 km off the start every
-  way, rivers in the valleys, islands and falls all round. Not checked: a
+- Verified: tsc, lint, build, 135 frontend tests (`zen.test.mjs`: any cell
+  order, cells let go and back the same, heights and water per biome, no
+  jumps in valley distance, streaming sideways). Browser: Verdant and Archipelago 3 to 15 km off the start every
+  way, rivers in the valleys, islands and falls all round; Glacier and
+  Verdant from a lowland towards a range. Not checked: a
   long flight by hand in a focused window.
 
 ### 2026-10-11: Adventure title below the score, finish screen tidied (Claude)
