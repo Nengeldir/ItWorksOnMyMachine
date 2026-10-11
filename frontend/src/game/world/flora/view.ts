@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { sceneryTime as fxTime } from "../../particles";
 import { TOON_LIGHT } from "../../toon";
 import { FLORA, STRUCTURES } from "../../tuning";
-import { ATMOSPHERE, MIST, atmospheric } from "../atmosphere";
+import { ATMOSPHERE, MIST, atmospheric, bornNow } from "../atmosphere";
 import type { VegetationSpec } from "../biomes/types";
 import { sunDirection } from "../palette";
 import { STRUCTURE_INFO, structuresOf } from "../structures/kinds";
@@ -95,6 +95,11 @@ function plantMaterial(sway: number, grass = false, grassGlow = 0, built: { spin
           float w = sway * floraWind * floraGust * gust;
           transformed.x += w * (sin(floraTime * 1.7 + phase) * 0.7 + sin(floraTime * 3.3 + phase * 1.9) * 0.3);
           transformed.z += w * cos(floraTime * 1.3 + phase) * 0.5;
+          #ifdef USE_INSTANCING
+            // Plants of land that has just arrived grow out of the ground (born, atmoNow: atmosphere.ts)
+            float grown = clamp((atmoNow - born) * atmoRevealRate, 0.0, 1.0);
+            transformed *= grown * (2.0 - grown);
+          #endif
           ${grass ? `
           // Tufts shrink away with distance instead of popping
           float far = distance(root, cameraPosition);
@@ -132,6 +137,9 @@ function plantMaterial(sway: number, grass = false, grassGlow = 0, built: { spin
 }
 
 const impostorVertex = /* glsl */ `
+  attribute float born;
+  uniform float atmoNow;
+  uniform float atmoRevealRate;
   uniform vec2 cells;
   varying vec2 vUv;
   varying vec3 vTint;
@@ -140,8 +148,11 @@ const impostorVertex = /* glsl */ `
   void main() {
     // instanceMatrix carries the plant's foot (column 3), width and height (scales of x and y) and atlas cell (z scale)
     vec3 foot = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
-    float width = instanceMatrix[0][0];
-    float height = instanceMatrix[1][1];
+    // Plants of land that has just arrived grow out of the ground, like the full meshes
+    float grown = clamp((atmoNow - born) * atmoRevealRate, 0.0, 1.0);
+    grown *= 2.0 - grown;
+    float width = instanceMatrix[0][0] * grown;
+    float height = instanceMatrix[1][1] * grown;
     float cell = floor(instanceMatrix[2][2] + 0.5);
     // Turn to face the camera, about the vertical only
     vec3 toCamera = cameraPosition - foot;
@@ -311,6 +322,8 @@ export class FloraView {
     this.impostorMaterial.uniforms.atmoMistMode = ATMOSPHERE.mistMode;
     this.impostorMaterial.uniforms.atmoMistHeight = ATMOSPHERE.mistHeight;
     this.impostorMaterial.uniforms.atmoMistThickness = ATMOSPHERE.mistThickness;
+    this.impostorMaterial.uniforms.atmoNow = ATMOSPHERE.now;
+    this.impostorMaterial.uniforms.atmoRevealRate = ATMOSPHERE.revealRate;
     this.materials.push(this.impostorMaterial);
     const quad = new THREE.PlaneGeometry(2, FRAME_Y1 - FRAME_Y0).translate(0, (FRAME_Y1 - FRAME_Y0) / 2, 0);
     this.geometries.push(quad);
@@ -372,12 +385,16 @@ export class FloraView {
     renderer.setRenderTarget(previous);
   }
 
-  /** A node came on screen: its plants appear, as full meshes or impostors by its level of detail */
-  show(key: number, lod: number, plants: Float32Array, tufts: Float32Array, box: THREE.Box3) {
+  /**
+   * A node came on screen: its plants appear, as full meshes or impostors by its level of detail.
+   * `fresh`: nothing stood there before (not a change of detail), so they grow in
+   */
+  show(key: number, lod: number, plants: Float32Array, tufts: Float32Array, box: THREE.Box3, fresh = false) {
     const node: NodeFlora = { lod, plants, tufts, box, impostors: false, full: false, grass: false };
     this.nodes.set(key, node);
-    if (lod === 0) this.addFull(key, node);
-    else this.addImpostors(key, node);
+    const born = fresh ? bornNow() : 0;
+    if (lod === 0) this.addFull(key, node, born);
+    else this.addImpostors(key, node, born);
     this.lastGrassCheck.set(Infinity, 0, 0);
   }
 
@@ -400,7 +417,7 @@ export class FloraView {
     return out.multiplyScalar(0.86 + 0.28 * ((variant * 7.13) % 1));
   }
 
-  private addFull(key: number, node: NodeFlora) {
+  private addFull(key: number, node: NodeFlora, born: number) {
     const { plants } = node;
     const count = plants.length / PLANT_STRIDE;
     if (!count) return;
@@ -420,12 +437,12 @@ export class FloraView {
       this.plantColor(s, plants[o + 7], color).toArray(colors[s], k * 3);
     }
     counts.forEach((n, s) => {
-      if (n) this.full[s].add(key, matrices[s], colors[s]);
+      if (n) this.full[s].add(key, matrices[s], colors[s], born);
     });
     node.full = true;
   }
 
-  private addImpostors(key: number, node: NodeFlora) {
+  private addImpostors(key: number, node: NodeFlora, born: number) {
     const { plants } = node;
     const count = plants.length / PLANT_STRIDE;
     if (!count || !this.impostors) return;
@@ -443,7 +460,7 @@ export class FloraView {
       this.plantColor(s, plants[o + 7], color);
       color.toArray(c, i * 3);
     }
-    this.impostors.add(key, m, c);
+    this.impostors.add(key, m, c, born);
     node.impostors = true;
   }
 

@@ -4,6 +4,7 @@ import type { Particles } from "../particles";
 import { RARITIES, runItem, type Items } from "../run/items";
 import type { Pickup } from "../run/pickups";
 import { ITEMS_FX } from "../tuning";
+import { smoothstep } from "../math";
 import { ItemDisplay } from "./equip";
 
 const FACE = new THREE.Vector3(0,0,1);
@@ -35,7 +36,10 @@ export class PickupView {
     if(this.version!==items.version){this.clear();this.version=items.version;}
     let count=0;
     for(const pickup of items.pickups){
-      const near=pickup.position.distanceToSquared(pilot)<ITEMS_FX.pickupRange**2;
+      const far=pickup.position.distanceTo(pilot);
+      const near=far<ITEMS_FX.pickupRange;
+      // Grows in over the last stretch of the range instead of popping up at its edge
+      const grown=1-smoothstep(ITEMS_FX.pickupRange*0.8,ITEMS_FX.pickupRange,far);
       let display=this.displays.get(pickup);
       if(pickup.collected || pickup.blocked || !near || count>=24){
         if(display){display.dispose();this.displays.delete(pickup);}continue;
@@ -45,15 +49,16 @@ export class PickupView {
         display=new ItemDisplay(runItem(pickup.id).model,ITEMS_FX.pickupSize);
         display.group.position.copy(pickup.position);this.group.add(display.group);this.displays.set(pickup,display);
       }
+      display.group.scale.setScalar(grown);
       display.update(dt,particles);
       this.color.set(RARITIES[rarity].color);
       // Keep the light just above the field surface, tilted with its gentle slope.
       this.position.copy(pickup.floor).addScaledVector(pickup.normal,0.7);
       this.rotation.setFromUnitVectors(FACE,pickup.normal);
-      this.scale.set(ITEMS_FX.pickupSpot,ITEMS_FX.pickupSpot,1);
+      this.scale.set(ITEMS_FX.pickupSpot*grown,ITEMS_FX.pickupSpot*grown,1);
       this.matrix.compose(this.position,this.rotation,this.scale);this.spots.setMatrixAt(count,this.matrix);this.spots.setColorAt(count,this.color);
       this.position.lerpVectors(pickup.floor,pickup.position,0.5);
-      this.rotation.identity();this.scale.set(1,pickup.position.y-pickup.floor.y,1);
+      this.rotation.identity();this.scale.set(grown,pickup.position.y-pickup.floor.y,grown);
       this.matrix.compose(this.position,this.rotation,this.scale);this.beams.setMatrixAt(count,this.matrix);this.beams.setColorAt(count++,this.color);
     }
     this.spots.count=this.beams.count=count;

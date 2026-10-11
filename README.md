@@ -345,6 +345,9 @@ repeated rebuilding. In the developer `?tune` panel, `Terrain` exposes
 `lodLookAheadSeconds` and `lodLookAheadMax`. The cache is bounded
 by estimated buffer memory and 256 hidden nodes. Mixed-detail terrain still
 uses overlapping border cells; it is not a fully stitched adaptive mesh.
+Land that comes on screen where none was shown fades in out of the haze over
+`fadeIn` seconds (0.9) while its plants grow in; a change of detail swaps at
+once. `arrivalsPerFrame` (12) is how many arrived meshes are taken in per frame.
 
 **Flight model** ([`frontend/src/game/flight.ts`](frontend/src/game/flight.ts)):
 an arcade, energy-based wingsuit. The nose points where you go, gravity along
@@ -363,6 +366,10 @@ wing dust and compact downstroke puffs. `rollSparkles` adjusts the golden
 barrel-roll arcs; `boostSparkles` adjusts the gold dust and ivory slivers
 swept behind the wings during boost. `bloomHalo` controls the widest glow
 layers independently of bloom strength and radius, keeping light edges defined.
+With bloom (High quality) the frame is drawn at `bloomResolution` (1) times the
+CSS size at most and its edges are smoothed by FXAA; `bloomSamples` above 0
+multisamples the bloom's float target instead, which costs several times more
+on integrated GPUs.
 Cosmetics exposes `wingParticleSize` for the decorated wings' tiny accents.
 Collection pickups exposes crystal size, mote rate and mote distance; Run
 exposes `portalFlash` for crossing sparkles and screen brightening. Crystal
