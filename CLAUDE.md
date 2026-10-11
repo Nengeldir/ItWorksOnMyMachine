@@ -113,10 +113,15 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 
 | Path | What it does |
 | :--- | :--- |
-| `profile/` | Profile types/API client, server-authoritative balances, durable account-scoped pickup outbox and equipped appearance notifications |
+| `profile/` | Profile types/API client, server-authoritative balances, durable account-scoped pickup outbox, the run-report outbox, market, wheel, pet names, style and public pages, and equipped appearance notifications |
+| `game/collection/` | The collection beyond looks. `rarity.ts`: the one rarity palette (common untinted, uncommon sky blue, rare violet, legendary gold). `abilities.ts`: every pet's, rare/legendary cosmetic's and keepsake's power as data (`POWERS`: stats, charm use, voice, shed particles), `perksFor` adds them up, `charmOf`. `fx.ts`: `CollectionFx`, rare cosmetics' particles, the powers' flares, the pet's calls. `sounds.ts`: synthesized signature sounds (`Synth`, `voice`, `chime`; `playVoice`/`playChime` for menus). `icons.ts` |
+| `game/run/charm.ts` | `Charm`: the keepsake carried on adventures (key `K`): relics once per level with their charges, food treats, passive keepsakes, the giant firework (`ROCKET`: strap, fuse, a lasting push until taken off) |
+| `game/run/orbs.ts` | Stamina orbs: adventures have no natural boost recharge; orbs along the line between hoops refill it, fewer and weaker per level (`ORB`, in `?tune`); one instanced draw call |
 | `game/run/collection.ts` | Adventure-only hoop-distance rarity placement, streamed obstacle clearance, swept collection (5.2 m crystals, 3.2 m treasures), toon crystal/cape tokens, nearby budgeted crystal motes and pickup animation |
 | `game/cosmetics/`, `game/pets/` | Cape/hat/shoe/wing catalogs and toon models; eight detailed bird/mythological pets (fanned feather tails, plumes, brush and spined tails, per-pet ornaments; the wingless dragon, kirin and fox gallop on two swinging leg pairs) flying beside the pilot and, within `PET_LOOKS.hoopRange` of a hoop, blending onto their own unscored autopilot rail through its centre, each shedding its own budgeted trail of light (`PET_SPARKS`, `PET_LOOKS.sparkle`) |
-| `components/ProfilePanel.tsx`, `components/CollectionPreview.tsx`, `components/TestCollectionPanel.tsx` | Persistent profile/inventory, equip controls, XP/crystal HUD, animated model preview (one shared WebGL renderer for the page: never a context per preview) and unsaved test fitting room |
+| `components/ProfilePanel.tsx`, `components/CollectionPreview.tsx`, `components/Minifigure.tsx`, `components/TestCollectionPanel.tsx` | Inventory (rarity tiles, powers, unlock levels, Equip / Carry as charm, pet names), the draggable standing figurine with the pet (`Avatar.stance.stand`), XP/crystal HUD, animated previews, and the unsaved test fitting room (Carry as charm too) |
+| `components/preview3d.ts`, `components/portrait.ts` | One shared WebGL renderer for every preview, drawing into each preview's own 2D canvas (never a context per preview); cached leaderboard portraits |
+| `components/ShopPanel.tsx`, `components/LeaderboardPanel.tsx`, `components/LessonCover.tsx` | The Lantern Market (three daily offers, demo pouches, the Wheel of Winds and its prize screen), the Hall of Winds (leaderboard and pilot pages), lesson mode's blank document |
 | `game/Game.ts` | The game: frame loop, fixed 120 Hz physics steps, race state, ring checks, HUD data, effects wiring (gate bursts, skim spray, gate motes), rendering with optional bloom and bounded broad halos (`FX.bloomHalo`), adaptive quality, test-only shared time scaling, the `?tune` panel |
 | `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only. `touching()` is the pilot's hitbox (`FLIGHT.hit*`): a ball for the body and a rectangle per wing, tilted up at a dihedral, fixed in the flight frame (never the animated pose), sampled against the distance field with early-outs; `hitboxWorld()` is the same hitbox in world space, which `Game.step` tests against the land drawn (`LandCollider`). `FlightMods` (run upgrades: drag, sink, stall, proximity boost, dash boost, thermal lift, hover, glide lock, `thrust`, a plunge's `dive`, Hover-Stall's `hang`, `turn` for stances and Aero-Braking, Zenith's `climb`, Ascension's `ascend`, a rise on rails in `ascendStep`) are only ever passed in run mode; `flap()`, `launch()`, `deflect()`, `surge()` and a forced `dodge()` are run abilities |
 | `game/avatar.ts` | The pilot: a cel-shaded chibi flyer built from primitives (merged per body part, vertex-colored), a procedural cape and scarf (`Cloth`), two-segment feathered wings, a sculpted face (jaw and cheeks, nose, mouth, layered eyes without ink) under two hair-and-eyes styles (`setStyle(1 | 2)`, from Settings' `pilotStyle`), and all its animation: bank lead spring, barrel rolls, flapping driven by effort, bobbing, cloth ripples, limb reactions. Also `createLabel` and `glowTexture` |
@@ -207,6 +212,12 @@ Players never collide, so the server only relays positions.
   (clamp first), and never divide by something that can reach zero. One NaN
   pixel turns the whole bloomed frame black. This happened with the light
   pillars; see the change log.
+- **Adventures only (rule 6):** collection powers (`RunController.perks`,
+  from what's equipped), the charm, stamina orbs (the boost never recharges by
+  itself in a run: `FlightMods.recharge = 0`), unlock levels (`playerLevel`:
+  items, upgrades and server treasures above it never turn up) and harder
+  levels (`LevelKey.difficulty`, `course.ts` `Difficulty`: 0 on level 1, which
+  is the unchanged map, up to 1 on level 8). Races never see any of it.
 - **Quality levels:** 2 = bloom at up to 2× DPR (composer capped at 1.5×),
   1 = no bloom, 0 = 1× DPR and 40% particles. `adaptQuality` steps down after
   sustained frames over 25 ms, and never back up.
@@ -234,6 +245,63 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-11: Collection powers, the charm, economy, market, Hall of Winds, orbs, harder levels (Claude)
+
+Asked for, after the final review: pickup effects in rarity colors with
+exponentially rarer finds and duplicate messages; powers for every item,
+rare+ cosmetic and pet (with descriptions in the inventory, key reminders,
+the rocket as a lasting toggle); unique particles and sounds for rare+
+things and pets; a robust database; a public leaderboard with pilot pages
+and pet names; crystals between hoops; lesson mode; a market with daily
+offers, demo pouches and a daily wheel; XP for gates and score into
+crystals; unlock levels; a bit more sparkle and a gentler portal flash at
+night; pets playing round the pilot; mobile; a figurine in the inventory; a
+feature-ideas document; then (added mid-way) harder levels, stamina orbs
+instead of natural boost recharge, and an infinite-mode prototype plan.
+Branch `adventure-economy`, from `final-review`.
+- **Server** (`backend/profiles.py`, `app.py`, `models.py`): unlock levels
+  and prices in the catalog; odds 27:9:3:1 per rarity; every collectible
+  unique (duplicates pay crystals); the charm slot; `POST /api/profile/runs`
+  (2 XP per gate, 10 per level, 60 for finishing; score / 200 crystals, +5%
+  per level, at most 1,500; once per adventure, checked against the server's
+  clock and per-level caps); claims of later levels need their time; the
+  market (`/api/shop`, `/buy`), the wheel (`/spin`, once a UTC day, drawn on
+  the server), pet names, style, `/api/players` and `/api/players/{id}`
+  (HMAC public ids); race XP per gate; per-pilot rate limits, at most 20
+  adventures an hour, plans pruned to the latest 40, CHECK constraints.
+- **Run** (`run/controller.ts`, `charm.ts`, `orbs.ts`, `items.ts`,
+  `upgrades.ts`, `pickups.ts`, `collection.ts`, `flight.ts`): powers applied
+  as FlightMods and scoring; the charm; unlock levels; stamina orbs and no
+  natural recharge (`FlightMods.recharge`); harder levels
+  (`world/course.ts`, `LevelKey.difficulty`, `levelId`); the portal smaller
+  and offset on deeper levels; crystals between hoops; pickup bursts in
+  rarity colors; toasts naming the key that uses an item.
+- **Looks and sounds** (`collection/fx.ts`, `sounds.ts`, `items/fx.ts`,
+  `audio.ts`, `pets/companion.ts`, `avatar.ts`): rare cosmetics' particles,
+  powers' flares, pets' calls; the rocket's full strap-on, fuse, ignition and
+  douse; the pet's orbit (critically damped spring, loops of joy, roaming
+  after hoops); `Avatar.stance.stand`; boost 60/s and roll 90/s sparkles; the
+  portal flash dims at night (`RUN.portalNightDim`).
+- **UI**: the inventory with the figurine; the Lantern Market and wheel; the
+  Hall of Winds; lesson mode; landing nav pills; the charm chip; the finish
+  screen's rewards; touch Item, next and Charm buttons; phones' layouts.
+- **Docs**: `docs/adventure-profile.md` (the economy, rewritten),
+  `docs/feature-ideas.md`, `docs/infinite-mode-prototype.md` with its trials
+  (`docs/prototypes/infinite/trial.mjs`), README.
+- Verified: build (bundle-size warning), lint, 140 frontend tests (11 new or
+  extended: `adventure.test.mjs`, the pet orbit) and 46 backend tests (13
+  new; four updated where rules changed on purpose). In Chrome on the dev
+  server with a scratch backend: the inventory (figurine turned by drag,
+  rarity tiles, the power card), the market (offers, a real spin landing on
+  its slice, the prize screen for crystals and for nothing), the Hall of
+  Winds and a pilot page, lesson mode over a time trial (paused, Escape
+  back), the rocket charm strapping on and burning in test mode, orbs and the
+  fox's orbit in flight, phones held sideways (844 x 390) and upright (390 x
+  760) in frames. Frames were stepped by hand in the hidden tab.
+- Not verified: sounds (not listened to), real phones, a full eight-level
+  adventure flown by hand (difficulty feel, orb balance, crystals per run),
+  frame time in a focused window with many powers' particles.
 
 ### 2026-10-11: Final review before unit testing and playtesting (Claude)
 
@@ -3054,11 +3122,20 @@ ported to the islands world:
 
 ## Next up
 
+- Playtest the economy (`docs/adventure-profile.md`): orb spacing and
+  restore per level, crystals per run (score / 200) against market prices,
+  unlock levels, the wheel's odds; listen to every pet's call and keepsake
+  signature; judge difficulty 0.5 to 1 by hand (the tightest bends are about
+  17 m radius at level 8); real phones (the new touch buttons, the market's
+  wheel, the figurine's drag). Remote pilots still don't show cosmetics or
+  powers' particles (rooms send no appearance). Infinite mode: see
+  `docs/infinite-mode-prototype.md`; more ideas in `docs/feature-ideas.md`.
+
 - From the final review (`docs/audit-2026-10-11.md`, patch notes): strip or
   gate the `X-User-Id` login headers if port 8080 can ever be reached
-  without the VIScon portal; limit room creation and prune old adventure
-  plans; split the 1.48 MB bundle by route; a unit test for `ItemFx` with a
-  fake canvas; throttle `collectionClear` to every 0.5 s.
+  without the VIScon portal; limit room creation; split the bundle (now
+  about 1.6 MB) by route; a unit test for `ItemFx` with a fake canvas.
+  (Done since: adventure plans pruned, `collectionClear` cached per pickup.)
 
 - Pilot styles: send `pilotStyle` with room snapshots so other players see it
   (remote pilots and ghosts are Style 1 now); look at both faces in flight, by

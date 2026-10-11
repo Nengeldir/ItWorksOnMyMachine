@@ -84,6 +84,10 @@ docker compose up -d --build
 | `T` / left stick click    | Resonance: a wave of song that turns the gates ahead to face you (adventure) |
 | `G` / d-pad up            | Ascension: give up your forward speed to shoot straight up (adventure) |
 | `H` / d-pad down          | Gliding stance: falcon (fast, stiff) or butterfly (floaty, nimble); with both, it cycles (adventure) |
+| `Y` / right mouse / d-pad right | Use the lit item in your bag (adventure; a toast says which key when you pick one up) |
+| `U` / mouse wheel / d-pad left | Next item in the bag                         |
+| `K` / gamepad Back        | Use your charm: the keepsake you carry (adventure); with the giant firework, strap it on and light it, press again to take it off |
+| `L` (when Lesson mode is on) | Cover the screen with a blank document; the back arrow, `Esc` or `L` returns |
 | `1` to `4`                | Choose an upgrade at a portal                      |
 | `Enter` in the finale     | Skip the cutscene                                  |
 | `Backspace` at the end    | Back to the menu from the finish screen            |
@@ -110,6 +114,8 @@ on Android the first tap goes full screen and turns the screen for you.
 | Hold **Boost** / **Brake** | Boost / air brake                                 |
 | `‹` `›`                   | 5 m sideways dodge                                 |
 | **Flap** / **Hover** / **Plunge** / **Gale** | Tap to use the adventure ability once you have its upgrade |
+| The item button (its icon), **↻** | Use the lit item in the bag / the next item (adventure) |
+| **Charm** / **Rocket off** | Use your charm; with the giant firework lit, take it off |
 | **Respawn**, **Pause**    | As `R` and `P`                                     |
 
 "Invert touch up / down" is in Settings. The tutorial follows touch as well
@@ -393,6 +399,52 @@ finish time has to match its own clock within 3 s, and nothing under 25 s
 counts. That stops casual cheating, not a determined cheater, since the server
 doesn't fly the course itself.
 
+## Adventures: harder levels, stamina orbs, powers and the charm
+
+- **Every level is harder than the last.** Level 1 is exactly the map a time
+  trial on its seed flies; each level after widens and sharpens the racing
+  line's turns (up to 71° off its axis), deepens its rises and falls (with
+  short climbs), brings the gates closer, shrinks the rings and hides the
+  portal a little to one side. The land is carved around the line, so the
+  same map reshapes with it. Races and time trials never change.
+- **No natural boost recharge in an adventure.** Fly through the warm, glowing
+  **orange stamina orbs** along the line to refill it. Each level holds fewer,
+  and each restores less (42% of the reserve on level 1, 14% by level 8).
+  Skim-Booster, Cloud-Surfing, the ley line, nectar and energy lights still
+  refill it too.
+- **Powers.** Every pet, every rare or legendary cosmetic and every keepsake
+  has a power in adventures (never in races): the swallow lowers drag, the
+  fox fetches loot from further away, the phoenix undoes one crash per level,
+  the Phoenix mantle burns your boost hotter, Frost walkers skate off one
+  glancing hit per level, Constellation wings widen gates and refill boost…
+  The inventory describes each. Rarer is stronger.
+- **The charm.** Carry one keepsake from your collection as your charm (`K`):
+  fruit and sweets are treats once per level, the adventure's relics give
+  their effect once per level, the golden feather and helms work by
+  themselves, and the **giant firework** is pulled out, swung onto your back
+  and lit for a lasting push until you press `K` again.
+- **Unlock levels.** The strongest items, keepsakes, pets and upgrades only
+  turn up (on the islands, at portals, at the market, on the wheel) once your
+  pilot level is high enough; the inventory says when.
+- **Rewards.** Every gate is worth 2 XP, and your final score turns into
+  crystals (1 per 200 points, 5% more per pilot level, at most 1,500 a run).
+  The finish screen shows what you earned. Races and time trials give 1 XP per
+  gate.
+
+## Market, wheel, Hall of Winds and lesson mode
+
+- **Lantern Market** (landing page): three treasures a day for crystals, and
+  the **Wheel of Winds**, one free spin a day with its odds on the wheel itself
+  (treasures by rarity, crystals, or nothing). The crystal pouches are a demo:
+  nothing is ever charged, they only explain that crystals are earned by flying.
+- **Hall of Winds** (landing page): every pilot by level, with a portrait;
+  open one for their page: a figurine in their outfit, flight log, fastest
+  race on each map, best adventure, named companions and achievements.
+- **Inventory**: your pilot as a figurine (drag to turn it) in everything you
+  wear, with your companion; name your companions there.
+- **Lesson mode** (Settings): `L` covers the game with a blank document and
+  holds it still; the back arrow, `Esc` or `L` brings you back.
+
 ## Saved adventure profile
 
 **Profile & inventory** in the menu shows your level, XP, crystals, items,
@@ -420,7 +472,11 @@ capes have distinct embroidered hems.
 | `frontend/src/profile/`               | Profile API client, types and durable pickup outbox       |
 | `frontend/src/game/run/collection.ts` | Hoop-distance rarity, terrain-safe pickups and collection models |
 | `frontend/src/game/cosmetics/`, `game/pets/` | Toon outfits, decorated wing fans and animated hoop guides |
-| `frontend/src/components/ProfilePanel.tsx`, `CollectionPreview.tsx`, `TestCollectionPanel.tsx` | Profile, inventory, equip controls, preview and unsaved test fitting room |
+| `frontend/src/components/ProfilePanel.tsx`, `CollectionPreview.tsx`, `Minifigure.tsx`, `TestCollectionPanel.tsx` | Profile, inventory (with the draggable figurine and pet names), previews and the unsaved test fitting room |
+| `frontend/src/components/ShopPanel.tsx`, `LeaderboardPanel.tsx`, `LessonCover.tsx` | The Lantern Market and Wheel of Winds, the Hall of Winds with pilot pages, lesson mode |
+| `frontend/src/components/preview3d.ts`, `portrait.ts` | One shared WebGL context for every 3D preview; leaderboard portraits |
+| `frontend/src/game/collection/` | The rarity palette, every collectible's power, signature sounds, in-flight looks and icons |
+| `frontend/src/game/run/charm.ts`, `run/orbs.ts` | The charm (keepsake) slot and its uses; stamina orbs |
 | `backend/app.py`                       | API endpoints, login headers, solo runs                  |
 | `backend/rooms.py`                     | Rooms, race state machine, SSE listeners, tick loop      |
 | `backend/store.py`                     | SQLite runs, leaderboards and ghosts                     |
@@ -479,6 +535,20 @@ All routes start with `/api`; interactive docs are at `/api/docs`.
 | `POST` | `/api/runs/finish`         | Submit a time trial with its ghost                       |
 | `GET`  | `/api/leaderboard?seed=`   | Best time per player on a seed                           |
 | `GET`  | `/api/ghosts?seed=`        | Ghosts of the fastest runs on a seed                     |
+| `GET`  | `/api/profile`             | Your profile: level, crystals, inventory, equipped, stats, catalog |
+| `POST` | `/api/profile/adventures`  | Start an adventure: its token and frozen reward plan (20 an hour at most) |
+| `POST` | `/api/profile/claim`       | Claim pickups touched (a level's only after the levels before it could be flown) |
+| `POST` | `/api/profile/runs`        | Report an adventure: gates → XP, score → crystals, once, checked against the server's clock |
+| `POST` | `/api/profile/equip`       | Equip a cosmetic, a pet or the charm (`slot: charm`)     |
+| `POST` | `/api/profile/pets`        | Name a companion                                         |
+| `POST` | `/api/profile/style`       | The character style shown on your public page            |
+| `GET`  | `/api/shop`                | Today's three offers, the wheel and whether its spin is ready |
+| `POST` | `/api/shop/buy`            | Buy one of today's offers                                |
+| `POST` | `/api/shop/spin`           | Spin the Wheel of Winds (once per UTC day; decided on the server) |
+| `GET`  | `/api/players`             | The Hall of Winds: pilots by XP                          |
+| `GET`  | `/api/players/{public_id}` | A pilot's public page (keyed by an HMAC id; no login or browser ids) |
+
+Every profile write is rate limited per pilot (429 beyond it).
 
 ## Local Development (without Docker)
 
