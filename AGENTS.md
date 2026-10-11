@@ -109,6 +109,8 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/run/collection.ts` | Adventure-only hoop-distance rarity placement, streamed obstacle clearance, swept collection (5.2 m crystals, 3.2 m treasures), toon crystal/cape tokens, nearby budgeted crystal motes and pickup animation |
 | `game/cosmetics/`, `game/pets/` | Cape/hat/shoe/wing catalogs and toon models; eight detailed bird/mythological pets leading on their own unscored autopilot rail |
 | `components/ProfilePanel.tsx`, `components/CollectionPreview.tsx`, `components/TestCollectionPanel.tsx` | Persistent profile/inventory, equip controls, XP/crystal HUD, animated model preview and unsaved test fitting room |
+
+| `components/RaceResults.tsx` | Compact finish reminder in flight; bounded, scrollable results when paused, with resume and optional solo retry |
 | `game/Game.ts` | The game: frame loop, fixed 120 Hz physics steps, race state, ring checks, HUD data, effects wiring (gate bursts, skim spray, gate motes), rendering with optional bloom, adaptive quality, test-only shared time scaling, the `?tune` panel |
 | `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only. `touching()` is the pilot's hitbox (`FLIGHT.hit*`): a ball for the body and a rectangle per wing, tilted up at a dihedral, fixed in the flight frame (never the animated pose), sampled against the distance field with early-outs; `hitboxWorld()` is the same hitbox in world space, which `Game.step` tests against the land drawn (`LandCollider`). `FlightMods` (run upgrades: drag, sink, stall, proximity boost, dash boost, thermal lift, hover, glide lock, `thrust`, a plunge's `dive`, Hover-Stall's `hang`, `turn` for stances and Aero-Braking, Zenith's `climb`, Ascension's `ascend`, a rise on rails in `ascendStep`) are only ever passed in run mode; `flap()`, `launch()`, `deflect()`, `surge()` and a forced `dodge()` are run abilities |
 | `game/avatar.ts` | The pilot: a cel-shaded chibi flyer built from primitives (merged per body part, vertex-colored), a procedural cape and scarf (`Cloth`), two-segment feathered wings, and all its animation: bank lead spring, barrel rolls, flapping driven by effort, bobbing, cloth ripples, limb reactions. Also `createLabel` and `glowTexture` |
@@ -225,6 +227,23 @@ above the start looking down the course, `{along, height, side, ahead}` along
 the course. `__raceHashes()` checks the race map hasn't moved.
 
 ## Change log
+
+### 2026-10-11 — Compact race HUD and mobile pause controls (`ui-fix`)
+
+- Follow-up rebase onto main `692a487`: preserved the new Pilot/Adventure settings, their validation tests, Adventure opening hint and all upstream documentation. Build and lint pass; all 138 frontend tests pass. No additional visual changes or fresh simulator playtest in this rebase.
+
+- Solo/group races keep white-glass instruments at the edges and the flight path clear. Start sits near the top; ghost notices expire after five seconds. Secondary controls return on pause; rotate prompts clear in landscape. Adventure layout is unchanged.
+- `RaceResults.tsx` shows a small finish reminder during flight and bounded results while paused. Short landscape screens place the summary beside scrollable standings. Solo retains retry; both sessions expose resume callbacks.
+- Settings → Touch adds a saved, validated `leftHandedTouch` preference that mirrors race HUD/button placement, preserving steering and arrow directions. Explicit paused state restores Help/Settings and hides flight buttons.
+- Verified desktop and mobile previews, build/lint and 127 frontend tests. Rebuilt localhost:8080 and verified iPhone 16 / iOS 18.2 Simulator: Settings opens in both paused layouts, handedness flips and persists after reload. Rebased onto latest main and squashed for review; main's performance changes and notes retained.
+
+
+
+
+
+
+
+
 
 ### 2026-10-11: Portal upgrade card hover contrast
 

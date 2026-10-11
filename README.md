@@ -558,3 +558,11 @@ browser console, handy for teleporting around or poking at the race state.
 - Daily challenge history and per-ring split times
 
 Terrain detail replacements keep normal flight active while existing terrain covers the area. The loading glide remains only for genuinely missing nearby terrain, including initial loading.
+
+Solo and multiplayer race HUDs stay visible at the screen edges. Compact speed and boost/skim bars leave the centre clear; standings scroll on small screens. Ghost names appear briefly at race start. Touch dodge arrows retain left/right order, and the rotate prompt clears in landscape.
+
+### Race results on phones
+
+Finishing a race leaves a compact reminder while you keep flying. Pause to see results and standings; on landscape phones the finish summary sits beside the scrollable list. Menu, Help, Settings, Respawn and Resume remain available without overlapping. Solo time trials also offer retry (Enter on desktop).
+
+In **Settings → Touch**, enable **Left-handed race UI** to move solo/group race touch buttons to the left and instruments to the right. The preference is saved on this device; steering and dodge directions stay the same.

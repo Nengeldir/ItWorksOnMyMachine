@@ -93,6 +93,10 @@ export class SoloSession {
     this.game?.engage();
   }
 
+  resume() {
+    if (this.store.get().hud?.paused) this.game?.togglePause();
+  }
+
   /** Countdown, then race; ghosts of the best runs fly along */
   start() {
     const game = this.game;

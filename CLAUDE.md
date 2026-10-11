@@ -117,6 +117,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 | `game/run/collection.ts` | Adventure-only hoop-distance rarity placement, streamed obstacle clearance, swept collection (5.2 m crystals, 3.2 m treasures), toon crystal/cape tokens, nearby budgeted crystal motes and pickup animation |
 | `game/cosmetics/`, `game/pets/` | Cape/hat/shoe/wing catalogs and toon models; eight detailed bird/mythological pets (fanned feather tails, plumes, brush and spined tails, per-pet ornaments; the wingless dragon, kirin and fox gallop on two swinging leg pairs) playing round the pilot (`companion.ts`: a springed, bobbing orbit with loops of joy, a few seconds of roaming after each hoop) and, within `PET_LOOKS.hoopRange` of a hoop, eased onto their own unscored autopilot rail through its centre, each shedding its own budgeted trail of light (`PET_SPARKS`, `PET_LOOKS.sparkle`) |
 | `components/ProfilePanel.tsx`, `components/CollectionPreview.tsx`, `components/TestCollectionPanel.tsx` | The adventure journal (`ProfilePanel`: name, level, crystals, collection, equip; opened from the menu's pilot pill or the pause), the in-flight XP/crystal pill (`ProfileStatus`, not before take-off), animated model preview (one shared WebGL renderer for the page: never a context per preview) and the unsaved test fitting room. Journal, settings and fitting room share the `.sheet` card in `index.css` (with `.chip`, `.segmented`, `.meter`); `kindIcons.tsx` has an icon per collection kind |
+| `components/RaceResults.tsx` | Compact finish reminder in flight; bounded, scrollable results when paused, with resume and optional solo retry |
 | `game/Game.ts` | The game: frame loop, fixed 120 Hz physics steps, race state, ring checks, HUD data, effects wiring (gate bursts, skim spray, gate motes), rendering with optional bloom and bounded broad halos (`FX.bloomHalo`), adaptive quality, test-only shared time scaling, the `?tune` panel |
 | `game/flight.ts` | Arcade, energy-based flight model (`FLIGHT` constants). Physics only. `touching()` is the pilot's hitbox (`FLIGHT.hit*`): a ball for the body and a rectangle per wing, tilted up at a dihedral, fixed in the flight frame (never the animated pose), sampled against the distance field with early-outs; `hitboxWorld()` is the same hitbox in world space, which `Game.step` tests against the land drawn (`LandCollider`). `FlightMods` (run upgrades: drag, sink, stall, proximity boost, dash boost, thermal lift, hover, glide lock, `thrust`, a plunge's `dive`, Hover-Stall's `hang`, `turn` for stances and Aero-Braking, Zenith's `climb`, Ascension's `ascend`, a rise on rails in `ascendStep`) are only ever passed in run mode; `flap()`, `launch()`, `deflect()`, `surge()` and a forced `dodge()` are run abilities |
 | `game/avatar.ts` | The pilot: a cel-shaded chibi flyer built from primitives (merged per body part, vertex-colored), a procedural cape and scarf (`Cloth`), two-segment feathered wings, a sculpted face (jaw and cheeks, nose, mouth, layered eyes without ink) under two hair-and-eyes styles (`setStyle(1 | 2)`, from Settings' `pilotStyle`), and all its animation: bank lead spring, barrel rolls, flapping driven by effort, bobbing, cloth ripples, limb reactions. Also `createLabel` and `glowTexture` |
@@ -303,6 +304,21 @@ commits (as for PR #46).
   main's `tests/register.mjs` still fails on Node < 22.15). Not played in a
   browser: that is the playtest before pushing.
 
+### 2026-10-11 — Compact race HUD and mobile pause controls (`ui-fix`)
+
+- Follow-up rebase onto main `692a487`: preserved the new Pilot/Adventure settings, their validation tests, Adventure opening hint and all upstream documentation. Build and lint pass; all 138 frontend tests pass. No additional visual changes or fresh simulator playtest in this rebase.
+
+- Solo/group races keep white-glass instruments at the edges and the flight path clear. Start sits near the top; ghost notices expire after five seconds. Secondary controls return on pause; rotate prompts clear in landscape. Adventure layout is unchanged.
+- `RaceResults.tsx` shows a small finish reminder during flight and bounded results while paused. Short landscape screens place the summary beside scrollable standings. Solo retains retry; both sessions expose resume callbacks.
+- Settings → Touch adds a saved, validated `leftHandedTouch` preference that mirrors race HUD/button placement, preserving steering and arrow directions. Explicit paused state restores Help/Settings and hides flight buttons.
+- Verified desktop and mobile previews, build/lint and 127 frontend tests. Rebuilt localhost:8080 and verified iPhone 16 / iOS 18.2 Simulator: Settings opens in both paused layouts, handedness flips and persists after reload. Rebased onto latest main and squashed for review; main's performance changes and notes retained.
+
+
+
+
+
+
+
 ### 2026-10-11: Performance pass and land that fades in (Claude)
 
 Asked for: the game is compute intensive; smooth the loading (no assets
@@ -349,6 +365,8 @@ Chrome on this machine's Intel UHD (ANGLE D3D11, 1578 × 802, DPR 1) with
   changes don't fade). **Not seen in motion or in a focused window**: the
   fade's feel, FXAA on thin ribbons and ink outlines, pickups growing in.
   Backend untouched.
+
+
 
 ### 2026-10-11: Wardrobe PR rebased onto main, linear (Claude)
 

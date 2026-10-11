@@ -22,7 +22,7 @@ test("bindings and preferences survive save/reload without sharing default array
   const old=globalThis.localStorage; let data;
   globalThis.localStorage={getItem:()=>data,setItem:(_key,value)=>{data=value;}};
   try {
-    const s=defaultSettings(); s.bindings.boost=["KeyJ"]; s.invertMouse=true;
+    const s=defaultSettings(); s.bindings.boost=["KeyJ"]; s.invertMouse=true; s.leftHandedTouch=true;
     saveSettings(s); const loaded=loadSettings();
     assert.deepEqual(loaded,s); assert.equal(bindingLabel(loaded.bindings,"boost"),"J");
     assert.deepEqual(defaultSettings().bindings.boost,["ShiftLeft","ShiftRight"]);
@@ -65,4 +65,10 @@ test("pilot style and crystals-only pickups are saved and validated", () => {
   assert.equal(s.pilotStyle, 2); assert.equal(s.crystalsOnly, true);
   for (const bad of [3, "2", null, 0]) assert.equal(normalizeSettings({pilotStyle: bad}).pilotStyle, 1);
   assert.equal(normalizeSettings({crystalsOnly: "yes"}).crystalsOnly, false);
+});
+
+test("left-handed touch layout defaults off and rejects non-booleans", () => {
+ assert.equal(defaultSettings().leftHandedTouch, false);
+ assert.equal(normalizeSettings({leftHandedTouch:true}).leftHandedTouch,true);
+ assert.equal(normalizeSettings({leftHandedTouch:"true"}).leftHandedTouch,false);
 });
