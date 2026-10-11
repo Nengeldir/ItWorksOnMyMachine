@@ -12,7 +12,6 @@ import { Avatar } from "./avatar";
 import { APPEARANCE_EVENT, validateAppearance, type Appearance } from "./cosmetics/storage";
 import { profileClient } from "../profile/client";
 import { Companion } from "./pets/companion";
-import { CosmeticSparkles } from "./cosmetics/sparkles";
 import { CameraRig } from "./camera";
 import { DISSOLVE_AT, type DeathKind, DeathFall, classifyCrash, fieldNormal } from "./death";
 import { Debris } from "./effects";
@@ -30,13 +29,15 @@ import { INTERPOLATION_DELAY_MS, Pilot, type PilotSample } from "./pilots";
 import { clamp } from "./math";
 import { SpeedLines } from "./speedlines";
 import { TOON_LIGHT } from "./toon";
-import { FX, RANGES, RINGS, RUN, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveTuning } from "./tuning";
+import { FX, RANGES, RINGS, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveTuning } from "./tuning";
 import { ABILITY } from "./run/abilities";
 import { PICKUP, PICKUP_PREFS } from "./run/pickups";
 import { ITEM, RUN_ITEMS, type RunItemId } from "./run/items";
 import { ORB } from "./run/orbs";
+import { portalFlash } from "./run/portal";
 import { RunController, type RunEvents, type RunHost, type RunOptions } from "./run/controller";
 import type { Equipped } from "./collection/abilities";
+import { CollectionFx } from "./collection/fx";
 import { type Rarity, rarityIndex } from "./collection/rarity";
 import type { UpgradeId } from "./run/upgrades";
 import type { RunHud } from "./run/run";
@@ -207,12 +208,11 @@ export class Game implements RunHost {
     const appearance = this.testLook ?? profileClient.appearance();
     this.avatar.setAppearance(appearance);
     this.companion.set(appearance.pet);
-    this.sparkles.setAppearance(appearance);
-    this.run?.setEquipped(this.equipped());
+    const equipped = this.equipped();
+    this.collectionFx.setEquipped(equipped);
+    this.run?.setEquipped(equipped);
   };
   private readonly fx: PilotFx;
-  /** Rare cosmetics' own particles (decoration only) */
-  private readonly sparkles: CosmeticSparkles;
   /** What the pilot carries (models and animations only, for now) */
   private readonly equipment: Equipment;
   /** What the run's abilities look like (game/abilities/) */
@@ -221,6 +221,8 @@ export class Game implements RunHost {
   private readonly abilityFx2: AbilityFx2;
   /** What the design list's items look like when used (items/fx.ts) */
   private readonly itemFx: ItemFx;
+  /** The collection in flight: rare cosmetics' light, the powers' flares, the companion's calls */
+  private readonly collectionFx: CollectionFx;
   /** Test mode's Shift+I hands out the items in turn */
   private nextTestItem = 0;
   readonly particles: Particles;
@@ -388,7 +390,10 @@ export class Game implements RunHost {
     this.ambient = new Ambient(this.particles, this.softParticles);
     this.avatar = new Avatar(options.color);
     this.companion = new Companion(this.scene, this.particles);
-    this.sparkles = new CosmeticSparkles(this.avatar, this.particles);
+    this.collectionFx = new CollectionFx(this.avatar, this.particles, {
+      sound: (voice, level) => { if (!this.attract) this.audio.voice(voice, level); },
+      kick: (degrees) => this.rig.kick(degrees),
+    });
     this.appearanceChanged();
     window.addEventListener(APPEARANCE_EVENT, this.appearanceChanged);
     this.fx = new PilotFx(this.avatar, options.color, this.particles);
@@ -560,6 +565,11 @@ export class Game implements RunHost {
     else this.holdRun(false);
   }
 
+  /** The adventure so far (null outside a run): reported when a pilot leaves before the end */
+  runSnapshot() {
+    return this.run?.snapshot() ?? null;
+  }
+
   /** Dev tools: give the running run an upgrade now, e.g. `__game.grant("slipstream")` */
   grant(id: UpgradeId) {
     this.run?.grant(id);
@@ -653,9 +663,11 @@ export class Game implements RunHost {
   }
 
   veil(amount: number) {
-    if (this.veilFlash !== RUN.portalFlash) {
-      this.veilFlash = RUN.portalFlash;
-      this.portalVeil.style.setProperty("--portal-flash", RUN.portalFlash.toFixed(3));
+    // Gentler under a night sky, where the same brightening glares
+    const flash = portalFlash(this.world.palette.night);
+    if (this.veilFlash !== flash) {
+      this.veilFlash = flash;
+      this.portalVeil.style.setProperty("--portal-flash", flash.toFixed(3));
     }
     if (Math.abs(amount - this.veilAmount) < 0.002) return;
     this.veilAmount = amount;
@@ -1629,16 +1641,18 @@ export class Game implements RunHost {
       // Frozen on the start line or in the tunnel: no motes, or they pile up into a glowing ball
       const moving = this.raceState !== "countdown" && !waiting;
       this.fx.update(dt, this.flight.speed, this.flight.velocity, this.smoothProximity, moving);
-      this.sparkles.update(dt, this.flight.velocity, moving && !this.inWormhole && !this.attract);
       this.skimSpray(dt);
       if (this.run) {
         this.abilityFx.update(dt, this.run.abilities, this.world, this.flight, this.rig.camera, this.passedGate, moving);
         this.abilityFx2.update(dt, this.run.abilities, this.world, this.flight, this.rig.camera, this.passedGate, moving);
         this.itemFx.update(dt, this.run.items, this.flight, moving, this.run.charm);
+        this.collectionFx.update(dt, this.flight, this.run, moving && !this.inWormhole);
       } else {
         this.abilityFx.hide();
         this.abilityFx2.hide();
         this.itemFx.hide();
+        // Outside adventures the cosmetics still shine (looks only), but no power acts
+        this.collectionFx.update(dt, this.flight, null, moving && !this.attract);
       }
       this.rig.update(
         dt,

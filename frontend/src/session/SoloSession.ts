@@ -3,6 +3,7 @@ import { type FinishResult, Game, type HudState } from "../game/Game";
 import type { Settings } from "../storage";
 import type { InputObserver } from "../game/input";
 import { Store } from "./store";
+import { profileClient } from "../profile/client";
 
 const COUNTDOWN_MS = 3000;
 const SOLO_COLOR = "#ff5d73";
@@ -12,6 +13,8 @@ export interface SoloResult {
   saving: boolean;
   rank?: number;
   personalBestMs?: number;
+  /** XP the finish earned on the pilot's profile */
+  xp?: number;
   error?: string;
 }
 
@@ -145,10 +148,13 @@ export class SoloSession {
         client_id: this.clientId,
         nickname: this.settings.nickname,
         ghost,
+        gates: this.store.get().hud?.totalCheckpoints ?? 0,
       });
+      // The finish's XP (one per gate) shows up in the profile
+      if (saved.xp) void profileClient.refresh().catch(() => {});
       if (attempt !== this.attempt) return;
       this.store.set({
-        result: { timeMs, saving: false, rank: saved.rank, personalBestMs: saved.personal_best_ms },
+        result: { timeMs, saving: false, rank: saved.rank, personalBestMs: saved.personal_best_ms, xp: saved.xp },
         leaderboard: saved.leaderboard,
       });
     } catch (e) {

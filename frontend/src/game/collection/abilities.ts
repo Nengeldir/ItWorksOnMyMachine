@@ -72,6 +72,8 @@ export interface Shed {
   size: number; // metres
   life: number; // seconds
   gravity: number;
+  /** Extra rate while boosting, × the boost (0: none) */
+  boost?: number;
 }
 
 /** What using a keepsake as the charm does */
@@ -116,7 +118,7 @@ export const POWERS: readonly Power[] = [
   P({ key: "cape:royal", name: "Regal bearing", description: "Fly like royalty: the style multiplier climbs one level higher, and every gate is worth 25 more points.", stats: { styleCap: 1, gateBonus: 25 }, voice: "gild",
     shed: { from: "hem", color: "#ffe39a", kind: 2, rate: 10, size: 0.09, life: 0.9, gravity: 0.6 } }),
   P({ key: "cape:ember", name: "Molten wake", description: "The phoenix mantle burns behind you: boost accelerates 20% harder and stamina orbs restore 60% more.", stats: { boostAccel: 0.2, orbs: 1.6 }, voice: "ember",
-    shed: { from: "hem", color: "#ff9a52", kind: 0, rate: 22, size: 0.11, life: 0.8, gravity: -0.9 } }),
+    shed: { from: "hem", color: "#ff9a52", kind: 0, rate: 22, size: 0.11, life: 0.8, gravity: -0.9, boost: 2 } }),
   P({ key: "hat:wingedHelm", name: "Hermes' step", description: "Little wings at your temples: dodges come back 35% sooner and carry you 2 m further.", stats: { dodgeCooldown: 0.65, dodgeDistance: 2 }, voice: "feather",
     shed: { from: "head", color: "#fff1c4", kind: 3, rate: 6, size: 0.18, life: 0.6, gravity: 0 } }),
   P({ key: "hat:starwitch", name: "Star sight", description: "The stargazer's eye catches every glint: style points +15% and treasures are collected from 2 m further.", stats: { styleRate: 1.15, pickupRadius: 2 }, voice: "stars",

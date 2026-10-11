@@ -5,6 +5,8 @@ import { RUN_LENGTH, type RunHud as RunHudState, type RunSummary } from "../game
 import { UPGRADES, type Upgrade, type UpgradeId } from "../game/run/upgrades";
 import type { BindingAction } from "../game/bindings";
 import { BIOMES, type BiomeId } from "../game/world/biomes";
+import { powerOf } from "../game/collection/abilities";
+import type { RunReward } from "../profile/types";
 import { Feather } from "./Feather";
 import { boundKeys } from "./keys";
 import "./RunHud.css";
@@ -106,7 +108,7 @@ export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compas
       </div>
     )}
 
-    <ItemBag items={run.items} />
+    <ItemBag items={run.items} charm={run.charm} />
 
     {run.upgrades.length > 0 && (
       <div className="run-upgrades" title="Upgrades">
@@ -117,17 +119,26 @@ export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compas
     )}
 
     {toasts && run.toast && (
-      <div className="run-toast glass" key={run.toast.id}>
+      <div
+        className={`run-toast glass${run.toast.rarity !== undefined ? " rarity" : ""}`}
+        key={run.toast.id}
+        style={run.toast.rarity !== undefined ? ({ "--rarity": RARITIES[run.toast.rarity].color } as CSSProperties) : undefined}
+      >
         {run.toast.text}
         {run.toast.points > 0 && <b> +{run.toast.points.toLocaleString()}</b>}
+        {/* The key it reminds you of: your binding on a keyboard, the button's name on a touch screen */}
+        {run.toast.action && <span className="toast-key">
+          <span className="no-touch"> · <kbd>{boundKeys(run.toast.action)[0]?.[0] ?? "?"}</kbd> to use</span>
+          <span className="touch-only"> · tap {run.toast.action === "charm" ? "Charm" : "the item button"}</span>
+        </span>}
       </div>
     )}
   </div>
 );
 
 /** The bag of items (three slots, the one to use lit up) and the effects under way */
-const ItemBag = ({ items }: { items: RunHudState["items"] }) => {
-  if (!items.bag.length && !items.active.length) return null;
+const ItemBag = ({ items, charm }: { items: RunHudState["items"]; charm: RunHudState["charm"] }) => {
+  if (!items.bag.length && !items.active.length && !charm) return null;
   const use = boundKeys("useItem")[0]?.[0] ?? "Y";
   const next = boundKeys("nextItem")[0]?.[0] ?? "U";
   return (
@@ -164,6 +175,22 @@ const ItemBag = ({ items }: { items: RunHudState["items"] }) => {
           </span>
         </div>
       )}
+      {charm && <CharmChip charm={charm} />}
+    </div>
+  );
+};
+
+/** The keepsake carried as the charm: its icon, name and state (ready, used this level, burning) */
+const CharmChip = ({ charm }: { charm: NonNullable<RunHudState["charm"]> }) => {
+  const key = boundKeys("charm")[0]?.[0] ?? "K";
+  const state = charm.state === "ready" ? <><kbd>{key}</kbd> {charm.left > 1 ? `×${charm.left}` : "ready"}</>
+    : charm.state === "strapping" ? "lighting…" : charm.state === "burning" ? <><kbd>{key}</kbd> take off</>
+    : charm.state === "used" ? "next level" : "always on";
+  return (
+    <div className={`run-charm glass ${charm.state}`} title={powerOf(`item:${charm.id}`)?.description}>
+      <span className="label">Charm</span>
+      <b>{charm.name}</b>
+      <span className="state">{state}</span>
     </div>
   );
 };
@@ -190,6 +217,7 @@ export const FinishScreen = ({
   onNewRun,
   onMenu,
   testMode = false,
+  reward = null,
 }: {
   summary: RunSummary;
   best: number | null;
@@ -197,6 +225,8 @@ export const FinishScreen = ({
   onNewRun?: () => void;
   onMenu: () => void;
   testMode?: boolean;
+  /** What the adventure earned on the profile: the score turned into crystals, the gates into XP */
+  reward?: RunReward | null;
 }) => {
   const won = summary.completed;
   const verdict = testMode ? "test result · not saved" :
@@ -222,6 +252,13 @@ export const FinishScreen = ({
           <strong>{summary.score.toLocaleString()}</strong>
           <span>{verdict}</span>
         </div>
+        {!testMode && (
+          <p className={`finish-reward${reward ? " in" : ""}`}>
+            {reward
+              ? <>Earned <b>+{reward.crystals.toLocaleString()} crystals</b> and <b>+{reward.xp.toLocaleString()} XP</b>{reward.levels > 0 && <> · <b>level {reward.profile.level}!</b></>}</>
+              : "Turning your score into crystals…"}
+          </p>
+        )}
         <dl className="finish-stats">
           {stats.map(([label, value]) => (
             <div key={label}>

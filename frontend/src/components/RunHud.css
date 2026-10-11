@@ -739,3 +739,55 @@
     display: none;
   }
 }
+
+/* The charm: the keepsake carried on adventures, beside the bag */
+.run-charm {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.05rem 0.5rem;
+  align-items: center;
+  padding: 0.45rem 0.75rem;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, #ffc94d 55%, transparent);
+  box-shadow: 0 0 18px color-mix(in srgb, #ffc94d 25%, transparent);
+  font-size: 0.75rem;
+  max-width: 15rem;
+}
+.run-charm .label {
+  grid-row: span 2;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-70);
+}
+.run-charm b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.run-charm .state { color: var(--ink-70); }
+.run-charm.used, .run-charm.passive { opacity: 0.75; box-shadow: none; }
+.run-charm.burning { border-color: #ff9a52; box-shadow: 0 0 22px #ff9a5266; }
+.run-charm.burning .state, .run-charm.strapping .state { color: #c85a14; font-weight: 700; }
+
+/* A toast about an item picked up glows in its rarity */
+.run-toast.rarity {
+  border: 1px solid color-mix(in srgb, var(--rarity) 70%, transparent);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--rarity) 35%, transparent);
+}
+.run-toast .toast-key kbd { margin: 0 0.15rem; }
+
+/* What the finished adventure earned */
+.finish-reward {
+  margin: 0.4rem 0 0.8rem;
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+.finish-reward.in {
+  opacity: 1;
+  animation: reward-in 0.6s ease-out;
+}
+.finish-reward b { color: #a8730a; }
+@keyframes reward-in { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (max-width: 720px) {
+  .run-charm { max-width: 11rem; }
+}
+@media (prefers-reduced-motion: reduce) { .finish-reward.in { animation: none; } }

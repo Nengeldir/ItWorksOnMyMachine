@@ -150,3 +150,23 @@ test("after a hoop the pet plays around for a few seconds, and never jumps on or
     companion.dispose();
   }
 });
+
+test("far from hoops the pet circles the pilot playfully and smoothly instead of holding one spot", () => {
+  const scene = new Group(), pilot = new Group(), companion = new Companion(scene);
+  companion.set("fox");
+  const sides = new Set(); let previous = null, largestStep = 0, farthest = 0;
+  for (let i = 0; i < 60 * 14; i++) {
+    pilot.position.z -= 40 / 60; // 40 m/s straight ahead (-z), no course: nothing to guide it
+    companion.update(1 / 60, pilot, true);
+    const offset = companion.group.position.clone().sub(pilot.position);
+    farthest = Math.max(farthest, offset.length());
+    // Which quarter round the pilot it is in: right, ahead, left or behind
+    sides.add(Math.floor(((Math.atan2(offset.x, -offset.z) + Math.PI * 2.25) % (Math.PI * 2)) / (Math.PI / 2)));
+    if (previous) largestStep = Math.max(largestStep, offset.distanceTo(previous));
+    previous = offset;
+  }
+  assert.equal(sides.size, 4, "it goes all the way round");
+  assert.ok(farthest < 4.6, `stays close (${farthest.toFixed(2)} m)`);
+  assert.ok(largestStep < 0.25, `moves smoothly (${largestStep.toFixed(3)} m per frame)`);
+  companion.dispose();
+});

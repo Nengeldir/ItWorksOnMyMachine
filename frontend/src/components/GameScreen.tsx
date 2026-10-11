@@ -254,6 +254,7 @@ const SoloScreen = ({ seed, settings, onSettings, onExit, tutorial, onTutorialEn
           {result.rank !== undefined && <p><strong>{ordinal(result.rank)}</strong> on this course
             {result.personalBestMs !== undefined && result.personalBestMs < result.timeMs && <> · your best is {formatTime(result.personalBestMs)}</>}
             {result.personalBestMs === result.timeMs && <> · new personal best!</>}
+            {!!result.xp && <> · <b className="xp-gain">+{result.xp} XP</b></>}
           </p>}
           <h3>Best times</h3>
           <Leaderboard entries={leaderboard} empty="No times yet on this course." />
@@ -493,7 +494,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onT
   const idle = useIdleUi();
   const [session] = useState(() => new RunSession(seed, settings));
   const ref = useMountedSession(session, settings);
-  const { hud, stage, offers, next, arrived, summary, best, error } = useSyncExternalStore(session.store.subscribe, session.store.get);
+  const { hud, stage, offers, next, arrived, summary, best, error, reward } = useSyncExternalStore(session.store.subscribe, session.store.get);
   const run = hud?.run ?? null;
   usePaletteTheme(hud?.palette);
 
@@ -556,7 +557,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onT
       {stage === "pick" && !hud?.paused && <UpgradePicker offers={offers} next={next} onPick={(id) => session.pick(id)} />}
 
       {stage === "summary" && summary && (
-        <FinishScreen summary={summary} best={best} onAgain={() => session.again()} onNewRun={onNewRun} onMenu={onExit} />
+        <FinishScreen summary={summary} best={best} reward={reward} onAgain={() => session.again()} onNewRun={onNewRun} onMenu={onExit} />
       )}
     </div>
   );
