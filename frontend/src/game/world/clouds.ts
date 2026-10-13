@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { makeRng, range } from "../rng";
 import { ATMOSPHERE } from "./atmosphere";
 import type { World } from "./World";
+import { type Area, perCell } from "./open";
 
 // Soft clouds for the generator-v2 biomes: each cloud a cluster of puffs drawn
 // as camera-facing billboards in one instanced draw call. Puffs are lit from
@@ -73,9 +74,13 @@ const fragmentShader = /* glsl */ `
 export class SoftClouds {
   readonly mesh: THREE.Mesh;
 
-  constructor(world: World, count: number, lift: number, banks: number) {
+  /**
+   * A level's clouds; or, given an open world's cell, its share of them (as many per square metre,
+   * anywhere in it, no banks: there is no line to put them across)
+   */
+  constructor(world: World, count: number, lift: number, banks: number, area: Area | null = null) {
     const { course, seed, palette } = world;
-    const rng = makeRng(seed, "soft clouds");
+    const rng = makeRng(seed, area ? `soft clouds/${area.key}` : "soft clouds");
     const puffs: number[] = [];
     const shades: number[] = [];
     const cloud = (cx: number, cy: number, cz: number, width: number, height: number, n: number) => {
@@ -87,10 +92,14 @@ export class SoftClouds {
         shades.push(v, rng());
       }
     };
+    if (area) {
+      count = perCell(rng, count, 900);
+      banks = 0;
+    }
     for (let i = 0; i < count; i++) {
-      const z = range(rng, course.start.z - 500, course.endZ + 1300);
+      const z = area ? range(rng, area.z0, area.z1) : range(rng, course.start.z - 500, course.endZ + 1300);
       const width = range(rng, 110, 260);
-      cloud(course.x(z) + range(rng, -900, 900), course.y(z) + range(rng, 160, 380) + lift, z, width, width * range(rng, 0.3, 0.45), 6 + Math.floor(rng() * 6));
+      cloud(area ? range(rng, area.x0, area.x1) : course.x(z) + range(rng, -900, 900), course.y(z) + range(rng, 160, 380) + lift, z, width, width * range(rng, 0.3, 0.45), 6 + Math.floor(rng() * 6));
     }
     // Banks across the racing line: fly straight through them
     for (let i = 0; i < banks; i++) {

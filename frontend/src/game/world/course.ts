@@ -53,6 +53,11 @@ export function difficulty(level: number): Difficulty {
 /**
  * The racing line: a descending 3D curve, a function of z, so it never turns back.
  * Gates (obstacles the line threads) sit along it, each with a ring.
+ *
+ * An open world (Zen) has no line: its course is level at y = 0 along z, with no
+ * gates, no rings, no end and no tube carved through the land, so the land
+ * around it is the same in every direction. y = 0 is the height the open world's
+ * land is measured from, where a line's land is measured from the line.
  */
 export class Course {
   readonly rings: Ring[] = [];
@@ -61,6 +66,7 @@ export class Course {
   readonly start: Vector3;
   readonly startDirection: Vector3;
   readonly endZ: number;
+  readonly open: boolean;
   private readonly noise: NoiseFunction2D;
   private readonly z0: number;
   private readonly xs: Float64Array;
@@ -69,10 +75,19 @@ export class Course {
   readonly level: number;
   private readonly hard: Difficulty;
 
-  constructor(seed: number, level = 0) {
+  constructor(seed: number, level = 0, open = false) {
+    this.open = open;
     this.noise = createNoise2D(makeRng(seed, "line"));
     this.level = level;
     this.hard = difficulty(level);
+    if (open) {
+      this.endZ = Infinity;
+      this.z0 = START_Z;
+      this.xs = this.ys = new Float64Array(0);
+      this.start = this.pointAt(START_Z);
+      this.startDirection = new Vector3(0, 0, 1);
+      return;
+    }
     const rng = makeRng(seed, "gates");
     // The same draws at every difficulty (level 0 is exactly the frozen map), only spaced closer
     for (let z = 90; z < LENGTH; z += range(rng, 95, 130) * this.hard.spacing) this.gates.push(z);
@@ -113,6 +128,7 @@ export class Course {
   }
 
   x(z: number): number {
+    if (this.open) return 0;
     const base = 170 * this.noise(z * 0.0011, 1.3) + 45 * this.noise(z * 0.004, 7.7);
     if (this.level <= 0) return base;
     const h = this.hard;
@@ -120,6 +136,7 @@ export class Course {
   }
 
   y(z: number): number {
+    if (this.open) return 0;
     const f = Math.min(Math.max((z - this.z0) / STEP, 0), this.ys.length - 1.001);
     const i = Math.floor(f);
     return this.ys[i] + (this.ys[i + 1] - this.ys[i]) * (f - i);
@@ -135,6 +152,7 @@ export class Course {
 
   /** Distance from a point to the racing line (exact within a few tube radii, else at least that) */
   distance(px: number, py: number, pz: number): number {
+    if (this.open) return Infinity;
     const reach = TUBE_RADIUS + 10;
     const first = Math.max(0, Math.floor((pz - reach - this.z0) / STEP));
     const last = Math.min(this.xs.length - 2, Math.ceil((pz + reach - this.z0) / STEP));

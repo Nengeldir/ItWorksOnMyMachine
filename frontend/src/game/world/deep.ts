@@ -5,6 +5,7 @@ import { TOON_LIGHT } from "../toon";
 import { ATMOSPHERE } from "./atmosphere";
 import type { UnderwaterSpec } from "./biomes/types";
 import type { World } from "./World";
+import { type Area, perCell } from "./open";
 
 // What makes a level read as under the sea, besides the surface overhead and
 // the ripples of light on the land (both in atmosphere.ts): shafts of light
@@ -281,14 +282,15 @@ export class SeaLife {
   readonly meshes: THREE.Mesh<THREE.InstancedBufferGeometry, THREE.ShaderMaterial>[] = [];
   private readonly glow = { value: 0 };
 
-  constructor(world: World, spec: UnderwaterSpec) {
+  /** A level's sea life; or, given an open world's cell, its share of it (anywhere in the cell) */
+  constructor(world: World, spec: UnderwaterSpec, area: Area | null = null) {
     const { course } = world;
-    const rng = makeRng(world.seed, "sea life");
-    /** Open water beside the racing line with `room` metres clear of the rock all round, or null */
+    const rng = makeRng(world.seed, area ? `sea life/${area.key}` : "sea life");
+    /** Open water beside the racing line (anywhere in an open world's cell) with `room` metres clear of the rock all round, or null */
     const spot = (lateral: [number, number], rise: [number, number], room: number): [number, number, number] | null => {
       for (let tries = 0; tries < 6; tries++) {
-        const z = range(rng, course.start.z - 60, course.endZ + 200);
-        const x = course.x(z) + (rng() < 0.5 ? -1 : 1) * range(rng, lateral[0], lateral[1]);
+        const z = area ? range(rng, area.z0, area.z1) : range(rng, course.start.z - 60, course.endZ + 200);
+        const x = area ? range(rng, area.x0, area.x1) : course.x(z) + (rng() < 0.5 ? -1 : 1) * range(rng, lateral[0], lateral[1]);
         const y = course.y(z) + range(rng, rise[0], rise[1]);
         if (world.rock.distance(x, y, z) > room) return [x, y, z];
       }
@@ -299,7 +301,10 @@ export class SeaLife {
     const swim: number[] = [];
     const tint: number[] = [];
     const color = new THREE.Color();
-    for (let i = 0; i < spec.shoals; i++) {
+    // An open world's cell: as many per square metre as beside a level's line
+    const shoals = area ? perCell(rng, spec.shoals, 170) : spec.shoals;
+    const jellyfish = area ? perCell(rng, spec.jellyfish, 170) : spec.jellyfish;
+    for (let i = 0; i < shoals; i++) {
       const radius = range(rng, 5, 15);
       const at = spot([12, 170], [-16, 40], radius + 4);
       // A few schools are a handful of big fish instead of a cloud of small ones
@@ -335,7 +340,7 @@ export class SeaLife {
 
     const home: number[] = [];
     const hues: number[] = [];
-    for (let i = 0; i < spec.jellyfish; i++) {
+    for (let i = 0; i < jellyfish; i++) {
       // Mostly small, now and then a giant further out
       const size = rng() < 0.12 ? range(rng, 4, 7) : range(rng, 0.8, 2.4);
       const at = spot([size > 3 ? 40 : 8, 190], [-18, 60], size * 3 + 4);

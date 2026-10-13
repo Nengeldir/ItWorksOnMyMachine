@@ -7,7 +7,8 @@ import { kindInfo } from "../structures/kinds";
 import { Plant } from "../trees";
 import type { LandCollider } from "../landCollider";
 import type { World } from "../World";
-import { NODE_SIZE, type TerrainMesh, VOXEL, nodeKey } from "./mesh";
+import { smoothstep } from "../../math";
+import { KEY_SPAN, NODE_SIZE, type TerrainMesh, VOXEL, nodeKey } from "./mesh";
 
 // Streams generator-v2 land around the camera as an octree of nodes: 384 m
 // nodes far away, split into 192, 96 and finally 48 m nodes as you get close. Every
@@ -16,9 +17,16 @@ import { NODE_SIZE, type TerrainMesh, VOXEL, nodeKey } from "./mesh";
 // replacements have arrived (and the other way round when merging), so the land
 // never shows holes or two levels at once. Land that comes on screen where none
 // was shown before fades in out of the haze (its `born` attribute, atmosphere.ts).
+//
+// An open world (Zen) has no footprint to cover up front: columns of root
+// nodes are planted around the camera, every way, as it goes and dug up far
+// behind it, and land is loaded in a cone ahead of where you fly. Behind you it counts further
+// away (`TERRAIN.coneBehind`), so it stays coarse and is asked for last.
 
 export const LOD_LEVELS = 4;
 const ROOT_LOD = LOD_LEVELS - 1;
+/** Within this many metres you see land in every direction at full detail, cone or not */
+const CONE_NEAR = 160;
 
 export interface NodeRequest {
   kind: "node";
@@ -68,6 +76,11 @@ export class LandStreamer {
   private cacheBytes = 0;
   private desired: Node[] = [];
   private readonly wanted: { node: Node; d: number }[] = [];
+  /** An open world: the root columns planted so far, by column */
+  private readonly columns: Map<number, Node[]> | null;
+  /** Where you are flying (unit, horizontal), for the cone; zero when still */
+  private readonly heading = new THREE.Vector3();
+  private readonly toNode = new THREE.Vector3();
 
   constructor(world: World, group: THREE.Group, material: THREE.Material, flora: FloraView | null, collider: LandCollider) {
     this.world = world;
@@ -78,6 +91,8 @@ export class LandStreamer {
     const field = world.land!;
     const { course } = world;
     const extent = field.ground?.spec.extent ?? 900;
+    this.columns = world.open ? new Map() : null;
+    if (this.columns) return;
     const size = NODE_SIZE << ROOT_LOD;
     // The land's footprint: the course from before the start to past the end, out to its extent either side
     let xMin = Infinity;
@@ -182,6 +197,12 @@ export class LandStreamer {
       this.lastUpdate.copy(at);
       this.lastLookAhead.copy(this.lookAhead);
       this.stamp++;
+      if (this.columns) {
+        this.heading.set(velocity?.x ?? 0, 0, velocity?.z ?? 0);
+        if (this.heading.lengthSq() > 1) this.heading.normalize();
+        else this.heading.set(0, 0, 0);
+        this.plant(at);
+      }
       this.desired.length = 0;
       for (const root of this.roots) this.visit(root, at);
       for (const root of this.roots) this.pruneTree(root, false);
@@ -196,7 +217,7 @@ export class LandStreamer {
       if (node.shown) continue;
       const d = node.box.distanceToPoint(at);
       if (d < TERRAIN.readyRadius && !this.shownAncestor(node) && !this.visibleCoverage(node)) missingNearby = true;
-      if (node.state === "idle") wanted.push({ node, d: d + node.lod * 120 });
+      if (node.state === "idle") wanted.push({ node, d: d * this.behind(node, d, at) + node.lod * 120 });
     }
     this.ready = !missingNearby;
     wanted.sort((a, b) => a.d - b.d);
@@ -206,11 +227,26 @@ export class LandStreamer {
     }
   }
 
+  /**
+   * The cone: how much further than it is a node counts, by where it lies from where you fly.
+   * 1 ahead and close by; up to `TERRAIN.coneBehind` straight behind. Only in an open world.
+   */
+  private behind(node: Node, d: number, at: THREE.Vector3): number {
+    if (!this.columns || d < CONE_NEAR || this.heading.lengthSq() === 0) return 1;
+    node.box.getCenter(this.toNode).sub(at).setY(0);
+    const length = this.toNode.length();
+    if (length < 1) return 1;
+    const along = this.toNode.dot(this.heading) / length; // 1 ahead, -1 behind
+    return 1 + (TERRAIN.coneBehind - 1) * smoothstep(0.5, -0.4, along);
+  }
+
   private visit(node: Node, at: THREE.Vector3) {
     const d = node.box.distanceToPoint(at);
-    if (d > TERRAIN.viewDistance) return;
+    const behind = this.behind(node, d, at);
+    // Far behind you, land isn't kept at all (it comes back, coarse first, when you turn)
+    if (d * (1 + (behind - 1) * 0.5) > TERRAIN.viewDistance) return;
     const split = node.lod === 3 ? TERRAIN.lodFar : node.lod === 2 ? TERRAIN.lodNear : TERRAIN.lodDetail;
-    const detailDistance = this.predicting ? Math.min(d, node.box.distanceToPoint(this.lookAhead)) : d;
+    const detailDistance = (this.predicting ? Math.min(d, node.box.distanceToPoint(this.lookAhead)) : d) * behind;
     node.split = node.lod > 0 && detailDistance < split + (node.split ? TERRAIN.lodHysteresis : 0);
     if (node.split) {
       for (const child of this.childrenOf(node)) this.visit(child, at);
@@ -397,7 +433,67 @@ export class LandStreamer {
    */
   covers(x: number, y: number, z: number): boolean {
     for (const root of this.roots) if (inside(root.box, x, y, z)) return this.coveredIn(root, x, y, z);
+    // An open world's land not planted yet: the field stands in
+    if (this.columns) return false;
     return true;
+  }
+
+  /**
+   * An open world: plants root columns within sight of `at`, every way, and digs up the ones left
+   * far behind, meshes, plants and colliders with them
+   */
+  private plant(at: THREE.Vector3) {
+    const columns = this.columns!;
+    const size = NODE_SIZE << ROOT_LOD;
+    const reach = TERRAIN.viewDistance + size;
+    for (let ix = Math.floor((at.x - reach) / size); ix <= Math.floor((at.x + reach) / size); ix++) {
+      for (let iz = Math.floor((at.z - reach) / size); iz <= Math.floor((at.z + reach) / size); iz++) {
+        const key = nodeKey(ROOT_LOD, ix, 0, iz);
+        if (columns.has(key) || rectDistance(at, ix, iz, size) > reach) continue;
+        const nodes: Node[] = [];
+        columns.set(key, nodes);
+        const range = this.columnRange(ROOT_LOD, ix, iz);
+        if (!range) continue;
+        for (let iy = Math.floor(range[0] / size); iy <= Math.floor(range[1] / size); iy++) {
+          const node = this.node(ROOT_LOD, ix, iy, iz, null);
+          nodes.push(node);
+          this.roots.push(node);
+        }
+      }
+    }
+    let dug = false;
+    for (const [key, nodes] of columns) {
+      const root = nodes[0];
+      const ix = root ? root.ix : decodeColumn(key)[0];
+      const iz = root ? root.iz : decodeColumn(key)[1];
+      if (rectDistance(at, ix, iz, size) < reach + size) continue;
+      columns.delete(key);
+      for (const node of nodes) this.dig(node);
+      dug = true;
+    }
+    if (dug) {
+      const kept = this.roots.filter((root) => columns.has(nodeKey(ROOT_LOD, root.ix, 0, root.iz)));
+      this.roots.length = 0;
+      this.roots.push(...kept);
+    }
+  }
+
+  /** Forgets a node and everything under it: off screen, meshes freed, colliders and cached ranges gone */
+  private dig(node: Node) {
+    if (node.children) for (const child of node.children) this.dig(child);
+    if (node.shown) this.hide(node);
+    const cached = this.cache.get(node.key);
+    if (cached) {
+      this.cache.delete(node.key);
+      this.cacheBytes -= cached.bytes;
+    }
+    node.mesh?.geometry.dispose();
+    node.mesh = null;
+    node.plants = node.tufts = null;
+    node.state = "idle";
+    this.world.trees.remove(node.key);
+    this.byKey.delete(node.key);
+    this.ranges.delete(nodeKey(node.lod, node.ix, 0, node.iz));
   }
 
   private coveredIn(node: Node, x: number, y: number, z: number): boolean {
@@ -422,6 +518,20 @@ export class LandStreamer {
     this.cacheBytes = 0;
     this.arrived.length = 0;
   }
+}
+
+/** Horizontal distance from a point to a root column */
+function rectDistance(at: THREE.Vector3, ix: number, iz: number, size: number): number {
+  const dx = Math.max(ix * size - at.x, 0, at.x - (ix + 1) * size);
+  const dz = Math.max(iz * size - at.z, 0, at.z - (iz + 1) * size);
+  return Math.hypot(dx, dz);
+}
+
+/** A root column's ix and iz back from its key (nodeKey at the root level, iy 0) */
+function decodeColumn(key: number): [number, number] {
+  const iz = (key % KEY_SPAN) - KEY_SPAN / 2;
+  const ix = (Math.floor(key / KEY_SPAN / KEY_SPAN) % KEY_SPAN) - KEY_SPAN / 2;
+  return [ix, iz];
 }
 
 function inside(box: THREE.Box3, x: number, y: number, z: number): boolean {

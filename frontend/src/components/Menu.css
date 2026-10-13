@@ -70,14 +70,16 @@ body:has(.menu-backdrop:empty) {
 
 .menu-tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* Sized by their names (With friends is long), the spare room shared out */
+  grid-template-columns: repeat(4, auto);
   padding: 4px;
   border-radius: 16px;
   background: var(--ink-06);
 }
 
 .menu-tabs button {
-  padding: 0.6rem;
+  padding: 0.6rem 0.5rem;
+  white-space: nowrap;
   border: none;
   border-radius: 12px;
   background: none;

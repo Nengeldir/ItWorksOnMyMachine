@@ -167,7 +167,7 @@ const BUCKET = 32;
 /** Trees by area, for collisions. Chunks add theirs as their meshes arrive. */
 export class TreeIndex {
   private readonly buckets = new Map<number, Collider[]>();
-  private readonly chunks = new Set<number>();
+  private readonly chunks = new Map<number, Collider[]>();
   private readonly reach: number;
 
   /** Distances are exact up to `reach` metres from a tree */
@@ -182,17 +182,37 @@ export class TreeIndex {
   /** Adds a chunk's trees, once */
   add(chunk: number, trees: Collider[]) {
     if (this.chunks.has(chunk)) return;
-    this.chunks.add(chunk);
+    this.chunks.set(chunk, trees);
     for (const tree of trees) {
-      const r = tree.radius + this.reach;
-      for (let bx = Math.floor((tree.x - r) / BUCKET); bx <= Math.floor((tree.x + r) / BUCKET); bx++) {
-        for (let bz = Math.floor((tree.z - r) / BUCKET); bz <= Math.floor((tree.z + r) / BUCKET); bz++) {
-          const key = this.key(bx, bz);
-          const list = this.buckets.get(key);
-          if (list) list.push(tree);
-          else this.buckets.set(key, [tree]);
-        }
-      }
+      this.bucketsOf(tree, (key) => {
+        const list = this.buckets.get(key);
+        if (list) list.push(tree);
+        else this.buckets.set(key, [tree]);
+      });
+    }
+  }
+
+  /** Takes a chunk's trees out again (land left far behind on an endless line) */
+  remove(chunk: number) {
+    const trees = this.chunks.get(chunk);
+    if (!trees) return;
+    this.chunks.delete(chunk);
+    for (const tree of trees) {
+      this.bucketsOf(tree, (key) => {
+        const list = this.buckets.get(key);
+        if (!list) return;
+        const i = list.indexOf(tree);
+        if (i >= 0) list.splice(i, 1);
+        if (!list.length) this.buckets.delete(key);
+      });
+    }
+  }
+
+  /** Every bucket a tree reaches into */
+  private bucketsOf(tree: Collider, each: (key: number) => void) {
+    const r = tree.radius + this.reach;
+    for (let bx = Math.floor((tree.x - r) / BUCKET); bx <= Math.floor((tree.x + r) / BUCKET); bx++) {
+      for (let bz = Math.floor((tree.z - r) / BUCKET); bz <= Math.floor((tree.z + r) / BUCKET); bz++) each(this.key(bx, bz));
     }
   }
 

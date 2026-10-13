@@ -53,6 +53,14 @@ const STEP = 1 / 120; // physics runs at a fixed rate, rendering interpolates
 const MAX_STEPS_PER_FRAME = 12;
 const SCORE_RANGE = 10; // proximity counts within this many metres
 const RESPAWN_DELAY = 1.4; // seconds
+/**
+ * Zen: after a crash you come back where the tumble rolled to, a little further on its way: these
+ * steps on (m) and these heights above it (m) are tried in turn for a spot with room to fly
+ */
+const ZEN_AHEAD = [18, 10, 28, 0];
+const ZEN_ABOVE = [12, 20, 30, 44];
+const ZEN_ROOM = 9; // metres clear of rock, trees and water all round the spot…
+const ZEN_RUNWAY = 30; // …and nothing this close ahead in the way you set off
 const START_SPEED = 32; // m/s
 /** The autopilot starts the course again this far past the finish (the line runs on, down towards a sea) */
 const AUTOPILOT_LOOP = 40;
@@ -96,6 +104,9 @@ export interface HudState {
   run: RunHud | null;
   biomeName: string;
   paletteName: string;
+  /** Zen: the level goes on for ever, and a crash puts you back nearby */
+  /** Zen's open world: a crash brings you back nearby */
+  openWorld: boolean;
   palette: Palette; // the level's lighting mood: the UI takes its colors from it
   speedKmh: number;
   boostCharge: number;
@@ -295,6 +306,9 @@ export class Game implements RunHost {
   private checkpoints = 0;
   private finishMs: number | null = null;
   private crashedAt: number | null = null;
+  /** Where a crash happened and which way you were flying (Zen comes back along the tumble) */
+  private readonly crashFrom = new THREE.Vector3();
+  private readonly crashHeading = new THREE.Vector3();
   /** The pilot's tumble after a crash (looks only) */
   private readonly death = new DeathFall();
   private dissolved = false;
@@ -1016,8 +1030,8 @@ export class Game implements RunHost {
     pilot.dispose();
   }
 
-  private respawn(checkpoints: number) {
-    const { position, direction } = this.world.spawnPoint(checkpoints);
+  private respawn(checkpoints: number, spawn = this.world.spawnPoint(checkpoints)) {
+    const { position, direction } = spawn;
     if (checkpoints === 0 && this.startSlot !== null) {
       // A start grid four abreast, so racers don't spawn inside each other
       const side = tmp.crossVectors(direction, THREE.Object3D.DEFAULT_UP).normalize();
@@ -1050,12 +1064,60 @@ export class Game implements RunHost {
 
   private respawnNow() {
     if (this.raceState === "countdown") return;
+    if (this.world.open) {
+      this.respawn(0, this.zenSpawn());
+      return;
+    }
     if (this.run) {
       if (this.run.frozen) return;
       this.respawn(this.run.checkpoint);
       return;
     }
     this.respawn(this.raceState === "free" ? 0 : this.checkpoints);
+  }
+
+  /**
+   * Zen: where to come back after a crash (or on asking to respawn): near where the tumble rolled
+   * to, a little on along the way it rolled, in open air, setting off that way if it's clear (else
+   * the way you were facing). Fell into the abyss, or no room anywhere near: straight up from
+   * there to the first open air.
+   */
+  private zenSpawn(): { position: THREE.Vector3; direction: THREE.Vector3 } {
+    const crashed = this.crashedAt !== null;
+    const from = (crashed ? this.death.position : this.flight.position).clone();
+    // The way the tumble went (from the hit to where it stopped), else the way you were flying
+    const way = crashed ? from.clone().sub(this.crashFrom).setY(0) : this.flight.velocity.clone().setY(0);
+    if (crashed && way.lengthSq() < 4) way.copy(this.crashHeading);
+    const { course } = this.world;
+    const along = this.flight.forward.clone().setY(0);
+    if (along.lengthSq() < 0.01) along.copy(course.startDirection);
+    along.normalize();
+    if (way.lengthSq() < 0.01) way.copy(along);
+    way.normalize();
+    const world = this.world;
+    const room = (p: THREE.Vector3) => world.distance(p.x, p.y, p.z) > ZEN_ROOM && !world.lost(p.y - 30, p.z);
+    const runway = (p: THREE.Vector3, d: THREE.Vector3) => {
+      for (let t = 6; t <= ZEN_RUNWAY; t += 6) {
+        if (world.distance(p.x + d.x * t, p.y + d.y * t - t * 0.2, p.z + d.z * t) < ZEN_ROOM * 0.6) return false;
+      }
+      return true;
+    };
+    const spot = new THREE.Vector3();
+    if (!world.lost(from.y, from.z)) {
+      for (const above of ZEN_ABOVE) {
+        for (const ahead of ZEN_AHEAD) {
+          spot.copy(from).addScaledVector(way, ahead);
+          spot.y += above;
+          if (!room(spot)) continue;
+          if (runway(spot, way)) return { position: spot, direction: way };
+          if (runway(spot, along)) return { position: spot, direction: along.clone() };
+        }
+      }
+    }
+    // Straight up from there (from y = 0 out of the abyss) to the first open air
+    spot.set(from.x, Math.max(from.y, course.y(from.z)), from.z);
+    for (let i = 0; i < 80 && !room(spot); i++) spot.y += 12;
+    return { position: spot, direction: along };
   }
 
   /**
@@ -1067,6 +1129,8 @@ export class Game implements RunHost {
     const f = this.flight;
     const lost = part === null;
     this.crashedAt = this.elapsed;
+    this.crashFrom.copy(this.prevPosition);
+    this.crashHeading.copy(f.velocity).setY(0);
     this.flight.releaseControls();
     // How the hit plays out depends on how that part met the surface
     if (land) {
@@ -1755,6 +1819,7 @@ export class Game implements RunHost {
       seed: this.world.seed,
       run: runHud,
       biomeName: this.world.biome.name,
+      openWorld: this.world.open,
       paletteName: this.world.palette.name,
       palette: this.world.palette,
       boostCharge: this.flight.boostCharge,

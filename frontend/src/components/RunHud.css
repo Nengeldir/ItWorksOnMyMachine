@@ -392,11 +392,14 @@
   }
 }
 
+/* The level's name as you arrive: below the score pill and the compass (they reach about 13rem), never
+   over them; white with the theme's ink glow, like the landing page's title */
 .run-title {
   position: absolute;
-  top: 30%;
+  top: max(15rem, 34%);
   left: 50%;
-  transform: translate(-50%, -50%);
+  width: min(40rem, calc(100% - 2rem));
+  transform: translateX(-50%);
   text-align: center;
   pointer-events: none;
   /* The ink lettering gets a thin border of warm light and a soft glow, so it reads on dark maps too */
@@ -413,9 +416,8 @@
 
 .run-title small {
   font-weight: 700;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.24em;
   text-transform: uppercase;
-  color: var(--ink-70);
 }
 
 .run-title h2 {
@@ -427,7 +429,23 @@
 }
 
 .run-title p {
+  margin: 0;
   font-size: 1.1rem;
+}
+
+/* Short screens: smaller, so it ends above the flight panel */
+@media (max-height: 720px) {
+  .run-title {
+    top: 14.5rem;
+  }
+
+  .run-title h2 {
+    font-size: 2.2rem;
+  }
+
+  .run-title p {
+    font-size: 1rem;
+  }
 }
 
 @keyframes run-title {

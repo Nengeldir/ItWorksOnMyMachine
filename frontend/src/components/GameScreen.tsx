@@ -16,6 +16,7 @@ import type { ItemGallery } from "../game/items/gallery";
 import { FinishScreen, RunHud, TitleCard, UpgradePicker } from "./RunHud";
 import { RoomSession } from "../session/RoomSession";
 import { SoloSession } from "../session/SoloSession";
+import { ZenSession } from "../session/ZenSession";
 import { useMediaToggle } from "../media";
 import { type Settings, clientId } from "../storage";
 import { usePaletteTheme, useUiTheme } from "../theme";
@@ -645,10 +646,40 @@ const NoWebGL = ({ onExit }: { onExit: () => void }) => (
   </div>
 );
 
+// --- Zen ---------------------------------------------------------------------------
+
+/** Zen: one map for ever, nothing to beat. The map's name drifts in once, as you set off. */
+const ZenScreen = ({ seed, settings, onSettings, onExit }: ScreenProps & { seed: number }) => {
+  const [session] = useState(() => new ZenSession(seed, settings));
+  const ref = useMountedSession(session, settings);
+  const { hud, error } = useSyncExternalStore(session.store.subscribe, session.store.get);
+  usePaletteTheme(hud?.palette);
+  const { biome, palette } = session.level;
+  // The title shows once, when the land first comes in (later loading never brings it back)
+  const [arrived, setArrived] = useState(false);
+  if (!arrived && hud && !hud.loading) setArrived(true);
+  return (
+    <div className="game">
+      <div ref={ref} className="game-view" />
+      {hud && <Hud hud={hud} settings={settings} />}
+      <TopBar title={`Zen · ${biome.name} · ${palette.name}`} onExit={onExit} controls={{ settings, onSettings, muted: !!hud?.muted }} />
+      {arrived && (
+        <div className="zen-title">
+          <small>Zen · {palette.name}</small>
+          <h2>{biome.name}</h2>
+          <p>{biome.tagline}</p>
+        </div>
+      )}
+      {error && <div className="banner glass">{error}</div>}
+    </div>
+  );
+};
+
 const GameScreen = ({ screen, onNewRun, ...props }: ScreenProps & { screen: Exclude<Screen, { kind: "menu" }>; onNewRun: () => void }) => {
   if (!webglAvailable()) return <NoWebGL onExit={props.onExit} />;
   if (screen.kind === "explore" || screen.kind === "test") return <ExploreScreen biome={screen.biome} seed={screen.seed} testMode={screen.kind === "test"} {...props} />;
   if (screen.kind === "run") return <RunScreen seed={screen.seed} onNewRun={onNewRun} {...props} />;
+  if (screen.kind === "zen") return <ZenScreen seed={screen.seed} {...props} />;
   if (screen.kind === "gallery") return <GalleryScreen onExit={props.onExit} />;
   return screen.kind === "solo" ? (
     <SoloScreen seed={screen.seed} {...props} />

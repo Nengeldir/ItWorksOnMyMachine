@@ -261,6 +261,8 @@ export interface LevelKey {
   index: number; // level number in the run (0 outside a run)
   /** How much harder the line is than the time trial on this seed (0..1, course.ts `Difficulty`); runs only */
   difficulty?: number;
+  /** Zen: an open world, with no line and land every way (generator-v2 biomes only) */
+  open?: boolean;
 }
 
 export interface Level {

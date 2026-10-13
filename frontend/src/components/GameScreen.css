@@ -503,3 +503,69 @@
     opacity 0.9s ease,
     visibility 0s 0.9s;
 }
+
+/* Zen: the map's name drifts in as you set off, white with the theme's ink glow, then goes */
+.zen-title {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  width: min(40rem, calc(100% - 2rem));
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: #fff;
+  pointer-events: none;
+  text-shadow:
+    0 2px 2px color-mix(in srgb, var(--ink) 35%, transparent),
+    0 4px 30px color-mix(in srgb, var(--ink) 55%, transparent);
+  animation: zen-title 6s ease-in-out both;
+}
+
+.zen-title small {
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.zen-title h2 {
+  margin: 0.15em 0;
+  font-size: clamp(2.4rem, 7vw, 4.4rem);
+  line-height: 1.05;
+}
+
+.zen-title p {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+@keyframes zen-title {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -40%);
+  }
+  20%,
+  70% {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -56%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zen-title {
+    animation-name: zen-title-fade;
+  }
+
+  @keyframes zen-title-fade {
+    0%,
+    100% {
+      opacity: 0;
+    }
+    20%,
+    70% {
+      opacity: 1;
+    }
+  }
+}

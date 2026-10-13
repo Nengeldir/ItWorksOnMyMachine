@@ -112,6 +112,7 @@ export const TERRAIN = {
   lodHysteresis: 48, // extra distance before merging fine detail again
   cacheMiB: 48, // bounded cache of hidden terrain (estimated CPU + GPU buffers)
   viewDistance: 1500,
+  coneBehind: 2.5, // Zen: land behind you counts this much further away (coarser, and asked for last)
   readyRadius: 260, // the start waits until the land this close has arrived
   arrivalsPerFrame: 12, // arrived land meshes taken in per frame once you're flying (each costs about 0.04 ms)
   fadeIn: 0.9, // seconds for land that has just arrived to fade in out of the haze, and its plants to grow in
@@ -353,6 +354,7 @@ export const RANGES: Record<string, [number, number, number?]> = {
   lodNear: [120, 600, 10],
   lodFar: [300, 1400, 10],
   viewDistance: [600, 2500, 10],
+  coneBehind: [1, 4, 0.1],
   readyRadius: [100, 500, 10],
   arrivalsPerFrame: [1, 32, 1],
   fadeIn: [0, 3, 0.05],

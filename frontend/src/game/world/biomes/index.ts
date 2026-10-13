@@ -44,6 +44,23 @@ export function seedLevel(seed: number): Level {
   return makeLevel({ biome, seed, mood, runSeed: 0, index: 0 });
 }
 
+/** The maps Zen can fly: all but Sky Isles, whose frozen generator has no open world */
+export const ZEN_MAPS: BiomeId[] = MAPS.filter((biome) => biome !== "skyIsles");
+
+/** Zen's seed for a seed: itself, or the next one whose map isn't Sky Isles (so every seed has a Zen map) */
+export function zenSeed(seed: number): number {
+  let zen = seed;
+  while (seedMap(zen).biome === "skyIsles") zen++;
+  return zen;
+}
+
+/** Zen: the map `zenSeed(seed)` stands for, as an open world going on every way */
+export function zenLevel(seed: number): Level {
+  const zen = zenSeed(seed);
+  const { biome, mood } = seedMap(zen);
+  return makeLevel({ biome, seed: zen, mood, runSeed: 0, index: 0, open: true });
+}
+
 /**
  * Sky Isles on a seed, with the mood that seed picks: the old race map, whose generator stays frozen
  * (`__raceHashes()` checks it on seeds 1, 7 and 42)
@@ -99,5 +116,5 @@ export function makeLevel(key: LevelKey): Level {
 
 /** Identifies a level's map, e.g. to cache it or to drop stale worker results */
 export function levelId(key: LevelKey): string {
-  return `${key.biome}:${key.seed}:${key.mood}${key.difficulty ? `:d${key.difficulty.toFixed(3)}` : ""}`;
+  return `${key.biome}:${key.seed}:${key.mood}${key.difficulty ? `:d${key.difficulty.toFixed(3)}` : ""}${key.open ? ":open" : ""}`;
 }

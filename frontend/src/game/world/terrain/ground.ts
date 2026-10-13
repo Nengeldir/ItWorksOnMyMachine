@@ -1,5 +1,5 @@
 import { TERRAIN_DETAIL } from "../../tuning";
-import { smoothstep } from "../../math";
+import { clamp, smoothstep } from "../../math";
 import type { Rng } from "../../rng";
 import type { Course } from "../course";
 import { fbm, type Noise, terrace, warpedRidged } from "./noise";
@@ -12,6 +12,16 @@ import { type RiverSpec, type StepSpec, Steps } from "./river";
 // 3D noise on steep slopes adds overhangs. As a distance field it is
 // (y - h) / sqrt(1 + |∇h|²), which stays close to the true distance on slopes,
 // so proximity scoring works on hillsides as well as on the flat.
+//
+// An open world (Zen) has no line, so its ground is made the way open-world
+// games blend terrain (Minecraft's continentalness and erosion, a wide warped
+// mask): a slow region noise says lowland or mountains, with kilometres
+// between; the land rises from plains through foothills onto the shoulder a
+// range stands on, and only its core gets the ridged peaks. A network of
+// valleys meanders every way, a river (or lava, ice...) along each at one
+// level (`waterLevel`); the valleys are carved through it all, their sides as
+// wide as the land is high, so slopes stay bounded and nothing rises sheer off
+// a flat floor. No steps, no falls.
 
 export interface GroundSpec {
   depth: number; // valley floor below the racing line (when there are no steps)
@@ -34,6 +44,23 @@ export interface GroundSpec {
 
 /** Metres either side of the river where its banks rise to the valley floor */
 const BANK_WIDTH = 12;
+/** Open world: metres per unit of the region noise (lowlands and ranges several kilometres across) */
+const REGION_SCALE = 5200;
+/** Open world: the region noise goes from lowland (0) to mountains (1) between these values */
+const REGION_LOW = 0.33;
+const REGION_HIGH = 0.64;
+/** Open world: metres per unit of the valley noise (valleys come about 2 to 5 km apart) */
+const VALLEY_SCALE = 4200;
+/** Open world: metres the valleys are pushed about by, so they meander */
+const VALLEY_WARP = 260;
+/**
+ * Open world: distance from a valley is the valley noise over its slope (per unit of `VALLEY_SCALE`).
+ * Near a valley, the slope there, kept between these (so a valley is as wide where the warp packs
+ * the noise tight); further out, the usual slope `VALLEY_GRADIENT_FAR`. The slope there alone jumps
+ * where the noise flattens, and far out even a small change moves the distance a lot: a cliff
+ */
+const VALLEY_GRADIENT: [number, number] = [2, 5];
+const VALLEY_GRADIENT_FAR = 3.5;
 
 export class Ground {
   readonly spec: GroundSpec;
@@ -42,13 +69,19 @@ export class Ground {
   private readonly noise: Noise;
   private readonly flatLevel: number;
   private readonly mountainReach: number;
+  /** An open world (no line: valleys every way, see `openHeight`) */
+  readonly open: boolean;
+  /** An open world's water: the level its rivers and lakes stand at, if it has any */
+  readonly waterLevel: number | null;
 
   constructor(course: Course, spec: GroundSpec, rng: Rng, noise: Noise) {
     this.course = course;
     this.spec = spec;
     this.noise = noise;
-    this.steps = spec.steps ? new Steps(course, spec.steps, spec.river, rng, noise) : null;
-    this.flatLevel = spec.level === null ? 0 : course.y(course.endZ) + spec.level;
+    this.open = course.open;
+    this.steps = spec.steps && !this.open ? new Steps(course, spec.steps, spec.river, rng, noise) : null;
+    this.flatLevel = spec.level === null ? 0 : this.open ? spec.level : course.y(course.endZ) + spec.level;
+    this.waterLevel = this.open && spec.river ? (spec.level ?? -spec.depth) - spec.river.bank : null;
     this.mountainReach = spec.mountains ? spec.mountains.from - 120 : Infinity;
   }
 
@@ -59,6 +92,7 @@ export class Ground {
 
   /** The height, given the racing line's x and y at this z (callers that sample columns reuse them) */
   heightAt(x: number, z: number, lineX: number, lineY: number): number {
+    if (this.open) return this.openHeight(x, z);
     const s = this.spec;
     const n = this.noise.n2;
     const a = Math.abs(x - lineX);
@@ -115,6 +149,79 @@ export class Ground {
       }
     }
     return h;
+  }
+
+  /** Open world: the ground's height (see the top of this file) */
+  private openHeight(x: number, z: number): number {
+    const s = this.spec;
+    const n = this.noise.n2;
+    const floor = s.level ?? -s.depth;
+    // Lowland (0) to mountains (1): a slow noise, warped so its edges aren't round
+    const wx = x + 900 * n(x / 4000 + 2.2, z / 4000 - 6.1);
+    const wz = z + 900 * n(x / 4000 - 3.4, z / 4000 + 9.7);
+    const region = smoothstep(REGION_LOW, REGION_HIGH, 0.5 + 0.5 * fbm(n, wx / REGION_SCALE + 7.7, wz / REGION_SCALE - 1.9, 3));
+    // Metres the land stands above the valley floor, before the valleys are carved
+    let relief = 0;
+    // Rolling hills everywhere, growing into foothills towards the mountains
+    if (s.hills) relief += s.hills.amp * (0.35 + 1.1 * smoothstep(0, 0.7, region)) * (0.55 + 0.45 * fbm(n, x / s.hills.scale, z / s.hills.scale, 4));
+    if (s.mountains) {
+      const m = s.mountains;
+      const core = smoothstep(0.3, 1, region);
+      if (core > 0) {
+        // The shoulder a range stands on, then its ridged peaks, sharper towards its heart (a level's
+        // backdrop mountains are sharper: these are flown over and through)
+        relief += m.amp * 0.3 * core;
+        relief += m.amp * core * core * warpedRidged(n, x / m.scale, z / m.scale, m.warp, 4, 1 + (m.sharpness - 1) * core * 0.6);
+        relief += s.roughness * TERRAIN_DETAIL.mountainRelief * core * (0.7 * n(x * 0.045, z * 0.045) + 0.3 * n(x * 0.11, z * 0.11));
+      }
+    }
+    // The valleys, carved through it all: the land eases down to the floor over a width that grows
+    // with its height, so the steepest a valley side gets is about the biome's wall slope
+    const a = this.valleyDistance(x, z);
+    const slope = clamp(s.wall * 1.4, 0.38, 0.7);
+    const width = s.valley + Math.max(relief, 0) / slope;
+    let h = floor + relief * smoothstep(s.valley * 0.25, width, a);
+    if (s.floorHills) h += s.floorHills * fbm(n, x / 45, z / 45, 2);
+    if (s.terraces) {
+      const t = s.terraces;
+      const cover = 0.5 + 0.5 * fbm(n, x / 320 + 11.1, z / 320, 2);
+      const mask = smoothstep(1 - t.cover - 0.08, 1 - t.cover + 0.08, cover) * smoothstep(s.valley, s.valley + 60, a);
+      if (mask > 0) h += (terrace(h - floor, t.step, t.sharpness) + floor - h) * mask;
+    }
+    if (s.crevasses && a < s.valley + 30) {
+      const c = s.crevasses;
+      const crack = Math.abs(Math.sin((Math.PI * z) / c.spacing + 2.2 * n(x / 90, z / 90)));
+      const open = 1 - smoothstep(0, c.width / c.spacing, crack);
+      if (open > 0) h -= c.depth * open * smoothstep(s.valley + 30, s.valley - 10, a) * (0.6 + 0.4 * n(x / 30, z / 50));
+    }
+    if (this.waterLevel !== null && s.river) {
+      // The river along the valley's middle, widening with a slow noise and now and then into a lake
+      const r = s.river;
+      const lake = r.lakes > 0 ? smoothstep(1 - r.lakes * 1.2, 1, 0.5 + 0.5 * n(x / 900 - 4.2, z / 900 + 8.6)) : 0;
+      const w = (r.width[0] + (r.width[1] - r.width[0]) * (0.5 + 0.5 * n(x / 400 + 1.7, z / 400 - 3.3))) * (0.5 + lake * 1.6);
+      if (a < w + BANK_WIDTH) {
+        const level = this.waterLevel;
+        const channel = a < w ? level - 0.4 - r.bed * (1 - (a / w) ** 2) : level - 0.4 + (r.bank + 0.4) * smoothstep(w, w + BANK_WIDTH, a);
+        if (channel < h) h = channel;
+      }
+    }
+    return h;
+  }
+
+  /** Open world: about the metres to the middle of the nearest valley, where the warped valley noise crosses zero */
+  valleyDistance(x: number, z: number): number {
+    const v = this.valleyNoise(x, z);
+    const slope = (Math.hypot(this.valleyNoise(x + 6, z) - v, this.valleyNoise(x, z + 6) - v) / 6) * VALLEY_SCALE;
+    const near = clamp(slope, VALLEY_GRADIENT[0], VALLEY_GRADIENT[1]);
+    return (Math.abs(v) * VALLEY_SCALE) / (near + (VALLEY_GRADIENT_FAR - near) * smoothstep(0.02, 0.12, Math.abs(v)));
+  }
+
+  /** Open world: the noise whose zeros are the valleys' middles */
+  valleyNoise(x: number, z: number): number {
+    const n = this.noise.n2;
+    const wx = x + VALLEY_WARP * n(x / 1500 + 5.3, z / 1500 - 2.1);
+    const wz = z + VALLEY_WARP * n(x / 1500 - 7.7, z / 1500 + 4.4);
+    return n(wx / VALLEY_SCALE + 31.7, wz / VALLEY_SCALE - 12.9);
   }
 
   /** Signed distance to the ground, with overhangs carved into steep slopes */

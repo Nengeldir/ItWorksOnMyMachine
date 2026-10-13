@@ -3,7 +3,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { type LeaderboardEntry, getLeaderboard } from "../api";
 import { formatTime } from "../format";
 import { randomSeed } from "../game/rng";
-import { type BiomeId, MAPS, featuredSeed, seedLevel } from "../game/world/biomes";
+import { type BiomeId, MAPS, ZEN_MAPS, featuredSeed, seedLevel, zenSeed } from "../game/world/biomes";
 import { keyboardBinding } from "../game/bindings";
 import { Course } from "../game/world/course";
 import { bestRun } from "../session/RunSession";
@@ -15,24 +15,26 @@ const MAX_SEED = 2 ** 31;
 
 /**
  * What the map select is for. Every mode shows the same cards (today's, one per map, a random one) and
- * picking one plays exactly that map: a time trial on it, a run that starts on it, a room that races it.
+ * picking one plays exactly that map: a time trial on it, a run that starts on it, a room that races it,
+ * endless free flight in it (Zen, which has every map but Sky Isles: its seeds are `zenSeed`s).
  */
-export type MapSelectMode = "solo" | "run" | "room";
+export type MapSelectMode = "solo" | "run" | "room" | "zen";
 
 const WORDS: Record<MapSelectMode, { title: string; today: string; card: string; random: string; roll: string }> = {
   solo: { title: "Choose a course", today: "Today's course", card: "Course", random: "Random course", roll: "Roll a course" },
   run: { title: "Choose a map", today: "Today's run", card: "Start the run here", random: "Random run", roll: "Roll a map" },
   room: { title: "Choose a map", today: "Today's course", card: "Race here", random: "Random map", roll: "Roll a map" },
+  zen: { title: "Choose a map", today: "Today's Zen", card: "Wander here", random: "Random map", roll: "Roll a map" },
 };
 
 type Card = { kind: "daily"; seed: number } | { kind: "featured"; seed: number } | { kind: "random"; seed: number | null };
 
 let featured: number[] | null = null;
 
-/** One course for each map: the lowest seed that stands for it */
-function featuredSeeds(): number[] {
+/** One course for each map: the lowest seed that stands for it (Zen: every map but Sky Isles) */
+function featuredSeeds(mode: MapSelectMode): number[] {
   featured ??= MAPS.map(featuredSeed);
-  return featured;
+  return mode === "zen" ? featured.filter((_, i) => ZEN_MAPS.includes(MAPS[i])) : featured;
 }
 
 interface CourseInfo {
@@ -98,29 +100,32 @@ interface MapSelectProps {
 /** The map select: a carousel of courses (over the live backdrop on the landing page, which shows the middle one) */
 const MapSelect = ({ mode, daily, countdown, art = {}, onPreview, live, onPick, action, onBack }: MapSelectProps) => {
   const words = WORDS[mode];
+  const zen = mode === "zen";
+  // Zen has no Sky Isles: any seed becomes its Zen seed
+  const own = (seed: number) => (zen ? zenSeed(seed) : seed);
   const [rolled, setRolled] = useState<number | null>(null);
   const [seedText, setSeedText] = useState("");
   const cards = useMemo<Card[]>(
     () => [
-      { kind: "daily", seed: daily },
-      ...featuredSeeds().map((seed): Card => ({ kind: "featured", seed })),
+      { kind: "daily", seed: zen ? zenSeed(daily) : daily },
+      ...featuredSeeds(mode).map((seed): Card => ({ kind: "featured", seed })),
       { kind: "random", seed: rolled },
     ],
-    [daily, rolled],
+    [daily, rolled, mode, zen],
   );
   const [index, setIndex] = useState(0);
   const [boards, setBoards] = useState<Record<number, LeaderboardEntry[]>>({});
   const card = cards[index];
   const step = (by: number) => setIndex((i) => (i + by + cards.length) % cards.length);
-  const pick = () => onPick(card.seed ?? randomSeed());
+  const pick = () => onPick(card.seed ?? own(randomSeed()));
 
   useEffect(() => {
     const seed = card.seed;
     if (seed === null) return;
     const timer = setTimeout(() => {
       onPreview?.(seed);
-      // Runs score in this browser only; races and rooms have a board per seed
-      if (mode === "run") return;
+      // Runs score in this browser only and Zen not at all; races and rooms have a board per seed
+      if (mode === "run" || mode === "zen") return;
       getLeaderboard(seed, clientId())
         .then((entries) => setBoards((all) => ({ ...all, [seed]: entries })))
         .catch(() => {});
@@ -147,7 +152,7 @@ const MapSelect = ({ mode, daily, countdown, art = {}, onPreview, live, onPick, 
   });
 
   const roll = () => {
-    const seed = randomSeed();
+    const seed = own(randomSeed());
     setRolled(seed);
     setSeedText(String(seed));
   };
@@ -156,7 +161,7 @@ const MapSelect = ({ mode, daily, countdown, art = {}, onPreview, live, onPick, 
     const digits = text.replace(/\D/g, "");
     setSeedText(digits);
     const seed = Number(digits);
-    if (digits && seed >= 1 && seed < MAX_SEED) setRolled(seed);
+    if (digits && seed >= 1 && seed < MAX_SEED) setRolled(own(seed));
   };
 
   const pickTyped = (e: FormEvent) => {
@@ -170,7 +175,7 @@ const MapSelect = ({ mode, daily, countdown, art = {}, onPreview, live, onPick, 
       <article className="course-card side glass" onClick={() => step(by)} aria-hidden="true">
         <CardArt card={cards[at]} art={art} countdown={countdown} today={words.today} />
         <div className="course-body">
-          <CardHead card={cards[at]} words={words} />
+          <CardHead card={cards[at]} words={words} zen={zen} />
         </div>
       </article>
     );
@@ -203,7 +208,7 @@ const MapSelect = ({ mode, daily, countdown, art = {}, onPreview, live, onPick, 
         <article className="course-card main glass" aria-live="polite">
           <CardArt card={card} art={art} countdown={countdown} today={words.today} main />
           <div className="course-body">
-            <CardHead card={card} words={words} />
+            <CardHead card={card} words={words} zen={zen} />
             {card.kind === "random" && (
               <form className="course-random" onSubmit={pickTyped}>
                 <button type="button" onClick={roll}>
@@ -218,7 +223,8 @@ const MapSelect = ({ mode, daily, countdown, art = {}, onPreview, live, onPick, 
                 />
               </form>
             )}
-            {card.seed !== null && (mode === "run" ? <RunBest seed={card.seed} /> : <Board entries={boards[card.seed]} />)}
+            {card.seed !== null &&
+              (mode === "run" ? <RunBest seed={card.seed} /> : zen ? <p className="course-empty">No clock, no score: the valley goes on for ever.</p> : <Board entries={boards[card.seed]} />)}
           </div>
         </article>
         {side(1)}
@@ -270,7 +276,7 @@ const CardArt = ({ card, art, countdown, today, main = false }: CardArtProps) =>
 };
 
 /** What a card is: its label, name and chips */
-const CardHead = ({ card, words }: { card: Card; words: (typeof WORDS)[MapSelectMode] }) => {
+const CardHead = ({ card, words, zen = false }: { card: Card; words: (typeof WORDS)[MapSelectMode]; zen?: boolean }) => {
   const info = card.seed === null ? null : courseInfo(card.seed);
   const label = card.kind === "daily" ? words.today : card.kind === "random" ? words.random : words.card;
   return (
@@ -283,7 +289,7 @@ const CardHead = ({ card, words }: { card: Card; words: (typeof WORDS)[MapSelect
         <div className="course-chips">
           <span>{info.mood}</span>
           <span>#{card.seed}</span>
-          <span>{info.gates} gates</span>
+          <span>{zen ? "Endless" : `${info.gates} gates`}</span>
         </div>
       )}
     </>
