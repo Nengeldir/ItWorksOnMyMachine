@@ -31,6 +31,7 @@ import {
 } from "./run";
 import { type RunStats, UPGRADES, type Upgrade, type UpgradeId, baseStats, offer, statsFor } from "./upgrades";
 import { Collection } from "./collection";
+import { achievements } from "../achievements";
 import type { Reward } from "../../profile/types";
 import type { Rarity } from "../collection/rarity";
 
@@ -43,6 +44,8 @@ import type { Rarity } from "../collection/rarity";
 /** What the run needs from the game */
 export interface RunHost {
   readonly scene: THREE.Scene;
+  /** Report to the achievements (false in test mode) */
+  readonly tracking?: boolean;
   readonly particles: Particles;
   readonly flight: Flight;
   readonly prevPosition: THREE.Vector3;
@@ -147,6 +150,10 @@ export type PerkSave = "frost";
 
 /** The most glancing hit Frost skate turns into a skate (the cosine of the angle into the surface) */
 const FROST_GLANCE = 0.6;
+/** Seconds Guardian Gale rests after foreseeing a crash */
+const GUARD_REST = 20;
+/** Metres per stack of Gourd's Breath */
+const GOURD_BREATH = 6;
 
 /** Out of lives: the crash plays, the view fades into light over these seconds, then the summary */
 const LOST_FADE_FROM = 1;
@@ -203,7 +210,10 @@ export class RunController {
   private revivesLeft = 0;
   private shieldsLeft = 0;
   /** Bumped when a collection power acts, so the looks and sounds can follow */
-  readonly perkCue = { rekindle: 0, frost: 0, kick: 0, gate: 0 };
+  readonly perkCue = { rekindle: 0, frost: 0, kick: 0, gate: 0, guard: 0, cushion: 0 };
+  /** Guardian Gale rests this long before it can foresee another crash; Cloud Cushion's bounces left this level */
+  private guardWait = 0;
+  private cushionsLeft = 0;
   /** Night falls over this level (the owl's watch) */
   private night = 0;
   private toastTime = 0;
@@ -222,6 +232,8 @@ export class RunController {
   private sparkled = false;
   /** The last portal's cutscene */
   private finale: Finale | null = null;
+  /** The finale was skipped (Enter): no Stargazer */
+  private finaleSkipped = false;
   private collection: Collection | null = null;
   /** The opening autopilot is flying (see preview) */
   private previewing = false;
@@ -331,6 +343,7 @@ export class RunController {
     this.orbs.setLevel(world, this.level);
     this.revivesLeft = this.perks.revives;
     this.shieldsLeft = this.perks.shields;
+    this.cushionsLeft = this.stats.cloudCushion;
     this.night = world.palette.night;
     if (this.events.rewards) this.collection = new Collection(world, this.events.rewards.filter(r => r.level === this.level), this.host.scene);
     // The portal stands at the last gate
@@ -378,7 +391,7 @@ export class RunController {
   /** Y (or the right mouse button): uses the item picked in the bag */
   useItem() {
     if (this.frozen || (this.phase !== "explore" && this.phase !== "arrive")) return;
-    this.items.use(this.host.flight);
+    if (this.items.use(this.host.flight) && this.host.tracking) achievements.record("itemsUsed");
     if(this.items.restore>0){this.stamina=Math.min(2+this.stats.flap,this.stamina+this.items.restore);this.items.restore=0;}
   }
 
@@ -424,6 +437,52 @@ export class RunController {
     return false;
   }
 
+  /**
+   * A crash is about to happen (Game looked ahead): something may foresee it, a Jade Foresight
+   * Talisman in the bag, the talisman carried as the charm (once per level), or Guardian Gale (then it
+   * rests). True: Game hands the pilot to the wind on the safe line for `ITEM.guardTime`
+   */
+  foresee(): boolean {
+    if (this.phase !== "explore" && this.phase !== "arrive") return false;
+    const use = this.charm.use;
+    let saved = this.items.foresee();
+    if (!saved && use?.kind === "relic" && use.item === "foresightCharm" && this.charm.left > 0) {
+      this.charm.left--;
+      this.charm.cue.use++;
+      saved = true;
+    }
+    if (!saved && this.stats.guardianGale > 0 && this.guardWait <= 0) {
+      this.guardWait = GUARD_REST;
+      saved = true;
+    }
+    if (!saved) return false;
+    this.perkCue.guard++;
+    this.items.cue.foresight++;
+    this.notify("The wind foresaw a crash", 0);
+    return true;
+  }
+
+  /**
+   * Fell into the abyss or the sea: Cloud Cushion bounces the pilot back up over the line, once per
+   * level. False if it can't
+   */
+  cushion(flight: Flight): boolean {
+    if (this.cushionsLeft <= 0) return false;
+    const course = this.host.world.course;
+    const z = THREE.MathUtils.clamp(flight.position.z, course.start.z, course.endZ - 25);
+    flight.reset(course.pointAt(z).addScaledVector(UP, 6), course.tangentAt(z), Math.max(30, flight.speed));
+    this.items.reset();
+    this.cushionsLeft--;
+    this.perkCue.cushion++;
+    this.notify("A cloud catches you", 0);
+    return true;
+  }
+
+  /** Metres added to the radius crystals, orbs, lights and items are collected from */
+  private get reach(): number {
+    return this.perks.pickupRadius + this.stats.gourdBreath * GOURD_BREATH;
+  }
+
   /** Frost skate: a glancing hit (never head-on) turns into a skate off an ice ramp, once per level */
   perkSave(part: HitPart | null, normal: THREE.Vector3, direction: THREE.Vector3): PerkSave | null {
     if (part === null || this.shieldsLeft <= 0 || this.abilities.hang >= 0) return null;
@@ -460,7 +519,7 @@ export class RunController {
 
   /** Style points right now: the owl at night, the stargazer, a starfruit */
   get styleRate(): number {
-    return this.perks.styleRate * (this.night > 0.5 ? this.perks.nightStyle : 1) * this.charm.style;
+    return this.perks.styleRate * (this.night > 0.5 ? this.perks.nightStyle : 1) * this.charm.style * this.items.styleMultiplier;
   }
 
   /** Puts an item in the bag right now (dev tools and test mode); false if the bag is full */
@@ -499,13 +558,16 @@ export class RunController {
     m.recharge = 0;
     if (this.phase !== "explore" && this.phase !== "arrive") return;
     if (!this.items.frozenCombo) this.levelTime += dt;
+    this.guardWait = Math.max(0, this.guardWait - dt);
+    this.items.reach = this.reach;
     this.abilities.worldRate=this.items.worldRate;
-    this.collection?.step(prevPosition, flight.position, this.collected, this.host.particles, perks.pickupRadius);
+    this.collection?.step(prevPosition, flight.position, this.collected, this.host.particles, this.reach + this.items.gourdReach);
     this.abilities.step(dt, input, proximity, flight, m);
     this.charm.step(dt, flight, m);
     const pickups = this.items.cue.pickup, full = this.items.cue.full;
     this.items.step(dt, input, proximity, flight, m);
-    if (this.orbs.step(flight, perks.orbs, perks.pickupRadius) > 0) this.host.stinger("orb");
+    if (this.orbs.step(flight, perks.orbs, this.reach + this.items.gourdReach) > 0) this.host.stinger("orb");
+    if (this.items.cue.pickup !== pickups && this.items.bag.length >= 3 && this.host.tracking) achievements.unlock("fullBag");
     if (this.items.cue.pickup !== pickups && this.items.picked) {
       const item = runItem(this.items.picked);
       this.notify(`Picked up ${item.name}`, 0, item.auto ? undefined : "useItem", item.rarity);
@@ -536,9 +598,10 @@ export class RunController {
       this.items.gate(i);
       this.chain = Math.min(CHAIN_MAX, this.chain + 1);
       this.bestChain = Math.max(this.bestChain, this.chain);
+      if (this.host.tracking) achievements.best("bestChain", this.chain);
       this.gates++;
       this.lastGate = Math.max(this.lastGate, i + 1);
-      this.score += Math.round((GATE_POINTS + this.stats.gateBonus + perks.gateBonus) * this.chain * perks.gatePoints) + this.charm.gate();
+      this.score += Math.round((GATE_POINTS + this.stats.gateBonus + perks.gateBonus) * this.chain * perks.gatePoints * this.items.gateMultiplier) + this.charm.gate();
       // The dragon and the constellation wings: gates refill the boost (and a wingbeat)
       if (perks.gateRefill > 0) flight.refillBoost(perks.gateRefill);
       if (perks.gateRefill > 0 || perks.gateStamina > 0) this.perkCue.gate++;
@@ -558,6 +621,10 @@ export class RunController {
 
     for (const portal of this.portals) {
       if (portal.crossed(prevPosition, flight.position, this.stats.magnet + perks.magnet)) {
+        if (this.host.tracking) {
+          achievements.unlock("firstPortal");
+          achievements.record("levels");
+        }
         this.enterPortal();
         break;
       }
@@ -610,6 +677,7 @@ export class RunController {
 
   private gain(id: UpgradeId) {
     this.picked.push(id);
+    if (this.host.tracking) achievements.record("abilities");
     this.stats = statsFor(this.picked);
     this.abilities.setStats(this.stats);
     this.lives += UPGRADES.find((u) => u.id === id)?.effect.lives ?? 0;
@@ -717,12 +785,21 @@ export class RunController {
 
   /** Enter during the finale: straight to the white light */
   skipFinale() {
+    if (this.finale) this.finaleSkipped = true;
     this.finale?.skip();
   }
 
   private finish(completed = true) {
     if (this.ended) return;
     this.ended = true;
+    if (this.host.tracking) {
+      achievements.best("bestScore", this.snapshot(completed).score);
+      if (completed) {
+        achievements.record("runsCompleted");
+        if (this.crashes === 0) achievements.unlock("flawless");
+        if (!this.finaleSkipped) achievements.unlock("stargazer");
+      }
+    }
     this.phase = completed ? "won" : "lost";
     this.host.freeze(true);
     this.events.ended?.(this.snapshot(completed));
@@ -905,6 +982,7 @@ export class RunController {
     const abilities: RunHud["abilities"] = [];
     if (this.stats.flap > 0) abilities.push({ id: "flap", name: "Wingbeat", key: "C", charge: this.stamina / (2 + this.stats.flap), ready: this.stamina >= 1, count: Math.floor(this.stamina) });
     abilities.push(...this.abilities.hud(this.host.flight));
+    if (this.stats.guardianGale > 0) abilities.push({ id: "guardianGale", name: "Guardian Gale", key: "", charge: 1 - this.guardWait / GUARD_REST, ready: this.guardWait <= 0 });
     const objectives = [{ title: "Reach the portal", progress: compass ? `${compass.distance} m` : "", fraction: 0, done: false, failed: false }];
     return {
       seed: this.seed,

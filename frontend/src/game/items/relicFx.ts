@@ -14,13 +14,22 @@ import type { Equipment } from "./equip";
 
 const ICE = new THREE.Color("#afdeff");
 const GOLD = new THREE.Color("#ffe5a0");
+const JADE = new THREE.Color("#8ff0cf");
+const PAPER = new THREE.Color("#fff6ea");
 const at = new THREE.Vector3();
 const vel = new THREE.Vector3();
+const from = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 /** Relic effects only read run state; collision, scoring and collection live in run/. */
 export class RelicFx {
   readonly group = new THREE.Group();
   private readonly kite = buildItem("stormKite");
+  /** The paper crane, flying ahead to the gates it opens */
+  private readonly crane = buildItem("paperCrane");
+  private readonly cranePosition = new THREE.Vector3();
+  private craneFlying = false;
+  private gourdDebt = 0;
+  private koiTime = 0;
   private readonly cord = new THREE.Line(new THREE.BufferGeometry().setAttribute("position",new THREE.Float32BufferAttribute(new Float32Array(6),3)),new THREE.LineBasicMaterial({color:"#f5df9e",transparent:true,opacity:0.75}));
   private readonly tether = new THREE.Line(new THREE.BufferGeometry().setAttribute("position",new THREE.Float32BufferAttribute(new Float32Array(6),3)),new THREE.LineBasicMaterial({color:"#9ceddb",transparent:true,opacity:0.9}));
   private readonly lights = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.3), new THREE.MeshBasicMaterial({color:"#ffe5a0"}),128);
@@ -43,6 +52,8 @@ export class RelicFx {
   private readonly particles: Particles;
   constructor(avatar: Avatar, equipment: Equipment, particles: Particles) {
     this.avatar = avatar; this.equipment = equipment; this.particles = particles;
+    this.crane.scale.setScalar(9);
+    this.group.add(this.crane);
     this.group.add(this.markers.mesh, this.ribbon.mesh, this.lights, this.kite, this.cord, this.tether, this.moths.mesh, this.temporal, this.electric, this.bolts);
   }
   used(id: RunItemId) {
@@ -187,7 +198,47 @@ export class RelicFx {
     }
     if (lantern && this.equipment.wearing("hand") !== "spiritLantern") this.equipment.equip("spiritLantern");
     if (!lantern && this.equipment.wearing("hand") === "spiritLantern") this.equipment.unequip("hand");
-    this.equipment.lift = lantern ? 1 : 0;
+    // Held up while they work: the open umbrella overhead, the gourd drinking the wind
+    const umbrella = items.time("oilUmbrella") >= 0, gourd = items.time("windGourd") >= 0;
+    for (const [on, id] of [[umbrella, "oilUmbrella"], [gourd, "windGourd"]] as const) {
+      if (on && this.equipment.wearing("hand") !== id) this.equipment.equip(id);
+      if (!on && this.equipment.wearing("hand") === id) this.equipment.unequip("hand");
+    }
+    this.equipment.lift = lantern || umbrella || gourd ? 1 : 0;
+    if (umbrella) this.avatar.stance.butterfly = Math.max(this.avatar.stance.butterfly, 0.35);
+    // The gourd breathes in: streams of wind flowing into it from all round
+    this.gourdDebt += gourd && flying ? 40 * this.particles.budget * ITEMS_FX.relics * dt : 0;
+    for (; this.gourdDebt >= 1; this.gourdDebt--) {
+      this.avatar.slots.hand.getWorldPosition(at);
+      const a = Math.random() * Math.PI * 2, r = 6 + Math.random() * 10;
+      from.set(Math.cos(a) * r, (Math.random() - 0.5) * 6, Math.sin(a) * r);
+      at.add(from);
+      this.particles.emit(at, vel.copy(from).multiplyScalar(-1.6).addScaledVector(flight.velocity, 1), fx(0.6, 0.25, JADE, Kind.Wisp, 0, 1, 0.8));
+    }
+    if (gourd) this.markers.add(this.avatar.group.position, UP, 3 + (items.time("windGourd") * 9) % 6, 0.25 * ITEMS_FX.relics, 0.02, 3, JADE);
+    // The koi's fortune: two golden koi spirits circling the pilot
+    if (items.time("koiCharm") >= 0) {
+      this.koiTime += dt;
+      for (let j = 0; j < 2; j++) {
+        const a = this.koiTime * 2.4 + j * Math.PI;
+        at.copy(this.avatar.group.position).add(vel.set(Math.cos(a) * 2.2, Math.sin(a * 2) * 0.5, Math.sin(a) * 2.2));
+        this.particles.emit(at, vel.copy(flight.velocity).multiplyScalar(0.9), fx(0.5, 0.22, GOLD, j ? Kind.Glow : Kind.Star, 0, 1, 1.6));
+      }
+    }
+    // The crane flies ahead to its next gate, waits there, and moves on as you fly it
+    const craneGate = items.time("paperCrane") >= 0 ? items.world?.course.rings[items.craneGates[0]] : undefined;
+    this.crane.visible = !!craneGate;
+    if (craneGate) {
+      if (!this.craneFlying) { this.avatar.slots.hand.getWorldPosition(this.cranePosition); this.craneFlying = true; }
+      at.copy(craneGate.position).addScaledVector(UP, craneGate.radius * 0.6);
+      this.cranePosition.lerp(at, 1 - Math.exp(-dt * 1.4));
+      this.crane.position.copy(this.cranePosition).addScaledVector(UP, Math.sin(items.time("paperCrane") * 6) * 0.4);
+      this.crane.lookAt(at.add(craneGate.normal));
+      for (const index of items.craneGates) {
+        const gate = items.world!.course.rings[index];
+        this.markers.add(gate.position, gate.normal, gate.radius + items.widening(index), 0.5 * ITEMS_FX.relics, 0.03, 2, PAPER);
+      }
+    } else this.craneFlying = false;
     this.debt += (lantern && flying ? 8 * this.particles.budget * ITEMS_FX.relics : 0) * dt;
     for (; this.debt >= 1; this.debt--) {
       this.avatar.slots.hand.getWorldPosition(at);
@@ -200,5 +251,5 @@ export class RelicFx {
     this.markers.end();
   }
   hide() { this.group.visible = false; this.avatar.spectral(0); }
-  dispose() { this.avatar.spectral(0); this.bolts.geometry.dispose(); this.bolts.material.dispose(); this.electric.geometry.dispose(); this.electric.material.dispose(); this.temporal.geometry.dispose(); this.temporal.material.dispose(); this.moths.dispose(); disposeItem(this.kite); this.tether.geometry.dispose(); this.tether.material.dispose(); this.cord.geometry.dispose(); this.cord.material.dispose(); this.lights.geometry.dispose(); this.lights.material.dispose(); this.ribbon.dispose(); this.markers.dispose(); this.group.removeFromParent(); }
+  dispose() { this.avatar.spectral(0); this.bolts.geometry.dispose(); this.bolts.material.dispose(); this.electric.geometry.dispose(); this.electric.material.dispose(); this.temporal.geometry.dispose(); this.temporal.material.dispose(); this.moths.dispose(); disposeItem(this.kite); disposeItem(this.crane); this.tether.geometry.dispose(); this.tether.material.dispose(); this.cord.geometry.dispose(); this.cord.material.dispose(); this.lights.geometry.dispose(); this.lights.material.dispose(); this.ribbon.dispose(); this.markers.dispose(); this.group.removeFromParent(); }
 }

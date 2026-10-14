@@ -10,8 +10,8 @@ export const FLIGHT = {
   pitchRate: 2.4, // rad/s at full input
   rollRate: 4.2, // maximum bank response, rad/s
   maxBank: 80, // degrees: steering cannot roll past this
-  dodgeDistance: 5, // metres along the unbanked right axis at activation
-  dodgeDuration: 0.6,
+  dodgeDistance: 8, // metres along the unbanked right axis at activation
+  dodgeDuration: 0.5,
   dodgeCooldown: 1, // seconds between starts
   turnRate: 1.4, // gameplay multiplier on coordinated turning
   autoLevel: 2, // bank-target and upright recovery response, 1/s
@@ -183,6 +183,8 @@ export class Flight {
   readonly position = new Vector3();
   readonly quaternion = new Quaternion();
   readonly velocity = new Vector3();
+  /** The part of `velocity` that is the dodge's sideways slide this step (the camera leaves it out) */
+  readonly dodgeVelocity = new Vector3();
   readonly forward = new Vector3(0, 0, -1);
   readonly up = new Vector3(0, 1, 0);
   readonly right = new Vector3(1, 0, 0);
@@ -224,7 +226,7 @@ export class Flight {
     return true;
   }
 
-  releaseControls() { this.boost = 0; this.brake = 0; this.dodgeElapsed = -1; }
+  releaseControls() { this.boost = 0; this.brake = 0; this.dodgeElapsed = -1; this.dodgeVelocity.set(0, 0, 0); }
 
   reset(position: Vector3, direction: Vector3, speed: number) {
     this.releaseControls();
@@ -532,15 +534,19 @@ export class Flight {
     this.velocity.copy(this.flightPath).multiplyScalar(this.speed);
     this.position.addScaledVector(this.flightPath, averageSpeed * dt);
     this.dodgeWait = Math.max(0, this.dodgeWait - dt);
+    this.dodgeVelocity.set(0, 0, 0);
     if (this.dodgeElapsed >= 0) {
       const before = this.dodgeElapsed / this.dodgeDuration;
       this.dodgeElapsed = Math.min(this.dodgeDuration, this.dodgeElapsed + dt);
       const after = this.dodgeElapsed / this.dodgeDuration;
-      // Smoothstep displacement integrates to exactly 5 m, with zero end speeds.
+      // Smoothstep displacement integrates to exactly the dodge's length, with zero end speeds.
       const moved = this.dodgeDirection * this.dodgeLength
         * (after * after * (3 - 2 * after) - before * before * (3 - 2 * before));
       this.position.addScaledVector(this.dodgeAxis, moved);
-      if (dt > 0) this.velocity.addScaledVector(this.dodgeAxis, moved / dt);
+      if (dt > 0) {
+        this.dodgeVelocity.copy(this.dodgeAxis).multiplyScalar(moved / dt);
+        this.velocity.add(this.dodgeVelocity);
+      }
       if (this.dodgeElapsed >= this.dodgeDuration) this.dodgeElapsed = -1;
     }
   }

@@ -7,7 +7,7 @@ import { Builder, GOLD, GOLD_DEEP, blend, cyl, lathe, leaf, sphere, star } from 
 // is a hand's length or two); `y` is up, `-z` the front. The giant firework
 // (the Comet Tail Firework) is in models.ts.
 
-export type RelicId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether" | "mothCape" | "resonantChimes" | "crystalUpdraft" | "duskHourglass" | "electroPrism" | "dragonTear";
+export type RelicId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether" | "mothCape" | "resonantChimes" | "crystalUpdraft" | "duskHourglass" | "electroPrism" | "dragonTear" | "windGourd" | "foresightCharm" | "oilUmbrella" | "koiCharm" | "paperCrane" | "firecrackers";
 
 const ANEMO = "#5fe6c6";
 const ANEMO_LIGHT = "#c8fff1";
@@ -184,7 +184,99 @@ function dragonTear(): THREE.BufferGeometry {
  b.add(star(0.025,0.01,0.01,4),"#c0f3ff",0.9,[0,0.065,-0.068]);return b.build();
 }
 
+/** The Wind-Drinking Gourd: a lacquered calabash (hulu) on a red cord, a gold band at its waist, a swirl of wind on its belly */
+function windGourd(): THREE.BufferGeometry {
+  const b = new Builder();
+  b.add(lathe([[0.001, 0], [0.05, 0.006], [0.072, 0.035], [0.075, 0.07], [0.058, 0.1], [0.03, 0.118], [0.034, 0.13], [0.05, 0.155], [0.052, 0.18], [0.04, 0.2], [0.018, 0.212], [0.001, 0.214]], 26),
+    (p, out) => blend("#d9a35a", "#9c6a35", (Math.sin(Math.atan2(p.z, p.x) * 9) * 0.5 + 0.5) * 0.35 + p.y * 1.5, out), 0.05);
+  b.add(new THREE.TorusGeometry(0.033, 0.008, 6, 18), GOLD, 0.35, [0, 0.118, 0], [Math.PI / 2, 0, 0]);
+  b.add(cyl(0.012, 0.016, 0.03, 10), "#7a4b2e", 0, [0, 0.225, 0]);
+  // A red cord and tassel, and the wind's swirl painted on the belly
+  b.add(new THREE.TorusGeometry(0.04, 0.005, 5, 14, Math.PI * 1.4), "#c9404b", 0, [0, 0.12, 0.02], [0, Math.PI / 2, 0]);
+  b.add(new THREE.ConeGeometry(0.016, 0.06, 8), "#c9404b", 0, [0.03, 0.06, 0.06], [Math.PI, 0, 0]);
+  b.add(new THREE.TorusGeometry(0.03, 0.005, 5, 18, Math.PI * 1.6), ANEMO, 0.8, [0, 0.055, -0.074], [0, 0, 0.6]);
+  b.add(star(0.014, 0.006, 0.006, 4), ANEMO_LIGHT, 1, [0, 0.055, -0.078]);
+  return b.build();
+}
+
+/** The Jade Foresight Talisman: a carved jade plaque in a gold frame, an eye of light, a red knotted cord */
+function foresightCharm(): THREE.BufferGeometry {
+  const b = new Builder();
+  b.add(cyl(0.07, 0.07, 0.018, 28), (p, out) => blend("#7fd4b4", "#3f9a7f", Math.hypot(p.x, p.z) * 10 + Math.sin(p.x * 60) * 0.1, out), 0.25, [0, 0.09, 0], [Math.PI / 2, 0, 0]);
+  b.add(new THREE.TorusGeometry(0.07, 0.008, 6, 28), GOLD, 0.35, [0, 0.09, 0]);
+  b.add(new THREE.TorusGeometry(0.04, 0.004, 5, 24, Math.PI * 1.7), "#e9fff6", 0.6, [0, 0.09, -0.011], [0, 0, 0.8]);
+  b.add(sphere(0.014, 10, 8), "#fff6d6", 1, [0, 0.09, -0.012], [0, 0, 0], [1, 1, 0.5]);
+  b.add(new THREE.TorusGeometry(0.014, 0.005, 5, 12), "#c9404b", 0, [0, 0.168, 0]);
+  for (const s of [-1, 1]) b.add(cyl(0.004, 0.004, 0.08, 5), "#c9404b", 0, [s * 0.012, 0.0, 0.004], [0, 0, s * 0.15]);
+  b.add(new THREE.ConeGeometry(0.014, 0.05, 8), "#c9404b", 0, [0, -0.045, 0.004], [Math.PI, 0, 0]);
+  return b.build();
+}
+
+/** An oil-paper umbrella, open: a painted canopy on bamboo ribs, a lacquered handle */
+function oilUmbrella(): THREE.BufferGeometry {
+  const b = new Builder();
+  b.add(new THREE.ConeGeometry(0.34, 0.12, 48, 6, true), (p, out) => {
+    const a = Math.atan2(p.z, p.x), r = Math.hypot(p.x, p.z);
+    out.set(r > 0.31 ? "#f3d18b" : Math.sin(a * 8) > 0.9 ? "#fff1e6" : r < 0.06 ? "#f3d18b" : r > 0.15 && r < 0.2 ? "#f6b2a8" : "#d9534f");
+  }, 0.05, [0, 0.52, 0]);
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    b.add(cyl(0.003, 0.003, 0.35, 4), "#b98a55", 0, [Math.cos(a) * 0.17, 0.5, Math.sin(a) * 0.17], [0, -a, Math.PI / 2 - 0.34]);
+  }
+  b.add(cyl(0.008, 0.008, 0.6, 8), "#b98a55", 0, [0, 0.25, 0]);
+  b.add(cyl(0.014, 0.014, 0.12, 10), "#7a2e2e", 0.05, [0, 0.0, 0]);
+  b.add(sphere(0.016, 8, 6), GOLD, 0.4, [0, 0.6, 0]);
+  return b.build();
+}
+
+/** The Golden Koi Charm: a leaping golden koi over a red knot */
+function koiCharm(): THREE.BufferGeometry {
+  const b = new Builder();
+  b.add(sphere(0.045, 14, 10), (p, out) => blend("#ffe08a", GOLD_DEEP, p.y * 12 + 0.5, out), 0.5, [0, 0.1, 0], [0, 0, 0.5], [0.7, 0.8, 1.9]);
+  for (const s of [-1, 1]) b.add(leaf(0.07, 0.035), "#ffd36e", 0.45, [0, 0.13, 0.085], [-0.9, 0, s * 0.5]);
+  b.add(leaf(0.06, 0.02), "#ffd36e", 0.4, [0, 0.15, -0.01], [-1.4, 0, 0]);
+  b.add(sphere(0.007, 6, 5), "#5a3a2a", 0, [0.02, 0.12, -0.065]);
+  b.add(new THREE.TorusKnotGeometry(0.03, 0.007, 48, 6, 2, 3), "#c9404b", 0.05, [0, 0.02, 0]);
+  for (const s of [-1, 1]) b.add(cyl(0.004, 0.003, 0.06, 5), "#c9404b", 0, [s * 0.015, -0.03, 0], [0, 0, s * 0.2]);
+  return b.build();
+}
+
+/** A paper crane: folded facets, a red-tipped tail */
+function paperCrane(): THREE.BufferGeometry {
+  const b = new Builder();
+  const facet = (points: [number, number][], depth = 0.006) => {
+    const shape = new THREE.Shape();
+    points.forEach(([x, y], i) => (i ? shape.lineTo(x, y) : shape.moveTo(x, y)));
+    shape.closePath();
+    return new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false }).translate(0, 0, -depth / 2);
+  };
+  for (const s of [-1, 1]) b.add(facet([[0, -0.03], [0.13, 0.02], [0.02, 0.05]]), s > 0 ? "#fbf3ea" : "#efe4d6", 0.05, [0, 0.08, 0], [Math.PI / 2 - 0.3, 0, s > 0 ? 0 : Math.PI], [1, 1, 1]);
+  b.add(facet([[-0.08, 0], [0.08, 0], [0, 0.05]]), "#fbf3ea", 0.05, [0, 0.07, 0], [0, Math.PI / 2, 0]);
+  b.add(facet([[0, 0], [0.012, 0], [0.006, 0.09]]), "#fbf3ea", 0, [0, 0.09, -0.07], [-0.6, 0, 0]);
+  b.add(facet([[0, 0], [0.012, 0], [0.006, 0.08]]), "#e8546b", 0.05, [0, 0.09, 0.07], [0.6, 0, 0]);
+  return b.build();
+}
+
+/** A string of firecrackers: little red rolls with gold caps on a braided fuse */
+function firecrackers(): THREE.BufferGeometry {
+  const b = new Builder();
+  b.add(cyl(0.004, 0.004, 0.3, 5), "#7a4b2e", 0, [0, 0.12, 0]);
+  for (let i = 0; i < 8; i++) {
+    const s = i % 2 ? 1 : -1, y = 0.01 + i * 0.033;
+    b.add(cyl(0.011, 0.011, 0.06, 8), (p, out) => out.set(Math.abs(p.y) > 0.024 ? GOLD : "#d9343f"), 0.1, [s * 0.026, y, 0], [0, 0, s * 1.1]);
+  }
+  b.add(new THREE.TorusKnotGeometry(0.022, 0.006, 40, 6, 2, 3), "#d9343f", 0.05, [0, 0.29, 0]);
+  b.add(sphere(0.012, 6, 5), "#ffd27a", 1, [0, -0.04, 0]);
+  return b.build();
+}
+
 export const RELIC_BUILDERS: Record<RelicId, () => THREE.BufferGeometry> = {
+  windGourd,
+  foresightCharm,
+  oilUmbrella,
+  koiCharm,
+  paperCrane,
+  firecrackers,
   dragonTear,
   electroPrism,
   duskHourglass,

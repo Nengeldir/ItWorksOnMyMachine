@@ -29,7 +29,7 @@ import type { Equipment } from "./equip";
 //    wings in a flash of gold; while it lasts, golden ribbons stream off the
 //    wingtips and the wings shed glitter like honey in the sun.
 
-export type ItemSound = "pickup" | "full" | "auto" | "uncork" | "shield" | "shatter" | "wax" | "fuse" | "ignite" | "douse" | "eat";
+export type ItemSound = "pickup" | "full" | "auto" | "uncork" | "shield" | "shatter" | "wax" | "fuse" | "ignite" | "douse" | "eat" | "pop" | "foresee";
 
 export interface ItemFxHost {
   kick(degrees?: number): void;
@@ -43,6 +43,8 @@ const LEAF = new THREE.Color("#8ee8b0");
 const ICE = new THREE.Color("#a8e4ff");
 const FROST = new THREE.Color("#e8fbff");
 const HONEY = new THREE.Color("#ffd36e");
+const JADE = new THREE.Color("#8ff0cf");
+const CRACKER = new THREE.Color("#ff5a4a");
 const PICKED = new THREE.Color();
 const UP = new THREE.Vector3(0, 1, 0);
 const ORIGIN = new THREE.Vector3();
@@ -79,6 +81,10 @@ const USE_STYLE: Partial<Record<RunItemId, "eat" | "raise" | "toss">> = {
   anemoCatcher: "raise",
   starflakeShield: "raise",
   gliderWax: "raise",
+  windGourd: "raise",
+  koiCharm: "raise",
+  paperCrane: "toss",
+  firecrackers: "toss",
 };
 
 interface Wave {
@@ -105,7 +111,9 @@ export class ItemFx {
   private readonly pickups = new PickupView();
   private active = false;
   private version = -1;
-  private readonly cue = { pickup: 0, use: 0, full: 0, auto: 0, shatter: 0, chime: 0, bounce: 0 };
+  private readonly cue = { pickup: 0, use: 0, full: 0, auto: 0, shatter: 0, chime: 0, bounce: 0, pop: 0, foresight: 0 };
+  /** The guard's wind (a foreseen crash): ribbons of jade wind round the pilot */
+  private guardDebt = 0;
   private readonly rings = new RingQuads(16, true);
   private readonly waves: Wave[] = [];
 
@@ -169,7 +177,7 @@ export class ItemFx {
   }
 
   /** After the avatar and its effects animated: everything else; `charm`: the keepsake carried */
-  update(dt: number, items: Items, flight: Flight, flying: boolean, charm: Charm | null = null) {
+  update(dt: number, items: Items, flight: Flight, flying: boolean, charm: Charm | null = null, guarding = false) {
     this.active = true;
     this.group.visible = !this.inWormhole;
     const budget = this.particles.budget * (flying ? 1 : 0);
@@ -206,6 +214,14 @@ export class ItemFx {
           this.host.kick(5);
         } else if (flame < 0.05) this.lit = false;
       }
+    }
+    // A foreseen crash: the wind spirals round the pilot while it carries them on the safe line
+    this.guardDebt += guarding ? 70 * budget * dt : 0;
+    for (; this.guardDebt >= 1; this.guardDebt--) {
+      const a = Math.random() * TAU, pilot = this.avatar.group.position;
+      at.copy(pilot).add(tmp.set(Math.cos(a) * 1.8, rand(-0.6, 0.6), Math.sin(a) * 1.8));
+      vel.set(-Math.sin(a) * 6, rand(0, 1.5), Math.cos(a) * 6).addScaledVector(flight.velocity, 0.85);
+      this.particles.emit(at, vel, fx(rand(0.4, 0.7), rand(0.3, 0.55), Math.random() < 0.7 ? JADE : WHITE, Kind.Wisp, 0, 2, 0.8));
     }
     this.updateWaves(dt);
     this.rings.end();
@@ -249,6 +265,30 @@ export class ItemFx {
         at.copy(pilot).add(tmp.set(rand(-0.6, 0.6), rand(-1, 1), rand(-0.6, 0.6)));
         this.particles.emit(at, vel.set(0, rand(6, 14), 0), fx(rand(0.6, 1.1), rand(0.15, 0.3), tint, Kind.Glow, 0, 0.8, 2.2));
       }
+    }
+    if (c.pop !== seen.pop) {
+      seen.pop = c.pop;
+      // A firecracker bursts behind: red paper and gold sparks
+      const pilot = this.avatar.group.position;
+      at.copy(pilot).addScaledVector(flight.forward, -1.5);
+      for (let k = 0; k < Math.round(26 * budget); k++) {
+        vel.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize().multiplyScalar(rand(3, 9)).addScaledVector(flight.velocity, 0.6);
+        this.particles.emit(at, vel, k % 3 ? fx(rand(0.3, 0.6), rand(0.12, 0.22), k % 2 ? CRACKER : HONEY, Kind.Shard, 4, 1.5, 1.8) : fx(0.35, 0.3, WHITE, Kind.Star, 0, 2, 2.4));
+      }
+      this.wave(at, null, 0.4, 3, 0.25, HONEY);
+      this.host.sound("pop", 0.9 + Math.random() * 0.25);
+      this.host.kick(3);
+    }
+    if (c.foresight !== seen.foresight) {
+      seen.foresight = c.foresight;
+      // The jade talisman cracks into light
+      const pilot = this.avatar.group.position;
+      this.wave(pilot, null, 0.6, 5, 0.6, JADE);
+      for (let k = 0; k < Math.round(40 * budget); k++) {
+        vel.set(rand(-1, 1), rand(-0.5, 1), rand(-1, 1)).normalize().multiplyScalar(rand(2, 7)).addScaledVector(flight.velocity, 0.7);
+        this.particles.emit(pilot, vel, k % 2 ? fx(rand(0.5, 0.9), rand(0.15, 0.3), JADE, Kind.Shard, 3, 1.4, 1.8) : fx(0.7, 0.2, WHITE, Kind.Star, -1, 1.5, 2));
+      }
+      this.host.sound("foresee");
     }
     if (c.full !== seen.full) {
       seen.full = c.full;

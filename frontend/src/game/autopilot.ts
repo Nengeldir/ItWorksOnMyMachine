@@ -32,6 +32,8 @@ export class Autopilot {
   private speed = 0;
   private bank = 0;
   private readonly offset = new THREE.Vector3();
+  /** Seconds for a start off the line to settle onto it (the run's guard pulls you in faster) */
+  settle = SETTLE;
 
   /** Takes over from wherever the pilot is on the next step (after a respawn or a new level) */
   reset() {
@@ -60,7 +62,7 @@ export class Autopilot {
     this.speed = clamp(this.speed + accel * dt, AUTOPILOT.railMinSpeed, Math.max(AUTOPILOT.railMinSpeed, AUTOPILOT.railMaxSpeed));
     // The line is a function of z: ds = dz / tangent.z
     this.z += this.speed * dt * tangent.z;
-    this.offset.multiplyScalar(Math.exp(-dt / SETTLE));
+    this.offset.multiplyScalar(Math.exp(-dt / this.settle));
     course.pointAt(this.z, point).add(this.offset);
     course.tangentAt(this.z, tangent);
 

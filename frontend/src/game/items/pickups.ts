@@ -49,6 +49,8 @@ export class PickupView {
         display=new ItemDisplay(runItem(pickup.id).model,ITEMS_FX.pickupSize);
         display.group.position.copy(pickup.position);this.group.add(display.group);this.displays.set(pickup,display);
       }
+      // Drawn where it is now: the wind-drinking gourd pulls pickups in
+      display.group.position.copy(pickup.position);
       display.group.scale.setScalar(grown);
       display.update(dt,particles);
       this.color.set(RARITIES[rarity].color);

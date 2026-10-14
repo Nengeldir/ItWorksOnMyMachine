@@ -86,7 +86,7 @@ test("held steering never exceeds 80 degrees, turns continuously, and levels on 
   }
 });
 
-test("Q/E dodge moves exactly 5 metres at different speeds and step sizes without changing heading", () => {
+test("Q/E dodge moves exactly its 8 metres at different speeds and step sizes without changing heading", () => {
   for (const dir of [-1,1]) for (const speed of [20,80]) for (const dt of [1/120,1/60,0.013]) {
     const f=make(speed), normal=make(speed);
     assert.equal(f.dodge(dir), true); assert.equal(f.dodge(-dir), false);
@@ -94,7 +94,8 @@ test("Q/E dodge moves exactly 5 metres at different speeds and step sizes withou
       f.step(dt,{pitch:0,roll:0},0); normal.step(dt,{pitch:0,roll:0},0);
     }
     const displacement=f.position.clone().sub(normal.position);
-    assert.ok(Math.abs(displacement.x-dir*5)<1e-9);
+    assert.ok(Math.abs(displacement.x-dir*FLIGHT.dodgeDistance)<1e-9);
+    assert.equal(FLIGHT.dodgeDistance, 8);
     assert.ok(Math.abs(displacement.y)+Math.abs(displacement.z)<1e-9);
     assert.ok(f.quaternion.angleTo(normal.quaternion)<1e-7);
     assert.equal(f.dodgePhase,0); assert.equal(f.dodge(dir),false);
@@ -107,7 +108,8 @@ test("dodge displacement passes through obstacles incrementally and resets on re
   for(let i=0;i<72;i++) {
     f.step(1/120,{pitch:0,roll:0},0);
     if(before<2.5 && f.position.x>=2.5) crossedWall=true;
-    assert.ok(f.position.x-before < 0.11); before=f.position.x;
+    // Never a teleport: at most its peak speed (1.5 × length / duration) times one step
+    assert.ok(f.position.x-before < 0.21); before=f.position.x;
   }
   assert.equal(crossedWall,true);
   f.reset(new Vector3(),new Vector3(0,0,-1),40);

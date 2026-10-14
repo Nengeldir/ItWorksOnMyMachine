@@ -37,6 +37,9 @@ export interface RunStats {
   falcon: number; // stance (H): wings tucked, fast and stiff
   butterfly: number; // stance (H): cape spread, slow, floaty and nimble
   echoTrail: number; // passive: close a circle across your own ribbon of light for a wind ring
+  guardianGale: number; // passive: a crash about to happen is foreseen, and the wind carries you on the safe line
+  gourdBreath: number; // passive: crystals, orbs, lights and items drift in from further away
+  cloudCushion: number; // passive: once per level a fall into the abyss bounces off a cloud
 }
 
 export type UpgradeId =
@@ -67,7 +70,10 @@ export type UpgradeId =
   | "ascension"
   | "falcon"
   | "butterfly"
-  | "echoTrail";
+  | "echoTrail"
+  | "guardianGale"
+  | "gourdBreath"
+  | "cloudCushion";
 
 export interface Upgrade {
   id: UpgradeId;
@@ -113,7 +119,16 @@ export const UPGRADES: readonly Upgrade[] = [
   { id: "falcon", name: "Falcon Stance", icon: "🦅", kind: "ability", key: "H", max: 1, effect: { falcon: 1 }, description: "Toggle: wings tucked like a stooping falcon. You fall much faster and go faster, but steer stiffly.", minLevel: 4 },
   { id: "butterfly", name: "Butterfly Stance", icon: "🌸", kind: "ability", key: "H", max: 1, effect: { butterfly: 1 }, description: "Toggle: cape and wings spread wide. You fall slowest and turn tightest, but slowly.", minLevel: 4 },
   { id: "echoTrail", name: "Echo-Trail", icon: "➰", kind: "passive", max: 1, effect: { echoTrail: 1 }, description: "You leave a ribbon of light. Close a full circle across it and it becomes a wind ring that hurls you on.", minLevel: 6 },
+  { id: "guardianGale", name: "Guardian Gale", icon: "🛡️", kind: "passive", max: 1, effect: { guardianGale: 1 }, description: "The wind watches over you. When a crash is about to happen it takes you onto the safe line for two seconds. Rests 20 seconds after.", minLevel: 3 },
+  { id: "gourdBreath", name: "Gourd's Breath", icon: "🏺", kind: "passive", max: 2, effect: { gourdBreath: 1 }, description: "A little hulu at your belt breathes in: crystals, stamina orbs, lights and items reach you from 6 metres further per stack." },
+  { id: "cloudCushion", name: "Cloud Cushion", icon: "🌥️", kind: "passive", max: 1, effect: { cloudCushion: 1 }, description: "Once per level, falling into the abyss or the sea lands you on a cloud that bounces you back up over the line.", minLevel: 2 },
 ];
+
+/** How rare an ability reads in the UI (its border): by the pilot level it waits for */
+export function upgradeRarity(upgrade: Upgrade): 0 | 1 | 2 | 3 {
+  const level = upgrade.minLevel ?? 1;
+  return level >= 7 ? 3 : level >= 4 ? 2 : level >= 2 ? 1 : 0;
+}
 
 const MULTIPLIED: (keyof RunStats)[] = ["drag", "sink", "stall", "proximity"];
 
@@ -122,6 +137,7 @@ export function baseStats(): RunStats {
     dash: 0, flap: 0, glideLock: 0, drag: 1, sink: 1, stall: 1, proximity: 1, magnet: 0, multiplier: 0, gateBonus: 0, lives: 0,
     featherfalling: 0, skimBooster: 0, cloudSurf: 0, plunge: 0, windShear: 0, thermalVision: 0, slipstream: 0, galeForce: 0, acrobatic: 0, hoverStall: 0,
     moth: 0, zenith: 0, resonance: 0, leyLine: 0, aeroBrake: 0, draftWeave: 0, ascension: 0, falcon: 0, butterfly: 0, echoTrail: 0,
+    guardianGale: 0, gourdBreath: 0, cloudCushion: 0,
   };
 }
 

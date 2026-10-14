@@ -75,9 +75,33 @@ export const ITEM = {
   fireTop: 150, // …fading out by this speed
   fireTurn: 0.35, // multiplies how hard you can steer
   fireWobble: 0.45, // how hard it yanks the controls about
+  // Wind-Drinking Gourd: the hulu breathes in everything loose around you
+  gourdTime: 8, // seconds
+  gourdRange: 40, // metres: crystals, orbs, lights and items this close are drawn in
+  gourdPull: 34, // m/s they fly towards you
+  // Jade Foresight Talisman: a crash about to happen is foreseen, and the wind carries you
+  guardTime: 2, // seconds on the safe line (Game's guard)
+  guardLook: 0.45, // seconds ahead it looks for rock
+  // Oil-Paper Umbrella: a parasol glide
+  umbrellaTime: 6,
+  umbrellaSink: 0.15, // multiplies the sink
+  umbrellaDrag: 1.15, // …and the drag (it catches the air)
+  umbrellaTurn: 1.15,
+  // Golden Koi Charm: a run of fortune
+  koiTime: 15,
+  koiGates: 2, // gate points multiplied by this
+  koiStyle: 1.5, // style points multiplied by this
+  // Paper Crane Guide: the crane flies ahead and the gates it visits open wider
+  craneGates: 3,
+  craneWiden: 4, // metres
+  craneTime: 25, // seconds at most
+  // String of Firecrackers: quick pops of speed
+  crackerPops: 4,
+  crackerGap: 0.45, // seconds between pops
+  crackerSurge: 7, // m/s each
 };
 
-export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether" | "mothCape" | "resonantChimes" | "crystalUpdraft" | "duskHourglass" | "electroPrism" | "dragonTear";
+export type RunItemId = "anemoCatcher" | "starflakeShield" | "gliderWax" | "cometFirework" | "spiritLantern" | "echoConch" | "phoenixFeather" | "silkRibbon" | "vortexGeode" | "aeroBoots" | "stormKite" | "glacialPrism" | "sunNectar" | "windTether" | "mothCape" | "resonantChimes" | "crystalUpdraft" | "duskHourglass" | "electroPrism" | "dragonTear" | "windGourd" | "foresightCharm" | "oilUmbrella" | "koiCharm" | "paperCrane" | "firecrackers";
 
 /** How an item saved the pilot from a hit */
 export type ItemSave = "starflake";
@@ -126,6 +150,12 @@ export const RUN_ITEMS: readonly RunItemInfo[] = [
   { id: "duskHourglass", model: "duskHourglass", name: "Dusk-Weaver's Hourglass", icon: "⌛", rarity: 3, charges: 1, description: "For four seconds, scenery and the spirit manta move at a quarter pace while your flight stays normal.", minLevel: 10 },
   { id: "electroPrism", model: "electroPrism", name: "Electro-Charged Prism", icon: "⚡", rarity: 2, charges: 1, description: "Near misses release chain lightning and score bonus points for twelve seconds.", minLevel: 5 },
   { id: "dragonTear", model: "dragonTear", name: "Tear of the Dragon", icon: "💧", rarity: 2, charges: 1, description: "Hold the use button to dive straight down, for up to six seconds. Release to regain normal flight.", minLevel: 5 },
+  { id: "windGourd", model: "windGourd", name: "Wind-Drinking Gourd", icon: "🏺", rarity: 1, charges: 1, description: "Uncork the hulu and it drinks the wind for eight seconds: crystals, stamina orbs, lights and items within 40 metres fly into it." },
+  { id: "foresightCharm", model: "foresightCharm", name: "Jade Foresight Talisman", icon: "🧿", rarity: 2, charges: 1, auto: true, description: "Carried, it sees a crash coming before it happens: the wind takes you onto the safe line for two seconds, then the jade cracks.", minLevel: 3 },
+  { id: "oilUmbrella", model: "oilUmbrella", name: "Oil-Paper Umbrella", icon: "☂️", rarity: 0, charges: 1, description: "Open it overhead for six seconds of parasol gliding: you barely sink and turn a little tighter, though the air holds you back." },
+  { id: "koiCharm", model: "koiCharm", name: "Golden Koi Charm", icon: "🐟", rarity: 1, charges: 1, description: "Fifteen seconds of fortune: gates score double and style points flow half again as fast." },
+  { id: "paperCrane", model: "paperCrane", name: "Paper Crane Guide", icon: "✉️", rarity: 0, charges: 1, description: "Release a paper crane. It flies ahead to the next three gates, and each one it visits opens 4 metres wider for you." },
+  { id: "firecrackers", model: "firecrackers", name: "String of Firecrackers", icon: "🧨", rarity: 0, charges: 1, description: "Light the string: four pops of speed, each a little kick forward, half a second apart." },
 ];
 
 export const runItem = (id: RunItemId): RunItemInfo => RUN_ITEMS.find((i) => i.id === id)!;
@@ -158,10 +188,16 @@ const DURATION: Record<RunItemId, () => number> = {
   starflakeShield: () => ITEM.shieldTime,
   gliderWax: () => ITEM.waxTime,
   cometFirework: () => ITEM.fireFuse + ITEM.fireTime,
+  windGourd: () => ITEM.gourdTime,
+  foresightCharm: () => ITEM.guardTime,
+  oilUmbrella: () => ITEM.umbrellaTime,
+  koiCharm: () => ITEM.koiTime,
+  paperCrane: () => ITEM.craneTime,
+  firecrackers: () => ITEM.crackerPops * ITEM.crackerGap + 0.1,
 };
 
 /** Effects that move the pilot: they end on a crash or a respawn */
-const FLIGHT_EFFECTS: RunItemId[] = ["anemoCatcher", "cometFirework", "silkRibbon", "aeroBoots", "stormKite", "windTether", "dragonTear"];
+const FLIGHT_EFFECTS: RunItemId[] = ["anemoCatcher", "cometFirework", "silkRibbon", "aeroBoots", "stormKite", "windTether", "dragonTear", "oilUmbrella", "firecrackers"];
 
 /** A push along the path, fading out as the speed nears its own top speed */
 const push = (amount: number, top: number, speed: number) => amount * clamp((top - speed) / 15, 0, 1);
@@ -194,7 +230,10 @@ export class Items {
   /** Seconds since each item's effect began (absent: not under way) */
   readonly active = new Map<RunItemId, number>();
   /** One-off moments, counted so the looks can tell a new one happened */
-  readonly cue = { pickup: 0, use: 0, full: 0, auto: 0, shatter: 0, phoenix: 0, chime: 0, bounce: 0, lightning: 0 };
+  readonly cue = { pickup: 0, use: 0, full: 0, auto: 0, shatter: 0, phoenix: 0, chime: 0, bounce: 0, lightning: 0, pop: 0, foresight: 0 };
+  /** The gates the paper crane visits (their ring indices), and how many pops the firecrackers have left */
+  readonly craneGates: number[] = [];
+  private pops = 0;
   /** The item last picked up, and last used */
   picked: RunItemId | null = null;
   used: RunItemId | null = null;
@@ -351,6 +390,15 @@ export class Items {
       }
       if(!found)return false;
     }
+    if (id === "paperCrane") {
+      this.craneGates.length = 0;
+      const rings = this.world?.course.rings ?? [];
+      for (let i = 0; i < rings.length - 1 && this.craneGates.length < ITEM.craneGates; i++) {
+        if (rings[i].position.z > flight.position.z + 5) this.craneGates.push(i);
+      }
+      if (!this.craneGates.length) return false;
+    }
+    if (id === "firecrackers") this.pops = 0;
     // ITEM STARTS
     // A shield already up would be wasted
     if (id === "starflakeShield" && this.active.has(id)) return false;
@@ -390,9 +438,38 @@ export class Items {
   /** A gate passed under the chimes widens the following gate. */
   gate(index: number) {
     if(this.active.has("resonantChimes")){this.chimeTarget=index+1;this.cue.chime++;}
+    // The crane moves on once you've flown its gate; with none left it settles into your hand
+    const crane = this.craneGates.indexOf(index);
+    if (crane >= 0) {
+      this.craneGates.splice(0, crane + 1);
+      if (!this.craneGates.length) this.active.delete("paperCrane");
+    }
   }
   widening(index: number): number {
-    return this.active.has("resonantChimes") && index===this.chimeTarget ? ITEM.chimeWiden : 0;
+    return (this.active.has("resonantChimes") && index===this.chimeTarget ? ITEM.chimeWiden : 0)
+      + (this.active.has("paperCrane") && this.craneGates.includes(index) ? ITEM.craneWiden : 0);
+  }
+
+  /** Gate points multiplied by this (the koi) */
+  get gateMultiplier(): number { return this.active.has("koiCharm") ? ITEM.koiGates : 1; }
+
+  /** Style points multiplied by this (the koi) */
+  get styleMultiplier(): number { return this.active.has("koiCharm") ? ITEM.koiStyle : 1; }
+
+  /** Extra metres crystals and stamina orbs are drawn in from (the gourd) */
+  get gourdReach(): number { return this.active.has("windGourd") ? ITEM.gourdRange : 0; }
+
+  /**
+   * A crash is foreseen: a talisman in the bag takes it (it cracks, and the wind carries the pilot
+   * on the safe line). False if there's none
+   */
+  foresee(): boolean {
+    const index = this.bag.findIndex((c) => c.id === "foresightCharm");
+    if (index < 0) return false;
+    this.bag.splice(index, 1);
+    this.selected = Math.min(this.selected, Math.max(0, this.bag.length - 1));
+    this.active.set("foresightCharm", 0);
+    return true;
   }
 
   /** A carried Phoenix feather revives from terrain or the abyss onto the clear course tube. */
@@ -509,6 +586,31 @@ export class Items {
       else { mods.dive=1;mods.diveAngle=Math.PI/2;mods.thrust+=ITEM.tearThrust;mods.turn*=0.6; }
     }
     // ITEM RULES
+    // Wind-Drinking Gourd: loose light and items fly into the hulu (crystals and orbs: `gourdReach`)
+    if (this.active.has("windGourd")) {
+      for (const light of this.lights) {
+        if (light.collected || light.position.distanceToSquared(flight.position) > ITEM.gourdRange ** 2) continue;
+        light.position.lerp(flight.position, Math.min(1, ITEM.gourdPull * dt / Math.max(1, light.position.distanceTo(flight.position))));
+      }
+      for (const pickup of this.pickups) {
+        if (pickup.collected || pickup.blocked || pickup.position.distanceToSquared(flight.position) > ITEM.gourdRange ** 2 || this.bag.length >= ITEM.bag) continue;
+        pickup.position.lerp(flight.position, Math.min(1, ITEM.gourdPull * dt / Math.max(1, pickup.position.distanceTo(flight.position))));
+      }
+    }
+    // Oil-Paper Umbrella: a parasol over your head
+    if (this.active.has("oilUmbrella")) {
+      mods.sink *= ITEM.umbrellaSink;
+      mods.drag *= ITEM.umbrellaDrag;
+      mods.turn *= ITEM.umbrellaTurn;
+      mods.hover = Math.max(mods.hover, 0.25);
+    }
+    // String of Firecrackers: a pop every so often
+    const crackers = this.time("firecrackers");
+    if (crackers >= 0 && this.pops < ITEM.crackerPops && crackers >= this.pops * ITEM.crackerGap + 0.15) {
+      this.pops++;
+      flight.surge(ITEM.crackerSurge);
+      this.cue.pop++;
+    }
     // Anemo Catcher: the bottled updraft lifts the path and holds the speed while it lasts
     const updraft = this.time("anemoCatcher");
     if (updraft >= 0) {

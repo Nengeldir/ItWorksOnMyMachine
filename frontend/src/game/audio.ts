@@ -467,6 +467,16 @@ export class GameAudio {
       case "eat":
         if (this.synth) voice(this.synth, "crunch");
         break;
+      case "pop":
+        // A firecracker: a sharp crack and a scatter of crackles
+        this.whoosh(3500, 800, 0.18, 0.5, "highpass");
+        this.synth?.crackle(6, 0.25, 0.06);
+        break;
+      case "foresee":
+        // Jade rings and the wind takes you: a clear chime over a rising rush
+        [1319, 1760, 2637].forEach((f, i) => this.tone(f, 0.6, "sine", 0.06, i * 0.06));
+        this.whoosh(300, 2400, 1.4, 0.45);
+        break;
     }
   }
 

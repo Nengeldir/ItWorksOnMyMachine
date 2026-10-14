@@ -31,7 +31,7 @@ export const ABILITY = {
   plungeCooldown: 5,
   plungeBonus: 300, // points for a gate struck mid-plunge, times the gate chain
   // Wind-Shear Dash (the Q / E dodge, upgraded)
-  shearDistance: 9,
+  shearDistance: 14,
   shearDuration: 0.16,
   shearCooldown: 0.8,
   // Slipstream Rider: the wake behind the spirit manta
