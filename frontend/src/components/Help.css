@@ -178,6 +178,14 @@
   text-align: center;
 }
 
+/* A line of explanation under a card's title (the adventure's restart) */
+.overlay-note {
+  max-width: 24rem;
+  margin: 0 auto;
+  text-align: center;
+  color: var(--ink-70);
+}
+
 .overlay-actions {
   display: flex;
   justify-content: center;

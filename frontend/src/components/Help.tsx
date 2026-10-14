@@ -74,7 +74,7 @@ interface OverlayProps {
 }
 
 /** A card's title under a small feather badge */
-const Title = ({ children }: { children: ReactNode }) => (
+export const Title = ({ children }: { children: ReactNode }) => (
   <header className="overlay-title">
     <span className="overlay-badge">
       <IconFeather size={22} />
@@ -87,7 +87,7 @@ const Title = ({ children }: { children: ReactNode }) => (
  * A card in the middle of a dimmed screen, the game paused behind it. Takes Enter and Esc before the game
  * and the screens do (Enter would start the run behind the card).
  */
-const Overlay = ({ label, onConfirm, onDismiss, children }: OverlayProps) => {
+export const Overlay = ({ label, onConfirm, onDismiss, children }: OverlayProps) => {
   const onKey = useEffectEvent((e: KeyboardEvent) => {
     if (e.key === "Enter") onConfirm();
     else if (e.key === "Escape") onDismiss();

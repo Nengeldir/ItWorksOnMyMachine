@@ -47,8 +47,8 @@ export const RunHud = ({ run, compassScale, toasts }: { run: RunHudState; compas
     <div className="run-score glass">
       <strong>{run.score.toLocaleString()}</strong>
       <span>
-        Level {run.level} / {run.length}
-        {run.chain > 1 && <b className="run-chain"> · chain ×{run.chain}</b>}
+        <span className="run-score-level">Level {run.level} / {run.length}</span>
+        {run.chain > 1 && <b className="run-chain"><span className="run-score-level"> · </span>chain ×{run.chain}</b>}
       </span>
     </div>
 

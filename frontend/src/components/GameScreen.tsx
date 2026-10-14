@@ -1,4 +1,4 @@
-import { IconArrowLeft, IconChevronDown, IconChevronUp, IconSettings } from "@tabler/icons-react";
+import { IconArrowLeft, IconChevronDown, IconChevronUp, IconRefresh, IconSettings } from "@tabler/icons-react";
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from "react";
 import type { Screen } from "../App";
 import { holdGame } from "../game/hold";
@@ -21,7 +21,7 @@ import { useMediaToggle } from "../media";
 import { type Settings, clientId } from "../storage";
 import { usePaletteTheme, useUiTheme } from "../theme";
 import Coach from "./Coach";
-import { HelpButton } from "./Help";
+import { HelpButton, Overlay, Title } from "./Help";
 import SettingsPanel from "./SettingsPanel";
 import Hud from "./Hud";
 import { RaceResults } from "./RaceResults";
@@ -33,6 +33,7 @@ import MapSelect from "./MapSelect";
 import "./GameScreen.css";
 import "./Touch.css";
 import "./HudLayout.css";
+import "./RunLayout.css";
 
 interface Mountable {
   mount(container: HTMLElement): void;
@@ -491,8 +492,34 @@ const ExploreScreen = ({ biome, seed, settings, onSettings, onExit, testMode = f
 
 // --- Roguelike run ------------------------------------------------------------------
 
+/** The adventure's restart, beside the "?" and the gear: asks first, since the run so far ends */
+const RestartButton = ({ onRestart }: { onRestart: () => void }) => {
+  const [asking, setAsking] = useState(false);
+  return (
+    <>
+      <button className="help-button glass" aria-label="Restart the adventure" title="Restart the adventure" onClick={() => setAsking(true)}>
+        <IconRefresh size={20} />
+      </button>
+      {asking && (
+        <Overlay label="Restart the adventure" onConfirm={() => { setAsking(false); onRestart(); }} onDismiss={() => setAsking(false)}>
+          <Title>Restart the adventure?</Title>
+          <p className="overlay-note">This run ends here and a new one sets off from level 1 on the same map. What you've earned so far still counts.</p>
+          <div className="overlay-actions">
+            <button className="primary" onClick={() => { setAsking(false); onRestart(); }}>
+              Restart <kbd>Enter</kbd>
+            </button>
+            <button onClick={() => setAsking(false)}>
+              Keep flying <kbd>Esc</kbd>
+            </button>
+          </div>
+        </Overlay>
+      )}
+    </>
+  );
+};
+
 const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onTutorialEnd = noop }: ScreenProps & { seed: number; onNewRun: () => void }) => {
-  const idle = useIdleUi();
+  // Adventures keep every panel shown (no hiding the glass while the mouse rests); RunLayout.css lays it out
   const [session] = useState(() => new RunSession(seed, settings));
   const ref = useMountedSession(session, settings);
   const { hud, stage, offers, next, arrived, summary, best, error, reward } = useSyncExternalStore(session.store.subscribe, session.store.get);
@@ -518,8 +545,10 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onT
   }, [tutorial, stage, onTutorialEnd]);
 
   return (
-    <div className={`game${idle ? " ui-idle" : ""}`}>
+    <div className={`game run-layout${hud?.paused ? " is-paused" : ""}`}>
       <div ref={ref} className="game-view" />
+      {/* Paused: the world softly blurred behind the HUD, so the pause is unmistakable */}
+      {hud?.paused && <div className="pause-veil" />}
       {/* Nothing but the wormhole while passing through a portal */}
       {stage !== "intro" && (hud?.paused || stage === "summary" || run?.phase === "explore" || run?.phase === "arrive") && <ProfileStatus paused={hud?.paused} />}
       {hud && (hud.paused || (stage !== "intro" && stage !== "pick" && stage !== "summary" && run?.phase !== "portal" && run?.phase !== "finale" && run?.phase !== "won")) && <Hud hud={hud} settings={settings} showStyle />}
@@ -537,7 +566,9 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onT
           title={run ? `Level ${run.level}/${run.length} · ${run.biome} · ${run.mood}` : "Adventure"}
           onExit={onExit}
           controls={{ settings, onSettings, muted: !!hud?.muted }}
-        />
+        >
+          <RestartButton onRestart={() => session.again()} />
+        </TopBar>
       )}
       {error && <div className="banner">{error} <button onClick={() => session.retry()}>Try again</button></div>}
 

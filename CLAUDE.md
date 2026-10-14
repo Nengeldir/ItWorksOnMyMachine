@@ -218,6 +218,31 @@ Breath, Cloud Cushion); the foresight/guard steers through `Autopilot` in
 
 Add new entries at the top, dated.
 
+### 2026-10-13: Adventure HUD: always shown, touch layout, restart, pause blur (Claude)
+
+Asked for: (1) every adventure panel always shown; (2) on touch screens hide
+the "Reach the portal" objective and put a compact boost panel there (no
+speed, no style line), score top centre with the level title shrunk to stop
+short of it, "?" and Settings top right, Resume under the pause card; (3) a
+restart button beside them (desktop too) with a confirmation; (4) a slight
+blur while paused. `RunScreen` no longer uses `useIdleUi` and carries
+`run-layout`/`is-paused`; new `components/RunLayout.css` holds the touch
+layout (`html.touch .game.run-layout`, CSS variables for the top row) and the
+`.pause-veil` blur. `Hud` takes `onResume` and wraps the pause card in
+`.hud-pause-stack` (positioning moved there; `Touch.css` follows);
+`RunSession.resume()`. `RestartButton` in `GameScreen.tsx` reuses `Overlay`/
+`Title` (now exported from `Help.tsx`, `.overlay-note` added) and calls
+`session.again()`; shown in every stage so the top row never has a gap. The
+score's "Level x / y" got a `.run-score-level` class so touch hides it (the
+title shows the level). Under 760 px wide, Respawn/Pause drop under the
+corner buttons; the compass hides while paused on touch (it hit the card).
+Touch layout applies to tablets too (`html.touch`). README updated. Verified:
+build, lint, `npm test` (148 pass); looked at 844×390 and 667×375 frames
+with `html.touch` forced (flying, paused, restart card, restart → level 1)
+and 1280×720 desktop. Not checked: real phones/iPad, notches, left-handed
+touch (adventures never had it), a lives-less run (the boost panel assumes
+the feathers pill above it).
+
 ### 2026-10-13: CLAUDE.md summarised, the old one archived (Claude)
 
 Asked for: a new CLAUDE.md summarising the old one, with the old one
@@ -274,6 +299,9 @@ on real hardware):
 - A full eight-level adventure through the finale and victory lap.
 
 **Known bugs and gaps:**
+- Adventure touch HUD (2026-10-13): check on real phones and an iPad; the
+  boost panel's top assumes the feathers pill; decide whether Respawn/Pause
+  should become round icon buttons to fit one row on narrow phones.
 - The first 1.4 s after a portal: level clock, gates and abilities are off
   until the blur clears (`RunController.step`); fix needs a timing decision.
 - Remote pilots and ghosts: no cosmetics, pilot style, powers' particles or
