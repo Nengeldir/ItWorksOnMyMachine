@@ -53,11 +53,15 @@ interface RockChunk {
   state: "idle" | "pending" | "loaded";
   mesh: THREE.Mesh | null;
   trees: THREE.InstancedMesh | null;
+  /** Its grass tufts, bushes and flowers (drawn only) */
+  decor: THREE.InstancedMesh[];
   /** Its pines and how far each reaches down to snapped rock, for drawing them */
   pines: Tree[];
   sink: Float32Array | null;
 }
 
+/** Metres from the camera within which Sky Isles' chunks show their grass, flowers and bushes */
+const DECOR_RANGE = 380;
 const pineMatrix = new THREE.Matrix4();
 const pineRotation = new THREE.Quaternion();
 const pinePosition = new THREE.Vector3();
@@ -88,14 +92,72 @@ function paint(geometry: THREE.BufferGeometry, color: THREE.Color): THREE.Buffer
   return geometry;
 }
 
-/** A low-poly pine, 1 m tall with branches 1 m wide at the bottom; instances scale it */
+/** Paints a geometry from `low` at its lowest vertex to `high` at its highest */
+function shade(geometry: THREE.BufferGeometry, low: THREE.Color, high: THREE.Color): THREE.BufferGeometry {
+  geometry.computeBoundingBox();
+  const { min, max } = geometry.boundingBox!;
+  const position = geometry.getAttribute("position");
+  const colors = new Float32Array(position.count * 3);
+  const c = new THREE.Color();
+  for (let i = 0; i < position.count; i++) c.copy(low).lerp(high, (position.getY(i) - min.y) / Math.max(1e-6, max.y - min.y)).toArray(colors, i * 3);
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  return geometry;
+}
+
+/**
+ * A pine, 1 m tall with branches 1 m wide at the bottom; instances scale it. Five drooping tiers, each
+ * darker inside and lighter at its rim, on a flared trunk; the silhouette stays inside the cone it
+ * collides as (trees.ts)
+ */
 function pineGeometry(foliage: THREE.Color, trunk: THREE.Color): THREE.BufferGeometry {
   const parts = [
-    paint(new THREE.CylinderGeometry(0.1, 0.14, 0.3, 5).translate(0, 0.15, 0), trunk),
-    paint(new THREE.ConeGeometry(1, 0.5, 6).translate(0, 0.43, 0), foliage.clone().multiplyScalar(0.9)),
-    paint(new THREE.ConeGeometry(0.75, 0.42, 6).translate(0, 0.63, 0), foliage),
-    paint(new THREE.ConeGeometry(0.5, 0.38, 6).translate(0, 0.81, 0), foliage.clone().multiplyScalar(1.12)),
+    shade(new THREE.CylinderGeometry(0.07, 0.15, 0.32, 7).translate(0, 0.16, 0), trunk.clone().multiplyScalar(0.75), trunk),
   ];
+  const tiers = 5;
+  for (let i = 0; i < tiers; i++) {
+    const k = i / (tiers - 1), radius = 0.98 - k * 0.6, height = 0.34 - k * 0.07, base = 0.26 + k * 0.56;
+    // A skirt that droops at its rim: a lathe from the rim up to the tier's point
+    const tier = new THREE.LatheGeometry([
+      new THREE.Vector2(radius * 0.9, -0.03), new THREE.Vector2(radius, 0), new THREE.Vector2(radius * 0.55, height * 0.45), new THREE.Vector2(0.001, height),
+    ], 9).translate(0, base, 0);
+    parts.push(shade(tier, foliage.clone().multiplyScalar(0.72 + k * 0.1), foliage.clone().multiplyScalar(1.02 + k * 0.12)));
+  }
+  const merged = mergeGeometries(parts.map((p) => p.toNonIndexed()))!;
+  parts.forEach((p) => p.dispose());
+  merged.computeVertexNormals();
+  return merged;
+}
+
+/** A grass tuft, 1 m: seven blades fanning from one root, dark at the root and pale at the tips (instances tint it) */
+function tuftGeometry(): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2, lean = 0.25 + (i % 3) * 0.12, tall = 0.7 + (i % 4) * 0.1;
+    parts.push(shade(new THREE.ConeGeometry(0.06, tall, 3).translate(0, tall / 2, 0).rotateZ(lean).rotateY(a), new THREE.Color(0.75, 0.8, 0.7), new THREE.Color(1.15, 1.18, 1)).toNonIndexed());
+  }
+  const merged = mergeGeometries(parts)!;
+  parts.forEach((p) => p.dispose());
+  return merged;
+}
+
+/** A round bush, 1 m: three soft clumps on the ground */
+function bushGeometry(): THREE.BufferGeometry {
+  const parts = [[0, 0.42, 0, 0.5], [0.3, 0.3, 0.15, 0.36], [-0.25, 0.28, -0.2, 0.38]].map(([x, y, z, r]) =>
+    shade(new THREE.IcosahedronGeometry(r, 1).translate(x, y, z), new THREE.Color(0.55, 0.6, 0.55), new THREE.Color(1.1, 1.12, 1)).toNonIndexed());
+  const merged = mergeGeometries(parts)!;
+  parts.forEach((p) => p.dispose());
+  return merged;
+}
+
+/** Wildflowers, 1 m: a few stems, each with a little bloom in white, rose or gold */
+function flowerGeometry(): THREE.BufferGeometry {
+  const blooms = ["#fff8ec", "#f6b2c8", "#ffd36e", "#a9c7ff"];
+  const parts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 4; i++) {
+    const a = i * 1.7, r = 0.18 + (i % 2) * 0.12, tall = 0.45 + (i % 3) * 0.12;
+    parts.push(paint(new THREE.CylinderGeometry(0.012, 0.016, tall, 3).translate(Math.cos(a) * r, tall / 2, Math.sin(a) * r), new THREE.Color("#6f9a55")).toNonIndexed());
+    parts.push(paint(new THREE.IcosahedronGeometry(0.07, 0).translate(Math.cos(a) * r, tall, Math.sin(a) * r), new THREE.Color(blooms[i])).toNonIndexed());
+  }
   const merged = mergeGeometries(parts)!;
   parts.forEach((p) => p.dispose());
   return merged;
@@ -134,6 +196,9 @@ export class WorldView {
   private readonly rockMaterial: THREE.MeshLambertMaterial;
   private readonly treeMaterial: THREE.MeshLambertMaterial;
   private readonly treeGeometry: THREE.BufferGeometry;
+  /** Sky Isles' drawn-only dressing: tuft, bush and flowers, and their material */
+  private readonly decorGeometry: THREE.BufferGeometry[];
+  private readonly decorMaterial: THREE.Material;
   private readonly materials: THREE.Material[] = [];
   private readonly geometries: THREE.BufferGeometry[] = [];
   private readonly instanced: THREE.InstancedMesh[] = [];
@@ -168,6 +233,8 @@ export class WorldView {
     this.rockMaterial = this.material(atmospheric(new THREE.MeshLambertMaterial({ vertexColors: true }), 1));
     this.treeMaterial = this.material(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
     this.treeGeometry = this.geometry(pineGeometry(new THREE.Color(palette.forest), new THREE.Color(palette.trunk)));
+    this.decorGeometry = [this.geometry(tuftGeometry()), this.geometry(bushGeometry()), this.geometry(flowerGeometry())];
+    this.decorMaterial = this.material(atmospheric(new THREE.MeshLambertMaterial({ vertexColors: true }), 0));
 
     this.sky = new THREE.Mesh(this.geometry(new THREE.SphereGeometry(4000, 32, 16)), this.material(skyMaterial()));
     // After the land (it writes no depth and is tested against the land's), so its clouds
@@ -208,6 +275,7 @@ export class WorldView {
         state: "idle" as const,
         mesh: null,
         trees: null,
+        decor: [],
         pines: [],
         sink: null,
       }));
@@ -492,6 +560,7 @@ export class WorldView {
       this.collider.add(chunk.key, result.positions, VOXEL);
     }
 
+    this.dress(chunk, result.decor);
     const trees: Tree[] = [];
     for (let i = 0; i < result.trees.length; i += 5) {
       const [x, ground, z, height, radius] = result.trees.subarray(i, i + 5);
@@ -515,6 +584,36 @@ export class WorldView {
       mesh.computeBoundingSphere();
       this.placePines(chunk, 0);
       this.sprouting.push({ chunk, born: bornNow() });
+      this.group.add(mesh);
+    }
+  }
+
+  /** A chunk's grass, bushes and flowers: one instanced mesh per kind, tinted by the palette's grass and forest */
+  private dress(chunk: RockChunk, decor: Float32Array) {
+    if (!decor?.length) return;
+    const palette = this.world.palette;
+    const grass = new THREE.Color(palette.grass), forest = new THREE.Color(palette.forest), dry = new THREE.Color("#e8d27a"), color = new THREE.Color();
+    for (let kind = 0; kind < 3; kind++) {
+      let count = 0;
+      for (let i = 3; i < decor.length; i += 6) if (decor[i] === kind) count++;
+      if (!count) continue;
+      const mesh = new THREE.InstancedMesh(this.decorGeometry[kind], this.decorMaterial, count);
+      let n = 0;
+      for (let i = 0; i < decor.length; i += 6) {
+        if (decor[i + 3] !== kind) continue;
+        const [x, y, z, , size, patch] = decor.subarray(i, i + 6);
+        const spin = hash3(Math.floor(x * 10), Math.floor(z * 10), 5);
+        pineRotation.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, spin * Math.PI * 2);
+        mesh.setMatrixAt(n, pineMatrix.compose(pinePosition.set(x, y - 0.1, z), pineRotation, pineScale.setScalar(size)));
+        // Lush hollows grow deeper green, dry rises paler; bushes take the forest's color
+        if (kind === 1) color.copy(forest).lerp(grass, 0.35 + spin * 0.3);
+        else color.copy(grass).lerp(patch > 0 ? forest : dry, Math.min(0.6, Math.abs(patch) * 0.8));
+        mesh.setColorAt(n++, kind === 2 ? color.setRGB(1, 1, 1) : color);
+      }
+      mesh.computeBoundingSphere();
+      mesh.matrixAutoUpdate = false;
+      mesh.userData.kind = kind;
+      chunk.decor.push(mesh);
       this.group.add(mesh);
     }
   }
@@ -568,6 +667,11 @@ export class WorldView {
       chunk.mesh.geometry.dispose();
       chunk.mesh = null;
     }
+    for (const mesh of chunk.decor) {
+      this.group.remove(mesh);
+      mesh.dispose();
+    }
+    chunk.decor = [];
     if (chunk.trees) {
       this.group.remove(chunk.trees);
       chunk.trees.dispose(); // its instance buffers; the pine geometry is shared
@@ -626,6 +730,13 @@ export class WorldView {
     } else {
       this.stream(camera.position);
       if (this.sprouting.length) this.sprout();
+      // Grass, flowers and bushes only near the camera: three draw calls a chunk is too many far out
+      for (const chunk of this.chunks) {
+        if (!chunk.decor.length) continue;
+        const distance = chunk.center.distanceTo(camera.position);
+        // Bushes carry furthest, then the grass; the flowers are only for close up
+        for (const mesh of chunk.decor) mesh.visible = distance < DECOR_RANGE * (mesh.userData.kind === 1 ? 1.4 : mesh.userData.kind === 2 ? 0.6 : 1);
+      }
     }
     this.sky.position.copy(camera.position);
     this.gates.update(dt, camera);

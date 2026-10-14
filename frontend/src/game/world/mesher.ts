@@ -23,6 +23,8 @@ export interface ChunkMesh {
   trees: Float32Array; // [x, ground, z, height, radius] per tree
   /** Per tree, how far below `ground` its trunk is drawn: down to the snapped rock, never changing its collider */
   treeSink: Float32Array;
+  /** Drawn only, never collides: [x, y, z, kind (0 grass tuft, 1 bush, 2 flowers), size, shade] per piece */
+  decor: Float32Array;
 }
 
 const CORNERS = [
@@ -56,6 +58,11 @@ interface Colors {
   under: Color;
   snow: Color;
   tunnel: Color;
+  /** Grass in lusher hollows and on drier, sunlit rises; a warm and a cool band in the rock */
+  lush: Color;
+  dry: Color;
+  warmRock: Color;
+  coolRock: Color;
 }
 
 const colorCache = new Map<string, Colors>();
@@ -70,6 +77,10 @@ function colorsFor(palette: Palette): Colors {
       under: rock.clone().multiplyScalar(0.62),
       snow: new Color(palette.snow),
       tunnel: rock.clone().multiplyScalar(0.75),
+      lush: new Color(palette.grass).lerp(new Color(palette.forest), 0.35).multiplyScalar(1.05),
+      dry: new Color(palette.grass).lerp(new Color("#e8d27a"), 0.35),
+      warmRock: rock.clone().lerp(new Color("#d9a86c"), 0.22),
+      coolRock: rock.clone().lerp(new Color("#7f8fa8"), 0.2),
     };
     colorCache.set(palette.name, colors);
   }
@@ -122,7 +133,7 @@ export function meshChunk(world: World, ix: number, iy: number, iz: number): Chu
     }
   }
   if (inside === 0 || inside === field.length) {
-    return { positions: new Float32Array(0), colors: new Float32Array(0), trees: new Float32Array(0), treeSink: new Float32Array(0) };
+    return { positions: new Float32Array(0), colors: new Float32Array(0), trees: new Float32Array(0), treeSink: new Float32Array(0), decor: new Float32Array(0) };
   }
 
   // One vertex per crossed cell, at the average of where its edges cross the surface
@@ -170,8 +181,10 @@ export function meshChunk(world: World, ix: number, iy: number, iz: number): Chu
   const colors: number[] = [];
   const trees: number[] = [];
   const treeSink: number[] = [];
+  const decor: number[] = [];
   const palette = colorsFor(world.palette);
   const color = new Color();
+  const tint = new Color();
   const cell = (i: number, j: number, k: number) => (i + C * (j + C * k)) * 3;
   const emit = (ax: number, ay: number, az: number, bx: number, by: number, bz: number, cx: number, cy: number, cz: number) => {
     positions.push(ax, ay, az, bx, by, bz, cx, cy, cz);
@@ -200,8 +213,13 @@ export function meshChunk(world: World, ix: number, iy: number, iz: number): Chu
     const jitter = hash3(Math.round(mx * 4), Math.round(my * 4), Math.round(mz * 4));
     const above = my - world.course.y(mz);
 
-    // Grassy tops, rocky sides, darker undersides, snow on the highest islands
-    color.copy(palette.rock).lerp(palette.grass, smoothstep(0.45, 0.7, up));
+    // Grassy tops, rocky sides, darker undersides, snow on the highest islands. The grass drifts between
+    // lush and sunlit-dry patches across an island; the rock is banded in warm and cool strata
+    const patch = Math.sin(mx * 0.021 + Math.sin(mz * 0.013) * 2) * Math.sin(mz * 0.017 + mx * 0.006);
+    const strata = Math.sin(my * 0.42 + Math.sin(mx * 0.05 + mz * 0.04) * 1.5);
+    color.copy(palette.rock).lerp(strata > 0 ? palette.warmRock : palette.coolRock, Math.abs(strata) * 0.8);
+    tint.copy(palette.grass).lerp(patch > 0 ? palette.lush : palette.dry, Math.min(1, Math.abs(patch) * 1.4));
+    color.lerp(tint, smoothstep(0.45, 0.7, up));
     const snowy = up > 0.5 && above > 70 + 40 * jitter;
     if (snowy) color.lerp(palette.snow, smoothstep(0.5, 0.75, up));
     color.lerp(palette.under, smoothstep(-0.15, -0.55, up));
@@ -218,6 +236,23 @@ export function meshChunk(world: World, ix: number, iy: number, iz: number): Chu
         trees.push(mx, my - 0.3, mz, height, height * 0.27);
         // The rock drawn there may now lie lower than the grid's face: reach down to it
         treeSink.push(Math.max(0, distance(mx, my, mz)));
+      }
+    }
+    // Drawn-only dressing on the grass (never collides): tufts everywhere, flowers here and there, and
+    // round bushes under the pines, kept clear of the racing line so they never look like obstacles
+    if (up > 0.75 && !snowy) {
+      const sink = Math.max(0, distance(mx, my, mz));
+      for (let n = 0; n < 4; n++) {
+        const pick = hash3(Math.round(mx * 4) + n * 17, Math.round(mz * 4), 11);
+        const size = hash3(Math.round(mx * 4), Math.round(mz * 4) + n * 13, 12);
+        const kind = pick < 0.035 ? 1 : pick < 0.13 ? 2 : pick < 0.62 ? 0 : -1;
+        if (kind < 0) continue;
+        // Somewhere on the face: barycentric weights from the hashes
+        let u = hash3(Math.round(mx * 8), n, Math.round(mz * 8)), w = hash3(n, Math.round(mz * 8), Math.round(mx * 8));
+        if (u + w > 1) { u = 1 - u; w = 1 - w; }
+        const x = ax + e1x * u + e2x * w, y = ay + e1y * u + e2y * w, z = az + e1z * u + e2z * w;
+        if (kind === 1 && world.course.distance(x, y, z) < TUBE_RADIUS + 4) continue;
+        decor.push(x, y - sink, z, kind, kind === 1 ? 2.2 + size * 2.4 : kind === 2 ? 1.4 + size * 0.8 : 1.3 + size * 1.4, patch);
       }
     }
   };
@@ -262,5 +297,6 @@ export function meshChunk(world: World, ix: number, iy: number, iz: number): Chu
     colors: remapFaces(new Float32Array(colors), cleaned.sources, 9),
     trees: new Float32Array(trees),
     treeSink: new Float32Array(treeSink),
+    decor: new Float32Array(decor),
   };
 }

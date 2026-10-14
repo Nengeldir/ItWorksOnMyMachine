@@ -64,9 +64,9 @@ window.__shot = async (view, ms = 4000) => {
 // rings must never change, or recorded ghosts stop matching their maps; mesh may
 // change when the looks do. Expected (trees, dist and rings since the Sky Isles
 // port; mesh since the mesh cleanup replaced snapping, 2026-10-10):
-//   1: mesh 4cb2746a trees f4f3226a dist 9086de69 rings 583fd555 (Winter)
-//   7: mesh a1696d0a trees fb4fc91d dist 6aab8c08 rings c8cc2d15 (Misty pines)
-//  42: mesh 3a723711 trees 112f6564 dist 3b43c006 rings 40f33295 (Misty pines)
+//   1: mesh d90c9dec trees f4f3226a dist 9086de69 rings 583fd555 (Winter)
+//   7: mesh 8e7a68b2 trees fb4fc91d dist 6aab8c08 rings c8cc2d15 (Misty pines)
+//  42: mesh 5b173008 trees 112f6564 dist 3b43c006 rings 40f33295 (Misty pines)
 window.__raceHashes = async () => {
   const v = Date.now();
   const { World } = await import(`/src/game/world/World.ts?t=${v}`);

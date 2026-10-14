@@ -32,7 +32,7 @@ self.onmessage = (event: MessageEvent<MeshRequest>) => {
     const mesh = meshChunk(world, request.ix, request.iy, request.iz);
     self.postMessage(
       { kind: "chunk", level: id, key: request.key, ...mesh },
-      { transfer: [mesh.positions.buffer, mesh.colors.buffer, mesh.trees.buffer, mesh.treeSink.buffer] },
+      { transfer: [mesh.positions.buffer, mesh.colors.buffer, mesh.trees.buffer, mesh.treeSink.buffer, mesh.decor.buffer] },
     );
   } else {
     const { lod, ix, iy, iz } = request;
