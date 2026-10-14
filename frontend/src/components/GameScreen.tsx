@@ -10,7 +10,7 @@ import { webglAvailable } from "../game/webgl";
 import { BIOMES, type BiomeId } from "../game/world/biomes";
 import { RUN } from "../game/tuning";
 import { ExploreSession } from "../session/ExploreSession";
-import { RunSession } from "../session/RunSession";
+import { RunSession, type RunTestOptions } from "../session/RunSession";
 import { ITEMS } from "../game/items/models";
 import type { ItemGallery } from "../game/items/gallery";
 import { FinishScreen, RunHud, TitleCard, UpgradePicker } from "./RunHud";
@@ -404,41 +404,28 @@ const RoomScreen = ({ code, seed, settings, onSettings, onExit, tutorial, onTuto
 
 // --- Explore ---------------------------------------------------------------------
 
-const ExploreScreen = ({ biome, seed, settings, onSettings, onExit, testMode = false }: ScreenProps & { biome: BiomeId; seed: number; testMode?: boolean }) => {
+const ExploreScreen = ({ biome, seed, settings, onSettings, onExit }: ScreenProps & { biome: BiomeId; seed: number }) => {
   const idle = useIdleUi();
-  const [collectionOpen, setCollectionOpen] = useState(false);
-  const [session] = useState(() => new ExploreSession(biome, seed, settings, testMode));
+  const [session] = useState(() => new ExploreSession(biome, seed, settings));
   const ref = useMountedSession(session, settings);
-  const { hud, error, biome: current, mood, track, playing, speed, offers, next, summary } = useSyncExternalStore(session.store.subscribe, session.store.get);
+  const { hud, error, biome: current, mood, track, playing } = useSyncExternalStore(session.store.subscribe, session.store.get);
   usePaletteTheme(hud?.palette);
 
   // The mouse is often locked to the game, so everything has a key
   useHotkeys({
-    ...(!testMode ? {
-      KeyN: () => session.step(1),
-      KeyB: () => session.step(-1),
-      KeyV: () => session.stepMood(1),
-    } : {}),
-    Enter: () => { if (summary) session.again(); else session.skip(); },
-    Backspace: () => { if (summary) onExit(); },
+    KeyN: () => session.step(1),
+    KeyB: () => session.step(-1),
+    KeyV: () => session.stepMood(1),
   });
 
   const moods = BIOMES[current].moods;
-  const run = hud?.run ?? null;
-  const phase = run?.phase;
-  const transitioning = phase === "portal" || phase === "pick" || phase === "finale" || phase === "won";
   return (
     <div className={`game${idle ? " ui-idle" : ""}`}>
       <div ref={ref} className="game-view" />
-      {hud && !summary && (!transitioning || hud.paused) && <Hud hud={hud} settings={settings} showStyle={testMode} />}
-      {/* Test mode flies a real run: its score, chain and compass to the portal */}
-      {testMode && run && !summary && !transitioning && <RunHud run={run} compassScale={RUN.compass} toasts={RUN.toasts} />}
-      {!summary && <TopBar title={testMode
-        ? `Test · #${seed}${run ? ` · Level ${run.level}/${run.length} · ${run.biome} · ${run.mood}` : ""} · ${speed}× speed`
-        : `Explore · ${hud ? `${hud.biomeName} · ${hud.paletteName}` : ""} · #${seed}`} onExit={onExit} controls={{ settings, onSettings, muted: !!hud?.muted }} />}
+      {hud && <Hud hud={hud} settings={settings} />}
+      <TopBar title={`Explore · ${hud ? `${hud.biomeName} · ${hud.paletteName}` : ""} · #${seed}`} onExit={onExit} controls={{ settings, onSettings, muted: !!hud?.muted }} />
       {error && <div className="banner">{error}</div>}
-      {!summary && !transitioning && <aside className={`debug-panel glass${testMode ? " test" : ""}`}>
-        {!testMode && <>
+      <aside className="debug-panel glass">
         <h3>Worlds</h3>
         <div className="debug-row">
           {(Object.keys(BIOMES) as BiomeId[]).map((id) => (
@@ -463,30 +450,35 @@ const ExploreScreen = ({ biome, seed, settings, onSettings, onExit, testMode = f
         <p className="debug-keys">
           <kbd>N</kbd> next world · <kbd>B</kbd> previous · <kbd>V</kbd> next light
         </p>
-        </>}
-        {testMode && <>
-          <h3>Test mode · nothing saved</h3>
-          <button onClick={() => { session.beginCollectionPreview(); setCollectionOpen(true); }}>Try items, pets & cosmetics</button>
-          <div className="debug-row touch-only">
-            <button onClick={() => session.testAction("portal")}>Portal</button>
-            <button onClick={() => session.testAction("win")}>Victory</button>
-            <button onClick={() => session.testAction("speed")}>{speed === 1 ? "Half speed" : "Normal speed"}</button>
-          </div>
-          <ul className="debug-keys no-touch">
-            <li><kbd>Shift+P</kbd> portal ahead</li>
-            <li><kbd>Shift+O</kbd> victory</li>
-            <li><kbd>Shift+S</kbd> {speed === 1 ? "half speed" : "normal speed"}</li>
-            <li><kbd>Shift+I</kbd> next item</li>
-          </ul>
-        </>}
-      </aside>}
-      {testMode && phase === "finale" && <div className="finale-skip" onClick={() => session.skip()}>
-        <kbd>Enter</kbd> <span className="no-touch">skip</span><span className="touch-only">Skip</span>
-      </div>}
-      {testMode && collectionOpen && <TestCollectionPanel session={session} onClose={() => { setCollectionOpen(false); session.endCollectionPreview(); }} />}
-      {testMode && offers.length > 0 && !hud?.paused && <UpgradePicker offers={offers} next={next} onPick={(id) => session.pick(id)} />}
-      {testMode && summary && <FinishScreen testMode summary={summary} best={null} onAgain={() => session.again()} onMenu={onExit} />}
+      </aside>
     </div>
+  );
+};
+
+/** Test mode's tools, over the real adventure: the fitting room, the item and ability shop, and the shortcuts */
+const TestPanel = ({ session, speed }: { session: RunSession; speed: number }) => {
+  const [open, setOpen] = useState<"wings" | "runItems" | null>(null);
+  const show = (start: "wings" | "runItems") => { session.beginCollectionPreview(); setOpen(start); };
+  return (
+    <>
+      <aside className="debug-panel glass test">
+        <h3>Test mode · nothing saved</h3>
+        <div className="debug-row">
+          <button onClick={() => show("wings")}>Fitting room</button>
+          <button onClick={() => show("runItems")}>Get items & abilities</button>
+        </div>
+        <div className="debug-row touch-only">
+          <button onClick={() => session.testAction("portal")}>Portal</button>
+          <button onClick={() => session.testAction("win")}>Victory</button>
+          <button onClick={() => session.testAction("speed")}>{speed === 1 ? "Half speed" : "Normal speed"}</button>
+        </div>
+        <ul className="debug-keys no-touch">
+          <li><kbd>Shift+P</kbd> portal ahead · <kbd>Shift+O</kbd> victory</li>
+          <li><kbd>Shift+S</kbd> {speed === 1 ? "half speed" : "normal speed"} · <kbd>Shift+I</kbd> next item</li>
+        </ul>
+      </aside>
+      {open && <TestCollectionPanel session={session} start={open} onClose={() => { setOpen(null); session.endCollectionPreview(); }} />}
+    </>
   );
 };
 
@@ -518,11 +510,12 @@ const RestartButton = ({ onRestart }: { onRestart: () => void }) => {
   );
 };
 
-const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onTutorialEnd = noop }: ScreenProps & { seed: number; onNewRun: () => void }) => {
-  // Adventures keep every panel shown (no hiding the glass while the mouse rests); RunLayout.css lays it out
-  const [session] = useState(() => new RunSession(seed, settings));
+const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onTutorialEnd = noop, test = null }: ScreenProps & { seed: number; onNewRun: () => void; test?: RunTestOptions | null }) => {
+  // Adventures keep every panel shown (no hiding the glass while the mouse rests); RunLayout.css lays it out.
+  // Test mode (?test) is this same adventure with the sandbox's tools on top, and nothing saved
+  const [session] = useState(() => new RunSession(seed, settings, test));
   const ref = useMountedSession(session, settings);
-  const { hud, stage, offers, next, arrived, summary, best, error, reward } = useSyncExternalStore(session.store.subscribe, session.store.get);
+  const { hud, stage, offers, next, arrived, summary, best, error, reward, speed } = useSyncExternalStore(session.store.subscribe, session.store.get);
   const run = hud?.run ?? null;
   usePaletteTheme(hud?.palette);
 
@@ -563,7 +556,7 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onT
       {showTitle && arrived && <TitleCard level={arrived.level} length={run!.length} biome={arrived.biome} />}
       {stage !== "summary" && (
         <TopBar
-          title={run ? `Level ${run.level}/${run.length} · ${run.biome} · ${run.mood}` : "Adventure"}
+          title={`${test ? `Test · #${seed} · ` : ""}${run ? `Level ${run.level}/${run.length} · ${run.biome} · ${run.mood}` : "Adventure"}${test && speed !== 1 ? ` · ${speed}× speed` : ""}`}
           onExit={onExit}
           controls={{ settings, onSettings, muted: !!hud?.muted }}
         >
@@ -586,10 +579,13 @@ const RunScreen = ({ seed, settings, onSettings, onExit, onNewRun, tutorial, onT
         </p>
       )}
 
+      {test && (stage === "flying" || stage === "intro") && run && run.phase !== "portal" && run.phase !== "finale" && run.phase !== "won" && <TestPanel session={session} speed={speed} />}
+
       {stage === "pick" && !hud?.paused && <UpgradePicker offers={offers} next={next} onPick={(id) => session.pick(id)} />}
 
-      {stage === "summary" && summary && (
-        <FinishScreen summary={summary} best={best} reward={reward} onAgain={() => session.again()} onNewRun={onNewRun} onMenu={onExit} />
+      {stage === "summary" && summary && (test
+        ? <FinishScreen testMode summary={summary} best={null} onAgain={() => session.again()} onMenu={onExit} />
+        : <FinishScreen summary={summary} best={best} reward={reward} onAgain={() => session.again()} onNewRun={onNewRun} onMenu={onExit} />
       )}
     </div>
   );
@@ -708,7 +704,8 @@ const ZenScreen = ({ seed, settings, onSettings, onExit }: ScreenProps & { seed:
 
 const GameScreen = ({ screen, onNewRun, ...props }: ScreenProps & { screen: Exclude<Screen, { kind: "menu" }>; onNewRun: () => void }) => {
   if (!webglAvailable()) return <NoWebGL onExit={props.onExit} />;
-  if (screen.kind === "explore" || screen.kind === "test") return <ExploreScreen biome={screen.biome} seed={screen.seed} testMode={screen.kind === "test"} {...props} />;
+  if (screen.kind === "explore") return <ExploreScreen biome={screen.biome} seed={screen.seed} {...props} />;
+  if (screen.kind === "test") return <RunScreen seed={screen.seed} onNewRun={onNewRun} test={{ biome: screen.biome }} {...props} />;
   if (screen.kind === "run") return <RunScreen seed={screen.seed} onNewRun={onNewRun} {...props} />;
   if (screen.kind === "zen") return <ZenScreen seed={screen.seed} {...props} />;
   if (screen.kind === "gallery") return <GalleryScreen onExit={props.onExit} />;

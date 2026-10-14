@@ -18,12 +18,15 @@ test("decorated wings have distinct bounded geometry, mirrored fans and finite t
       vertices += o.geometry.attributes.position.count;
       positions.push(...o.geometry.attributes.position.array);
     });
-    assert.ok(vertices > 1000 && vertices < 20000);
+    // Origami is a few crisp flat facets; everything else is sculpted
+    assert.ok(vertices > (spec.id === "paper" ? 300 : 1000) && vertices < 20000, spec.id);
     signatures.add(JSON.stringify(positions));
     const left = buildWing(spec.id,-1), right = buildWing(spec.id,1);
-    const lp=left.outer.children[0].geometry.attributes.position, rp=right.outer.children[0].geometry.attributes.position;
+    // One-piece wings (sparrow, cardboard) carry everything on the inner part
+    const part = (m) => m.outer.children[0] ? m.outer : m.inner;
+    const lp=part(left).children[0].geometry.attributes.position, rp=part(right).children[0].geometry.attributes.position;
     assert.equal(lp.count,rp.count);
-    let lx=0, rx=0; for(let i=0;i<lp.count;i++) { lx+=lp.getX(i)*left.outer.scale.x; rx+=rp.getX(i)*right.outer.scale.x; }
+    let lx=0, rx=0; for(let i=0;i<lp.count;i++) { lx+=lp.getX(i)*part(left).scale.x; rx+=rp.getX(i)*part(right).scale.x; }
     assert.ok(Math.abs(lx + rx) < 1e-3, spec.id);
     let disposed=0; for(const geometry of geometries) geometry.addEventListener("dispose",()=>disposed++);
     disposeModel(model); assert.equal(disposed,geometries.size); left.dispose();right.dispose();
@@ -32,19 +35,19 @@ test("decorated wings have distinct bounded geometry, mirrored fans and finite t
 });
 
 test("the offline sandbox exposes every item, cosmetic and existing pet without a solo-flight entry", async () => {
-  assert.equal(SANDBOX_COLLECTION.length,65);
-  assert.equal(new Set(SANDBOX_COLLECTION.map(e=>e.key)).size,65);
-  assert.equal(SANDBOX_COLLECTION.filter(e=>e.kind==="pet").length,8);
+  assert.equal(SANDBOX_COLLECTION.length,99);
+  assert.equal(new Set(SANDBOX_COLLECTION.map(e=>e.key)).size,99);
+  assert.equal(SANDBOX_COLLECTION.filter(e=>e.kind==="pet").length,12);
   assert.ok(!SANDBOX_COLLECTION.some(e=>e.key==="pet:none"));
   assert.ok(SANDBOX_COLLECTION.every(e=>e.xp===0));
-  const {ExploreSession}=await import("../src/session/ExploreSession.ts");
+  const {RunSession}=await import("../src/session/RunSession.ts");
   const calls=[];
-  const session=Object.create(ExploreSession.prototype);
+  const session=Object.create(RunSession.prototype);
   session.game={testAppearance:look=>calls.push(["look",look]),equip:id=>calls.push(["item",id]),useItem:()=>calls.push(["use"]),setThrust:()=>{}};
-  session.testMode=false;
+  session.test=null;
   session.previewAppearance({wings:"astral"}); session.previewItem("firework");session.previewUseItem();
   assert.deepEqual(calls,[]);
-  session.testMode=true;
+  session.test={biome:"skyIsles"};
   session.previewAppearance({wings:"astral"});session.previewItem("firework");session.previewUseItem();
   assert.deepEqual(calls,[["look",{wings:"astral"}],["item","firework"],["use"]]);
 });

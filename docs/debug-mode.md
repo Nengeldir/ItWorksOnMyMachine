@@ -46,10 +46,13 @@ finale and the finish screen.
 ## How it's built
 
 - `route.ts`: `screenFromSearch` gives a `{ kind: "test", biome, seed }` screen.
-- `ExploreSession` (with `testMode`) starts a `RunController` on the chosen
-  level (`Game.startRun(seed, events, level, Infinity)`: the sandbox never
-  runs out of lives). Its `ended` event never reaches `RunSession`'s bests or
-  the server.
+- Since 2026-10-14 test mode is the real adventure screen: `GameScreen`
+  routes `kind: "test"` to `RunScreen` with `test={{ biome }}`, and
+  `RunSession(seed, settings, test)` starts the run on that biome's level with
+  `{ lives: Infinity }` and no player level (every item and ability open). It
+  asks the profile for nothing, reports nothing, keeps no bests and doesn't
+  count achievements (`GameOptions.track` false). `RunScreen` adds the test
+  panel (`TestPanel`) and the test finish screen.
 - `Input.onTestAction` (installed only by `Game` in test mode) and
   `RunController.spawnTestPortal` / `testWin`.
 - `testPlayback.ts`: the playback rate. `Game.loop` scales its frame delta
@@ -71,12 +74,16 @@ from the production build. `/?gallery` shows every model without terrain.
 
 ## Collection fitting room
 
-Choose **Try items, pets & cosmetics** in the test panel. All 65 model choices
-are available offline: thirty-one carried items, capes, hats, shoes, wings and all
-eight pets. Inspect front/back previews, try a style in flight, carry/use an item,
+Choose **Fitting room** in the test panel. Every model choice in the sandbox
+collection is available offline: carried items, capes, hats, shoes, wings and
+every pet, each box bordered in its rarity's color. Inspect front/back previews, try a style in flight, carry/use an item,
 light the firework, put it away, unequip a companion or restore your profile look.
 Flight pauses while the dialog is open; closing resumes only if it was flying
 beforehand. The selected pet leads along the autopilot rail through hoops.
+
+**Get items & abilities** opens the same dialog on its shop tabs: tap an
+adventure item to put it in the bag (`Game.testGiveItem`; the oldest leaves a
+full bag) or an ability to take it now (`Game.grant`).
 
 This changes only the current test Game. It saves no appearance, inventory,
 crystals or XP and bypasses no profile ownership checks. Normal explore and

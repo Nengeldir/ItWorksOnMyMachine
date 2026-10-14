@@ -1,14 +1,8 @@
-import type { TestAction } from "../game/input";
 import { Game, type HudState } from "../game/Game";
-import { dailySeed } from "../game/rng";
-import type { RunSummary } from "../game/run/run";
-import type { Upgrade, UpgradeId } from "../game/run/upgrades";
 import { trackFile } from "../game/music";
 import { BIOMES, type BiomeId, makeLevel, runLevel } from "../game/world/biomes";
 import type { Settings } from "../storage";
 import { Store } from "./store";
-import type { Appearance } from "../game/cosmetics/storage";
-import type { ItemId } from "../game/items/models";
 
 const COLOR = "#ff5d73";
 const ORDER = Object.keys(BIOMES) as BiomeId[];
@@ -21,16 +15,13 @@ export interface ExploreState {
   /** The music file this world should play, and the one actually playing */
   track: string;
   playing: string | null;
-  speed: number;
-  offers: Upgrade[];
-  next: BiomeId | null;
-  summary: RunSummary | null;
 }
 
 /**
  * Free flight through any biome: no clock, nothing saved. Handy for looking at
  * the land. Worlds and lighting moods can be switched on the spot (the debug
  * panel and keys), without reloading, to check looks and music together.
+ * (Test mode is the real adventure with tools on top: `RunSession` with `test`.)
  */
 export class ExploreSession {
   readonly seed: number;
@@ -38,12 +29,8 @@ export class ExploreSession {
   private settings: Settings;
   private game: Game | null = null;
   private timer = 0;
-  private resumeAfterPreview = false;
-  previewLook: Appearance | null = null;
-  readonly testMode: boolean;
 
-  constructor(biome: BiomeId, seed: number, settings: Settings, testMode = false) {
-    this.testMode = testMode;
+  constructor(biome: BiomeId, seed: number, settings: Settings) {
     this.seed = seed;
     this.settings = settings;
     this.store = new Store<ExploreState>({
@@ -53,10 +40,6 @@ export class ExploreSession {
       mood: runLevel(seed, 1, biome).key.mood,
       track: trackFile(biome),
       playing: null,
-      speed: 1,
-      offers: [],
-      next: null,
-      summary: null,
     });
   }
 
@@ -69,10 +52,8 @@ export class ExploreSession {
         clock: () => performance.now(),
         controls: this.settings,
         color: COLOR,
-        testMode: this.testMode,
-        events: { hud: (hud) => this.store.set({ hud }), testSpeed: (speed) => this.store.set({ speed }) },
+        events: { hud: (hud) => this.store.set({ hud }) },
       });
-      if (this.testMode) this.startTest(biome, mood);
     } catch (e) {
       console.error(e);
       this.store.set({ error: `The game couldn't start: ${(e as Error).message}` });
@@ -103,80 +84,12 @@ export class ExploreSession {
   show(biome: BiomeId, mood?: number) {
     const own = runLevel(this.seed, 1, biome).key.mood;
     const next = mood === undefined ? own : ((mood % BIOMES[biome].moods.length) + BIOMES[biome].moods.length) % BIOMES[biome].moods.length;
-    if (this.testMode) this.startTest(biome, next);
-    else this.game?.setLevel(this.level(biome, next));
-    this.updateUrl(biome);
-    this.store.set({ biome, mood: next, track: trackFile(biome) });
-  }
-
-  private updateUrl(biome: BiomeId) {
+    this.game?.setLevel(this.level(biome, next));
     const url = new URL(location.href);
-    // Test mode may have been opened as ?explore=…&test or ?run=…&test: keep one spelling
-    if (this.testMode) ["explore", "run"].forEach((name) => url.searchParams.delete(name));
-    url.searchParams.set(this.testMode ? "test" : "explore", biome);
+    url.searchParams.set("explore", biome);
     url.searchParams.set("seed", String(this.seed));
     history.replaceState(null, "", url.pathname + url.search + url.hash);
-  }
-
-  private startTest(biome: BiomeId, mood: number) {
-    this.store.set({ offers: [], next: null, summary: null });
-    this.game?.startRun(this.seed, {
-      offer: (offers, next) => this.store.set({ offers, next }),
-      arrived: (_level, current) => {
-        const mood = this.game!.world.level.key.mood;
-        this.store.set({ biome: current, mood, track: trackFile(current) });
-        this.updateUrl(current);
-      },
-      ended: (summary) => {
-        // Test results never enter RunSession's local best scores or the server.
-        this.store.set({ summary, offers: [], next: null });
-        this.game?.victoryLap(dailySeed());
-      },
-    }, this.level(biome, mood), { lives: Infinity }); // the sandbox never runs out of lives, and every item and ability is open
-  }
-
-  pick(id: UpgradeId) {
-    if (this.store.get().hud?.paused) return;
-    this.game?.pickUpgrade(id);
-    this.store.set({ offers: [], next: null });
-  }
-
-  again() {
-    const { biome, mood } = this.store.get();
-    this.show(biome, mood);
-  }
-
-  testAction(action: TestAction) {
-    this.game?.testAction(action);
-  }
-
-  skip() {
-    this.game?.skipFinale();
-  }
-
-  beginCollectionPreview() {
-    if (!this.testMode || !this.game) return;
-    this.resumeAfterPreview = !this.store.get().hud?.paused;
-    if (this.resumeAfterPreview) this.game.togglePause();
-  }
-
-  endCollectionPreview() {
-    if (this.testMode && this.resumeAfterPreview && this.store.get().hud?.paused) this.game?.togglePause();
-    this.resumeAfterPreview = false;
-  }
-
-  previewAppearance(look: Appearance | null) {
-    if (!this.testMode) return;
-    this.previewLook = look; this.game?.testAppearance(look);
-  }
-  previewItem(id: ItemId) { if (this.testMode) this.game?.equip(id); }
-  /** Carry a keepsake as the charm in this test run (null: the profile's own) */
-  previewCharm(id: string | null) { if (this.testMode) this.game?.testCharmItem(id); }
-  previewUseItem() { if (this.testMode) this.game?.useItem(); }
-  previewThrust(on: boolean) { if (this.testMode) this.game?.thrust(on ? 1 : 0); }
-  clearPreviewItems() {
-    if (!this.testMode) return;
-    for (const slot of ["hand", "head", "back"] as const) this.game?.unequip(slot);
+    this.store.set({ biome, mood: next, track: trackFile(biome) });
   }
 
   /** The next (or, with -1, previous) world in the list */
