@@ -15,10 +15,10 @@ const TodaysBest = ({ entries }: TodaysBestProps) => {
   const [open, setOpen] = useMediaToggle(WIDE);
 
   return (
-    <aside className={`menu-best glass ${open ? "open" : ""}`}>
+    <aside className={`menu-best menu-ghost ${open ? "open" : ""}`}>
       <button className="menu-best-flag" aria-label="Today's best" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <span className="menu-badge">
-          <IconFlag size={20} />
+        <span className="menu-ring">
+          <IconFlag size={19} />
         </span>
       </button>
       {open && (

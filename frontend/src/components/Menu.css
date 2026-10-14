@@ -32,26 +32,105 @@ body:has(.menu-backdrop:empty) {
   background-attachment: fixed;
 }
 
-.menu-title {
-  text-align: center;
-  color: #fff;
-  margin-top: 3vh;
-  /* White on any sky, even the palest: a tight ink edge plus a soft glow */
-  text-shadow:
-    0 2px 2px color-mix(in srgb, var(--ink) 30%, transparent),
-    0 4px 28px color-mix(in srgb, var(--ink) 45%, transparent);
+/* The page's own colors, from the map behind it (theme.ts sets data-sky): on a light sky the map's
+   ink with a white halo; on a dark one pristine white and pale gold with a golden glow */
+.menu {
+  --menu-fg: var(--ink);
+  --menu-soft: var(--ink-70);
+  --menu-halo: rgba(255, 255, 255, 0.85);
+  --menu-gold: color-mix(in srgb, var(--gold) 70%, var(--ink));
+  --menu-shade: rgba(255, 255, 255, 0.34);
+  --menu-pool: rgba(255, 250, 240, 0.62);
+  --emblem-line: color-mix(in srgb, var(--ink) 80%, var(--gold));
+  --emblem-line-hi: color-mix(in srgb, var(--gold) 75%, #fff);
+  --emblem-node: color-mix(in srgb, var(--gold) 80%, var(--ink));
+  --emblem-core: #fff8e4;
+  --emblem-glow: rgba(255, 246, 220, 0.85);
+  --mote: #f1b94a;
+  --mote-accent: #fff1c4;
 }
 
+:root[data-sky="dark"] .menu {
+  --menu-fg: #fffdf7;
+  --menu-soft: rgba(255, 249, 232, 0.78);
+  --menu-halo: rgba(255, 226, 160, 0.45);
+  --menu-gold: #f3dc9a;
+  --menu-shade: rgba(6, 8, 28, 0.42);
+  --menu-pool: rgba(8, 10, 32, 0.5);
+  --emblem-line: #e9cf8a;
+  --emblem-line-hi: #fffaf0;
+  --emblem-node: #fff3c4;
+  --emblem-core: #3b2f63;
+  --emblem-glow: rgba(255, 224, 150, 0.55);
+  --mote: #fff6dc;
+  --mote-accent: #f3d68c;
+}
+
+.menu-title {
+  text-align: center;
+  margin-top: 3vh;
+}
+
+/* The name in light: pale gold carved letters with a soft white glow (an ink edge on pale skies keeps
+   them readable), a slow shimmer passing over them */
 .menu-title h1 {
+  position: relative;
   font-size: clamp(3.5rem, 10vw, 6.5rem);
   font-weight: 800;
   line-height: 1;
+  color: transparent;
+  background: linear-gradient(100deg, #fffdf6 0%, #fff4d2 30%, #f2d48a 52%, #fff6dc 70%, #fffdf6 100%);
+  background-size: 220% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  filter:
+    drop-shadow(0 1px 1px color-mix(in srgb, var(--ink) 75%, transparent))
+    drop-shadow(0 0 2px color-mix(in srgb, var(--ink) 35%, transparent))
+    drop-shadow(0 0 14px rgba(255, 250, 235, 0.75))
+    drop-shadow(0 0 34px rgba(255, 222, 150, 0.45));
+  animation: menu-shimmer 9s ease-in-out infinite;
+}
+
+:root[data-sky="dark"] .menu-title h1 {
+  filter:
+    drop-shadow(0 0 10px rgba(255, 255, 255, 0.55))
+    drop-shadow(0 0 30px rgba(255, 214, 130, 0.5));
+}
+
+@keyframes menu-shimmer {
+  0%, 100% { background-position: 100% 0; }
+  50% { background-position: 0% 0; }
 }
 
 .menu-title p {
   margin: 0.6rem 0 0;
   font-size: 1.15rem;
   font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--menu-fg);
+  text-shadow: 0 0 12px var(--menu-halo), 0 0 3px var(--menu-halo);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-title h1 { animation: none; }
+}
+
+/* Motes of light (MenuMotes) and the soft shade at the top and bottom edges: both between the live
+   world (z -1) and the page, never catching the pointer */
+.menu-motes,
+.menu-shade {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.menu-shade {
+  background:
+    linear-gradient(180deg, var(--menu-shade) 0, transparent 7rem),
+    linear-gradient(0deg, var(--menu-shade) 0, transparent 8rem);
 }
 
 .menu-card {
@@ -68,28 +147,217 @@ body:has(.menu-backdrop:empty) {
   font-size: 1.1rem;
 }
 
-.menu-tabs {
+/* The three modes: emblems of light floating on the sky, all alike, no panels */
+.menu-modes {
+  width: min(56rem, 100%);
   display: grid;
-  /* Sized by their names (With friends is long), the spare room shared out */
-  grid-template-columns: repeat(4, auto);
-  padding: 4px;
-  border-radius: 16px;
-  background: var(--ink-06);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: 1.5rem;
+  margin-top: 2vh;
 }
 
-.menu-tabs button {
-  padding: 0.6rem 0.5rem;
-  white-space: nowrap;
+.menu .menu-emblem {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.25rem 0.75rem;
   border: none;
-  border-radius: 12px;
+  border-radius: 28px;
   background: none;
+  color: var(--menu-fg);
+  text-align: center;
+  transition: transform 0.35s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+
+.menu .menu-emblem:hover:not(:disabled),
+.menu .menu-emblem:focus-visible {
+  background: none;
+  transform: translateY(-4px);
+}
+
+.menu .menu-emblem:focus-visible {
+  outline: none;
+}
+
+.emblem-art {
+  position: relative;
+  width: clamp(7.5rem, 15vw, 10rem);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+}
+
+/* The backdrop that lifts it off the sky: a smooth, breathing blur of light */
+.emblem-halo {
+  position: absolute;
+  inset: -12%;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--emblem-glow) 0%, color-mix(in srgb, var(--emblem-glow) 45%, transparent) 38%, transparent 68%);
+  filter: blur(6px);
+  opacity: 0.75;
+  animation: emblem-breathe 5s ease-in-out infinite;
+  transition: opacity 0.4s, transform 0.4s;
+}
+
+.menu-emblem:nth-child(2) .emblem-halo { animation-delay: -1.6s; }
+.menu-emblem:nth-child(3) .emblem-halo { animation-delay: -3.2s; }
+
+@keyframes emblem-breathe {
+  0%, 100% { transform: scale(0.94); }
+  50% { transform: scale(1.04); }
+}
+
+.emblem-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 0 4px var(--emblem-glow));
+}
+
+.emblem-outer,
+.emblem-ring {
+  transform-origin: 0 0;
+  transition: transform 0.9s cubic-bezier(0.3, 1.2, 0.4, 1);
+}
+
+.emblem-ring {
+  animation: emblem-turn 40s linear infinite;
+}
+
+@keyframes emblem-turn {
+  to { transform: rotate(360deg); }
+}
+
+.emblem-nodes circle {
+  animation: emblem-twinkle 3.2s ease-in-out infinite;
+}
+
+.emblem-nodes circle:nth-child(2n) { animation-delay: -1.1s; }
+.emblem-nodes circle:nth-child(3n) { animation-delay: -2.2s; }
+
+@keyframes emblem-twinkle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.emblem-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  color: var(--menu-fg);
+  filter: drop-shadow(0 0 6px var(--menu-halo));
+  transition: transform 0.35s;
+}
+
+.menu-emblem:hover .emblem-halo,
+.menu-emblem:focus-visible .emblem-halo {
+  opacity: 1;
+  transform: scale(1.12);
+}
+
+.menu-emblem:hover .emblem-outer,
+.menu-emblem:focus-visible .emblem-outer {
+  transform: rotate(90deg);
+}
+
+.menu-emblem:hover .emblem-icon,
+.menu-emblem:focus-visible .emblem-icon {
+  transform: scale(1.1);
+}
+
+.menu-emblem b {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 14px var(--menu-halo), 0 0 3px var(--menu-halo);
+}
+
+.menu-emblem small {
+  max-width: 13rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--menu-soft);
+  text-shadow: 0 0 10px var(--menu-halo), 0 0 2px var(--menu-halo);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .emblem-halo, .emblem-ring, .emblem-nodes circle { animation: none; }
+}
+
+/* A page under the home page: its title and the way back */
+.menu-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.menu-card-head b {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+}
+
+.menu .menu-back {
+  padding: 0.4rem 0.85rem 0.4rem 0.6rem;
+  border-radius: 999px;
+}
+
+/* Racing's two ways: two big buttons side by side */
+.menu-ways {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+}
+
+.menu .menu-way {
+  min-height: 11rem;
+  padding: 1.2rem 0.9rem;
+  border-radius: 22px;
+  flex-direction: column;
+  gap: 0.45rem;
+  text-align: center;
+}
+
+.menu-way b {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+}
+
+.menu-way small {
+  font-weight: 500;
+  font-size: 0.8rem;
   color: var(--ink-70);
 }
 
-.menu-tabs button[aria-selected="true"] {
-  background: #fff;
-  color: var(--ink);
-  box-shadow: 0 2px 8px var(--ink-12);
+.menu-lede {
+  margin: 0;
+  text-align: center;
+  font-weight: 600;
+  color: var(--ink-70);
+}
+
+/* Short screens (phones held sideways): smaller emblems, closer together */
+@media (max-height: 520px) {
+  .menu-modes { gap: 0.75rem; margin-top: 0; }
+  .emblem-art { width: 6.4rem; }
+  .menu-emblem b { font-size: 1.2rem; }
+  .menu-emblem small { font-size: 0.78rem; }
+
+  .menu .menu-way {
+    min-height: 7rem;
+  }
+}
+
+/* Narrow portrait phones: the emblems shrink and lose their line */
+@media (max-width: 560px) {
+  .menu-modes { gap: 0.5rem; }
+  .emblem-art { width: 6.2rem; }
+  .menu-emblem b { font-size: 1.1rem; }
+  .menu-emblem small { display: none; }
 }
 
 .menu-course {
@@ -130,9 +398,14 @@ body:has(.menu-backdrop:empty) {
 
 .menu-more {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.25rem 0.75rem;
+}
+
+.menu .menu-more .menu-link {
+  white-space: nowrap;
 }
 
 .menu .menu-link {
@@ -282,17 +555,6 @@ body:has(.menu-backdrop:empty) {
   color: var(--ink-70);
 }
 
-.menu-badge {
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 13px;
-  display: grid;
-  place-items: center;
-  color: #fff;
-  background: linear-gradient(160deg, color-mix(in srgb, var(--ink) 72%, #fff), var(--ink));
-  box-shadow: 0 3px 0 color-mix(in srgb, var(--ink) 65%, #000);
-}
-
 /* Narrow screens: an opened board stacks upwards from the flag, clear of the pilot button */
 @media (max-width: 899px) {
   .menu-best.open {
@@ -330,7 +592,7 @@ body:has(.menu-backdrop:empty) {
 @media (max-width: 1000px) {
   .menu-nav { top: 0.75rem; left: 0.75rem; gap: 0.4rem; }
   .menu-nav button { width: 2.75rem; height: 2.75rem; padding: 0; justify-content: center; border-radius: 50%; }
-  .menu-nav button span { display: none; }
+  .menu-nav button > span:not(.menu-ring) { display: none; }
 }
 
 /* Phones and narrow windows: the pills sit top left, where the centred logo would run under them,
@@ -358,4 +620,113 @@ body:has(.menu-backdrop:empty) {
     margin-top: 0.3rem;
     font-size: 0.95rem;
   }
+}
+
+/* The page's corners: Market, Hall of Winds, "?", settings, today's best and you. No panels: words
+   and thin rings of light on the sky, lit from behind when you point at them */
+.menu .menu-ghost {
+  background: none;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  color: var(--menu-fg);
+  text-shadow: 0 0 2px var(--menu-halo), 0 0 6px var(--menu-halo), 0 0 14px var(--menu-halo);
+  transition: transform 0.2s, background 0.3s, filter 0.3s;
+}
+
+.menu .menu-ghost:hover:not(:disabled) {
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--emblem-glow) 70%, transparent), transparent);
+  filter: brightness(1.06);
+}
+
+.menu-ring,
+.menu .menu-icon.menu-ghost,
+.menu .help-button.menu-ghost {
+  flex: none;
+  width: 2.6rem;
+  height: 2.6rem;
+  padding: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--menu-fg);
+  border: 1px solid color-mix(in srgb, var(--menu-gold) 75%, transparent);
+  background: radial-gradient(circle, color-mix(in srgb, var(--emblem-glow) 80%, transparent) 0%, color-mix(in srgb, var(--emblem-glow) 25%, transparent) 70%);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--emblem-glow) 70%, transparent), inset 0 0 6px color-mix(in srgb, var(--emblem-glow) 80%, transparent);
+}
+
+.menu .menu-icon.menu-ghost:hover:not(:disabled),
+.menu .help-button.menu-ghost:hover:not(:disabled) {
+  background: radial-gradient(circle, var(--emblem-glow) 0%, color-mix(in srgb, var(--emblem-glow) 40%, transparent) 75%);
+  transform: scale(1.06);
+}
+
+.menu-ring svg,
+.menu-ghost > svg {
+  filter: drop-shadow(0 0 3px var(--menu-halo));
+}
+
+/* A pool of soft light (or shadow, on dark skies) behind the words, fading out at its edges: they read on
+   any land behind them without a panel's edge */
+.menu-nav .menu-ghost,
+.menu .menu-pilot.menu-ghost,
+.menu-best.menu-ghost {
+  background: radial-gradient(closest-side, var(--menu-pool), color-mix(in srgb, var(--menu-pool) 45%, transparent) 65%, transparent);
+}
+
+.menu-nav .menu-ghost {
+  padding: 0.25rem 0.9rem 0.25rem 0.25rem;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.menu .menu-pilot.menu-ghost {
+  padding: 0.25rem 0.9rem 0.25rem 0.25rem;
+  border-radius: 999px;
+}
+
+.menu .menu-pilot-text small,
+.menu-best .menu-best-list > b,
+.menu-best .menu-hint {
+  color: var(--menu-soft);
+}
+
+.menu-best.menu-ghost {
+  padding: 0.25rem;
+  border-radius: 999px;
+}
+
+.menu-best.menu-ghost .menu-best-flag {
+  color: var(--menu-fg);
+}
+
+.menu-best.menu-ghost .menu-best-entry {
+  padding: 0.2rem 0.5rem 0.2rem 0.2rem;
+  background: none;
+  color: var(--menu-fg);
+}
+
+.menu-best.menu-ghost .menu-best-entry.me {
+  background: none;
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--menu-gold) 80%, transparent);
+  border-radius: 6px;
+}
+
+.menu-best.menu-ghost .menu-best-entry i {
+  color: var(--menu-fg);
+  background: none;
+  border: 1px solid color-mix(in srgb, var(--menu-gold) 75%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--emblem-glow) 70%, transparent);
+}
+
+.menu-best.menu-ghost .menu-best-entry em {
+  color: var(--menu-soft);
+}
+
+@media (max-width: 899px) {
+  .menu-best.menu-ghost.open { border-radius: 22px; }
+}
+
+@media (max-width: 1000px) {
+  .menu-nav .menu-ghost { width: auto; height: auto; padding: 0.15rem; border-radius: 50%; }
 }

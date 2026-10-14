@@ -1,5 +1,5 @@
-import { IconBuildingStore, IconDiamond, IconDice5, IconMap, IconSettings, IconTrophy, IconUser } from "@tabler/icons-react";
-import { type FormEvent, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { IconArrowLeft, IconBuildingStore, IconCompass, IconDiamond, IconDice5, IconFlag, IconMap, IconSettings, IconTrophy, IconUser, IconUsers, IconWind } from "@tabler/icons-react";
+import { type FormEvent, type ReactNode, useCallback, useEffect, useId, useMemo, useState, useSyncExternalStore } from "react";
 import { type LeaderboardEntry, type User, getLeaderboard } from "../api";
 import type { Screen } from "../App";
 import { randomRoomCode, untilTomorrow } from "../format";
@@ -17,6 +17,7 @@ import ShopPanel from "./ShopPanel";
 import LeaderboardPanel from "./LeaderboardPanel";
 import { HelpButton } from "./Help";
 import MenuBackdrop from "./MenuBackdrop";
+import MenuMotes from "./MenuMotes";
 import TodaysBest from "./TodaysBest";
 import "./Menu.css";
 
@@ -27,6 +28,56 @@ interface MenuProps {
   joinCode?: string;
   go: (screen: Screen) => void;
 }
+
+/**
+ * A mode on the landing page: an emblem of light (a diamond of fine gold lines, constellation nodes on its
+ * points, a ring round the mode's sign) floating on the sky, its name under it. Motes gather into it
+ * (`data-motes`, MenuMotes) and fly out of it while it's hovered
+ */
+const Emblem = ({ icon, name, line, onClick }: { icon: ReactNode; name: string; line: string; onClick: () => void }) => {
+  const id = useId().replace(/:/g, "");
+  return (
+    <button className="menu-emblem" onClick={onClick}>
+      <span className="emblem-art" data-motes aria-hidden="true">
+        <span className="emblem-halo" />
+        <svg className="emblem-frame" viewBox="-60 -60 120 120">
+          <defs>
+            <radialGradient id={`${id}-core`}>
+              <stop offset="0" stopColor="var(--emblem-core)" stopOpacity="0.95" />
+              <stop offset="0.65" stopColor="var(--emblem-core)" stopOpacity="0.35" />
+              <stop offset="1" stopColor="var(--emblem-core)" stopOpacity="0" />
+            </radialGradient>
+            <linearGradient id={`${id}-line`} x1="0" y1="-1" x2="0" y2="1">
+              <stop offset="0" stopColor="var(--emblem-line-hi)" />
+              <stop offset="1" stopColor="var(--emblem-line)" />
+            </linearGradient>
+          </defs>
+          <circle r="34" fill={`url(#${id}-core)`} />
+          {/* The diamond and its stars turn a quarter when pointed at, and settle */}
+          <g className="emblem-outer">
+          <g stroke={`url(#${id}-line)`} fill="none">
+            <path d="M0 -54 L54 0 L0 54 L-54 0 Z" strokeWidth="1.4" />
+            <path d="M0 -46 L46 0 L0 46 L-46 0 Z" strokeWidth="0.7" opacity="0.65" />
+            <path d="M0 -54 L0 -38 M54 0 L38 0 M0 54 L0 38 M-54 0 L-38 0" strokeWidth="0.9" />
+            <path d="M-27 -27 L-21 -21 M27 -27 L21 -21 M27 27 L21 21 M-27 27 L-21 21" strokeWidth="0.8" opacity="0.7" />
+          </g>
+          <g className="emblem-ring" fill="none" stroke={`url(#${id}-line)`}>
+            <circle r="31" strokeWidth="1.3" />
+            <circle r="36" strokeWidth="0.6" strokeDasharray="1.5 4.2" opacity="0.8" />
+          </g>
+          <g className="emblem-nodes" fill="var(--emblem-node)">
+            <circle cy="-54" r="2.8" /><circle cx="54" r="2.8" /><circle cy="54" r="2.8" /><circle cx="-54" r="2.8" />
+            <circle cx="-24" cy="-24" r="1.5" /><circle cx="24" cy="-24" r="1.5" /><circle cx="24" cy="24" r="1.5" /><circle cx="-24" cy="24" r="1.5" />
+          </g>
+          </g>
+        </svg>
+        <span className="emblem-icon">{icon}</span>
+      </span>
+      <b>{name}</b>
+      <small>{line}</small>
+    </button>
+  );
+};
 
 const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
   const [daily, setDaily] = useState(() => dailySeed());
@@ -48,7 +99,9 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
     const { biome, palette } = seedLevel(zenDaily);
     return { map: biome.name, mood: palette.name };
   }, [zenDaily]);
-  const [tab, setTab] = useState<"solo" | "friends" | "adventure" | "zen">(joinCode ? "friends" : "solo");
+  // The landing page's pages: the three modes, then each mode's page (Racing's two ways, and each way)
+  const [view, setView] = useState<"home" | "adventure" | "racing" | "solo" | "friends" | "zen">(joinCode ? "friends" : "home");
+  const back = () => setView(view === "solo" || view === "friends" ? "racing" : "home");
   const [code, setCode] = useState(joinCode ?? "");
   const [board, setBoard] = useState<LeaderboardEntry[]>([]);
   const best = useMemo(() => bestRun(dailyRun), [dailyRun]);
@@ -93,16 +146,20 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
   }, []);
 
   useEffect(() => {
-    // Enter flies today's course (Solo) or run (Adventure), unless a field or button has the focus
+    // Enter starts what the page leads with (the home page opens Adventure), Escape goes back a page,
+    // unless a field or button has the focus
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Enter" || e.target !== document.body || picking) return;
-      if (tab === "solo") go({ kind: "solo", seed: daily });
-      else if (tab === "adventure") go({ kind: "run", seed: dailyRun });
-      else if (tab === "zen") go({ kind: "zen", seed: zenDaily });
+      if (e.target !== document.body || picking || panel !== "none") return;
+      if (e.key === "Escape" && view !== "home") back();
+      if (e.key !== "Enter") return;
+      if (view === "home") setView("adventure");
+      else if (view === "adventure") go({ kind: "run", seed: dailyRun });
+      else if (view === "solo") go({ kind: "solo", seed: daily });
+      else if (view === "zen") go({ kind: "zen", seed: zenDaily });
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [daily, dailyRun, zenDaily, tab, picking, go]);
+  });
 
   const joinRoom = (e: FormEvent) => {
     e.preventDefault();
@@ -119,18 +176,23 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
 
   return (
     <main className="menu">
-      {/* The Lantern Market and the Hall of Winds (the journal opens from the pilot pill) */}
+      {/* The Lantern Market and the Hall of Winds (the journal opens from the pilot pill): light on the
+          sky, not panels over it */}
       <nav className="menu-nav" aria-label="Market and leaderboard">
-        <button className="glass" onClick={() => setPanel("shop")} aria-label="Lantern Market"><IconBuildingStore size={20} /><span>Market</span></button>
-        <button className="glass" onClick={() => setPanel("hall")} aria-label="Hall of Winds: the leaderboard"><IconTrophy size={20} /><span>Hall of Winds</span></button>
+        <button className="menu-ghost" onClick={() => setPanel("shop")} aria-label="Lantern Market"><span className="menu-ring"><IconBuildingStore size={19} /></span><span>Market</span></button>
+        <button className="menu-ghost" onClick={() => setPanel("hall")} aria-label="Hall of Winds: the leaderboard"><span className="menu-ring"><IconTrophy size={19} /></span><span>Hall of Winds</span></button>
       </nav>
       {panel === "shop" && <ShopPanel onClose={() => setPanel("none")} />}
       {panel === "hall" && <LeaderboardPanel onClose={() => setPanel("none")} />}
       <MenuBackdrop seed={shown} mode="drift" onSnapshot={keepArt} onShown={setLive} settings={settings} />
+      {/* Between the world and the UI: motes of light, gathering into the emblems; a soft shade top and
+          bottom so the words there read without panels */}
+      {!picking && <MenuMotes />}
+      {!picking && <div className="menu-shade" aria-hidden="true" />}
 
-      <HelpButton className="menu-help" />
+      <HelpButton className="menu-help menu-ghost" />
       <button
-        className="menu-icon glass settings-button"
+        className="menu-icon menu-ghost settings-button"
         aria-label="Settings"
         onClick={() => setPanel(panel === "settings" ? "none" : "settings")}
       >
@@ -163,126 +225,142 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
       ) : (
         <>
           <header className="menu-title">
-            <h1>WindRider</h1>
-            <p>Race through floating islands</p>
+            <h1 data-text="WindRider">WindRider</h1>
+            <p>Fly through floating worlds</p>
           </header>
 
-          <section className="menu-card glass">
-            <div className="menu-tabs" role="tablist">
-              <button role="tab" aria-selected={tab === "solo"} onClick={() => setTab("solo")}>
-                Solo
-              </button>
-              <button role="tab" aria-selected={tab === "friends"} onClick={() => setTab("friends")}>
-                With friends
-              </button>
-              <button role="tab" aria-selected={tab === "adventure"} onClick={() => setTab("adventure")}>
-                Adventure
-              </button>
-              <button role="tab" aria-selected={tab === "zen"} onClick={() => setTab("zen")}>
-                Zen
-              </button>
-            </div>
+          {view === "home" && (
+            <section className="menu-modes" aria-label="Game modes">
+              <Emblem icon={<IconFlag size={30} />} name="Racing" line="Time trials and races with friends" onClick={() => setView("racing")} />
+              <Emblem icon={<IconCompass size={34} />} name="Adventure" line="Eight worlds, one flight" onClick={() => setView("adventure")} />
+              <Emblem icon={<IconWind size={30} />} name="Zen" line="One endless map, no clock" onClick={() => setView("zen")} />
+            </section>
+          )}
 
-            {tab === "solo" ? (
-              <>
-                <div className="menu-course">
-                  <div>
-                    <small>Today's course · #{daily}</small>
-                    <b>{course.map}</b>
-                  </div>
-                  <span>{course.mood}</span>
-                  <span>{course.gates} gates</span>
-                  <span>New in {countdown}</span>
-                </div>
-                <button className="primary" onClick={() => go({ kind: "solo", seed: daily })}>
-                  Fly today's course <kbd>Enter</kbd>
+          {view !== "home" && (
+            <section className="menu-card glass">
+              <header className="menu-card-head">
+                <button className="menu-back" onClick={back} aria-label="Back">
+                  <IconArrowLeft size={18} /> Back
                 </button>
-                <div className="menu-more">
-                  <button className="menu-link" onClick={() => setPicking("solo")}>
-                    <IconMap size={18} /> Choose a course
-                  </button>
-                </div>
-              </>
-            ) : tab === "zen" ? (
-              <>
-                <div className="menu-course">
-                  <div>
-                    <small>Today's Zen · #{zenDaily}</small>
-                    <b>{zen.map}</b>
+                <b>{view === "adventure" ? "Adventure" : view === "racing" ? "Racing" : view === "solo" ? "Solo" : view === "friends" ? "With friends" : "Zen"}</b>
+              </header>
+
+              {view === "adventure" ? (
+                <>
+                  <p className="menu-lede">Eight worlds, one flight: portals, upgrades, items and treasure.</p>
+                  <div className="menu-course">
+                    <div>
+                      <small>Today's run · #{dailyRun}</small>
+                      <b>{run.map}</b>
+                    </div>
+                    <span>{run.mood}</span>
+                    <span>8 maps</span>
+                    {best !== null && <span>Best {best.toLocaleString()}</span>}
+                    <span>New in {countdown}</span>
                   </div>
-                  <span>{zen.mood}</span>
-                  <span>Endless</span>
-                  <span>No clock</span>
-                </div>
-                <button className="primary" onClick={() => go({ kind: "zen", seed: zenDaily })}>
-                  Start flying <kbd>Enter</kbd>
-                </button>
-                <div className="menu-more">
-                  <button className="menu-link" onClick={() => setPicking("zen")}>
-                    <IconMap size={18} /> Choose a map
+                  <button className="primary" onClick={() => go({ kind: "run", seed: dailyRun })}>
+                    Start today's run <kbd>Enter</kbd>
                   </button>
-                  <button className="menu-link" onClick={() => go({ kind: "zen", seed: zenSeed(randomSeed()) })}>
-                    <IconDice5 size={18} /> Random map
-                  </button>
-                </div>
-              </>
-            ) : tab === "adventure" ? (
-              <>
-                <div className="menu-course">
-                  <div>
-                    <small>Today's run · #{dailyRun}</small>
-                    <b>{run.map}</b>
-                  </div>
-                  <span>{run.mood}</span>
-                  <span>8 maps</span>
-                  {best !== null && <span>Best {best.toLocaleString()}</span>}
-                  <span>New in {countdown}</span>
-                </div>
-                <button className="primary" onClick={() => go({ kind: "run", seed: dailyRun })}>
-                  Start today's run <kbd>Enter</kbd>
-                </button>
-                <div className="menu-more">
-                  <button className="menu-link" onClick={() => setPicking("run")}>
-                    <IconMap size={18} /> Choose a map
-                  </button>
-                  <button className="menu-link" onClick={() => go({ kind: "run", seed: randomSeed() })}>
-                    <IconDice5 size={18} /> New random run
-                  </button>
-                  {import.meta.env.DEV && (
-                    <button className="menu-link" onClick={() => go({ kind: "explore", biome: "skyIsles", seed: 1 })}>
-                      Debug: explore worlds
+                  <div className="menu-more">
+                    <button className="menu-link" onClick={() => setPicking("run")}>
+                      <IconMap size={18} /> Choose a map
                     </button>
-                  )}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="menu-course">
-                  <div>
-                    <small>Race room</small>
-                    <b>Same map, same time</b>
+                    <button className="menu-link" onClick={() => go({ kind: "run", seed: randomSeed() })}>
+                      <IconDice5 size={18} /> New random run
+                    </button>
+                    {import.meta.env.DEV && (
+                      <button className="menu-link" onClick={() => go({ kind: "explore", biome: "skyIsles", seed: 1 })}>
+                        Debug: explore
+                      </button>
+                    )}
                   </div>
-                  <span>Up to 12 pilots</span>
-                </div>
-                <button className="primary" onClick={() => setPicking("room")}>
-                  Create a room
-                </button>
-                <form onSubmit={joinRoom} className="menu-join">
-                  <input
-                    value={code}
-                    onChange={(e) => setCode(e.target.value.toUpperCase())}
-                    placeholder="Room code"
-                    maxLength={8}
-                    aria-label="Room code"
-                    autoFocus={!!joinCode}
-                  />
-                  <button type="submit" disabled={!/^[A-Za-z0-9]{3,8}$/.test(code.trim())}>
-                    Join
+                </>
+              ) : view === "racing" ? (
+                <div className="menu-ways">
+                  <button className="menu-way" onClick={() => setView("solo")}>
+                    <IconFlag size={30} />
+                    <b>Solo</b>
+                    <small>Today's course against the clock and the best ghosts</small>
                   </button>
-                </form>
-              </>
-            )}
-          </section>
+                  <button className="menu-way" onClick={() => setView("friends")}>
+                    <IconUsers size={30} />
+                    <b>With friends</b>
+                    <small>A room: the same map, the same start, up to 12 pilots</small>
+                  </button>
+                </div>
+              ) : view === "solo" ? (
+                <>
+                  <div className="menu-course">
+                    <div>
+                      <small>Today's course · #{daily}</small>
+                      <b>{course.map}</b>
+                    </div>
+                    <span>{course.mood}</span>
+                    <span>{course.gates} gates</span>
+                    <span>New in {countdown}</span>
+                  </div>
+                  <button className="primary" onClick={() => go({ kind: "solo", seed: daily })}>
+                    Fly today's course <kbd>Enter</kbd>
+                  </button>
+                  <div className="menu-more">
+                    <button className="menu-link" onClick={() => setPicking("solo")}>
+                      <IconMap size={18} /> Choose a course
+                    </button>
+                  </div>
+                </>
+              ) : view === "zen" ? (
+                <>
+                  <div className="menu-course">
+                    <div>
+                      <small>Today's Zen · #{zenDaily}</small>
+                      <b>{zen.map}</b>
+                    </div>
+                    <span>{zen.mood}</span>
+                    <span>Endless</span>
+                    <span>No clock</span>
+                  </div>
+                  <button className="primary" onClick={() => go({ kind: "zen", seed: zenDaily })}>
+                    Start flying <kbd>Enter</kbd>
+                  </button>
+                  <div className="menu-more">
+                    <button className="menu-link" onClick={() => setPicking("zen")}>
+                      <IconMap size={18} /> Choose a map
+                    </button>
+                    <button className="menu-link" onClick={() => go({ kind: "zen", seed: zenSeed(randomSeed()) })}>
+                      <IconDice5 size={18} /> Random map
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="menu-course">
+                    <div>
+                      <small>Race room</small>
+                      <b>Same map, same time</b>
+                    </div>
+                    <span>Up to 12 pilots</span>
+                  </div>
+                  <button className="primary" onClick={() => setPicking("room")}>
+                    Create a room
+                  </button>
+                  <form onSubmit={joinRoom} className="menu-join">
+                    <input
+                      value={code}
+                      onChange={(e) => setCode(e.target.value.toUpperCase())}
+                      placeholder="Room code"
+                      maxLength={8}
+                      aria-label="Room code"
+                      autoFocus={!!joinCode}
+                    />
+                    <button type="submit" disabled={!/^[A-Za-z0-9]{3,8}$/.test(code.trim())}>
+                      Join
+                    </button>
+                  </form>
+                </>
+              )}
+            </section>
+          )}
         </>
       )}
 
@@ -295,9 +373,9 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
         />
       )}
       {/* You: your name, level and crystals; opens your journal */}
-      <button className="menu-pilot glass" aria-label={`Journal of ${pilotName}`} onClick={() => setPanel("journal")}>
-        <span className="menu-badge">
-          <IconUser size={22} />
+      <button className="menu-pilot menu-ghost" aria-label={`Journal of ${pilotName}`} onClick={() => setPanel("journal")}>
+        <span className="menu-ring">
+          <IconUser size={20} />
         </span>
         <span className="menu-pilot-text">
           {pilotName}
