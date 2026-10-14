@@ -3,6 +3,7 @@ import { type FinishResult, Game, type HudState } from "../game/Game";
 import type { Settings } from "../storage";
 import type { InputObserver } from "../game/input";
 import { Store } from "./store";
+import { achievements } from "../game/achievements";
 import { profileClient } from "../profile/client";
 
 const COUNTDOWN_MS = 3000;
@@ -43,6 +44,8 @@ export class SoloSession {
   private game: Game | null = null;
   private runToken: Promise<string | null> | null = null;
   private attempt = 0;
+  /** This pilot's best time on the course before the flight just finished (undefined: none known) */
+  private previousBest: number | undefined;
 
   constructor(seed: number, clientId: string, settings: Settings) {
     this.seed = seed;
@@ -63,6 +66,7 @@ export class SoloSession {
 
   private createGame(container: HTMLElement): Game {
     return new Game(container, {
+      track: true,
       seed: this.seed,
       clock: () => performance.now(),
       controls: this.settings,
@@ -126,7 +130,11 @@ export class SoloSession {
 
   private async loadLeaderboard() {
     try {
-      this.store.set({ leaderboard: await getLeaderboard(this.seed, this.clientId) });
+      const leaderboard = await getLeaderboard(this.seed, this.clientId);
+      // Your best on this course so far, if it made the board (Better than yesterday)
+      const mine = leaderboard.find((entry) => entry.is_me);
+      if (mine && this.previousBest === undefined) this.previousBest = mine.time_ms;
+      this.store.set({ leaderboard });
     } catch {
       // Offline: the race still works
     }
@@ -153,6 +161,10 @@ export class SoloSession {
       // The finish's XP (one per gate) shows up in the profile
       if (saved.xp) void profileClient.refresh().catch(() => {});
       if (attempt !== this.attempt) return;
+      // Beat the best this pilot had on the course before this flight
+      const before = this.previousBest;
+      if (before !== undefined && timeMs < before) achievements.unlock("personalBest");
+      this.previousBest = Math.min(before ?? Infinity, saved.personal_best_ms ?? timeMs);
       this.store.set({
         result: { timeMs, saving: false, rank: saved.rank, personalBestMs: saved.personal_best_ms, xp: saved.xp },
         leaderboard: saved.leaderboard,

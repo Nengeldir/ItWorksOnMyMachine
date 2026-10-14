@@ -6,6 +6,7 @@ import GameScreen from "./components/GameScreen";
 import { randomSeed } from "./game/rng";
 import { FirstFlight } from "./components/Help";
 import Menu from "./components/Menu";
+import AchievementToast from "./components/AchievementToast";
 import { profileClient } from "./profile/client";
 import { type Screen, screenFromSearch, urlFor } from "./route";
 import {
@@ -81,6 +82,7 @@ const App = () => {
   if (screen.kind === "menu") {
     return <>
       <Menu me={me} settings={settings} onSettings={updateSettings} joinCode={screen.joinCode} go={go} />
+      <AchievementToast />
       {cover}
     </>;
   }
@@ -105,6 +107,7 @@ const App = () => {
         onTutorialEnd={endTutorial}
       />
       {playing && newcomer && !asked && <FirstFlight onStart={() => answer("started")} onSkip={() => answer("skipped")} />}
+      {screen.kind !== "test" && screen.kind !== "explore" && <AchievementToast />}
       {cover}
     </>
   );

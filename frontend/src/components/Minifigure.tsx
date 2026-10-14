@@ -20,21 +20,26 @@ export default function Minifigure({ appearance, style = 1, color = "#c47f9d", l
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  // Keyed by the look, so the figure is rebuilt only when what it wears changes
+  // What it wears, as a key: a change re-dresses the figure in place (no rebuild, it keeps turning)
   const look = JSON.stringify(validateAppearance(appearance));
+  const dress = useRef<((outfit: Appearance) => void) | null>(null);
+  const restyle = useRef<((style: 1 | 2, color: string) => void) | null>(null);
+  const initial = useRef({ look, style, color });
+  useEffect(() => { dress.current?.(JSON.parse(look) as Appearance); }, [look]);
+  useEffect(() => { restyle.current?.(style, color); }, [style, color]);
   useEffect(() => {
     const container = ref.current!;
     const canvas = canvasRef.current!;
     try { previewRenderer(); }
     catch { container.dataset.unavailable = "true"; return; }
     delete container.dataset.unavailable;
-    const outfit = JSON.parse(look) as Appearance;
+    const outfit = JSON.parse(initial.current.look) as Appearance;
     const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(30, 1, 0.05, 100);
     previewLights(scene);
     const turntable = new THREE.Group();
     scene.add(turntable);
-    const avatar = new Avatar(color);
-    avatar.setStyle(style);
+    const avatar = new Avatar(initial.current.color);
+    avatar.setStyle(initial.current.style);
     avatar.setAppearance(outfit);
     avatar.stance.stand = 1;
     avatar.update(0.016, 18, 0);
@@ -44,12 +49,26 @@ export default function Minifigure({ appearance, style = 1, color = "#c47f9d", l
     plinth.rotation.x = -Math.PI / 2;
     turntable.add(plinth);
     let pet: PetModel | null = null;
-    if (outfit.pet !== "none") {
-      pet = new PetModel(outfit.pet as Exclude<PetId, "none">);
+    const companion = (id: PetId) => {
+      if ((pet?.id ?? "none") === id) return;
+      pet?.dispose();
+      pet = null;
+      if (id === "none") return;
+      pet = new PetModel(id as Exclude<PetId, "none">);
       pet.group.scale.setScalar(0.42);
       pet.group.position.set(0.72, 0.1, -0.1);
       turntable.add(pet.group);
-    }
+    };
+    companion(outfit.pet);
+    // Equipping swaps the piece on the figure as it stands: no rebuild, no jump back to the start
+    dress.current = (next) => {
+      avatar.setAppearance(next);
+      companion(next.pet);
+    };
+    restyle.current = (nextStyle, nextColor) => {
+      avatar.setStyle(nextStyle);
+      avatar.setColor(nextColor);
+    };
     // Framed on the standing pilot (feet to hat, the companion beside), not on loose cloth and wingtips
     const FEET = -0.98, TOP = 1.42, WIDTH = 2.1;
     plinth.position.y = FEET;
@@ -123,6 +142,7 @@ export default function Minifigure({ appearance, style = 1, color = "#c47f9d", l
     };
     raf = requestAnimationFrame(loop);
     return () => {
+      dress.current = restyle.current = null;
       cancelAnimationFrame(raf);
       observer.disconnect();
       canvas.removeEventListener("pointerdown", down);
@@ -136,7 +156,7 @@ export default function Minifigure({ appearance, style = 1, color = "#c47f9d", l
       (plinth.material as THREE.Material).dispose();
       previewRenderer().renderLists.dispose();
     };
-  }, [look, style, color]);
+  }, []);
   return (
     <div className={`minifigure ${className}`} ref={ref} role="img" tabIndex={0} aria-label={`${label}. Drag or use the arrow keys to turn it.`}>
       <canvas ref={canvasRef} />

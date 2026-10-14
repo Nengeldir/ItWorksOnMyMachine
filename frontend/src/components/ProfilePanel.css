@@ -396,12 +396,12 @@
 /* Phones held sideways: little height, so the header folds up and the figure shrinks */
 @media (max-height: 520px) {
   .profile-dialog.sheet { padding: 0.7rem 1rem; max-height: calc(100dvh - 0.6rem); gap: 0.5rem; overflow: auto; }
+  .profile-dialog .journal-grid { max-height: none; }
   .profile-dialog .sheet-head h2 { font-size: 1.2rem; }
   .journal-intro, .journal-saved, .journal-foot p:first-child { display: none; }
   .journal-figure { display: grid; grid-template-columns: 7.5rem 1fr; align-items: center; gap: 0.5rem; padding: 0.3rem; }
   .minifigure { height: 140px; }
   .collection-preview { height: 120px; }
-  .journal-grid { max-height: 240px; }
 }
 
 /* --- In flight: the profile pill and the collection notice --------------------------------------- */
@@ -421,3 +421,40 @@
 .profile-flight.paused { pointer-events: auto; }
 /* Keep the profile away from the centred flight bars on narrow screens. */
 @media (max-width: 650px) { .profile-flight { top: 5rem; bottom: auto; right: .5rem; width: 105px; padding: .5rem; font-size: .7rem; } }
+
+/* --- The journal's pages: Guide and Achievements at the top, Back and close on their pages ---------- */
+.journal-pages { margin-left: auto; display: flex; gap: 0.4rem; }
+.journal-pages button { padding: 0.5rem 0.85rem; border-radius: 999px; }
+.journal-pages + .sheet-close { margin-left: 0.2rem; }
+.profile-dialog .journal-back { flex: none; padding: 0.45rem 0.85rem 0.45rem 0.6rem; border-radius: 999px; }
+.profile-dialog .sheet-head > div { min-width: 0; }
+.profile-dialog .sheet-head h2 { overflow-wrap: anywhere; }
+.journal-subtabs { font-size: 0.85rem; }
+@media (max-width: 650px) {
+  .journal-pages button span { display: none; }
+  .journal-pages button { width: 2.6rem; height: 2.6rem; padding: 0; border-radius: 50%; }
+}
+
+/* Every box holds its contents with room to spare: long names wrap, nothing touches the edge */
+.journal-card { box-sizing: border-box; min-width: 0; padding: 0.85rem 0.9rem 0.8rem; overflow: hidden; }
+.journal-card b { overflow-wrap: anywhere; padding-right: 1rem; }
+.journal-card small, .journal-state { flex-wrap: wrap; }
+.journal-power { top: 0.6rem; right: 0.7rem; }
+
+/* Locked: a big translucent lock in the middle of the box */
+.journal-card .journal-lock { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--ink); opacity: 0.16; pointer-events: none; }
+
+/* Small or short screens: the whole journal is one scroll, top to bottom (header, pilot, toolbar, grid) */
+@media (max-width: 1000px), (max-height: 760px) {
+  .profile-dialog.sheet { overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  .profile-dialog.sheet > * { flex-shrink: 0; }
+  .profile-dialog .journal-body { flex: none; }
+  .profile-dialog .journal-grid, .profile-dialog .journal-detail { overflow: visible; max-height: none; }
+  /* The picked one's preview and buttons stay in view while the list scrolls past */
+  .profile-dialog .journal-detail { position: sticky; top: 0; align-self: start; z-index: 1; }
+  .profile-dialog .guide, .profile-dialog .achievements { flex: none; }
+  .profile-dialog .guide-grid, .profile-dialog .guide-prose, .profile-dialog .achievements-grid { overflow: visible; }
+}
+/* Big screens: the guide and achievements fill the sheet, their lists scroll inside it */
+.profile-dialog.view-guide.sheet, .profile-dialog.view-achievements.sheet { height: min(52rem, calc(100dvh - 2rem)); }
+.journal-grid { grid-auto-rows: max-content; }

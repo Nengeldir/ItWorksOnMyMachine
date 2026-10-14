@@ -1,0 +1,102 @@
+/* The journal's field guide and achievements pages, and the achievement toast (AchievementToast) */
+
+/* --- The toast: top centre, over everything, then gone ------------------------------------------- */
+.achievement-toast {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 1rem 0.55rem 0.55rem;
+  border-radius: 20px;
+  pointer-events: none;
+  animation: achievement-in 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2) both, achievement-out 0.6s ease 3.6s forwards;
+}
+.achievement-toast span:nth-child(2) { display: grid; line-height: 1.2; }
+.achievement-toast small { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-45); }
+.achievement-toast em { font-style: normal; font-family: var(--font-numbers); font-weight: 800; color: var(--warm-deep, #a8730a); }
+.achievement-toast-badge, .achievements-badge {
+  width: 2.6rem; height: 2.6rem; border-radius: 14px; display: grid; place-items: center; flex: none; color: #fff;
+  background: linear-gradient(160deg, #ffd977, #d9963a); box-shadow: 0 3px 0 #a8730a, 0 0 18px #ffc94d80;
+}
+@keyframes achievement-in { from { opacity: 0; transform: translate(-50%, -12px) scale(0.92); } }
+@keyframes achievement-out { to { opacity: 0; transform: translate(-50%, -8px); } }
+@media (prefers-reduced-motion: reduce) { .achievement-toast { animation: achievement-out 0.6s ease 3.6s forwards; } }
+
+/* --- The field guide ------------------------------------------------------------------------------- */
+.guide { display: flex; flex-direction: column; gap: 0.8rem; min-height: 0; flex: 1; }
+.guide-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+.guide-sections { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.guide-search { display: inline-flex; align-items: center; gap: 0.4rem; margin-left: auto; padding: 0 0.7rem; border-radius: 999px; background: rgba(255, 255, 255, 0.65); border: 1px solid var(--ink-12); }
+.guide-search input { border: none; background: none; padding: 0.45rem 0; outline: none; width: 12rem; }
+.guide-prose { min-height: 0; overflow: auto; line-height: 1.55; }
+.guide-prose h3 { margin: 1.1rem 0 0.4rem; font-family: var(--font-display); font-size: 1.15rem; }
+.guide-prose h3:first-child { margin-top: 0; }
+.guide-prose p, .guide-prose li { color: var(--ink); font-size: 0.92rem; }
+.guide-prose ol { padding-left: 1.3rem; margin: 0.3rem 0; display: grid; gap: 0.35rem; }
+.guide-tip { padding: 0.6rem 0.8rem; border-radius: 14px; background: var(--ink-06); font-size: 0.85rem !important; }
+.guide-keys { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.guide-keys th { text-align: left; font-weight: 600; padding: 0.35rem 0.6rem 0.35rem 0; color: var(--ink-70); white-space: nowrap; }
+.guide-keys td { padding: 0.3rem 0; display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.guide-keys tr + tr { border-top: 1px solid var(--ink-06); }
+.guide-grid { min-height: 0; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: 0.65rem; align-content: start; padding: 0.15rem; }
+.guide-card {
+  box-sizing: border-box; min-width: 0; padding: 0.85rem 0.95rem; border-radius: 18px;
+  border: 1.5px solid color-mix(in srgb, var(--rarity) 85%, var(--ink-12));
+  background: linear-gradient(160deg, color-mix(in srgb, var(--rarity) 18%, transparent), rgba(255, 255, 255, 0.65) 65%);
+}
+.guide-card.rarity-common { border-color: var(--ink-12); background: rgba(255, 255, 255, 0.6); }
+.guide-card.rarity-legendary { box-shadow: 0 0 16px color-mix(in srgb, var(--rarity) 35%, transparent); }
+.guide-card header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.4rem; }
+.guide-card header div { display: grid; min-width: 0; }
+.guide-card header b { overflow-wrap: anywhere; }
+.guide-card header small { font-size: 0.72rem; color: var(--ink-70); text-transform: capitalize; }
+.guide-icon { width: 2.3rem; height: 2.3rem; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 1.2rem; background: color-mix(in srgb, var(--rarity) 35%, #fff); }
+.guide-card p { margin: 0.25rem 0 0; font-size: 0.83rem; color: var(--ink-70); }
+.guide-card .guide-power { color: var(--ink); }
+.guide-card .guide-power b { color: var(--rarity-deep); }
+
+/* --- Achievements ---------------------------------------------------------------------------------- */
+.achievements { display: flex; flex-direction: column; gap: 0.8rem; min-height: 0; flex: 1; }
+.achievements-summary { display: flex; align-items: center; gap: 0.9rem; }
+.achievements-summary > div { flex: 1; display: grid; gap: 0.3rem; }
+.achievements-summary b { font-family: var(--font-numbers); font-size: 1.4rem; }
+.achievements-summary b small { font-size: 0.85rem; color: var(--ink-45); }
+.achievements-summary > div > small { font-size: 0.78rem; color: var(--ink-70); }
+.achievements-badge { width: 3.2rem; height: 3.2rem; border-radius: 18px; }
+.achievements-filter { max-width: 100%; overflow-x: auto; scrollbar-width: none; align-self: flex-start; }
+.achievements-grid { min-height: 0; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 0.6rem; align-content: start; padding: 0.15rem; }
+.achievement {
+  position: relative; box-sizing: border-box; min-width: 0; overflow: hidden;
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.7rem; align-items: start;
+  padding: 0.8rem 0.9rem 1rem; border-radius: 18px; border: 1px solid rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.6);
+}
+.achievement.done { border-color: #e6bf6a; background: linear-gradient(160deg, #fff3cf, rgba(255, 255, 255, 0.7) 70%); }
+.achievement.secret { background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.5) 0 10px, rgba(255, 255, 255, 0.35) 10px 20px); }
+.achievement-icon { width: 2.3rem; height: 2.3rem; border-radius: 12px; display: grid; place-items: center; background: var(--ink-06); color: var(--ink-70); }
+.achievement.done .achievement-icon { color: #fff; background: linear-gradient(160deg, #ffd977, #d9963a); }
+.achievement-body header { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.achievement-body header b { overflow-wrap: anywhere; }
+.achievement-body header em { flex: none; font-style: normal; font-family: var(--font-numbers); font-size: 0.75rem; font-weight: 700; color: var(--ink-45); }
+.achievement-body p { margin: 0.2rem 0 0.35rem; font-size: 0.82rem; color: var(--ink-70); }
+.achievement-body small { font-size: 0.72rem; color: var(--ink-45); font-family: var(--font-numbers); }
+.achievement-tiers { display: flex; gap: 0.25rem; margin-bottom: 0.25rem; }
+.achievement-tiers span { flex: 1; height: 0.35rem; border-radius: 999px; background: var(--ink-12); }
+.achievement-tiers span.reached { background: linear-gradient(90deg, #ffd977, #d9963a); }
+.achievement-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: transparent; }
+.achievement-bar span { display: block; height: 100%; background: color-mix(in srgb, var(--warm, #e8a54a) 80%, #fff); }
+
+@media (max-width: 650px) {
+  .guide-search { margin-left: 0; width: 100%; }
+  .guide-search input { width: 100%; }
+  .guide-grid, .achievements-grid { grid-template-columns: 1fr; overflow: visible; }
+  .guide-prose { overflow: visible; }
+}
+
+/* Rows keep their content's height (cards clip their own overflow, which would let rows shrink to
+   nothing in a sheet of fixed height); the lists scroll instead */
+.achievements-grid, .guide-grid { grid-auto-rows: max-content; }
+.achievements > *:not(.achievements-grid), .guide > *:not(.guide-grid, .guide-prose) { flex-shrink: 0; }

@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { IconBook2, IconDiamond, IconLock, IconRotate, IconSparkles, IconX } from "@tabler/icons-react";
+import { IconArrowLeft, IconAward, IconBook, IconBook2, IconDiamond, IconLock, IconRotate, IconSparkles, IconX } from "@tabler/icons-react";
 import { profileClient } from "../profile/client";
 import type { Collectible, Profile } from "../profile/types";
 import { RARITY_STYLE } from "../game/collection/rarity";
@@ -12,11 +12,16 @@ import { RUN_ITEMS } from "../game/run/items";
 import { loadSettings } from "../storage";
 import { boundKeys } from "./keys";
 import CollectionPreview from "./CollectionPreview";
+import FieldGuide from "./FieldGuide";
+import AchievementsView from "./AchievementsView";
 import Minifigure from "./Minifigure";
 import { rarityStyle } from "./rarity";
 import "./ProfilePanel.css";
 
 const tabs = ["All", "Cosmetics", "Pets", "Keepsakes"] as const;
+/** The cosmetics, by kind */
+const cosmeticKinds = [["all", "All"], ["wings", "Wings"], ["cape", "Capes"], ["hat", "Hats"], ["shoes", "Shoes"]] as const;
+type CosmeticKind = (typeof cosmeticKinds)[number][0];
 
 /** A collectible's own description (its look or its adventure item's effect) */
 function lore(item: Collectible): string | undefined {
@@ -54,6 +59,9 @@ export default function ProfilePanel({ onClose, pilot }: { onClose: () => void; 
   const dialog = useRef<HTMLDialogElement>(null);
   const { profile, error, pending, loading } = useSyncExternalStore(profileClient.store.subscribe, profileClient.store.get);
   const [tab, setTab] = useState<typeof tabs[number]>("All");
+  const [cosmetic, setCosmetic] = useState<CosmeticKind>("all");
+  /** The collection, or one of the pages above it: the field guide and the achievements */
+  const [view, setView] = useState<"collection" | "guide" | "achievements">("collection");
   const [ownedOnly, setOwnedOnly] = useState(false);
   const [selected, setSelected] = useState("cape:classic");
   const [message, setMessage] = useState("");
@@ -70,7 +78,7 @@ export default function ProfilePanel({ onClose, pilot }: { onClose: () => void; 
     return () => { window.removeEventListener("keydown", stop, true); window.removeEventListener("keyup", stop, true); el.close(); };
   }, []);
   const entries = profile?.catalog.filter(item =>
-    (tab === "All" || (tab === "Cosmetics" ? ["cape", "hat", "shoes", "wings"].includes(item.kind) : item.kind === (tab === "Pets" ? "pet" : "item"))) &&
+    (tab === "All" || (tab === "Cosmetics" ? (cosmetic === "all" ? ["cape", "hat", "shoes", "wings"].includes(item.kind) : item.kind === cosmetic) : item.kind === (tab === "Pets" ? "pet" : "item"))) &&
     (!ownedOnly || profile.inventory[item.key])) ?? [];
   const item = profile?.catalog.find(e => e.key === selected);
   const state = item && profile ? status(item, profile) : null;
@@ -102,12 +110,24 @@ export default function ProfilePanel({ onClose, pilot }: { onClose: () => void; 
   const title = pilot ? pilot.name || "Guest" : profile?.name ?? "Your journal";
   const xp = profile ? (profile.next_level_xp ? profile.level_xp / profile.next_level_xp : 1) : 0;
   const charm = profile && profile.equipped.charm !== "none" ? profile.catalog.find(e => e.key === `item:${profile.equipped.charm}`) : undefined;
-  return <dialog ref={dialog} className="profile-dialog sheet" aria-labelledby="profile-title" onCancel={e => { e.preventDefault(); onClose(); }}>
+  // Esc goes back a page first, then closes
+  const dismiss = () => (view === "collection" ? onClose() : setView("collection"));
+  return <dialog ref={dialog} className={`profile-dialog sheet view-${view}`} aria-labelledby="profile-title" onCancel={e => { e.preventDefault(); dismiss(); }}>
     <header className="sheet-head">
-      <span className="overlay-badge"><IconBook2 size={22} /></span>
-      <div><small>Adventure journal</small><h2 id="profile-title">{title}</h2></div>
+      {view === "collection"
+        ? <span className="overlay-badge"><IconBook2 size={22} /></span>
+        : <button className="journal-back" onClick={() => setView("collection")} aria-label="Back to the journal"><IconArrowLeft size={18} /> Back</button>}
+      <div><small>{view === "collection" ? "Adventure journal" : view === "guide" ? "Field guide" : "Achievements"}</small>
+        <h2 id="profile-title">{view === "collection" ? title : view === "guide" ? "How everything works" : "Feats of the wind"}</h2></div>
+      {view === "collection" && <nav className="journal-pages" aria-label="Journal pages">
+        <button onClick={() => setView("guide")}><IconBook size={18} /><span>Guide</span></button>
+        <button onClick={() => setView("achievements")}><IconAward size={18} /><span>Achievements</span></button>
+      </nav>}
       <button className="sheet-close" autoFocus onClick={onClose} aria-label="Close the journal"><IconX size={20} /></button>
     </header>
+    {view === "guide" && <FieldGuide catalog={profile?.catalog ?? []} />}
+    {view === "achievements" && <AchievementsView />}
+    {view === "collection" && <>
     <section className="journal-pilot sheet-panel">
       {pilot && !pilot.verified && <label className="journal-name"><span>Your name</span>
         <input value={pilot.name} maxLength={24} placeholder="Guest" onChange={e => pilot.onName(e.target.value)} /></label>}
@@ -126,6 +146,8 @@ export default function ProfilePanel({ onClose, pilot }: { onClose: () => void; 
     {profile && <>
       <div className="journal-toolbar">
         <div className="segmented" role="tablist" aria-label="Collection">{tabs.map(t => <button key={t} role="tab" aria-selected={t === tab} onClick={() => setTab(t)}>{t}</button>)}</div>
+        {tab === "Cosmetics" && <div className="segmented journal-subtabs" role="tablist" aria-label="Cosmetics by kind">
+          {cosmeticKinds.map(([id, label]) => <button key={id} role="tab" aria-selected={id === cosmetic} onClick={() => setCosmetic(id)}>{label}</button>)}</div>}
         <label className="journal-filter"><input type="checkbox" checked={ownedOnly} onChange={e => setOwnedOnly(e.target.checked)} /> Collected only</label>
       </div>
       <div className="journal-body">
@@ -145,6 +167,7 @@ export default function ProfilePanel({ onClose, pilot }: { onClose: () => void; 
               <b>{entry.kind === "pet" && profile.pet_names[entry.asset] ? profile.pet_names[entry.asset] : entry.name}</b>
               <small><i className="journal-rarity" /> {entry.kind === "item" ? "keepsake" : entry.kind} · {entry.rarity}</small>
               <span className="journal-state">{s.owned ? s.text : <><IconLock size={12} /> {s.text}</>}</span>
+              {!s.owned && <IconLock className="journal-lock" size={54} stroke={1.6} aria-hidden="true" />}
             </button>;
           })}
           {!entries.length && <p className="journal-empty">No discoveries here yet. Follow the crystals and look beside the hoops.</p>}
@@ -177,6 +200,7 @@ export default function ProfilePanel({ onClose, pilot }: { onClose: () => void; 
       <footer className="journal-foot"><p>Crystals and gates grant XP. Each rarity is three times rarer than the last, and sits farther from the hoops. Duplicates become crystals.</p>
         <p role="status">{message || error || (loading ? "Refreshing…" : "")}</p>
         {error && <button onClick={() => void profileClient.refresh().catch(() => {})}>Retry saving / refresh</button>}</footer>
+    </>}
     </>}
   </dialog>;
 }

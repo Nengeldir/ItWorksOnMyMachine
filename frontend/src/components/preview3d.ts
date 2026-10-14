@@ -11,9 +11,17 @@ let shared: THREE.WebGLRenderer | null = null;
 
 export function previewRenderer(): THREE.WebGLRenderer {
   if (!shared) {
-    shared = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-    shared.setPixelRatio(1);
-    shared.outputColorSpace = THREE.SRGBColorSpace;
+    // The drawing buffer is kept until it's copied: Safari (iOS and macOS) can otherwise hand the 2D
+    // canvases an empty picture
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true, powerPreference: "low-power" });
+    renderer.setPixelRatio(1);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // A phone that drops the context (backgrounded, low memory) gets a fresh renderer on the next draw
+    renderer.domElement.addEventListener("webglcontextlost", (event) => {
+      event.preventDefault();
+      if (shared === renderer) shared = null;
+    });
+    shared = renderer;
   }
   return shared;
 }

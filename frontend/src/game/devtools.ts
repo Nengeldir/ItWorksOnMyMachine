@@ -8,6 +8,10 @@ import { fxTime } from "./particles";
 import { skyIslesLevel } from "./world/biomes/index";
 import { meshChunk, rockChunks } from "./world/mesher";
 import { World } from "./world/World";
+import { Avatar } from "./avatar";
+import { DEFAULT_APPEARANCE } from "./cosmetics/storage";
+import type { WingId } from "./cosmetics/catalog";
+import { previewLights } from "../components/preview3d";
 
 // Development helpers on `window` (dev builds only), for looking at the game
 // from the console or from browser automation. Automated or background tabs
@@ -308,7 +312,59 @@ export function installDevtools(itemPreview: string | null = null) {
     return { phase: r.phase, crossed: crossed !== null };
   };
 
-  Object.assign(window, { __itemShot: itemShot, __shot: shot, __raceHashes: raceHashes, __run: run, __bench: bench, __crash: crash, __portal: portal });
+  /**
+   * A contact sheet of a pair of wings, drawn over the page: a beat in four frames from behind and above,
+   * then folded (falcon), gliding fast, and banking. `__wingShot()` removes it again
+   */
+  const wingShot = (id: WingId | null = "classic", side = false) => {
+    document.getElementById("wing-shot")?.remove();
+    if (!id) return;
+    const canvas = document.createElement("canvas");
+    canvas.id = "wing-shot";
+    canvas.width = 1200;
+    canvas.height = 640;
+    Object.assign(canvas.style, { position: "fixed", inset: "0", zIndex: "99999", width: "1200px", height: "640px", background: "#a9c9e8" });
+    document.body.appendChild(canvas);
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setClearColor("#a9c9e8");
+    renderer.setScissorTest(true);
+    const poses: [string, (a: Avatar) => void, number][] = [
+      ["beat 0", () => {}, 0], ["beat 1/4", () => {}, 0.25], ["beat 1/2", () => {}, 0.5], ["beat 3/4", () => {}, 0.75],
+      ["falcon", (a) => { a.stance.falcon = 1; }, 0], ["fast glide", () => {}, -1], ["bank", () => {}, -2], ["standing", (a) => { a.stance.stand = 1; }, 0],
+    ];
+    poses.forEach(([, setup, beat], i) => {
+      const scene = new THREE.Scene();
+      previewLights(scene);
+      const avatar = new Avatar("#c47f9d");
+      avatar.setAppearance({ ...DEFAULT_APPEARANCE, wings: id });
+      setup(avatar);
+      scene.add(avatar.group);
+      const a = avatar as unknown as Record<string, number>;
+      // Climbing hard keeps the wings beating; a fast glide sweeps them; the bank rolls the body over time
+      if (beat === -2) {
+        for (let k = 0; k < 40; k++) { avatar.group.rotateZ(-0.012); avatar.update(1 / 60, 40, 0); }
+      } else {
+        for (let k = 0; k < 30; k++) avatar.update(1 / 60, beat === -1 ? 95 : 22, 0);
+        if (beat >= 0) { a.effort = 1; a.flapPhase = beat * Math.PI * 2; avatar.update(1e-4, 22, 0); }
+      }
+      const camera = new THREE.PerspectiveCamera(32, 300 / 320, 0.1, 50);
+      if (side) camera.position.set(7, 1.5, 0.5); else camera.position.set(0, 3.9, 5.2);
+      camera.lookAt(0, 0.3, 0.2);
+      const x = (i % 4) * 300, y = i < 4 ? 320 : 0;
+      renderer.setViewport(x, y, 300, 320);
+      renderer.setScissor(x, y, 300, 320);
+      renderer.render(scene, camera);
+      avatar.dispose();
+    });
+    const label = document.createElement("div");
+    label.textContent = `${id}: ${poses.map((p) => p[0]).join(" · ")}`;
+    Object.assign(label.style, { position: "fixed", left: "8px", top: "644px", zIndex: "99999", font: "14px sans-serif", background: "#fff", padding: "2px 6px" });
+    label.id = "wing-shot-label";
+    document.getElementById("wing-shot-label")?.remove();
+    document.body.appendChild(label);
+    return id;
+  };
+  Object.assign(window, { __wingShot: wingShot, __itemShot: itemShot, __shot: shot, __raceHashes: raceHashes, __run: run, __bench: bench, __crash: crash, __portal: portal });
 }
 
 /**

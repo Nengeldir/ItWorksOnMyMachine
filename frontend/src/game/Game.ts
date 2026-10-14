@@ -33,6 +33,7 @@ import { FX, RANGES, RINGS, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveT
 import { ABILITY } from "./run/abilities";
 import { PICKUP, PICKUP_PREFS } from "./run/pickups";
 import { ITEM, RUN_ITEMS, type RunItemId } from "./run/items";
+import { achievements } from "./achievements";
 import { ORB } from "./run/orbs";
 import { portalFlash } from "./run/portal";
 import { RunController, type RunEvents, type RunHost, type RunOptions } from "./run/controller";
@@ -53,6 +54,10 @@ const STEP = 1 / 120; // physics runs at a fixed rate, rendering interpolates
 const MAX_STEPS_PER_FRAME = 12;
 const SCORE_RANGE = 10; // proximity counts within this many metres
 const RESPAWN_DELAY = 1.4; // seconds
+/** Metres from rock at which a run's guard sees a crash coming (the wings reach about 2) */
+const GUARD_CLEARANCE = 1.2;
+/** m/s the pilot seems to glide at through the finale's void (its motes and ribbons stream back at this) */
+const FINALE_GLIDE = 28;
 /**
  * Zen: after a crash you come back where the tumble rolled to, a little further on its way: these
  * steps on (m) and these heights above it (m) are tried in turn for a spot with room to fly
@@ -156,6 +161,8 @@ export interface GameOptions {
   attract?: AttractMode;
   /** Local sandbox shortcuts and playback controls, enabled only by ?test. */
   testMode?: boolean;
+  /** Report to the achievements (a real flight: solo, room, adventure, Zen; never test, explore or the backdrop) */
+  track?: boolean;
 }
 
 /** Live state for the network: [x,y,z], [qx,qy,qz,qw], speed, checkpoints */
@@ -171,6 +178,7 @@ export interface NetState {
 
 const tmp = new THREE.Vector3();
 const tmp2 = new THREE.Vector3();
+const tmp3 = new THREE.Vector3();
 const projected = new THREE.Vector3();
 const at = new THREE.Vector3();
 const vel = new THREE.Vector3();
@@ -258,6 +266,15 @@ export class Game implements RunHost {
   private introAutopilot = false;
   /** Flies the racing line on rails while nobody plays (the chase backdrop, the victory lap) */
   private readonly rails = new Autopilot();
+  /**
+   * A run's guard (the Jade Foresight Talisman, Guardian Gale): a crash was foreseen and the wind flies
+   * the pilot on the safe line for ITEM.guardTime seconds, untouchable; -1 while not guarding
+   */
+  private guardTime = -1;
+  /** Reports to the achievements (a real flight), and the streaks the hidden ones watch */
+  readonly tracking: boolean;
+  private readonly streak = { skim: 0, inverted: 0, zen: 0, rolls: [] as number[], flying: false };
+  private readonly guardRails = new Autopilot();
   /** When the white light after the finale began to clear (null: not clearing) */
   private clearWhiteFrom: number | null = null;
   /** Inside a portal's wormhole: the level is hidden */
@@ -344,6 +361,7 @@ export class Game implements RunHost {
     this.events = options.events;
     loadTuning();
     this.attract = options.attract ?? null;
+    this.tracking = !!options.track && !options.testMode && !options.attract;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     // Checking every program's link log stalls the frame its shader is first used in
@@ -589,6 +607,13 @@ export class Game implements RunHost {
     this.run?.grant(id);
   }
 
+  /** ?test only: an item into the bag, the oldest leaving a full one so it always fits */
+  testGiveItem(id: RunItemId) {
+    if (!this.testPlayback || !this.run) return;
+    this.run.items.makeRoom();
+    this.run.giveItem(id);
+  }
+
   /** Dev tools: put an item in the run's bag now, e.g. `__game.giveItem("anemoCatcher")` */
   giveItem(id: RunItemId) {
     this.run?.giveItem(id);
@@ -824,6 +849,7 @@ export class Game implements RunHost {
 
   /** Builds the world for a level and puts you at the start, flying freely */
   setLevel(level: Level) {
+    this.guardTime = -1;
     // Already built (a run's first level, handed to the constructor): just start over
     if (this.world && levelId(this.world.level.key) === levelId(level.key) && this.world.level.run?.index === level.run?.index) {
       this.style = 0;
@@ -1031,6 +1057,7 @@ export class Game implements RunHost {
   }
 
   private respawn(checkpoints: number, spawn = this.world.spawnPoint(checkpoints)) {
+    this.guardTime = -1;
     const { position, direction } = spawn;
     if (checkpoints === 0 && this.startSlot !== null) {
       // A start grid four abreast, so racers don't spawn inside each other
@@ -1154,12 +1181,31 @@ export class Game implements RunHost {
     this.audio.crash();
     this.combo = 0;
     this.run?.crashed();
+    if (this.tracking) {
+      achievements.record("crashes");
+      if (lost) achievements.unlock("intoTheVoid");
+    }
   }
 
   private step(input: FlightInput) {
     this.prevPosition.copy(this.flight.position);
     this.prevQuaternion.copy(this.flight.quaternion);
     this.prevVelocity.copy(this.flight.velocity);
+    if (this.run && this.guardTime < 0 && !this.run.items.phasing && !this.run.items.invulnerable && this.crashAhead() && this.run.foresee()) {
+      this.guardTime = 0;
+      this.guardRails.reset();
+      if (this.tracking) achievements.unlock("windFriend");
+      this.guardRails.settle = 0.35;
+    }
+    if (this.guardTime >= 0 && this.run) {
+      // The wind has you: on rails along the racing line (its tube is clear of rock), gates still count
+      this.guardTime += STEP;
+      this.guardRails.step(STEP, this.flight, this.world.course);
+      this.proximity = 0;
+      this.run.step(STEP, 0, input);
+      if (this.guardTime >= ITEM.guardTime) this.guardTime = -1;
+      return;
+    }
     this.run?.items.beforeFlight(this.flight);
     // In a run, some items take the controls a little (the input scored and recorded stays the player's)
     this.flight.step(STEP, this.run ? this.run.steer(input) : input, this.proximity * this.proximity, FLIGHT, this.run ? this.run.flightMods : null);
@@ -1175,7 +1221,10 @@ export class Game implements RunHost {
     if(this.run?.items.invulnerable) part=null;
     else if(this.run?.items.phasing){this.hitLand=false;part=touching(this.others,this.flight.position,this.flight.quaternion,other,hitLocal);}
     else part=this.hitTest(other,distance);
-    if ((part || this.world.lost(y,z)) && this.run?.revive(this.flight)) {
+    // Cloud Cushion: a fall out of the world bounces back up over the line (once per level)
+    const cushioned = !part && this.world.lost(y, z) && !!this.run?.cushion(this.flight);
+    if (cushioned || ((part || this.world.lost(y,z)) && this.run?.revive(this.flight))) {
+      if (!cushioned && this.tracking) achievements.unlock("phoenixDown");
       this.prevPosition.copy(this.flight.position);
       this.prevQuaternion.copy(this.flight.quaternion);
       this.prevVelocity.copy(this.flight.velocity);
@@ -1212,6 +1261,46 @@ export class Game implements RunHost {
         if (!this.view.gates.passing(i) && this.crossed(i)) this.gateBurst(i);
       }
     }
+  }
+
+  /** A frame of flight, for the achievements: distance, boost, skimming, Zen, and the hidden streaks */
+  private track(dt: number) {
+    const s = this.streak;
+    if (!s.flying) {
+      s.flying = true;
+      achievements.unlock("firstWings");
+      if (this.world.open) achievements.unlock("firstZen");
+    }
+    const metres = this.flight.speed * dt;
+    achievements.record("distance", metres);
+    if (this.flight.boost > 0.5) achievements.record("boostTime", dt);
+    if (this.proximity > 0.6) achievements.record("skimTime", dt);
+    s.skim = this.proximity > 0.6 ? s.skim + dt : 0;
+    if (s.skim >= 5) achievements.unlock("featherLight");
+    s.inverted = this.flight.up.y < -0.6 ? s.inverted + dt : 0;
+    if (s.inverted >= 5) achievements.unlock("upsideDown");
+    if (this.world.open) {
+      achievements.record("zenDistance", metres);
+      achievements.record("zenTime", dt);
+      s.zen += metres;
+      if (s.zen >= 20_000) achievements.unlock("longWay");
+    }
+  }
+
+  /** Will the pilot hit something within ITEM.guardLook seconds on its present path (or fall out of the world)? */
+  private crashAhead(): boolean {
+    const f = this.flight;
+    for (let i = 1; i <= 4; i++) {
+      tmp.copy(f.position).addScaledVector(f.velocity, (ITEM.guardLook * i) / 4);
+      const d = Math.min(this.world.rock.distance(tmp.x, tmp.y, tmp.z), this.world.otherDistance(tmp.x, tmp.y, tmp.z));
+      if (d < GUARD_CLEARANCE || this.world.lost(tmp.y, tmp.z)) return true;
+    }
+    return false;
+  }
+
+  /** Is the wind carrying the pilot on the safe line (a foreseen crash)? */
+  get guarding(): boolean {
+    return this.guardTime >= 0;
   }
 
   /** The hitbox against everything solid where the pilot is now; `hitLand` says what was hit */
@@ -1358,6 +1447,11 @@ export class Game implements RunHost {
       this.audio.finish();
       const ghost = this.recorder.finish(timeMs, this.flight.position, this.flight.quaternion, this.flight.boost, this.flight.brake, this.flight.dodgePhase);
       this.events.finished?.({ timeMs, ghost });
+      if (this.tracking) {
+        achievements.record("racesFinished");
+        achievements.unlock("firstRace");
+        if (timeMs < 60_000) achievements.unlock("sub60");
+      }
     } else {
       this.audio.ring();
       this.view.setRings("race", this.checkpoints);
@@ -1372,11 +1466,22 @@ export class Game implements RunHost {
     // In a run, Wind-Shear Dash turns the dodge into a blink; never while hover-stalling
     const run = this.run;
     if (run && (run.abilities.hang >= 0 || run.abilities.ascend >= 0)) return;
-    if (this.flight.dodge(dir, run ? run.dodgeParams() : FLIGHT)) run?.dodged(dir, this.flight);
+    if (this.flight.dodge(dir, run ? run.dodgeParams() : FLIGHT)) {
+      run?.dodged(dir, this.flight);
+      if (this.tracking) {
+        achievements.record("dodges");
+        // Ten in ten seconds is dizzying
+        const rolls = this.streak.rolls;
+        rolls.push(this.elapsed);
+        while (rolls.length && this.elapsed - rolls[0] > 10) rolls.shift();
+        if (rolls.length >= 10) achievements.unlock("dizzy");
+      }
+    }
   }
 
   /** A gate was passed: it flares (WorldView), and shards, stars and light burst out of it */
   gateBurst(index: number) {
+    if (this.tracking) achievements.record("gates");
     const ring = this.world.course.rings[index];
     this.view.passRing(index);
     this.rig.kick();
@@ -1700,16 +1805,21 @@ export class Game implements RunHost {
       this.itemFx.pose(dt, this.run && !waiting ? this.run.items : null);
       this.avatar.setDodge(this.flight.dodgePhase);
       this.avatar.setSpeedControls(this.flight.boost, this.flight.brake);
-      this.avatar.update(dt, this.flight.speed, this.smoothProximity);
+      const finale = this.run?.phase === "finale";
+      this.avatar.update(dt, finale ? FINALE_GLIDE : this.flight.speed, this.smoothProximity);
       this.equipment.update(dt);
       // Frozen on the start line or in the tunnel: no motes, or they pile up into a glowing ball
       const moving = this.raceState !== "countdown" && !waiting;
-      this.fx.update(dt, this.flight.speed, this.flight.velocity, this.smoothProximity, moving);
+      // The finale holds the pilot still in the void, yet they glide on: the wings shed light and
+      // ribbons as in flight, blown back past them by the air they fly through
+      if (this.tracking && moving && !finale) this.track(dt);
+      if (finale) this.fx.update(dt, FINALE_GLIDE, tmp3.set(0, 0, -FINALE_GLIDE).applyQuaternion(body.quaternion), 0, true, true);
+      else this.fx.update(dt, this.flight.speed, this.flight.velocity, this.smoothProximity, moving);
       this.skimSpray(dt);
       if (this.run) {
         this.abilityFx.update(dt, this.run.abilities, this.world, this.flight, this.rig.camera, this.passedGate, moving);
         this.abilityFx2.update(dt, this.run.abilities, this.world, this.flight, this.rig.camera, this.passedGate, moving);
-        this.itemFx.update(dt, this.run.items, this.flight, moving, this.run.charm);
+        this.itemFx.update(dt, this.run.items, this.flight, moving, this.run.charm, this.guardTime >= 0);
         this.collectionFx.update(dt, this.flight, this.run, moving && !this.inWormhole);
       } else {
         this.abilityFx.hide();
@@ -1726,7 +1836,8 @@ export class Game implements RunHost {
         this.flight.speed,
         this.smoothProximity,
         this.clearance,
-        this.renderVelocity,
+        // The chase follows the flight path, not a dodge's sideways slide (it swung back like a rubber band)
+        tmp3.subVectors(this.renderVelocity, this.flight.dodgeVelocity),
         this.flight.boost,
       );
     } else {

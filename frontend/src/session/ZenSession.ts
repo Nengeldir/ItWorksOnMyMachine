@@ -33,6 +33,7 @@ export class ZenSession {
   mount(container: HTMLElement) {
     try {
       this.game = new Game(container, {
+        track: true,
         seed: this.level.seed,
         level: this.level,
         clock: () => performance.now(),

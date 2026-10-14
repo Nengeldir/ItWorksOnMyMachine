@@ -5,6 +5,7 @@ import { type ConnectionStatus, type Identity, RoomClient } from "../net/RoomCli
 import type { Settings } from "../storage";
 import type { InputObserver } from "../game/input";
 import { Store } from "./store";
+import { achievements } from "../game/achievements";
 import { profileClient } from "../profile/client";
 
 const SEND_INTERVAL_MS = 66; // ~15 Hz up, matching the server's snapshot rate
@@ -93,6 +94,7 @@ export class RoomSession {
     let game = this.game;
     if (!game) {
       game = new Game(this.container, {
+        track: true,
         seed: info.seed,
         clock: this.client.clock.now,
         controls: this.settings,
@@ -143,7 +145,11 @@ export class RoomSession {
     try {
       const result = await this.client?.finish(timeMs, ghost, this.store.get().hud?.totalCheckpoints ?? 0);
       if (result?.xp) void profileClient.refresh().catch(() => {});
-      if (result) this.store.set({ lastPlace: result.place });
+      if (result) {
+        this.store.set({ lastPlace: result.place });
+        achievements.record("roomRaces");
+        if (result.place === 1) achievements.record("roomWins");
+      }
     } catch (e) {
       this.flash(`Finish not counted: ${(e as Error).message}`);
     }
