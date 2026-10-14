@@ -30,8 +30,15 @@ the last ring.
   and islands made around you as you fly, wherever you go; no gates, no
   clock, no score, nothing saved. A crash puts you back in the air close to
   where you tumbled. Every map but Sky Isles (its race generator is frozen).
-  Zen was designed and written by Stella (stella-sy-x, PR #51); see
-  [CREDITS.md](CREDITS.md).
+
+The landing page shows the three modes as emblems of light floating over the
+live map: **Racing**, **Adventure** and **Zen**. Each opens its own page:
+Adventure's has today's run, the map select and a random run; Racing's has
+two big buttons, **Solo** and **With friends**, each leading to its page; every
+page has a Back button (`Esc`). The page's colors follow the map behind it:
+the map's ink on light skies, pristine white and pale gold on dark ones (night,
+dusk, the deep). Motes of light drift over it and gather into the emblems;
+pointing at one sends motes and trailing stars out of it.
 
 All modes share one pool of maps: a seed stands for one of the nine
 biomes, its layout and its light, the same in a time trial, a room and an
@@ -84,7 +91,7 @@ docker compose up -d --build
 | Mouse (click the view)    | Pitch and turn; bank is limited to 80°.       |
 | `W` `S` / `↑` `↓`         | Dive / pull up (flight-stick style)                |
 | `A` `D` / `←` `→`         | Turn left / right; maximum bank 80°.              |
-| `Q` `E` | 5 m sideways dodge + roll (gamepad: `LB` `RB`)  |
+| `Q` `E` | 8 m sideways dodge + roll (gamepad: `LB` `RB`)  |
 | Gamepad left stick        | Pitch and turn. `Y` respawns.                      |
 | `R`                       | Respawn at the last ring                           |
 | `M`                       | Mute                                               |
@@ -126,7 +133,7 @@ on Android the first tap goes full screen and turns the screen for you.
 | :------------------------ | :------------------------------------------------- |
 | Drag anywhere on the view | A stick appears under your thumb: pitch and turn   |
 | Hold **Boost** / **Brake** | Boost / air brake                                 |
-| `‹` `›`                   | 5 m sideways dodge                                 |
+| `‹` `›`                   | 8 m sideways dodge                                 |
 | **Flap** / **Hover** / **Plunge** / **Gale** | Tap to use the adventure ability once you have its upgrade |
 | The item button (its icon), **↻** | Use the lit item in the bag / the next item (adventure) |
 | **Charm** / **Rocket off** | Use your charm; with the giant firework lit, take it off |
@@ -145,10 +152,15 @@ below the islands, and you respawn at your last ring, with the clock still
 running. While the land around you is still loading (outside races), the
 pilot glides in slowly by itself and you get control once it has arrived.
 
-In flight the glass panels (top bar, flight panel, score, abilities, messages)
-stay hidden until you move the mouse or tap the screen, and fade again a moment
-later; the lives, objectives and the way to the next gate or portal stay.
-Press `P` to pause and press it again to resume. Flight, effects and adventure
+Races, adventures and test mode keep every panel on screen. In explore mode the
+glass panels stay hidden until you move the mouse or tap the screen, and fade
+again a moment later. On phones and tablets an adventure packs its HUD tighter:
+Menu and the level's title top left, the score top centre, Respawn and Pause,
+then restart, "?" and Settings top right; the feathers and a compact boost panel
+(no speed or style line) down the left edge. The adventure's restart button (top
+right on every device) asks before it starts the run again from level 1.
+Press `P` to pause and press it again to resume; an adventure blurs the world
+softly while paused. Flight, effects and adventure
 timers freeze, and gameplay audio is silenced. In time trials and multiplayer,
 the official race clock keeps running during a pause; other players keep racing.
 Open **Settings** from the main menu or the paused screen to change controls.
@@ -201,8 +213,8 @@ and double-tap barrel rolls are disabled. A/D, the mouse and left stick target
 a bank of at most 80° and level smoothly on release. Pitch remains unrestricted.
 Release pitch after inverted flight to roll smoothly upright without changing
 the nose direction; recovery fades near vertical flight to avoid sudden flips.
-Q/E or LB/RB perform a 5 m sideways dodge over 0.6 s, with 1 s between starts.
-In an adventure, the Wind-Shear Dash ability makes it a 9 m blink (0.16 s, 0.8 s
+Q/E or LB/RB perform an 8 m sideways dodge over 0.5 s, with 1 s between starts.
+In an adventure, the Wind-Shear Dash ability makes it a 14 m blink (0.16 s, 0.8 s
 between starts).
 
 The adventure's abilities (picked at portals, adventure only; races never
@@ -232,7 +244,17 @@ Adventure items use a bag of three: **Y** (or right mouse button while flying)
 uses the selected item; **U** (or the mouse wheel) cycles it. Gamepad d-pad right
 uses and left cycles. Boots have three charges; the Phoenix feather works
 by itself when carried. `Shift+I` in test mode gives the next design-list item.
-The full set of 20 items spawns over clear terrain along adventure routes.
+Besides the 20 design-list items there are six more: the **Wind-Drinking
+Gourd** (a hulu that drinks the wind for 8 s, drawing crystals, orbs and items
+from 40 m), the **Jade Foresight Talisman** (works by itself: it sees a crash
+coming and the wind carries you onto the safe line for 2 s), the **Oil-Paper
+Umbrella** (6 s of parasol gliding), the **Golden Koi Charm** (15 s of double
+gates and faster style), the **Paper Crane Guide** (the next three gates open
+4 m wider) and the **String of Firecrackers** (four pops of speed). New abilities:
+**Guardian Gale** (the same crash-foresight every 20 s), **Gourd Breath** (a
+wider pickup reach per stack) and **Cloud Cushion**. That makes 26 items and
+31 upgrades; the journal's field guide lists every one.
+The full set of items spawns over clear terrain along adventure routes.
 Common, uncommon, rare and legendary pickups float 8, 13, 20 and 29 metres above
 the island. Spinning, bobbing models have a small rarity-colored spotlight beneath
 them. Fly within 3.2 metres to collect one; a full bag leaves it available.
@@ -250,7 +272,19 @@ steps, Frost walkers and Ember greaves. All use the pilot's toon shading,
 night-sensitive trims and animated joints. Appearance preferences are validated
 and saved separately from controls and scores; they never affect flight physics.
 Wings and companion pets use the same saved appearance; the journal and the
-test fitting room select them.
+test fitting room select them. There are 17 wings, 10 capes, 14 hats, 8 shoes
+and 12 pets, including straw hats, cat ears, fox masks, halos and crowns, geta,
+sakura and celestial capes, and a manta, rabbit, jellyfish and koi.
+
+**Wing rigs.** Every wing has a rig that decides how it moves
+(`game/wingRig.ts`): **feather** wings beat like a bird's (the primaries
+spread on the downstroke, twist and fold on the upstroke, and fold back in a
+dive), **sail** wings are one flexible membrane that bends and ripples,
+**jointed** wings (clockwork, ruin, paper, frost, storm) move as stiff plates on
+servo joints, and **rigid** ones (sparrow, cardboard) move in one piece. Wings
+beat harder while you climb and close up as you dive. Rarer wings and pets
+leave richer particles (wing flourishes, legendary downstroke bursts, a ring
+and crown of light round rare pets).
 
 ## How It Works
 
@@ -344,9 +378,14 @@ controls that motion; `fallBlend` sets the short shading join below the edge
 **Test mode:** open `/?test` (or `/?test=verdant&seed=2`), or add `&test` to
 any single-player URL: `/?explore=verdant&seed=2&test` tests that world,
 `/?seed=42&test` and `/?run=5&test` that seed (from Sky Isles). Rooms and the
-gallery ignore it. It flies a real adventure run (score, gate chain and the
-compass to the portal) with a small panel of the test shortcuts; world/light
-selectors and N/B/V switching stay in explore mode. Spawned portals use
+gallery ignore it. It is the real adventure screen (the same HUD, layout,
+restart button, opening glide, portals, upgrade picker and finish screen)
+starting in the URL's world, with endless lives, every item and ability open,
+and a panel on top: **Fitting room** (try every cosmetic, pet and keepsake),
+**Get items & abilities** (put any adventure item in the bag or take any
+ability now; every box has its rarity's color as a border) and the test
+shortcuts (touch buttons on phones). World/light selectors and N/B/V
+switching stay in explore mode. Spawned portals use
 adventure's wormhole and upgrade picker; victory uses its finish screen and
 autopilot. Slow motion scales the shared physics/animation clock, including
 scenery shaders, particles, camera motion, transitions and animated UI overlays.
@@ -503,14 +542,34 @@ cosmetics or a companion, and preview every model. Races and test mode grant no
 profile rewards. [Progression, rarity distances and API](docs/adventure-profile.md)
 describes spawn rates, the XP curve, duplicate conversion and persistence.
 
-In test mode (`/?test`), **Try items, pets & cosmetics** opens an unsaved fitting
+In test mode (`/?test`), **Fitting room** opens an unsaved fitting
 room for every model, with front/back previews, flight trials, item animations
-and firework controls. All eight existing pets are included; no-companion is an
+and firework controls. Every pet is included; no-companion is an
 unequip action. Equipped pets fly right beside you; when you near a hoop they
 take the autopilot rail through its centre, then come back. The dragon, kirin
 and fox have no wings: they gallop on thin air.
 Wings include feather, wind, ocean, ice, phoenix, storm and constellation designs;
 capes have distinct embroidered hems.
+
+## Journal: field guide and achievements
+
+The journal (the pilot at the landing page's bottom right) has two buttons at
+the top beside its title:
+
+- **Guide** (the field guide): how to play each mode (with a step-by-step guide to an
+  adventure), the controls, and every ability, item, cosmetic, pet and
+  keepsake with what it does, its rarity, its unlock level and its power.
+  Searchable; built from the game's own data.
+- **Achievements:** 37 achievements worth 2,005 points, across flight,
+  adventure, racing, Zen and the collection. Some are done once, some are
+  progressive with tiers (distance flown, gates, items used…), and some are
+  hidden: they show `???` and a hint until found. A toast says when one is
+  earned. They are kept in this browser (`windrider.achievements.v1`); test
+  mode and the landing page's backdrop never count.
+
+Both pages have a Back button and the close button; `Esc` goes back first. The
+cosmetics tab splits into Wings, Capes, Hats and Shoes; locked boxes carry a
+big translucent lock. On small screens the whole journal scrolls as one page.
 
 ## Project Structure
 

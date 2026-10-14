@@ -218,6 +218,69 @@ Breath, Cloud Cushion); the foresight/guard steers through `Autopilot` in
 
 Add new entries at the top, dated.
 
+### 2026-10-13/14: Zen ported, wings rigged, many new items and cosmetics, journal guide and achievements, new landing page (Claude)
+
+Asked for (18 items, then corrections and a landing-page brief):
+
+- **Zen (Stella's PR #51)** squash-merged as commit `5f6f0f7`, authored as
+  `stella-sy-x`, with CREDITS.md and source headers; `dc7b07f` ("Move Sky Isles
+  to the shared generator") left out, since Sky Isles' race generator is frozen.
+  Correction 2026-10-14: no "by Stella" text in the UI (menu, guide, README);
+  credit lives in git (rule 10 reworded). Rule 9: git always as the user.
+- **Wings:** `game/wingRig.ts` with four rigs; `items/builder.ts` `bone(n)`
+  skin weights; `cosmetics/wings.ts` rewritten (inner/outer, bones, anchors);
+  every wing has `rig` and `size`; nine new wings (sparrow, cardboard, paper,
+  butterfly, maple, clockwork, ruin, wyrm, seraph). `avatar.ts`: classic wing
+  rebuilt with skinned primaries; wings swap in place; climbing beats harder,
+  diving folds (item 18). Rare wings' and pets' flourishes in `pilotfx.ts`,
+  `pets/models.ts`, `companion.ts`.
+- **Finale:** wing particles drift as in flight (`Trail.drift`, `PilotFx` wind).
+- **Items/abilities/cosmetics/pets:** 6 items, 3 upgrades (see "Items and
+  abilities"), 8 hats, 3 shoes, 4 capes, 4 pets (manta, rabbit, jelly, koi);
+  powers for them; backend catalog to 99 entries with unlock levels.
+- **Models unified:** fruit and candy models redone in `items/models.ts`
+  (veined leaves, curved stems, gold ties; no faces).
+- **Dodge:** 8 m over 0.5 s (`FLIGHT.dodgeDistance/Duration`), shear 14 m; the
+  "rubber band" was the chase camera following the dodge's sideways velocity
+  (`Flight.dodgeVelocity` is now left out of the camera's lead).
+- **Sky Isles looks:** mesher colors (grass patches, rock strata), a decor
+  array (tufts, bushes, flowers) drawn by `WorldView` with a 5-tier pine.
+  Race tree/dist/ring hashes unchanged; mesh hashes updated in
+  `tests/items2.test.mjs` and `docs/dev-snippets.js`.
+- **Journal:** Guide (`FieldGuide.tsx`) and Achievements
+  (`AchievementsView.tsx`, `game/achievements.ts`, `AchievementToast.tsx`)
+  buttons with Back and close; cosmetics sub-tabs; big translucent locks;
+  padded cards; one scroll for the whole sheet on small screens; the
+  figurine and preview re-dress in place.
+- **Adventure:** the touch Resume button removed (Restart covers it).
+- **Test mode** is now the real adventure screen: `RunScreen` with `test`,
+  `RunSession(seed, settings, test)` (no profile, endless lives, every item
+  open), a test panel with Fitting room and Get items & abilities
+  (`TestCollectionPanel`, rarity-bordered boxes). `ExploreSession` lost its
+  test code; `tests/wardrobe.test.mjs` uses `RunSession`.
+- **Landing page:** three equal emblems (Racing, Adventure, Zen; SVG diamond,
+  constellation nodes, breathing halo, a quarter turn on hover); Adventure's
+  details moved to its own page (`view === "adventure"`); pale-gold shimmering
+  title with a white glow; Market, Hall of Winds, "?", settings, Today's best
+  and the pilot are `menu-ghost` rings and words on soft light pools instead of
+  glass pills; a top/bottom shade; `MenuMotes.tsx` (one 2D canvas, a fixed
+  pool: ambient motes, motes gathering into each emblem, motes and trailing
+  stars out of a hovered one; off with reduced motion); `theme.ts` sets
+  `data-sky` (`darkSky`: night ≥ 0.5 or sky lightness < 0.45) and dark maps
+  switch the page to white and pale gold.
+
+Verified: `npm run build`, `npm run lint`, `npm test` (158 pass), backend
+`pytest` (53 pass). Looked in the browser: every wing via `__wingShot`, fruit
+in the gallery, Sky Isles decor, the journal at desktop and 844×390, the
+landing page on a light map, forced dark (`data-sky="dark"` over a darkened
+backdrop), hover motes, 844×390 and 390×760 frames, the Adventure page, `/?test`
+(take off, shop, an item into the bag, an ability granted), `/?zen=42` loads.
+Not verified: a real dark map on the landing page (the daily map was light),
+real phones, focused-window frame rates (skinned wings, Sky Isles decor draw
+calls, the motes canvas over the backdrop), the finale's particles in motion,
+item/ability balance, the guard's look-ahead in tight canyons, every
+achievement's trigger in play.
+
 ### 2026-10-13: Adventure HUD: always shown, touch layout, restart, pause blur (Claude)
 
 Asked for: (1) every adventure panel always shown; (2) on touch screens hide
@@ -297,6 +360,12 @@ on real hardware):
   the 3 m LOD tier, full outfits and companions.
 - Gamepad and physical keyboards (AZERTY/QWERTZ/Dvorak), test-mode shortcuts.
 - A full eight-level adventure through the finale and victory lap.
+
+- 2026-10-14 work: the landing page on a real dark map and on phones; the
+  `MenuMotes` cost next to the backdrop; skinned wings and Sky Isles decor
+  frame times; new items' and abilities' balance (Foresight/Guardian Gale may
+  be strong); achievements' triggers in real play; the finale's drifting
+  particles.
 
 **Known bugs and gaps:**
 - Adventure touch HUD (2026-10-13): check on real phones and an iPad; the
