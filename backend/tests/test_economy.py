@@ -272,4 +272,4 @@ def test_keepsakes_match_the_adventure_items_rarity_and_unlock_level():
         assert entry["rarity"] == RARITIES[rarity], item
         assert entry["min_level"] == (int(level.group(1)) if level else by_rarity[rarity]), item
         checked += 1
-    assert checked == 19
+    assert checked == 25

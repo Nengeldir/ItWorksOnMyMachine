@@ -122,6 +122,15 @@ export class Trail {
     this.sides.length = 0;
   }
 
+  /**
+   * Moves every point but the newest by `offset`: a pilot held still in moving air (the finale's
+   * void) still leaves a ribbon streaming behind, as if flying
+   */
+  drift(offset: THREE.Vector3) {
+    for (let i = 1; i < this.points.length; i++) this.points[i].add(offset);
+    this.anchor.add(offset);
+  }
+
   /** Adds the wingtip's current position; `side` is the direction the ribbon spans */
   push(point: THREE.Vector3, side: THREE.Vector3, lengthScale = 1) {
     const last = this.points[0];

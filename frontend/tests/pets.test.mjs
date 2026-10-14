@@ -9,7 +9,7 @@ import { Course } from "../src/game/world/course.ts";
 import { World } from "../src/game/world/World.ts";
 import { runLevel } from "../src/game/world/biomes/index.ts";
 
-test("all eight pets animate finite, budgeted toon geometry and clean up their owned resources", () => {
+test("all twelve pets animate finite, budgeted toon geometry and clean up their owned resources", () => {
   const signatures = new Set();
   for (const pet of PETS) {
     if (pet.id === "none") continue;
@@ -31,7 +31,7 @@ test("all eight pets animate finite, budgeted toon geometry and clean up their o
     let disposed = 0; geometries.forEach(g => g.addEventListener("dispose", () => disposed++));
     model.dispose(); assert.equal(disposed, geometries.size);
   }
-  assert.equal(signatures.size, 8, "pets have different geometry, not only different colors");
+  assert.equal(signatures.size, 12, "pets have different geometry, not only different colors");
 });
 
 test("follower handles pause, hiding, respawn, re-equip and removal without touching the pilot", () => {
@@ -67,7 +67,7 @@ test("teleports while visible snap instead of dragging a pet through the whole w
 });
 
 test("all existing pets are genuine pets, stay by the pilot and take a rail through every hoop without changing the player", () => {
-  assert.deepEqual(PETS.map(p => p.id), ["swallow", "owl", "crane", "phoenix", "dragon", "kirin", "fox", "griffin"]);
+  assert.deepEqual(PETS.map(p => p.id), ["swallow", "owl", "crane", "phoenix", "dragon", "kirin", "fox", "griffin", "manta", "rabbit", "jelly", "koi"]);
   for (const biome of ["skyIsles", "verdant", "reef", "glacier", "archipelago", "lagoon", "twilight", "ember", "aurora"]) {
     const world = new World(runLevel(7, 1, biome)), course = world.course;
     const scene = new Group(), pilot = new Group(), companion = new Companion(scene);

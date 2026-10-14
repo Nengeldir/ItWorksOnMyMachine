@@ -36,7 +36,7 @@ export class CollectionFx {
   private pet: Voice | null = null;
   private petTimer = 8;
   private gateVoice: Voice | null = null;
-  private readonly seen = { rekindle: 0, frost: 0, kick: 0, gate: 0 };
+  private readonly seen = { rekindle: 0, frost: 0, kick: 0, gate: 0, guard: 0, cushion: 0 };
   private run: RunController | null = null;
   private foot = 0;
 
@@ -125,6 +125,18 @@ export class CollectionFx {
       }
       this.host.sound("frost");
       this.host.kick(5);
+    }
+    if (cue.cushion !== seen.cushion) {
+      seen.cushion = cue.cushion;
+      // Cloud Cushion: a puff of cloud bursts under the pilot as it bounces them back up
+      for (let k = 0; k < Math.round(60 * budget); k++) {
+        const a = (k / 60) * Math.PI * 2;
+        at.copy(pilot).add(jitter.set(Math.cos(a) * 2, -1.5, Math.sin(a) * 2));
+        vel.set(Math.cos(a) * rand(2, 5), rand(1, 4), Math.sin(a) * rand(2, 5));
+        this.particles.emit(at, vel, fx(rand(0.8, 1.4), rand(0.6, 1.1), WHITE, Kind.Wisp, -0.3, 1, 0.5));
+      }
+      this.host.sound("shimmer");
+      this.host.kick(6);
     }
     if (cue.kick !== seen.kick) {
       seen.kick = cue.kick;

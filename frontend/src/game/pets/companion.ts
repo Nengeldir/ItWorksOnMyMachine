@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { PET_LOOKS } from "../tuning";
 import type { PetId } from "./catalog";
-import { PET_SPARKS, PetModel } from "./models";
-import { type Kind, type Particles, fx } from "../particles";
+import { PET_FLOURISH, PET_SPARKS, PetModel } from "./models";
+import { Kind, type Particles, fx } from "../particles";
 import { Autopilot } from "../autopilot";
 import { Flight } from "../flight";
 import type { Course } from "../world/course";
@@ -52,6 +52,9 @@ export class Companion {
   private readonly scene: THREE.Object3D;
   private readonly particles: Particles | null;
   private sparkDebt = 0;
+  private flourishDebt = 0;
+  private flourishTime = 0;
+  private readonly accent = new THREE.Color();
   private readonly at = new THREE.Vector3();
   private readonly velocity = new THREE.Vector3();
   private readonly color = new THREE.Color();
@@ -221,6 +224,25 @@ export class Companion {
       this.velocity.set(Math.random() - .5, Math.random() * .6, Math.random() - .5).multiplyScalar(0.8);
       particles.emit(this.at, this.velocity, fx(spec.life * (0.7 + Math.random() * 0.6), spec.size * scale * (0.7 + Math.random() * 0.6),
         this.color, spec.kind as Kind, spec.gravity, 1.2, spec.intensity));
+    }
+    // Rarer companions: a ring of light turning round them, and the legendary ones' rising column
+    const extra = PET_FLOURISH[model.id];
+    if (!extra) return;
+    this.flourishTime += dt;
+    this.flourishDebt = Math.min(this.flourishDebt + extra.rate * PET_LOOKS.sparkle * particles.budget * dt, 8);
+    this.color.set(extra.color);
+    this.accent.set(extra.accent);
+    for (; this.flourishDebt >= 1; this.flourishDebt--) {
+      const a = this.flourishTime * 3 + Math.random() * 0.6, accent = Math.random() < 0.3;
+      this.at.set(Math.cos(a) * extra.radius, Math.sin(a * 2) * 0.12, Math.sin(a) * extra.radius)
+        .multiplyScalar(scale).applyQuaternion(g.quaternion).add(g.position);
+      this.velocity.set(-Math.sin(a), 0.2, Math.cos(a)).multiplyScalar(0.6 * scale);
+      particles.emit(this.at, this.velocity, fx(0.9 + Math.random() * 0.5, extra.size * scale * (accent ? 1.4 : 1), accent ? this.accent : this.color,
+        extra.kind as Kind, -0.1, 1.3, 1.5));
+      if (extra.crown && Math.random() < 0.35) {
+        this.at.copy(g.position).add(this.velocity.set((Math.random() - .5) * 0.4, 0.3, (Math.random() - .5) * 0.4).multiplyScalar(scale));
+        particles.emit(this.at, this.velocity.set(0, 1.4 * scale, 0), fx(1.1, extra.size * scale * 0.8, this.accent, Kind.Star, -0.2, 1, 1.8));
+      }
     }
   }
   dispose() { this.model?.dispose(); this.model = null; this.placed = false; }

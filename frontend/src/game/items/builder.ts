@@ -16,9 +16,23 @@ const s3 = new THREE.Vector3();
 const point = new THREE.Vector3();
 const paintColor = new THREE.Color();
 
-/** Collects painted primitives into one geometry with `color` and `glow` (what toonMaterial reads) */
+/**
+ * Collects painted primitives into one geometry with `color` and `glow` (what toonMaterial reads).
+ * Parts added after `bone(n)` are skinned to bone `n` (articulated wings bend each feather on its own
+ * bone); a geometry with any bone tagged gets `skinIndex` and `skinWeight`
+ */
 export class Builder {
   private readonly parts: THREE.BufferGeometry[] = [];
+  private readonly bones: number[] = [];
+  private current = 0;
+  private skinned = false;
+
+  /** Parts added from now on follow bone `index` (0: the root) */
+  bone(index: number): this {
+    this.current = index;
+    if (index > 0) this.skinned = true;
+    return this;
+  }
 
   add(geometry: THREE.BufferGeometry, paint: Paint, glow = 0, at: Vec = [0, 0, 0], rot: Vec = [0, 0, 0], scale: Vec = [1, 1, 1]): this {
     // Paint in the primitive's own space, before it is placed
@@ -38,11 +52,24 @@ export class Builder {
     m4.compose(v3.set(...at), q.setFromEuler(euler.set(...rot)), s3.set(...scale));
     flat.applyMatrix4(m4);
     this.parts.push(flat);
+    this.bones.push(this.current);
     return this;
   }
 
   build(): THREE.BufferGeometry {
     const geometry = mergeGeometries(this.parts)!;
+    if (this.skinned) {
+      const count = geometry.getAttribute("position").count;
+      const index = new Uint16Array(count * 4), weight = new Float32Array(count * 4);
+      let at = 0;
+      this.parts.forEach((part, i) => {
+        const n = part.getAttribute("position").count;
+        for (let v = at; v < at + n; v++) { index[v * 4] = this.bones[i]; weight[v * 4] = 1; }
+        at += n;
+      });
+      geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(index, 4));
+      geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute(weight, 4));
+    }
     this.parts.forEach((p) => p.dispose());
     geometry.computeBoundingSphere();
     return geometry;

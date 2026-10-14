@@ -8,7 +8,7 @@ const KEEPSAKES: Record<string, string> = {
   wingedHelm: "⛑️", apple: "🍎", peach: "🍑", grapes: "🍇", cherries: "🍒", starfruit: "🌟",
 };
 const PETS: Record<string, string> = {
-  swallow: "🐦", owl: "🦉", crane: "🦢", phoenix: "🔥", dragon: "🐉", kirin: "🦄", fox: "🦊", griffin: "🦅",
+  swallow: "🐦", owl: "🦉", crane: "🦢", phoenix: "🔥", dragon: "🐉", kirin: "🦄", fox: "🦊", griffin: "🦅", manta: "🐋", rabbit: "🐇", jelly: "🏮", koi: "🐟",
 };
 const KINDS: Record<string, string> = { cape: "🧣", hat: "👒", shoes: "👢", wings: "🪽", crystal: "💎" };
 

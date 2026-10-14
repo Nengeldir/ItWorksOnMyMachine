@@ -29,6 +29,8 @@ MIN_LEVEL = {
     "cape:ember": 7, "wings:astral": 9, "pet:phoenix": 10, "pet:dragon": 8, "pet:kirin": 12,
     "item:goldenFeather": 12, "item:phoenixFeather": 8, "item:duskHourglass": 10, "item:mothCape": 8,
     "item:firework": 4, "item:dragonTear": 5, "item:electroPrism": 5,
+    "wings:seraph": 10, "hat:crown": 9, "cape:celestial": 8, "pet:koi": 11,
+    "item:foresightCharm": 3,
 }
 DEFAULT_EQUIPPED = {"cape": "classic", "hat": "none", "shoes": "classic", "wings": "classic", "pet": "none", "charm": "none"}
 SLOTS = tuple(DEFAULT_EQUIPPED)
@@ -75,6 +77,10 @@ CATALOG = [
     entry("cape", "aurora", "Aurora veil", 2, "cape"),
     entry("cape", "ember", "Phoenix mantle", 3, "cape"),
     entry("cape", "royal", "Cloud court", 2, "cape"),
+    entry("cape", "sakura", "Sakura drift", 1, "cape"),
+    entry("cape", "jade", "Jade cloudsea", 1, "cape"),
+    entry("cape", "moonlit", "Moonlit tide", 2, "cape"),
+    entry("cape", "celestial", "Celestial mantle", 3, "cape"),
     entry("hat", "none", "Wind in your hair", 0, "hat"),
     entry("hat", "aviatorCap", "Aviator cap", 0, "hat"),
     entry("hat", "wingedHelm", "Winged helm", 2, "hat"),
@@ -82,22 +88,40 @@ CATALOG = [
     entry("hat", "lotus", "Lotus crown", 1, "hat"),
     entry("hat", "antlers", "Grove antlers", 1, "hat"),
     entry("hat", "beret", "Sky courier", 0, "hat"),
+    entry("hat", "strawHat", "Sunlit straw hat", 0, "hat"),
+    entry("hat", "catEars", "Cloud cat ears", 0, "hat"),
+    entry("hat", "flowerCrown", "Meadow crown", 0, "hat"),
+    entry("hat", "jadePin", "Jade hairpin", 1, "hat"),
+    entry("hat", "featherBand", "Feathered circlet", 1, "hat"),
+    entry("hat", "foxMask", "Kitsune mask", 2, "hat"),
+    entry("hat", "halo", "Dawn halo", 2, "hat"),
+    entry("hat", "crown", "Skyborne crown", 3, "hat"),
     entry("shoes", "classic", "Wayfarer boots", 0, "shoes"),
     entry("shoes", "cloud", "Cloud slippers", 0, "shoes"),
     entry("shoes", "petal", "Petal steps", 1, "shoes"),
     entry("shoes", "frost", "Frost walkers", 2, "shoes"),
     entry("shoes", "ember", "Ember greaves", 2, "shoes"),
+    entry("shoes", "geta", "Festival geta", 0, "shoes"),
+    entry("shoes", "windrunner", "Windrunner boots", 1, "shoes"),
+    entry("shoes", "starstep", "Starstep slippers", 2, "shoes"),
     *[entry("pet", asset, name, rarity, "pet") for asset, name, rarity in [
         ("swallow", "Ribbon swallow", 1),
         ("owl", "Moon owl", 1), ("crane", "Jade crane", 2),
         ("phoenix", "Dawn phoenix", 3), ("dragon", "Cloud dragon", 3),
         ("kirin", "Star kirin", 3), ("fox", "Lantern fox", 2),
-        ("griffin", "Sun griffin", 2)]],
+        ("griffin", "Sun griffin", 2), ("manta", "Sky manta", 1),
+        ("rabbit", "Moon rabbit", 2), ("jelly", "Lantern jellyfish", 2),
+        ("koi", "Cloud koi", 3)]],
     *[entry("wings", asset, name, rarity, "wings") for asset, name, rarity in [
         ("classic", "Wayfarer feathers", 0), ("prism", "Prismatic plumage", 1),
         ("gale", "Zephyr filigree", 1), ("tide", "Pearl tide", 1),
         ("frost", "Glacial cathedral", 2), ("ember", "Phoenix sunrise", 2),
-        ("storm", "Thunder sovereign", 2), ("astral", "Constellation wings", 3)]],
+        ("storm", "Thunder sovereign", 2), ("astral", "Constellation wings", 3),
+        ("sparrow", "Sparrow wings", 0), ("cardboard", "Cardboard glider", 0),
+        ("paper", "Origami crane", 1), ("butterfly", "Swallowtail silk", 1),
+        ("maple", "Maple glider", 1), ("clockwork", "Clockwork aviator", 2),
+        ("ruin", "Ruin guard vanes", 2), ("wyrm", "Cloud wyrm wings", 2),
+        ("seraph", "Seraph of dawn", 3)]],
     # Keepsakes: one is carried as the charm, its power on every adventure. The adventure items' rarities
 # match their run rarity (frontend run/items.ts), which is what their power is balanced on
     *[entry("item", asset, name, rarity, "charm") for asset, name, rarity in [
@@ -116,7 +140,10 @@ CATALOG = [
         ("crystalUpdraft", "Crystallized Updraft", 1), ("duskHourglass", "Dusk-Weaver's Hourglass", 3),
         ("electroPrism", "Electro-Charged Prism", 2), ("dragonTear", "Tear of the Dragon", 2),
         ("anemoCatcher", "Anemo Catcher", 0), ("starflakeShield", "Starflake Shield", 2),
-        ("gliderWax", "Luminescent Glider Wax", 1)]],
+        ("gliderWax", "Luminescent Glider Wax", 1), ("windGourd", "Wind-Drinking Gourd", 1),
+        ("foresightCharm", "Jade Foresight Talisman", 2), ("oilUmbrella", "Oil-Paper Umbrella", 0),
+        ("koiCharm", "Golden Koi Charm", 1), ("paperCrane", "Paper Crane Guide", 0),
+        ("firecrackers", "String of Firecrackers", 0)]],
 ]
 BY_KEY = {e["key"]: e for e in CATALOG}
 STARTERS = {f"{slot}:{asset}": 1 for slot, asset in DEFAULT_EQUIPPED.items() if slot not in ("pet", "charm")}

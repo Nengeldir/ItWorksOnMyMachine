@@ -30,6 +30,27 @@ export const PET_SPARKS: Record<CompanionId, { color: string; kind: number; size
   kirin: { color: "#d9c8ff", kind: 1, size: 0.11, life: 1.1, gravity: 0, rate: 9, intensity: 1.2 }, // star twinkles
   fox: { color: "#ffc27a", kind: 4, size: 0.1, life: 1.3, gravity: -0.3, rate: 9, intensity: 1.2 }, // foxfire
   griffin: { color: "#ffe08a", kind: 2, size: 0.09, life: 0.8, gravity: 0.1, rate: 10, intensity: 1.1 }, // sun flecks
+  manta: { color: "#bfe7ff", kind: 3, size: 0.18, life: 1, gravity: 0, rate: 8, intensity: 0.7 }, // wind ripples
+  rabbit: { color: "#fff4c8", kind: 1, size: 0.1, life: 1.2, gravity: -0.1, rate: 8, intensity: 1.2 }, // moonbeam twinkles
+  jelly: { color: "#d9c9ff", kind: 4, size: 0.1, life: 1.8, gravity: -0.25, rate: 10, intensity: 1.4 }, // drifting lights
+  koi: { color: "#ffd7a8", kind: 0, size: 0.08, life: 1.1, gravity: -0.4, rate: 12, intensity: 1.1 }, // bubbles of light
+};
+
+/**
+ * Rare and legendary companions shed a second, finer layer on top of their trail (looks only): `orbit`
+ * particles circle the body in a ring of `radius`, `burst` ones flare out now and then; legendary ones
+ * (`crown`) also rise in a slow column of light above them
+ */
+export const PET_FLOURISH: Partial<Record<CompanionId, { color: string; accent: string; kind: number; rate: number; radius: number; size: number; crown?: boolean }>> = {
+  crane: { color: "#d9fff1", accent: "#ff9aa8", kind: 2, rate: 6, radius: 0.5, size: 0.08 }, // jade petals and a red bead
+  fox: { color: "#ffd18a", accent: "#ff8a5c", kind: 4, rate: 8, radius: 0.55, size: 0.1 }, // circling foxfire
+  griffin: { color: "#fff0b0", accent: "#ffd166", kind: 1, rate: 7, radius: 0.6, size: 0.09 }, // sun glints
+  rabbit: { color: "#fff6d6", accent: "#c7d7ff", kind: 1, rate: 7, radius: 0.5, size: 0.09 }, // moonbeam twinkles
+  jelly: { color: "#f3e8ff", accent: "#ffb8e0", kind: 4, rate: 9, radius: 0.45, size: 0.09 }, // drifting lights
+  phoenix: { color: "#ffd27a", accent: "#ff7a3a", kind: 2, rate: 12, radius: 0.65, size: 0.1, crown: true }, // falling flame feathers
+  dragon: { color: "#e9fbff", accent: "#9fe6cf", kind: 1, rate: 10, radius: 0.7, size: 0.1, crown: true }, // pearl glints in a cloud ring
+  kirin: { color: "#efe6ff", accent: "#ffe39a", kind: 1, rate: 11, radius: 0.6, size: 0.1, crown: true }, // a ring of stars
+  koi: { color: "#ffe2b8", accent: "#ff8a5b", kind: 0, rate: 11, radius: 0.55, size: 0.09, crown: true }, // golden bubbles
 };
 
 /** A few merged parts per pet: one body, two wings, and up to three tails. */
@@ -44,16 +65,26 @@ export class PetModel {
   private time = 0;
   private readonly rate: number;
   private readonly amplitude: number;
+  /** Swimmers sway their tails harder; the jellyfish pulses */
+  private swim = 1;
+  private pulse = false;
 
   readonly id: CompanionId;
   constructor(id: CompanionId) {
     this.id = id;
     this.group.name = id;
     const bird = id === "swallow" || id === "owl" || id === "crane" || id === "phoenix";
-    const color = id === "swallow" ? "#64a7cb" : id === "owl" ? "#d5c5b2" : id === "crane" ? IVORY : id === "phoenix" ? "#e99366" : id === "dragon" ? "#8bc9b8" : id === "kirin" ? "#b3a4d3" : id === "fox" ? IVORY : "#d7ae72";
-    this.rate = id === "swallow" ? 4 : id === "owl" ? 1.5 : id === "crane" ? 1.1 : bird ? 1.8 : 1.4;
-    this.amplitude = id === "crane" ? 0.42 : 0.65;
+    const color = id === "swallow" ? "#64a7cb" : id === "owl" ? "#d5c5b2" : id === "crane" ? IVORY : id === "phoenix" ? "#e99366" : id === "dragon" ? "#8bc9b8" : id === "kirin" ? "#b3a4d3" : id === "fox" ? IVORY : id === "rabbit" ? "#f3eef7" : "#d7ae72";
+    this.rate = id === "swallow" ? 4 : id === "owl" ? 1.5 : id === "crane" ? 1.1 : id === "manta" ? 0.7 : id === "koi" ? 2.2 : bird ? 1.8 : 1.4;
+    this.amplitude = id === "crane" ? 0.42 : id === "manta" ? 0.45 : id === "koi" ? 0.3 : 0.65;
     const b = new Builder();
+    if (id === "manta" || id === "jelly" || id === "koi") {
+      // Sky swimmers carry no harness or plumage: just their own shapes
+      this.swimmer(b, id);
+      this.rig.add(paintedModel(b));
+      this.group.add(this.rig);
+      return;
+    }
     if (bird) {
       const owl = id === "owl", crane = id === "crane";
       b.add(sphere(0.22, 12, 9), color, 0, [0, 0, 0.03], [0, 0, 0], [owl ? .9 : 0.75, owl ? 1 : 0.85, crane ? 1.7 : 1.4])
@@ -91,7 +122,7 @@ export class PetModel {
       this.makeWings(color, id === "phoenix" ? GOLD : crane ? INK : owl ? "#b9a48e" : "#2f5f86", crane ? 0.74 : owl ? 0.44 : 0.54, owl, id === "phoenix" ? 0.35 : 0);
       this.makeTails(id === "phoenix" ? 3 : id === "swallow" ? 2 : 1, id === "phoenix" ? GOLD : color, id === "phoenix" ? 0.95 : id === "swallow" ? 0.68 : crane ? 0.42 : 0.34);
     } else {
-      const dragon = id === "dragon", kirin = id === "kirin", fox = id === "fox";
+      const dragon = id === "dragon", kirin = id === "kirin", fox = id === "fox", rabbit = id === "rabbit";
       this.runs = id !== "griffin";
       b.add(sphere(0.2, 12, 9), color, 0, [0, 0, 0.05], [0, 0, 0], [0.85, dragon ? 0.75 : 1, dragon ? 1.8 : 1.5])
         .add(sphere(0.13, 12, 9), fox ? IVORY : color, 0, [0, 0.16, -0.23], [0, 0, 0], [.9, 1.1, dragon ? 1.35 : 1.15])
@@ -103,6 +134,11 @@ export class PetModel {
         if (dragon) {
           b.add(new THREE.ConeGeometry(0.035, 0.17, 8), IVORY, 0.2, [s * 0.11, 0.34, -0.19], [0.2, 0, -s * 0.3])
             .add(new THREE.CapsuleGeometry(0.008, 0.15, 2, 6), GOLD, 0.2, [s * 0.12, 0.1, -0.38], [0, 0, s * 1.15]);
+        } else if (rabbit) {
+          // Long ears laid back, pink inside, the tips dipped in moonlight
+          b.add(new THREE.CapsuleGeometry(0.04, 0.24, 4, 8), color, 0, [s * 0.07, 0.36, -0.13], [0.55, 0, -s * 0.18], [1, 1, 0.6])
+            .add(new THREE.CapsuleGeometry(0.022, 0.18, 4, 8), "#f5c2d4", 0, [s * 0.07, 0.36, -0.155], [0.55, 0, -s * 0.18], [1, 1, 0.4])
+            .add(sphere(0.03, 8, 6), "#fff6d6", 0.4, [s * 0.1, 0.5, -0.02]);
         } else if (fox || kirin) {
           b.add(new THREE.ConeGeometry(0.069, fox ? 0.2 : 0.14, 10), color, 0, [s * 0.115, 0.32, -0.19], [0.15, 0, -s * 0.25])
             .add(new THREE.ConeGeometry(0.036, fox ? 0.13 : 0.08, 8), fox ? "#e9b1ad" : "#e6d4ed", 0, [s * 0.115, 0.34, -0.225], [0.15, 0, -s * 0.25]);
@@ -118,6 +154,11 @@ export class PetModel {
         b.add(new THREE.ConeGeometry(0.04, 0.24, 10), GOLD, 0.4, [0, 0.4, -0.28], [-0.25, 0, 0]);
         for (let i = 0; i < 7; i++) b.add(leaf(.22, .05), grad(IVORY, "#e6d4ed", .22), 0.1, [0, .23 - i * .016, -.14 + i * .05], [1.1, 0, 0]);
         this.makeTails(1, IVORY, 0.55);
+      } else if (rabbit) {
+        // A pink nose, a powder-puff tail and a crescent charm on the collar
+        b.add(sphere(0.02, 8, 6), "#f2a0b8", 0, [0, 0.125, -0.43])
+          .add(sphere(0.085, 10, 8), "#ffffff", 0.05, [0, 0.06, 0.32])
+          .add(new THREE.TorusGeometry(0.045, 0.013, 6, 16, Math.PI * 1.3), "#fff2b8", 0.6, [0, -0.02, -0.25], [0.2, 0, 2.1]);
       } else if (fox) {
         b.add(sphere(0.025, 8, 6), INK, 0, [0, 0.125, -0.44]);
         // A paper lantern on the harness, lit from inside
@@ -155,6 +196,63 @@ export class PetModel {
     }
     this.rig.add(paintedModel(b));
     this.group.add(this.rig);
+  }
+
+  /** The sky's swimmers: a manta on two broad fins, a pulsing jellyfish trailing light, a koi with silk fins */
+  private swimmer(b: Builder, id: "manta" | "jelly" | "koi") {
+    if (id === "manta") {
+      b.add(sphere(0.2, 16, 10), "#4b6fa8", 0, [0, 0, 0], [0, 0, 0], [1.25, 0.32, 1.25])
+        .add(sphere(0.18, 14, 9), IVORY, 0, [0, -0.022, 0.01], [0, 0, 0], [1.15, 0.24, 1.15]);
+      for (const s of [-1, 1]) {
+        b.add(new THREE.CapsuleGeometry(0.02, 0.08, 3, 6), "#4b6fa8", 0, [s * 0.07, 0, -0.26], [Math.PI / 2 + 0.3, 0, s * 0.3])
+          .add(sphere(0.016, 8, 6), INK, 0, [s * 0.11, 0.035, -0.18])
+          .add(sphere(0.006, 5, 4), IVORY, 0, [s * 0.112, 0.04, -0.192]);
+        // Broad fins, each its own part so it can beat
+        const fin = new Builder()
+          .add(leaf(0.5, 0.26).rotateX(-Math.PI / 2), grad("#4b6fa8", "#9fd0ff", 0.5, 0.2), 0, [0, 0, 0.02], [0, -s * Math.PI / 2, 0])
+          .add(new THREE.CapsuleGeometry(0.008, 0.38, 2, 6), "#cfe9ff", 0.4, [s * 0.22, 0.012, 0.02], [0, 0, Math.PI / 2]);
+        const wing = paintedModel(fin); wing.position.set(s * 0.18, 0, 0); this.rig.add(wing); this.wings.push(wing);
+      }
+      for (let k = 0; k < 3; k++) b.add(sphere(0.025, 8, 6), "#bfe7ff", 0.5, [0, 0.06, -0.05 + k * 0.08], [0, 0, 0], [1, 0.5, 1]);
+      this.sparkFrom.set(0, 0, 0.6);
+      const tail = new Builder();
+      for (let k = 0; k < 8; k++) tail.add(sphere(0.02 - k * 0.0018, 6, 4), "#3c5a8a", 0, [0, 0, k * 0.06], [0, 0, 0], [1, 1, 2]);
+      const whip = paintedModel(tail); whip.position.set(0, 0, 0.2); this.rig.add(whip); this.tails.push(whip);
+    } else if (id === "jelly") {
+      this.pulse = true;
+      this.swim = 1.6;
+      b.add(new THREE.SphereGeometry(0.2, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), grad("#e6dcff", "#b9a7ff", 0.2, 0), 0.45, [0, 0, 0], [0, 0, 0], [1, 0.85, 1])
+        .add(sphere(0.09, 12, 9), "#ffb8e0", 0.8, [0, 0.05, 0])
+        .add(sphere(0.012, 6, 5), INK, 0, [0.06, 0.08, -0.17]).add(sphere(0.012, 6, 5), INK, 0, [-0.06, 0.08, -0.17]);
+      for (let k = 0; k < 12; k++) {
+        const a = (k / 12) * Math.PI * 2;
+        b.add(sphere(0.03, 8, 6), k % 2 ? "#d9c9ff" : "#fff1ff", 0.4, [Math.cos(a) * 0.19, -0.005, Math.sin(a) * 0.19], [0, 0, 0], [1, 0.6, 1]);
+      }
+      this.sparkFrom.set(0, -0.5, 0);
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2, tail = new Builder();
+        for (let k = 0; k < 7; k++) tail.add(sphere(0.022 - k * 0.0022, 6, 5), k % 2 ? "#d9c9ff" : "#fff1ff", 0.35 + k * 0.05, [0, -k * 0.07, 0], [0, 0, 0], [1, 1.4, 1]);
+        const ribbon = paintedModel(tail); ribbon.position.set(Math.cos(a) * 0.1, -0.02, Math.sin(a) * 0.1); this.rig.add(ribbon); this.tails.push(ribbon);
+      }
+    } else {
+      this.swim = 2.4;
+      // A long white body splashed with vermilion and gold, whiskers and a silk dorsal fin
+      b.add(sphere(0.16, 18, 12), (p, out) => {
+        const patch = Math.sin(p.x * 30 + 1) * Math.sin(p.z * 22) + Math.sin(p.z * 9 + p.y * 14);
+        out.set(p.y > 0.02 && patch > 0.35 ? "#ff6a3d" : p.y > 0.06 && patch < -0.9 ? GOLD : "#fff8f0");
+      }, 0, [0, 0, 0], [0, 0, 0], [0.75, 0.8, 1.7]);
+      this.eyes(b, 0.075, 0.04, -0.22, 0.014);
+      for (const s of [-1, 1]) b.add(new THREE.CapsuleGeometry(0.004, 0.12, 2, 5), "#ffcf9a", 0.2, [s * 0.04, -0.03, -0.3], [1.2, 0, s * 0.6]);
+      b.add(leaf(0.2, 0.06), grad("#ff8a5b", "#ffe2cc", 0.2), 0.1, [0, 0.11, -0.02], [-1.1, 0, 0]);
+      for (const s of [-1, 1]) {
+        const fin = new Builder().add(leaf(0.16, 0.08).rotateX(-Math.PI / 2), grad("#ffd2b8", "#ff8a5b", 0.16, 0.2), 0.1, [0, 0, 0], [0, -s * Math.PI / 2 - s * 0.6, 0]);
+        const wing = paintedModel(fin); wing.position.set(s * 0.1, -0.05, -0.08); this.rig.add(wing); this.wings.push(wing);
+      }
+      this.sparkFrom.set(0, 0, 0.62);
+      const tail = new Builder();
+      for (const s of [-1, 1]) tail.add(quill(0.36, 0.12), grad("#ff8a5b", "#fff1e6", 0.36, 0.1), 0.15, [0, 0, 0], [s * 0.45, 0, 0]);
+      const fan = paintedModel(tail); fan.position.set(0, 0, 0.24); this.rig.add(fan); this.tails.push(fan);
+    }
   }
 
   private eyes(b: Builder, x: number, y: number, z: number, radius: number) {
@@ -268,10 +366,13 @@ export class PetModel {
       this.rig.rotation.x = Math.sin(stride + 0.45) * 0.09 * PET_LOOKS.stride;
       this.rig.position.y = Math.abs(Math.cos(stride + 0.45)) * 0.035 * PET_LOOKS.stride;
     }
+    const spread = this.pulse ? 0 : 0.45;
     for (let i = 0; i < this.tails.length; i++) {
-      this.tails[i].rotation.y = (i - (this.tails.length - 1) / 2) * 0.45 + Math.sin(t * 2.6 - i * 0.55) * 0.16 * PET_LOOKS.tailSway;
-      this.tails[i].rotation.x = -0.15 + Math.sin(t * 2 - i * 0.4) * 0.13 * PET_LOOKS.tailSway;
+      this.tails[i].rotation.y = (i - (this.tails.length - 1) / 2) * spread + Math.sin(t * 2.6 * this.swim - i * 0.55) * 0.16 * this.swim * PET_LOOKS.tailSway;
+      this.tails[i].rotation.x = (this.pulse ? 0 : -0.15) + Math.sin(t * 2 - i * 0.4) * 0.13 * PET_LOOKS.tailSway;
     }
+    // The jellyfish's bell squeezes and lets go
+    if (this.pulse) this.rig.scale.set(1 + Math.sin(t * 3) * 0.06, 1 - Math.sin(t * 3) * 0.08, 1 + Math.sin(t * 3) * 0.06);
   }
   dispose() { disposeModel(this.group); }
 }

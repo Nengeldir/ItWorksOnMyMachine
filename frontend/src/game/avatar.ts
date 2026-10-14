@@ -6,8 +6,9 @@ import { ANIM, FX, COSMETIC_FX } from "./tuning";
 import { clamp, smoothstep } from "./math";
 import { DISSOLVE_AT, type DeathKind, WING_POINTS } from "./death";
 import type { ItemSlot } from "./items/models";
-import { capeSpec, type CapeId, type WingId } from "./cosmetics/catalog";
-import { buildWing } from "./cosmetics/wings";
+import { capeSpec, wingSpec, type CapeId, type WingId, type WingRig } from "./cosmetics/catalog";
+import { buildWing, type WingAnchor, type WingModel } from "./cosmetics/wings";
+import { type FeatherBone, type WingDrive, articulate, rigAmplitude, rigRate, skinnedMesh } from "./wingRig";
 import type { Appearance } from "./cosmetics/storage";
 import { buildHat, buildShoe, disposeModel } from "./cosmetics/models";
 
@@ -82,7 +83,14 @@ function place(geometry: THREE.BufferGeometry, at: Vec = [0, 0, 0], rot: Vec = [
 
 /** Collects primitives into one mesh with per-vertex colors, so each body part is one draw call */
 class PartBuilder {
-  private readonly items: { geometry: THREE.BufferGeometry; paint: Paint }[] = [];
+  private readonly items: { geometry: THREE.BufferGeometry; paint: Paint; bone: number }[] = [];
+  private current = 0;
+
+  /** Primitives added from now on follow bone `index` (0: the root): the wings' primaries */
+  bone(index: number): this {
+    this.current = index;
+    return this;
+  }
 
   add(geometry: THREE.BufferGeometry, paint: Paint, at?: Vec, rot?: Vec, scale?: Vec): this {
     place(geometry, at, rot, scale);
@@ -91,7 +99,7 @@ class PartBuilder {
     for (const name of Object.keys(flat.attributes)) {
       if (name !== "position" && name !== "normal") flat.deleteAttribute(name);
     }
-    this.items.push({ geometry: flat, paint });
+    this.items.push({ geometry: flat, paint, bone: this.current });
     return this;
   }
 
@@ -107,6 +115,14 @@ class PartBuilder {
     }
     geometry.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(start * 3), 3));
     geometry.setAttribute("glow", new THREE.Float32BufferAttribute(new Float32Array(start), 1));
+    if (this.items.some((item) => item.bone > 0)) {
+      const index = new Uint16Array(start * 4), weight = new Float32Array(start * 4);
+      ranges.forEach((range, i) => {
+        for (let v = range.start; v < range.start + range.count; v++) { index[v * 4] = this.items[i].bone; weight[v * 4] = 1; }
+      });
+      geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(index, 4));
+      geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute(weight, 4));
+    }
     geometry.computeBoundingSphere();
     return { geometry, ranges };
   }
@@ -329,8 +345,15 @@ export interface AvatarOptions {
 }
 
 interface Side {
-  innerMesh: THREE.Mesh;
-  outerMesh: THREE.Mesh;
+  /** The original wing's two parts (hidden while a wardrobe pair is worn) */
+  innerMesh: THREE.Object3D;
+  outerMesh: THREE.Object3D;
+  /** The original wing's primaries, their rest angles, and where its tip and trailing corner sit on them */
+  classicBones: THREE.Bone[];
+  classicRest: number[];
+  /** The bones `articulate` drives now: the original's, or the worn pair's */
+  bones: THREE.Bone[];
+  rest: number[];
   boot: THREE.Mesh;
   shoulder: THREE.Object3D;
   elbow: THREE.Object3D;
@@ -380,7 +403,10 @@ export class Avatar {
   private hat: THREE.Group | null = null;
   private shoes: THREE.Group[] = [];
   private appearance: Appearance = { cape: "classic", hat: "none", shoes: "classic", wings: "classic", pet: "none" };
-  private wingModels: ReturnType<typeof buildWing>[] = [];
+  private wingModels: WingModel[] = [];
+  /** How the worn wings move, and how big they are (wingRig.ts) */
+  private wingRig: WingRig = "feather";
+  private wingSize = 1;
   get wingStyle(): WingId { return this.appearance.wings; }
   private readonly scarf: Cloth[];
   // Conservative bounds of the animated legs, reused for cloth self-collision.
@@ -389,6 +415,8 @@ export class Avatar {
   private readonly clothMatrix = new THREE.Matrix4();
   private readonly painted: Painted[] = [];
   private readonly outlines: THREE.Mesh[] = [];
+  /** The original wings' skeletons (their bone matrices live on the GPU) */
+  private readonly skeletons: THREE.Skeleton[] = [];
   private readonly materials: THREE.Material[] = [];
   private readonly aura: THREE.Sprite;
   private tones: Tones;
@@ -426,8 +454,12 @@ export class Avatar {
     this.barrelProgress = -1;
     this.boost = this.brake = 0;
     this.boostOn = false;
+    this.climbing = this.diving = 0;
   }
   private climb = 0;
+  /** How hard the pilot is climbing (0..1) and diving (0..1), eased: wings beat harder up, fold in down */
+  private climbing = 0;
+  private diving = 0;
   private time = 0;
   private clothTime = 0;
   private detailed = true;
@@ -684,7 +716,8 @@ export class Avatar {
           .add(capsule(0.034, 0.08), "dark", [0, -0.3, -0.012], [0.25, 0, 0]),
       ));
 
-      // Wings: an inner arm-wing and an outer hand-wing, each a fan of feathers
+      // Wings: an inner arm-wing and an outer hand-wing, each a fan of feathers. Built for the right side
+      // and mirrored for the left; each primary of the hand-wing is a bone of its own (wingRig.ts)
       const wing = new THREE.Object3D();
       wing.position.set(0.05 * s, 0.17, 0.12);
       wing.rotation.order = "YZX";
@@ -693,46 +726,53 @@ export class Avatar {
         const d = p.length();
         out.copy(t.cloth).lerp(t.clothLight, smoothstep(0.05, 0.6, d)).lerp(t.white, smoothstep(0.5, 0.9, d) * 0.6);
       };
-      const inner = new PartBuilder().add(capsule(0.022, 0.5), "trim", [0.27 * s, 0.03, 0], [0, 0, Math.PI / 2 - 0.12 * s]);
+      const innerHolder = new THREE.Object3D();
+      innerHolder.scale.x = s;
+      wing.add(innerHolder);
+      const inner = new PartBuilder().add(capsule(0.022, 0.5), "trim", [0.27, 0.03, 0], [0, 0, Math.PI / 2 - 0.12]);
       for (let i = 0; i < 4; i++) {
         const angle = -0.9 - i * 0.22; // fanning back towards the feet
-        inner.add(feather(0.5 + i * 0.05, 0.13), featherPaint, [(0.08 + i * 0.13) * s, 0.02 + i * 0.012, 0.004 * i], [
-          0,
-          0,
-          s > 0 ? angle : Math.PI - angle,
-        ]);
+        inner.add(feather(0.5 + i * 0.05, 0.13), featherPaint, [0.08 + i * 0.13, 0.02 + i * 0.012, 0.004 * i], [0, 0, angle]);
       }
-      const innerMesh = part(wing, inner, wingMat);
+      part(innerHolder, inner, wingMat);
       const wingOuter = new THREE.Object3D();
       wingOuter.position.set(0.54 * s, 0.07, 0);
       wingOuter.rotation.order = "YZX";
       wing.add(wingOuter);
+      const outerHolder = new THREE.Object3D();
+      outerHolder.scale.x = s;
+      wingOuter.add(outerHolder);
       const tipPaint: Paint = (p, t, out) => {
         const d = p.length();
         out.copy(t.clothLight).lerp(t.white, smoothstep(0.05, 0.4, d) * 0.5).lerp(t.tip, smoothstep(0.45, 0.95, d));
       };
-      const outer = new PartBuilder().add(capsule(0.018, 0.3), "trim", [0.15 * s, -0.02, 0], [0, 0, Math.PI / 2 + 0.25 * s]);
+      const outer = new PartBuilder().add(capsule(0.018, 0.3), "trim", [0.15, -0.02, 0], [0, 0, Math.PI / 2 + 0.25]);
       const primaries = 5;
+      const feathers: FeatherBone[] = [];
       for (let i = 0; i < primaries; i++) {
         const angle = 0.12 - i * 0.3;
         const length = 0.98 - i * 0.1;
-        outer.add(feather(length, 0.15), tipPaint, [(0.05 + i * 0.045) * s, -0.02 * i, 0.004 * i], [
-          0,
-          0,
-          s > 0 ? angle : Math.PI - angle,
-        ]);
+        const at: Vec = [0.05 + i * 0.045, -0.02 * i, 0.004 * i];
+        feathers.push({ position: at, angle });
+        outer.bone(i + 1).add(feather(length, 0.15), tipPaint, at, [0, 0, angle]);
       }
-      const outerMesh = part(wingOuter, outer, wingMat);
+      const painted = outer.build();
+      this.painted.push(painted);
+      const skinned = skinnedMesh(painted.geometry, wingMat, ink, feathers);
+      if (skinned.outline) this.outlines.push(skinned.outline);
+      this.skeletons.push(skinned.mesh.skeleton);
+      outerHolder.add(skinned.mesh);
+      // The tip of the leading primary, and of the last (the wing's trailing corner), ride on their bones
       const tip = new THREE.Object3D();
-      tip.position.set((0.05 + 0.98 * Math.cos(0.12)) * s, 0.98 * Math.sin(0.12), 0);
-      wingOuter.add(tip);
-      const last = 0.12 - (primaries - 1) * 0.3;
-      const lastLength = 0.98 - (primaries - 1) * 0.1;
+      tip.position.set(0.98, 0, 0);
+      skinned.bones[0].add(tip);
       const trail = new THREE.Object3D();
-      trail.position.set((0.05 + (primaries - 1) * 0.045 + lastLength * Math.cos(last)) * s, -0.02 * (primaries - 1) + lastLength * Math.sin(last), 0);
-      wingOuter.add(trail);
+      trail.position.set(0.98 - (primaries - 1) * 0.1, 0, 0);
+      skinned.bones[primaries - 1].add(trail);
+      const innerMesh = innerHolder, outerMesh = outerHolder;
+      const classicBones = skinned.bones, classicRest = skinned.rest;
 
-      return { shoulder, elbow, hip, knee, wing, wingOuter, tip, trail, boot, innerMesh, outerMesh };
+      return { shoulder, elbow, hip, knee, wing, wingOuter, tip, trail, boot, innerMesh, outerMesh, classicBones, classicRest, bones: classicBones, rest: classicRest };
     };
     this.right = makeSide(1);
     this.left = makeSide(-1);
@@ -768,10 +808,33 @@ export class Avatar {
         const leaf = Math.abs(u) < 0.05 || Math.abs(Math.abs(u) - (v * 3 % 1) * 0.8) < 0.06;
         const stars = (Math.abs(u - 0.42) + Math.abs(v - 0.3) * 4 < 0.18) || (Math.abs(u + 0.35) + Math.abs(v - 0.58) * 4 < 0.18) || diamond;
         const feathers = Math.abs((u * 3 + v * 4) % 1) < 0.12;
-        const emblem = pattern === "sun" ? sun : pattern === "leaf" ? leaf : pattern === "stars" ? stars : pattern === "feathers" ? feathers : diamond;
+        // Scattered petals: one per cell of a grid, each nudged and turned by its own hash
+        const cellU = Math.floor((u + 1) * 3.5), cellV = Math.floor(v * 6);
+        const h = Math.abs(Math.sin(cellU * 12.9898 + cellV * 78.233) * 43758.5453) % 1;
+        const pu = (u + 1) * 3.5 - cellU - 0.3 - h * 0.4, pv = v * 6 - cellV - 0.5 + (h - 0.5) * 0.3;
+        const turn = h * 6;
+        const petals = v > 0.08 && Math.hypot(pu * Math.cos(turn) + pv * Math.sin(turn), (pv * Math.cos(turn) - pu * Math.sin(turn)) * 2.2) < 0.2;
+        // Auspicious clouds: three curls, rings of a spiral round their hearts
+        const curl = (cu: number, cv: number) => {
+          const d = Math.hypot((u - cu) * 1.6, (v - cv) * 4);
+          return d < 0.3 && Math.abs(Math.sin(d * 26 - Math.atan2(v - cv, u - cu))) < 0.32;
+        };
+        const clouds = curl(-0.35, 0.35) || curl(0.4, 0.52) || curl(-0.05, 0.72);
+        // A crescent over embroidered waves
+        const moonDisc = Math.hypot(u * 0.9, (v - 0.33) * 2.4) < 0.24 && Math.hypot(u * 0.9 - 0.09, (v - 0.3) * 2.4) > 0.21;
+        const waves = v > 0.62 && Math.abs(((v * 12 + Math.sin(u * 9 + v * 4) * 0.6) % 1) - 0.5) < 0.1;
+        const moon = moonDisc || waves;
+        // A galaxy: two spiral arms round a bright heart, and scattered stars
+        const gr = Math.hypot(u * 1.2, (v - 0.45) * 2.6);
+        const arm = Math.abs(Math.sin(Math.atan2(v - 0.45, u * 0.46) * 2 - Math.log(gr + 0.02) * 3.2));
+        const starHash = Math.abs(Math.sin(Math.floor(u * 40) * 91.7 + Math.floor(v * 60) * 47.3) * 9187.3) % 1;
+        const galaxy = gr < 0.08 || starHash > 0.985;
+        const emblem = pattern === "sun" ? sun : pattern === "leaf" ? leaf : pattern === "stars" ? stars : pattern === "feathers" ? feathers
+          : pattern === "petals" ? petals : pattern === "clouds" ? clouds : pattern === "moon" ? moon : pattern === "galaxy" ? galaxy : diamond;
         const hem = v > 0.95 || (v > 0.86 && v < 0.89) || (pattern === "border" && Math.abs(u) > 0.84);
-        const embroidery = pattern !== "diamond" && Math.abs(Math.abs(u) - (.73 + .06 * Math.sin(v * 24))) < .045;
-        const panel = pattern === "stars" ? .28 * Math.sin(u * 5 + v * 9) : pattern === "feathers" ? .22 * Math.cos(u * 12 - v * 8) : .08 * Math.cos(u * 9);
+        const embroidery = pattern !== "diamond" && pattern !== "galaxy" && Math.abs(Math.abs(u) - (.73 + .06 * Math.sin(v * 24))) < .045;
+        const panel = pattern === "stars" ? .28 * Math.sin(u * 5 + v * 9) : pattern === "feathers" ? .22 * Math.cos(u * 12 - v * 8)
+          : pattern === "galaxy" ? (gr < 0.7 ? (1 - arm) * 0.75 * (1 - gr) : 0) : pattern === "moon" ? .18 * Math.sin(v * 7) : .08 * Math.cos(u * 9);
         out.copy(hem || emblem || embroidery ? t.trim : t.cloth).lerp(t.clothLight, hem || emblem || embroidery ? 0 : Math.max(0, panel))
           .lerp(t.clothDark, hem || emblem || embroidery ? 0 : smoothstep(0.2, 1, v) * 0.35);
       },
@@ -843,16 +906,7 @@ export class Avatar {
 
   setAppearance(appearance: Appearance) {
     if (this.ghost) return;
-    if (appearance.wings !== this.appearance.wings) {
-      this.wingModels.forEach(model => model.dispose()); this.wingModels = [];
-      for (const [side, sign] of [[this.left, -1], [this.right, 1]] as const) {
-        side.innerMesh.visible = side.outerMesh.visible = appearance.wings === "classic";
-        if (appearance.wings !== "classic") {
-          const model = buildWing(appearance.wings, sign);
-          side.wing.add(model.inner); side.wingOuter.add(model.outer); this.wingModels.push(model);
-        }
-      }
-    }
+    if (appearance.wings !== this.appearance.wings) this.wearWings(appearance.wings);
     if (appearance.hat !== this.appearance.hat) {
       if (this.hat) disposeModel(this.hat);
       this.hat = appearance.hat === "none" ? null : buildHat(appearance.hat);
@@ -873,6 +927,54 @@ export class Avatar {
     this.appearance = { ...appearance };
     this.repaint();
     this.applyPose(0);
+  }
+
+  /**
+   * Swaps the wings in place: the original pair, or a wardrobe pair on the same two joints. The tip and
+   * trailing-corner anchors (trails, motes, the crash tumble) move onto the worn pair, its bones if it has
+   * them; the wrist moves in or out with the pair's size. The flight hitbox never changes
+   */
+  private wearWings(id: WingId) {
+    // Off the old pair before it goes, or the anchors would be disposed with it
+    for (const side of [this.left, this.right]) { side.wingOuter.add(side.tip); side.wingOuter.add(side.trail); }
+    this.wingModels.forEach(model => model.dispose());
+    this.wingModels = [];
+    const spec = wingSpec(id);
+    this.wingRig = spec.rig;
+    this.wingSize = spec.size;
+    for (const [side, sign] of [[this.left, -1], [this.right, 1]] as const) {
+      const classic = id === "classic";
+      side.innerMesh.visible = side.outerMesh.visible = classic;
+      side.wingOuter.position.set(0.54 * sign * spec.size, 0.07 * spec.size, 0);
+      if (classic) {
+        side.bones = side.classicBones;
+        side.rest = side.classicRest;
+        side.classicBones[0].add(side.tip);
+        side.tip.position.set(0.98, 0, 0);
+        side.classicBones[side.classicBones.length - 1].add(side.trail);
+        side.trail.position.set(0.58, 0, 0);
+        continue;
+      }
+      const model = buildWing(id, sign);
+      side.wing.add(model.inner);
+      side.wingOuter.add(model.outer);
+      this.wingModels.push(model);
+      side.bones = model.bones;
+      side.rest = model.rest;
+      const hang = (anchor: THREE.Object3D, at: WingAnchor) => {
+        (at.bone >= 0 ? model.bones[at.bone] : at.part === "inner" ? model.inner : model.outer).add(anchor);
+        anchor.position.set(...at.position);
+      };
+      hang(side.tip, model.tip);
+      hang(side.trail, model.trail);
+    }
+  }
+
+  /** Each wing reshaped the way its build moves (wingRig.ts), on top of the pose just set */
+  private articulateWings(dt: number, drive: Omit<WingDrive, "dt">) {
+    for (const [side, s] of [[this.right, 1], [this.left, -1]] as [Side, 1 | -1][]) {
+      articulate(this.wingRig, { wing: side.wing, wingOuter: side.wingOuter, bones: side.bones, rest: side.rest }, s, { ...drive, dt });
+    }
   }
 
   /** A carried helmet takes priority over the wardrobe hat. */
@@ -966,15 +1068,21 @@ export class Avatar {
 
     // Effort decides how hard the wings flap: climbing, turning, rolling or slow
     const slow = clamp((32 - speed) / 18, 0, 1);
-    const diving = smoothstep(-0.15, -0.6, this.climb);
+    const diving = smoothstep(-0.12, -0.5, this.climb);
+    const climbing = smoothstep(0.08, 0.45, this.climb);
+    const ease = 1 - Math.exp(-dt * 4);
+    this.climbing += (climbing - this.climbing) * ease;
+    this.diving += (diving - this.diving) * ease;
+    // Going up the wings work hard, every beat; going down they close and the pilot drops like a stone
     let effort =
-      0.18 + clamp(this.climb, 0, 1) * 0.9 + Math.abs(this.yawRate) * 0.35 + Math.abs(this.rollRate) * 0.08 + slow * 0.7;
-    effort = clamp(effort * (1 - diving * 0.75), 0, 1);
+      0.18 + clamp(this.climb, 0, 1) * 1.2 + Math.abs(this.yawRate) * 0.35 + Math.abs(this.rollRate) * 0.08 + slow * 0.7;
+    effort = Math.max(effort, climbing * 0.95);
+    effort = clamp(effort * (1 - diving * 0.9), 0, 1);
     const st = this.stance;
     effort = Math.max(effort * (1 - st.tuck * 0.9) * (1 - st.falcon * 0.8), st.hover, st.cast * 0.8, st.climb * 0.95, st.flare * 0.7, st.butterfly * 0.75);
     this.effort += (effort - this.effort) * (1 - Math.exp(-dt * 3));
     const before = Math.sin(this.flapPhase);
-    this.flapPhase += TAU * (ANIM.flapRate + ANIM.flapBoost * this.effort) * dt * (this.barrel.t >= 0 ? 1.6 : 1) * (1 + st.hover * 0.9) * (1 - st.butterfly * 0.45) * (1 + st.climb * 0.35);
+    this.flapPhase += TAU * (ANIM.flapRate + ANIM.flapBoost * this.effort) * dt * rigRate(this.wingRig, this.wingSize) * (1 + this.climbing * 0.45) * (this.barrel.t >= 0 ? 1.6 : 1) * (1 + st.hover * 0.9) * (1 - st.butterfly * 0.45) * (1 + st.climb * 0.35);
     const after = Math.sin(this.flapPhase);
     if (before > 0 && after <= 0 && this.time - this.lastFlap > 0.15) {
       this.lastFlap = this.time;
@@ -1026,11 +1134,11 @@ export class Avatar {
     this.pelvis.rotation.set(0, turn * 0.06 * A.limbSwing, -this.lean * 0.15);
 
     // Wings
-    const amp = (A.flapAngle * this.effort + A.glideFlutter * (1 - this.effort)) * (1 - this.brake * 0.85) * (1 - this.boost * 0.5) * (1 - st.tuck * 0.85) * (1 - st.surf * 0.6) * (1 + st.hover * 0.25) * (1 - st.falcon * 0.85) * (1 + st.butterfly * 0.7 + st.climb * 0.3);
+    const amp = rigAmplitude(this.wingRig, this.wingSize) * (1 + this.climbing * 0.4) * (1 - this.diving * 0.6) * (A.flapAngle * this.effort + A.glideFlutter * (1 - this.effort)) * (1 - this.brake * 0.85) * (1 - this.boost * 0.5) * (1 - st.tuck * 0.85) * (1 - st.surf * 0.6) * (1 + st.hover * 0.25) * (1 - st.falcon * 0.85) * (1 + st.butterfly * 0.7 + st.climb * 0.3);
     const stroke = Math.sin(this.flapPhase) + 0.22 * Math.sin(this.flapPhase * 2);
     const strokeOuter = Math.sin(this.flapPhase - 0.7) + 0.22 * Math.sin(this.flapPhase * 2 - 1.4);
     const barrelTuck = this.barrel.t >= 0 ? Math.sin(Math.PI * this.barrel.t) : 0;
-    const sweep = A.sweepAtSpeed * speedK + barrelTuck * 0.45 - slow01(this.speed) * 0.1 + this.boost * A.boostSweep - this.brake * A.brakeSweep
+    const sweep = A.sweepAtSpeed * speedK + this.diving * 0.75 - this.climbing * 0.15 + barrelTuck * 0.45 - slow01(this.speed) * 0.1 + this.boost * A.boostSweep - this.brake * A.brakeSweep
       + st.tuck * 0.95 - st.hover * 0.3 - st.cast * 0.35 - st.flare * 0.95 + st.falcon * 1.15 - st.butterfly * 0.45 - st.sing * 0.2;
     // Positive lift raises the wing (towards the back)
     const lift = (s: 1 | -1) => 0.12 + amp * stroke + turn * 0.12 * s * A.limbSwing + st.cast * 0.35 - st.tuck * 0.15 + st.climb * 0.25 + st.sing * 0.4 + st.flare * 0.3 - st.falcon * 0.12 + st.butterfly * 0.18;
@@ -1079,6 +1187,9 @@ export class Avatar {
 
     // Standing (the figurine): every joint eases into an upright, relaxed pose
     if (st.stand > 0) this.standPose(st.stand, t);
+    // The wings' own build reshapes the pose: feathers spread, twist and bend; plates snap; one piece stays whole
+    const folded = Math.max(st.tuck * 0.9, st.falcon * 0.85, st.stand, this.brake * 0.25, this.diving * 0.7);
+    this.articulateWings(dt, { phase: this.flapPhase, amp, time: t, open: 1 - folded, speed: speedK, sweep, lean: this.lean, limp: false });
 
     // Aura breathes with the flaps and burns brighter when skimming
     const auraMat = this.aura.material as THREE.SpriteMaterial;
@@ -1141,7 +1252,9 @@ export class Avatar {
     this.capeShape = (u, v, out) => {
       const spec = capeSpec(this.capeId);
       const width = (0.11 + 0.2 * Math.pow(v, 0.8) * spread) * spec.width;
-      const scallop = (spec.pattern === "leaf" ? .075 * Math.cos(u * Math.PI * 3) : spec.pattern === "feathers" ? .085 * Math.cos(u * Math.PI * 5) : spec.pattern === "sun" ? .18 * (1 - Math.abs(u)) : spec.pattern === "stars" ? .08 * Math.cos(u * Math.PI * 2) : spec.pattern === "border" ? -.065 * (1 - u * u) : 0) * COSMETIC_FX.capeDetail;
+      const scallop = (spec.pattern === "leaf" ? .075 * Math.cos(u * Math.PI * 3) : spec.pattern === "feathers" ? .085 * Math.cos(u * Math.PI * 5) : spec.pattern === "sun" ? .18 * (1 - Math.abs(u))
+        : spec.pattern === "stars" ? .08 * Math.cos(u * Math.PI * 2) : spec.pattern === "border" ? -.065 * (1 - u * u) : spec.pattern === "petals" ? .06 * Math.abs(Math.cos(u * Math.PI * 2.5))
+        : spec.pattern === "clouds" ? .07 * Math.cos(u * Math.PI * 4) : spec.pattern === "moon" ? .05 * Math.sin(u * Math.PI * 6) : spec.pattern === "galaxy" ? .12 * (1 - u * u) : 0) * COSMETIC_FX.capeDetail;
       const w =
         wave * Math.pow(v, 1.3) * Math.sin(TAU * 1.3 * v - ct + u * 0.7) +
         wave * 0.35 * v * Math.sin(TAU * 2.4 * v - ct * 1.7 + u * 2.1);
@@ -1264,6 +1377,8 @@ export class Avatar {
       side.wingOuter.rotation.set(0, -(0.45 + wave(19, s) * 0.5 * panic + (broken ? 0.8 : 0)) * s, (-0.1 - fold * 0.9) * s);
     }
 
+    this.articulateWings(dt, { phase: t * 15, amp: 0.3 * panic, time: this.time, open: 0.5, speed: 0, sweep: 1, lean: 0, limp: true });
+
     const flop = wave(7, 0.5);
     this.pony[0].rotation.set(-1.25 + flop * 0.6, 0, wave(9, 1) * 0.6);
     this.pony[1].rotation.set(0.25 + flop * 0.4, 0, wave(11, 2) * 0.8);
@@ -1307,6 +1422,7 @@ export class Avatar {
   }
 
   dispose() {
+    this.skeletons.forEach((skeleton) => skeleton.dispose());
     this.wingModels.forEach(model => model.dispose());
     if (this.hat) disposeModel(this.hat);
     this.shoes.forEach(disposeModel);

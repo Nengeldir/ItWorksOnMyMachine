@@ -109,6 +109,10 @@ export const POWERS: readonly Power[] = [
   P({ key: "pet:griffin", name: "Sun's might", description: "The griffin's roar fills your wings: boost accelerates 20% harder.", stats: { boostAccel: 0.2 }, voice: "screech" }),
   P({ key: "pet:phoenix", name: "Rekindle", description: "Once per level the phoenix undoes a crash: you rise from the flames back over the line, briefly untouchable.", stats: { revives: 1 }, voice: "phoenix" }),
   P({ key: "pet:dragon", name: "Cloud rider", description: "Every gate the dragon passes with you refills 20% of your boost and a wingbeat.", stats: { gateRefill: 0.2, gateStamina: 1 }, voice: "dragon" }),
+  P({ key: "pet:manta", name: "Ray glide", description: "The manta shares its slow, endless glide: 8% less sink and 3% less drag.", stats: { sink: 0.92, drag: 0.97 }, voice: "crane" }),
+  P({ key: "pet:rabbit", name: "Moon hop", description: "Hop like the moon rabbit: dodges carry you 2 m further and come back 20% sooner.", stats: { dodgeDistance: 2, dodgeCooldown: 0.8 }, voice: "yip" }),
+  P({ key: "pet:jelly", name: "Soft bell", description: "Once per level the jellyfish's bell cushions a glancing hit, and you glance off instead of crashing.", stats: { shields: 1 }, voice: "glass" }),
+  P({ key: "pet:koi", name: "Fortune's current", description: "The koi swims upstream for you: gates score 30% more, style points flow 20% faster, and every gate refills 10% boost.", stats: { gatePoints: 1.3, styleRate: 1.2, gateRefill: 0.1 }, voice: "celestial" }),
   P({ key: "pet:kirin", name: "Lucky star", description: "The kirin's blessing: gates score 50% more, and you start every adventure with one extra golden feather.", stats: { gatePoints: 1.5, lives: 1 }, voice: "kirin" }),
 
   // --- cosmetics, rare and legendary ---------------------------------------------------------------
@@ -118,6 +122,18 @@ export const POWERS: readonly Power[] = [
     shed: { from: "hem", color: "#ffe39a", kind: 2, rate: 10, size: 0.09, life: 0.9, gravity: 0.6 } }),
   P({ key: "cape:ember", name: "Molten wake", description: "The phoenix mantle burns behind you: boost accelerates 20% harder and stamina orbs restore 60% more.", stats: { boostAccel: 0.2, orbs: 1.6 }, voice: "ember",
     shed: { from: "hem", color: "#ff9a52", kind: 0, rate: 22, size: 0.11, life: 0.8, gravity: -0.9, boost: 2 } }),
+  P({ key: "cape:moonlit", name: "Tidal pull", description: "The moon draws loose things to you: items, crystals and treasures come from 3 m further, and style points are worth 40% more under a night sky.", stats: { pickupRadius: 3, nightStyle: 1.4 }, voice: "stars",
+    shed: { from: "hem", color: "#dfe8ff", kind: 4, rate: 12, size: 0.1, life: 1.4, gravity: -0.15 } }),
+  P({ key: "cape:celestial", name: "Galaxy's turn", description: "A whole sky turns with you: 12% sharper steering and 10% less sink.", stats: { turn: 1.12, sink: 0.9 }, voice: "celestial",
+    shed: { from: "hem", color: "#ffe4a3", kind: 1, rate: 18, size: 0.12, life: 1.6, gravity: -0.1, boost: 1 } }),
+  P({ key: "hat:foxMask", name: "Kitsune's trick", description: "A fox's sidestep: dodges carry you 1.5 m further and kick you 4 m/s faster.", stats: { dodgeDistance: 1.5, dodgeBurst: 4 }, voice: "yip",
+    shed: { from: "head", color: "#ffc27a", kind: 4, rate: 7, size: 0.1, life: 1.2, gravity: -0.3 } }),
+  P({ key: "hat:halo", name: "Halo light", description: "Morning light gathers round you: style points +20% and every gate is worth 20 more points.", stats: { styleRate: 1.2, gateBonus: 20 }, voice: "choir",
+    shed: { from: "head", color: "#fff1b8", kind: 1, rate: 10, size: 0.09, life: 1.1, gravity: -0.4 } }),
+  P({ key: "hat:crown", name: "Sky sovereign", description: "The sky bows: the style multiplier climbs two levels higher and gates score 25% more.", stats: { styleCap: 2, gatePoints: 1.25 }, voice: "gild",
+    shed: { from: "head", color: "#ffd166", kind: 2, rate: 12, size: 0.1, life: 1, gravity: 0.4 } }),
+  P({ key: "shoes:starstep", name: "Starstep", description: "Each step lands on a star: dodges come back 30% sooner.", stats: { dodgeCooldown: 0.7 }, voice: "stars",
+    shed: { from: "feet", color: "#fff6d6", kind: 1, rate: 9, size: 0.08, life: 1, gravity: -0.2 } }),
   P({ key: "hat:wingedHelm", name: "Hermes' step", description: "Little wings at your temples: dodges come back 35% sooner and carry you 2 m further.", stats: { dodgeCooldown: 0.65, dodgeDistance: 2 }, voice: "feather",
     shed: { from: "head", color: "#fff1c4", kind: 3, rate: 6, size: 0.18, life: 0.6, gravity: 0 } }),
   P({ key: "hat:starwitch", name: "Star sight", description: "The stargazer's eye catches every glint: style points +15% and treasures are collected from 2 m further.", stats: { styleRate: 1.15, pickupRadius: 2 }, voice: "stars",
@@ -129,6 +145,10 @@ export const POWERS: readonly Power[] = [
   P({ key: "wings:frost", name: "Crystal glide", description: "Wings of ice slice the air: 7% less drag.", stats: { drag: 0.93 }, voice: "glass" }),
   P({ key: "wings:ember", name: "Sunrise lift", description: "Flame feathers rise on their own heat: climbs keep their speed 10% longer.", stats: { climb: 1 / 1.1 }, voice: "ember" }),
   P({ key: "wings:storm", name: "Static charge", description: "Lightning in the feathers: skimming the land pushes you 35% harder.", stats: { proximity: 1.35 }, voice: "zap" }),
+  P({ key: "wings:clockwork", name: "Wound spring", description: "A mainspring under the gears: boost accelerates 15% harder.", stats: { boostAccel: 0.15 }, voice: "spark" }),
+  P({ key: "wings:ruin", name: "Ancient core", description: "The amber core hums near gates: they count from 2 m further away, and stamina orbs restore 30% more.", stats: { magnet: 2, orbs: 1.3 }, voice: "zap" }),
+  P({ key: "wings:wyrm", name: "Dragon's draft", description: "Dragon skin rides the air off the land: skimming pushes you 25% harder and drag drops 5%.", stats: { proximity: 1.25, drag: 0.95 }, voice: "dragon" }),
+  P({ key: "wings:seraph", name: "Dawn's grace", description: "Three tiers of sunrise: one extra golden feather every adventure, and 8% less sink.", stats: { lives: 1, sink: 0.92 }, voice: "choir" }),
   P({ key: "wings:astral", name: "Constellation", description: "Stars bend to your course: gates count from 3 m further away and each one refills 15% boost.", stats: { magnet: 3, gateRefill: 0.15 }, voice: "celestial" }),
 
   // --- keepsakes, carried as the charm ---------------------------------------------------------------
@@ -150,10 +170,14 @@ export const POWERS: readonly Power[] = [
     ["resonantChimes", "Ringing gates"], ["crystalUpdraft", "Wind trampoline"], ["starflakeShield", "Ice aura"],
     ["aeroBoots", "Air steps"], ["glacialPrism", "Frozen moment"], ["windTether", "Spirit hook"], ["electroPrism", "Chain lightning"],
     ["dragonTear", "Dragon dive"], ["phoenixFeather", "Phoenix rebirth"], ["mothCape", "Moth phase"], ["duskHourglass", "Slow dusk"],
+    ["windGourd", "Wind drinker"], ["foresightCharm", "Foresight"], ["oilUmbrella", "Parasol glide"], ["koiCharm", "Fortune run"],
+    ["paperCrane", "Crane's guidance"], ["firecrackers", "Festival pops"],
   ] as [RunItemId, string][]).map(([item, name]) => P({
     key: `item:${item}`, name,
     description: item === "phoenixFeather"
       ? "Carried as the charm, it revives you from one crash per level, like the feather found on the islands."
+      : item === "foresightCharm"
+        ? "Carried as the charm, it foresees one crash per level and the wind carries you on the safe line, like the talisman found on the islands."
       : "Carried as the charm, you can use its adventure effect once per level with the charm key, like the one found on the islands.",
     charm: { kind: "relic", item }, voice: "relic",
   })),
