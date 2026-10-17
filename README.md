@@ -31,11 +31,14 @@ the last ring.
   clock, no score, nothing saved. A crash puts you back in the air close to
   where you tumbled. Every map but Sky Isles (its race generator is frozen).
 
-The landing page shows the three modes as emblems of light floating over the
-live map: **Racing**, **Adventure** and **Zen**. Each opens its own page:
+The landing page shows the four modes as emblems of light floating over the
+live map: **Racing**, **Adventure**, **Explore** and **Gathering** (a row of
+four; a 2 × 2 grid on portrait phones). Each opens its own page:
 Adventure's has today's run, the map select and a random run; Racing's has
-two big buttons, **Solo** and **With friends**, each leading to its page; every
-page has a Back button (`Esc`). The page's colors follow the map behind it:
+two big buttons, **Solo** and **With friends**, each leading to its page;
+Explore's has **Zen flight** (today's Zen map, the map select, a random map)
+and the Reaches, marked as coming; the Gathering's page says what's coming.
+Every page has a Back button (`Esc`). The page's colors follow the map behind it:
 the map's ink on light skies, pristine white and pale gold on dark ones (night,
 dusk, the deep). Motes of light drift over it and gather into the emblems;
 pointing at one sends motes and trailing stars out of it.
@@ -175,8 +178,10 @@ Menu/navigation keys, upgrade keys 1–4 and world-switching keys N/B/V are rese
 
 Mouse, keyboard and gamepad pitch can be inverted independently. Default mouse
 sensitivity is now 2× (range 0.3–6); existing saved sensitivity is preserved.
-Settings also include gamepad stick dead zone, music and effects/wind levels,
-mute, automatic or fixed graphics quality, and reduced camera shake/FOV effects.
+Settings also include gamepad stick dead zone, music and effects/wind levels
+(with a folded **Mixer** for ambience, interface sounds, combat and voices, each
+a share of the effects level), mute, automatic or fixed graphics quality, and
+reduced camera shake/FOV effects.
 Under **Pilot**, choose the character's look: Style 1 (ponytail, lashed eyes)
 or Style 2 (short tousled hair, straighter brows); looks only. Under
 **Adventure**, "Crystal pickups only" hides item and treasure pickups so a run
@@ -272,8 +277,8 @@ steps, Frost walkers and Ember greaves. All use the pilot's toon shading,
 night-sensitive trims and animated joints. Appearance preferences are validated
 and saved separately from controls and scores; they never affect flight physics.
 Wings and companion pets use the same saved appearance; the journal and the
-test fitting room select them. There are 17 wings, 10 capes, 14 hats, 8 shoes
-and 12 pets, including straw hats, cat ears, fox masks, halos and crowns, geta,
+test fitting room select them. There are 17 wings, 10 capes, 14 hats, 8 shoes,
+17 particle jars and 12 pets, including straw hats, cat ears, fox masks, halos and crowns, geta,
 sakura and celestial capes, and a manta, rabbit, jellyfish and koi.
 
 **Wing rigs.** Every wing has a rig that decides how it moves
@@ -285,6 +290,26 @@ servo joints, and **rigid** ones (sparrow, cardboard) move in one piece. Wings
 beat harder while you climb and close up as you dive. Rarer wings and pets
 leave richer particles (wing flourishes, legendary downstroke bursts, a ring
 and crown of light round rare pets).
+
+**Particle jars.** A sixth kind of cosmetic (`game/cosmetics/jars.ts`): 17
+glass jars, each holding one kind of particle of its own, drawn from the variety
+of Minecraft's particles (hearts, note-block notes, cherry petals, bubble
+columns, dripping honey, cloud puffs, happy-villager sparkles, snowflakes,
+flame and soul-fire flame, electric sparks, enchanting glyphs, fireflies, portal
+spirals, sculk souls, end-rod starlight, a totem's shower). Equip one and its
+particles drift in an aura round you (rising, falling, orbiting, spiralling in,
+blinking…) and stream off behind you as a trail. Common and uncommon jars hold
+plain solid shapes; rare and legendary jars glow (they bloom), and the rarer the
+jar the fuller its aura and trail. Looks only: jars have no powers. The journal
+and the fitting room show each jar with its particles going round inside the
+glass; "Put the jar away" takes it off.
+
+**Carried items keep clear.** What the pilot carries (the giant firework on the
+back, anything held in the hand) never cuts through the cape, the scarf or the
+wings: each item's shape is measured once as a solid (`game/items/clearance.ts`),
+the cape and scarf drape in front of a back item, and a wing that the pose would
+put inside an item turns at the shoulder just far enough to clear it (forward or
+behind, whichever is nearer). Looks only; the flight hitbox never changes.
 
 ## How It Works
 
@@ -447,6 +472,12 @@ on integrated GPUs.
 Cosmetics exposes `wingParticleSize` for the decorated wings' tiny accents and
 `sparkle`, the rate of the rare capes', hats' and shoes' own particles
 (starlight, gilded flakes, embers, a wisp, stardust, frost, sparks).
+`saturationDark`/`deepenDark` and `saturationLight`/`deepenLight` push the wing
+particles' colors on dark and light skies (light skies draw them as solid shapes),
+`glowParticles` brightens the glowing layers and `wingGlow` the glowing wings' aura;
+`wingParticles` (28.6, 30% more than before) sets how many every pair sheds.
+Particle jars exposes `aura` and `trail` (how many motes round you and behind
+you), `auraSize`, `trailSize` and `glow` (the glowing jars' brightness).
 Collection pickups exposes crystal size, mote rate and mote distance; Run
 exposes `portalFlash` for crossing sparkles and screen brightening. Crystal
 pickups have a fixed 5.2 m collection radius (treasures: 3.2 m).
@@ -568,17 +599,29 @@ the top beside its title:
   mode and the landing page's backdrop never count.
 
 Both pages have a Back button and the close button; `Esc` goes back first. The
-cosmetics tab splits into Wings, Capes, Hats and Shoes; locked boxes carry a
+cosmetics tab splits into Wings, Capes, Hats, Shoes and Jars; locked boxes carry a
 big translucent lock. On small screens the whole journal scrolls as one page.
 
 ## Project Structure
 
 | Path                                   | Purpose                                                  |
 | :------------------------------------- | :------------------------------------------------------- |
+| `shared/catalog/`                     | The open world's shared catalog (items, recipes, skill curves, loot tables, enemies, regions, NPCs, quests) as JSON, its JSON Schemas (`schema/`), the checker `check.mjs` and the type generator `types.mjs`; read by the frontend and the backend ([open-world plan](docs/open-world-plan.md) F1) |
+| `backend/catalog.py`                   | Loads and checks the shared catalog at startup (pydantic; the same checks and messages as `check.mjs`) |
+| `frontend/src/catalog.ts`, `catalog.gen.ts` | The shared catalog for the frontend, with types generated from its schemas (`npm run catalog`) |
+| `backend/stats.py`, `frontend/src/game/stats.ts` | The open world's stat system (plan F2): bases and caps from `stats.json`, gear and skill levels as sources; the same math both sides (shared vectors) |
+| `backend/inventory.py`, `frontend/src/game/inventory/` | The persistent inventory (plan F3): bag, storage, gear, the crystals' wallet, idempotent actions; the client predicts, keeps an outbox in localStorage and reconciles |
+| `backend/skills.py`, `frontend/src/game/skills.ts` | Skill XP, levels and Wind Rank (plan F4); XP only comes in an action's answer |
+| `frontend/src/components/world/` | The open world's UI: the stat sheet, skill emblems, the skill toast, the level-up card, the journal's Skills page, item cards and item-kind icons, the Reaches' painted map (`MapSheet`) and discovery card (loaded lazily: races never carry it) |
+| `frontend/src/game/reaches/`, `backend/regions.py` | The Reaches' region map (plan R1): which region (or Lanternhaven, or the open sky) owns every point and how much, borders blending over 300 m; the same function both sides (shared vectors); place discovery and the map's watercolour |
+| `frontend/src/components/ui/` | The UI primitives every open-world sheet uses (plan F7): `Sheet` (side, centre or bottom by screen size), `Grid` and `Slot` (drag and drop, keyboard, touch long-press), `Tooltip`, `RadialMenu`, `HoldButton`, `Tabs`, `Counter`, toasts, gamepad navigation; `/?ui` shows them all |
+| `frontend/src/game/audio/` | Audio buses with ducking (music, ambience, world, combat, interface, voices), and the open world's engine (plan F9, loaded on demand): a voice pool, sound families, pooled spatial panners, sample sheets, ambience beds per region |
+| `frontend/src/game/perf.ts`, `components/PerfOverlay.tsx`, `scripts/bundle-check.mjs` | The `?perf` corner panel, and the first load's size check against `bundle-budget.json` (plan F11) |
 | `backend/profiles.py`                  | Persistent adventure profiles, inventory, issued rewards and XP |
 | `frontend/src/profile/`               | Profile API client, types and durable pickup outbox       |
 | `frontend/src/game/run/collection.ts` | Hoop-distance rarity, terrain-safe pickups and collection models |
-| `frontend/src/game/cosmetics/`, `game/pets/` | Toon outfits, decorated wing fans and animated hoop guides |
+| `frontend/src/game/cosmetics/`, `game/pets/` | Toon outfits, decorated wing fans, particle jars (`jars.ts`, its own chunk) and animated hoop guides |
+| `frontend/src/game/items/clearance.ts` | Carried items' solid shapes: the cape drapes in front of them and the wings turn out of them (its own chunk) |
 | `frontend/src/components/ProfilePanel.tsx`, `CollectionPreview.tsx`, `Minifigure.tsx`, `TestCollectionPanel.tsx` | The journal (profile, inventory with the draggable figurine and pet names, equip controls), previews and the unsaved test fitting room |
 | `frontend/src/components/ShopPanel.tsx`, `LeaderboardPanel.tsx`, `LessonCover.tsx` | The Lantern Market and Wheel of Winds, the Hall of Winds with pilot pages, lesson mode |
 | `frontend/src/components/preview3d.ts`, `portrait.ts` | One shared WebGL context for every 3D preview; leaderboard portraits |
@@ -647,12 +690,14 @@ All routes start with `/api`; interactive docs are at `/api/docs`.
 | `POST` | `/api/profile/adventures`  | Start an adventure: its token and frozen reward plan (20 an hour at most) |
 | `POST` | `/api/profile/claim`       | Claim pickups touched (a level's only after the levels before it could be flown) |
 | `POST` | `/api/profile/runs`        | Report an adventure: gates → XP, score → crystals, once, checked against the server's clock |
-| `POST` | `/api/profile/equip`       | Equip a cosmetic, a pet or the charm (`slot: charm`)     |
+| `POST` | `/api/profile/equip`       | Equip a cosmetic, a pet, a particle jar (`slot: jar`) or the charm (`slot: charm`); `none` empties pet, jar or charm |
 | `POST` | `/api/profile/pets`        | Name a companion                                         |
 | `POST` | `/api/profile/style`       | The character style shown on your public page            |
 | `GET`  | `/api/shop`                | Today's three offers, the wheel and whether its spin is ready |
 | `POST` | `/api/shop/buy`            | Buy one of today's offers                                |
 | `POST` | `/api/shop/spin`           | Spin the Wheel of Winds (once per UTC day; decided on the server) |
+| `GET`  | `/api/inv`                 | The open world's inventory: bag, storage, equipped gear, wallet (crystals), skill XP, slots and `rev` |
+| `POST` | `/api/inv/actions`         | Up to 50 inventory actions (`move`, `sell`, `discard`; `grant`, `grant_xp` with `DEV_TOOLS=1`), each with its own `action_id`; the same id again returns the first answer |
 | `GET`  | `/api/players`             | The Hall of Winds: pilots by XP                          |
 | `GET`  | `/api/players/{public_id}` | A pilot's public page (keyed by an HMAC id; no login or browser ids) |
 
@@ -682,9 +727,14 @@ cd frontend
 npm install
 npm run dev        # http://localhost:5173, forwards /api to :8000
 npm run lint
-npm run build
+npm run build      # also checks shared/catalog and regenerates src/catalog.gen.ts
+npm run catalog    # just that: after editing shared/catalog/*.json or its schemas
+npm run bundle:accept  # record the first load's gzipped size as the new baseline (on purpose only)
 npm test       # Node 22.18+; flight, camera, controls and ghost regressions
 ```
+
+Both Docker images build from the repo root (`docker-compose.yml`), so each
+can copy `shared/`; one `.dockerignore` at the root serves both.
 
 To test multiplayer on one machine, open the room in two different browsers
 (or one on `localhost` and one on `127.0.0.1`). Without HTTP/2, a browser
@@ -693,6 +743,28 @@ them up. Deployed, HTTP/2 lifts the limit.
 
 In development, the running game is available as `window.__game` in the
 browser console, handy for teleporting around or poking at the race state.
+
+`npm run build` ends with a size check: what the landing page and the races
+load before anything lazy (gzipped) may grow by at most 2 kB per step over
+`frontend/bundle-budget.json`. When a step means to grow it, run
+`npm run bundle:accept` and commit the new baseline.
+
+| URL | What |
+| :--- | :--- |
+| `/?ui` | Every UI primitive (sheets, grids, slots, tooltips, the radial menu, hold buttons, tabs, counters, toasts), the Reaches' map and discovery card, and every sound family, with frames at phone and laptop sizes and a light or dark map |
+| `?perf` (on any game URL) | A corner panel: fps, frame and step ms, draw calls and triangles (against the budget), particles, sound voices, network kB/s, heap |
+| `__bench(q, scene)` (console, dev) | Frame cost at quality `q`; scenes `reaches-farm`, `windspire-room`, `gathering-30` are placeholders until their steps build them |
+
+The open world's inventory has dev tools too. Start the backend with
+`DEV_TOOLS=1 python app.py` (never in production: it allows granting items),
+then in the console `__inv.grant("moonwheat", 40)` puts items in the bag and
+`__inv.xp("farming", 1093)` grants skill XP through the real path (the skill
+toast, the level-up card, the journal's Skills page, Wind Rank).
+
+Since the inventory (plan F3), a pilot's crystals live in the inventory's
+wallet (`inventory` table, location `wallet`); the profile's `crystals` reads
+and writes it. Existing balances move there once at startup (`meta` key
+`inventory_v1`).
 
 ## Ideas for Next Steps
 
