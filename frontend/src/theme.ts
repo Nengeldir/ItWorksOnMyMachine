@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Color, SRGBColorSpace } from "three";
 import { seedLevel } from "./game/world/biomes";
-import type { Palette } from "./game/world/palette";
+import { type Palette, skyIsDark } from "./game/world/palette";
 
 // The UI's ink (text and primary buttons) for each map palette, picked by eye to sit with its sky.
 // All are dark enough for body text on the light glass.
@@ -21,17 +21,11 @@ function deriveInk(palette: Palette): string {
   return `#${new Color().setHSL(hsl.h, Math.min(hsl.s, 0.45), 0.16, SRGBColorSpace).getHexString(SRGBColorSpace)}`;
 }
 
-const sky = new Color();
-
 /**
  * Whether a map's sky is dark (night, dusk, the deep): the landing page then writes in pristine white and
- * pale gold instead of the map's ink. The sky's average brightness (horizon and zenith), or its night
+ * pale gold instead of the map's ink. The same test picks how the pilot's particles are drawn (`skyIsDark`)
  */
-export function darkSky(palette: Palette): boolean {
-  const horizon = sky.set(palette.horizon).getHSL(hsl, SRGBColorSpace).l;
-  const zenith = sky.set(palette.zenith).getHSL(hsl, SRGBColorSpace).l;
-  return palette.night >= 0.5 || (horizon + zenith) / 2 < 0.45;
-}
+export const darkSky = skyIsDark;
 
 /** Recolors the whole UI for a map: the CSS derives every shade from these two (and `data-sky`) */
 export function applyUiTheme(palette: Palette) {

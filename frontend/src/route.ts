@@ -10,7 +10,9 @@ export type Screen =
   | { kind: "run"; seed: number }
   // Endless free flight in one map (any but Sky Isles: see `zenSeed`)
   | { kind: "zen"; seed: number }
-  | { kind: "gallery" };
+  | { kind: "gallery" }
+  // The UI primitives and the sound families (plan F7, F9); `frame`: drawn inside the page's own preview frame
+  | { kind: "ui"; frame: boolean };
 
 export function validBiome(biome: string | null): biome is BiomeId {
   return biome !== null && Object.hasOwn(BIOMES, biome);
@@ -35,6 +37,7 @@ export function screenFromSearch(search: string, hasNickname: boolean): Screen {
     return hasNickname ? { kind: "room", code: room } : { kind: "menu", joinCode: room };
   }
   if (params.has("gallery")) return { kind: "gallery" };
+  if (params.has("ui")) return { kind: "ui", frame: params.has("frame") };
   const seed = validSeed(params.get("seed"));
   const run = validSeed(params.get("run"));
   if (params.has("test")) {
@@ -59,5 +62,6 @@ export function urlFor(screen: Screen): string {
   if (screen.kind === "run") return `/?run=${screen.seed}`;
   if (screen.kind === "zen") return `/?zen=${screen.seed}`;
   if (screen.kind === "gallery") return "/?gallery";
+  if (screen.kind === "ui") return screen.frame ? "/?ui&frame" : "/?ui";
   return "/";
 }

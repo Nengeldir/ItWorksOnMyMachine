@@ -12,6 +12,7 @@ import { Avatar } from "./avatar";
 import { DEFAULT_APPEARANCE } from "./cosmetics/storage";
 import type { WingId } from "./cosmetics/catalog";
 import { previewLights } from "../components/preview3d";
+import { BENCH_SCENES } from "./benchScenes";
 
 // Development helpers on `window` (dev builds only), for looking at the game
 // from the console or from browser automation. Automated or background tabs
@@ -161,10 +162,30 @@ export function installDevtools(itemPreview: string | null = null) {
    * EXT_disjoint_timer_query_webgl2, the GPU time of its rendering (bloom
    * passes included). Hidden tabs don't throttle this, unlike
    * requestAnimationFrame. Stream the land first (__shot).
+   *
+   * `__bench(q, scene)` sets up a named scene first (benchScenes.ts: "reaches-farm",
+   * "windspire-room", "gathering-30"); scenes not built yet measure what's on screen and say so.
+   * Prints draw calls, triangles, particles, step and frame ms (p50/p95) and the heap's growth.
    */
-  const bench = async (quality: 0 | 1 | 2 = 2, frames = 240) => {
+  const bench = async (quality: 0 | 1 | 2 = 2, sceneOrFrames: string | number = 240, frameCount = 240) => {
     const g = (window as unknown as { __game: Game }).__game as unknown as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
     cancelAnimationFrame(g.frame);
+    const sceneName = typeof sceneOrFrames === "string" ? sceneOrFrames : null;
+    const frames = typeof sceneOrFrames === "number" ? sceneOrFrames : frameCount;
+    const scene = sceneName ? BENCH_SCENES[sceneName] : null;
+    if (sceneName && !scene) throw new Error(`No bench scene "${sceneName}": ${Object.keys(BENCH_SCENES).join(", ")}`);
+    const undo = scene?.setup?.(g);
+    const memory = () => (performance as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize ?? null;
+    const heapBefore = memory();
+    // Time the 120 Hz steps inside each frame too
+    const step = g.step.bind(g);
+    let stepMs = 0;
+    const steps: number[] = [];
+    g.step = (...args: unknown[]) => {
+      const s = performance.now();
+      step(...args);
+      stepMs += performance.now() - s;
+    };
     const fx = (window as unknown as { __tuning: Record<string, Record<string, unknown>> }).__tuning["Trails & particles"];
     const wasAuto = fx.autoQuality;
     fx.autoQuality = false;
@@ -187,12 +208,17 @@ export function installDevtools(itemPreview: string | null = null) {
     for (let i = 0; i < 30 + frames; i++) {
       t += 1000 / 60;
       const start = performance.now();
+      stepMs = 0;
       g.loop(t);
-      if (i >= 30) cpu.push(performance.now() - start);
+      if (i >= 30) {
+        cpu.push(performance.now() - start);
+        steps.push(stepMs);
+      }
       cancelAnimationFrame(g.frame);
       if (i % 4 === 0) await settle();
     }
     g.render = render;
+    g.step = step;
     // Collect the GPU times as they become available
     const gpu: number[] = [];
     const deadline = performance.now() + 3000;
@@ -212,7 +238,20 @@ export function installDevtools(itemPreview: string | null = null) {
     render();
     const info = { calls: g.renderer.info.render.calls, triangles: g.renderer.info.render.triangles };
     g.renderer.info.autoReset = true;
-    return { quality, cpu: summary(cpu), gpu: summary(gpu), ...info, pixels: `${g.renderer.domElement.width}x${g.renderer.domElement.height}` };
+    const heapAfter = memory();
+    const particles = g.particles.alive() + g.softParticles.alive();
+    if (typeof undo === "function") undo();
+    return {
+      quality,
+      ...(sceneName ? { scene: sceneName, ready: scene!.ready, note: scene!.note } : {}),
+      cpu: summary(cpu),
+      gpu: summary(gpu),
+      step: summary(steps),
+      ...info,
+      particles,
+      heapMB: heapBefore !== null && heapAfter !== null ? +((heapAfter - heapBefore) / 1048576).toFixed(2) : null,
+      pixels: `${g.renderer.domElement.width}x${g.renderer.domElement.height}`,
+    };
   };
 
   /**

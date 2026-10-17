@@ -709,6 +709,8 @@ const GameScreen = ({ screen, onNewRun, ...props }: ScreenProps & { screen: Excl
   if (screen.kind === "run") return <RunScreen seed={screen.seed} onNewRun={onNewRun} {...props} />;
   if (screen.kind === "zen") return <ZenScreen seed={screen.seed} {...props} />;
   if (screen.kind === "gallery") return <GalleryScreen onExit={props.onExit} />;
+  // App draws /?ui itself
+  if (screen.kind === "ui") return null;
   return screen.kind === "solo" ? (
     <SoloScreen seed={screen.seed} {...props} />
   ) : (

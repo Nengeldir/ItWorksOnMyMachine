@@ -46,7 +46,7 @@ export default function SettingsPanel({ settings, onSettings, onClose }: Props) 
   const toggle = (key: "invertPitch" | "invertMouse" | "invertGamepad" | "invertTouch" | "reducedMotion" | "muted" | "crystalsOnly" | "leftHandedTouch" | "lessonMode", label: string) => (
     <label className="check"><input type="checkbox" checked={!!settings[key]} onChange={e => update({ [key]: e.target.checked })} />{label}</label>
   );
-  const slider = (key: "mouseSensitivity" | "deadZone" | "musicVolume" | "effectsVolume", label: string, min: number, max: number, step: number, fallback: number) => (
+  const slider = (key: "mouseSensitivity" | "deadZone" | "musicVolume" | "effectsVolume" | "ambienceVolume" | "combatVolume" | "uiVolume" | "voiceVolume", label: string, min: number, max: number, step: number, fallback: number) => (
     <label className="field"><span>{label} <output>{(settings[key] ?? fallback).toFixed(2)}</output></span>
       <input type="range" aria-label={label} min={min} max={max} step={step} value={settings[key] ?? fallback} onChange={e => update({ [key]: Number(e.target.value) })} />
     </label>
@@ -104,6 +104,14 @@ export default function SettingsPanel({ settings, onSettings, onClose }: Props) 
       {toggle("muted", "Mute all audio")}
       {slider("musicVolume", "Music volume", 0, 1, 0.05, 1)}
       {slider("effectsVolume", "Effects and wind volume", 0, 1, 0.05, 1)}
+      <details className="settings-mixer">
+        <summary>Mixer</summary>
+        <p className="settings-help">Each is a share of the effects volume.</p>
+        {slider("ambienceVolume", "Ambience", 0, 1, 0.05, 1)}
+        {slider("uiVolume", "Interface sounds", 0, 1, 0.05, 1)}
+        {slider("combatVolume", "Combat", 0, 1, 0.05, 1)}
+        {slider("voiceVolume", "Voices", 0, 1, 0.05, 1)}
+      </details>
     </section>
     <section className="sheet-panel"><h3>Display and camera</h3>
       <label className="field"><span>Graphics quality</span><select value={settings.quality ?? "auto"} onChange={e => update({quality:e.target.value as Settings["quality"]})}>

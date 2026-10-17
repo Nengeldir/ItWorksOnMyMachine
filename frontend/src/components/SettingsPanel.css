@@ -20,3 +20,14 @@
 .settings-dialog footer .primary { min-width: 9rem; border-radius: 999px; }
 .hud-pause button { pointer-events: auto; padding: .5rem 1rem; border-radius: 14px; cursor: pointer; }
 @media (max-width: 440px) { .settings-dialog { padding: 1rem; border-radius: 24px; } .binding-row { grid-template-columns: minmax(0,1fr) minmax(0,1fr) 1.5rem; } .binding-row > span { grid-column: 1 / -1; } }
+
+/* The open world's mixer (plan F9): folded under the two main sliders */
+.settings-mixer summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--ink-70);
+  margin: 0.4rem 0 0.2rem;
+}
+.settings-mixer[open] summary {
+  margin-bottom: 0;
+}

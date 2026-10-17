@@ -1,0 +1,176 @@
+/* /?ui: a soft painted sky behind the glass, in the map's colors */
+.uig {
+  min-height: 100dvh;
+  padding: 1.2rem max(1rem, env(safe-area-inset-right)) 4rem max(1rem, env(safe-area-inset-left));
+  background:
+    radial-gradient(ellipse at 20% 0%, color-mix(in srgb, var(--tint) 85%, #fff), transparent 60%),
+    linear-gradient(180deg, color-mix(in srgb, var(--tint) 70%, #9cc6ef), color-mix(in srgb, var(--ink) 35%, var(--tint)));
+  color: var(--ink);
+}
+
+:root[data-sky="dark"] .uig {
+  background:
+    radial-gradient(ellipse at 20% 0%, color-mix(in srgb, var(--tint) 30%, #3a3270), transparent 60%),
+    linear-gradient(180deg, #1d1f45, color-mix(in srgb, var(--ink) 70%, #10122a));
+}
+
+:root[data-sky="dark"] .uig-head h1,
+:root[data-sky="dark"] .uig-head > .uig-note,
+:root[data-sky="dark"] .uig > .uig-status,
+:root[data-sky="dark"] .uig-framed > .uig-status {
+  color: #fff;
+}
+
+.uig-framed {
+  padding-top: 0.8rem;
+}
+
+.uig-head {
+  max-width: 72rem;
+  margin: 0 auto 1rem;
+}
+
+.uig-head h1 {
+  font-size: 1.8rem;
+}
+
+.uig-section {
+  max-width: 72rem;
+  margin: 0 auto 0.9rem;
+}
+
+.uig-status {
+  max-width: 72rem;
+  margin: 0 auto 0.8rem;
+  font-family: var(--font-numbers);
+  font-size: 0.85rem;
+}
+
+.uig-note {
+  margin: 0 0 0.7rem;
+  font-size: 0.9rem;
+  color: var(--ink-70);
+}
+
+.uig-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
+}
+
+.uig-grids {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.2rem;
+  margin-bottom: 0.8rem;
+}
+
+.uig-grids h4,
+.uig-section h4 {
+  margin: 0 0 0.4rem;
+  font-size: 0.9rem;
+  color: var(--ink-70);
+}
+
+.uig-hotbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.uig-hotbar .ui-slot {
+  width: 3.25rem;
+}
+
+.uig-thumb {
+  display: grid;
+  place-items: center;
+  width: 7rem;
+  height: 4.5rem;
+  border-radius: 20px;
+  border: 2px dashed var(--ink-45);
+  font-weight: 700;
+  color: var(--ink-70);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+}
+
+.uig-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  font-weight: 700;
+  min-width: 7rem;
+}
+
+.uig-frame-box {
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.uig-frame-box iframe {
+  flex: none;
+  border: 0;
+  border-radius: 18px;
+  box-shadow: 0 20px 60px color-mix(in srgb, var(--ink) 35%, transparent);
+  transform-origin: top center;
+  background: #fff;
+}
+
+.uig-buses {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0 1rem;
+  margin-bottom: 0.6rem;
+}
+
+.uig-family {
+  min-width: 5.5rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-70);
+}
+
+.uig-meter {
+  display: inline-block;
+  min-width: 2ch;
+}
+
+.uig select {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  border-radius: 10px;
+  border: 1px solid var(--ink-12);
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--ink);
+}
+
+:root[data-sky="dark"] .uig-head .segmented {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+:root[data-sky="dark"] .uig-head .check {
+  color: #fff;
+}
+
+/* The map demo's discovery card, on a stage of its own (it is placed over the game in flight) */
+.uig-title-stage {
+  position: relative;
+  height: 13rem;
+  overflow: hidden;
+  border-radius: 18px;
+  background: linear-gradient(#cfe2f2, #eef3e4);
+}
+
+.uig-title-stage .run-title {
+  top: 1.5rem;
+}

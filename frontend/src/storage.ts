@@ -17,6 +17,7 @@ export function defaultSettings(): Settings {
   return { nickname: "", leftHandedTouch: false, invertPitch: false, invertMouse: false, invertGamepad: false, invertTouch: false,
     mouseSensitivity: 2, bindings: defaultBindings(), deadZone: 0.12,
     reducedMotion: false, quality: "auto", musicVolume: 1, effectsVolume: 1, muted: false,
+    ambienceVolume: 1, combatVolume: 1, uiVolume: 1, voiceVolume: 1,
     pilotStyle: 1, crystalsOnly: false, lessonMode: false };
 }
 
@@ -65,6 +66,8 @@ export function normalizeSettings(value: unknown): Settings {
     invertTouch: flag("invertTouch"), leftHandedTouch: flag("leftHandedTouch"),
     deadZone: number("deadZone", 0, 0.4, 0.12), reducedMotion: flag("reducedMotion"), muted: flag("muted"),
     musicVolume: number("musicVolume", 0, 1, 1), effectsVolume: number("effectsVolume", 0, 1, 1),
+    ambienceVolume: number("ambienceVolume", 0, 1, 1), combatVolume: number("combatVolume", 0, 1, 1),
+    uiVolume: number("uiVolume", 0, 1, 1), voiceVolume: number("voiceVolume", 0, 1, 1),
     pilotStyle: saved.pilotStyle === 2 ? 2 : 1, crystalsOnly: flag("crystalsOnly"), lessonMode: flag("lessonMode"),
     quality: ["auto","high","medium","low"].includes(String(saved.quality)) ? saved.quality as Settings["quality"] : "auto",
   };

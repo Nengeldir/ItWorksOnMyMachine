@@ -1,0 +1,565 @@
+/* The UI primitives (plan F7), in the glass language of the sheets in index.css: soft white panels,
+   round corners, gentle motion, every shade derived from --ink and --tint (theme.ts). */
+
+.ui-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* --- Sheet --------------------------------------------------------------------------------------- */
+
+.ui-sheet[open] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 1.1rem 1.2rem 1.2rem;
+}
+
+.ui-sheet-head {
+  flex: none;
+  margin-bottom: 0.8rem;
+}
+
+.ui-sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /* Room for focus rings at the scroll's edges */
+  padding: 3px;
+  margin: -3px;
+}
+
+.ui-sheet-foot {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding-top: 0.9rem;
+}
+
+/* Wide: a full-height side sheet on the right */
+.ui-sheet--side {
+  inset: 0 0 0 auto;
+  margin: 0;
+  width: min(32rem, calc(100vw - 3rem));
+  height: 100dvh;
+  max-height: none;
+  border-radius: 32px 0 0 32px;
+  border-right: none;
+  padding-right: calc(1.2rem + env(safe-area-inset-right));
+}
+
+.ui-sheet--side[open] {
+  animation: ui-sheet-side 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.05) both;
+}
+
+/* Medium: the centred panel every sheet already is (index.css) */
+.ui-sheet--centre {
+  width: min(36rem, calc(100vw - 2rem));
+}
+
+/* Compact and short: a bottom sheet with a handle */
+.ui-sheet--bottom {
+  inset: auto 0 0 0;
+  margin: 0 auto;
+  width: min(40rem, 100vw);
+  max-width: 100vw;
+  max-height: min(88dvh, calc(100dvh - 1.5rem));
+  border-radius: 28px 28px 0 0;
+  border-bottom: none;
+  padding-top: 0.35rem;
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+}
+
+.ui-sheet--bottom[open] {
+  animation: ui-sheet-up 0.38s cubic-bezier(0.2, 0.9, 0.3, 1.05) both;
+}
+
+.ui-sheet--bottom .sheet-head h2 {
+  font-size: 1.35rem;
+}
+
+/* Phones held sideways: every pixel of height goes to the body (no badge or eyebrow, a smaller close,
+   a tighter footer) */
+@media (max-height: 479px) {
+  .ui-sheet--bottom {
+    max-height: calc(100dvh - 0.5rem);
+    padding-bottom: calc(0.6rem + env(safe-area-inset-bottom));
+  }
+  .ui-sheet--bottom .ui-sheet-head {
+    margin-bottom: 0.4rem;
+  }
+  .ui-sheet--bottom .ui-sheet-head .overlay-badge,
+  .ui-sheet--bottom .ui-sheet-head small {
+    display: none;
+  }
+  .ui-sheet--bottom .ui-sheet-head h2 {
+    font-size: 1.15rem;
+  }
+  .ui-sheet--bottom .sheet-close {
+    width: 2.3rem;
+    height: 2.3rem;
+  }
+  .ui-sheet--bottom .ui-sheet-handle {
+    height: 1.1rem;
+  }
+  .ui-sheet--bottom .ui-sheet-foot {
+    padding-top: 0.5rem;
+  }
+}
+
+.ui-sheet-handle {
+  flex: none;
+  display: grid;
+  place-items: center;
+  height: 1.6rem;
+  margin: 0 -1.2rem 0.1rem;
+  cursor: grab;
+  touch-action: none;
+}
+
+.ui-sheet-handle span {
+  width: 2.8rem;
+  height: 0.3rem;
+  border-radius: 999px;
+  background: var(--ink-12);
+}
+
+.ui-pulled {
+  animation: none !important;
+  transition: none;
+}
+
+.ui-sheet:not(.ui-pulled) {
+  transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+
+.ui-sheet.ui-still[open] {
+  animation: ui-fade 0.2s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-sheet[open] {
+    animation: ui-fade 0.2s ease both;
+  }
+}
+
+@keyframes ui-sheet-side {
+  from {
+    opacity: 0;
+    transform: translateX(2.5rem);
+  }
+}
+
+@keyframes ui-sheet-up {
+  from {
+    opacity: 0.4;
+    transform: translateY(3rem);
+  }
+}
+
+@keyframes ui-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* --- Slots and grids ------------------------------------------------------------------------------ */
+
+.ui-grid {
+  --slot: 3.25rem;
+  display: grid;
+  grid-template-columns: repeat(var(--grid-columns), minmax(2.75rem, var(--slot)));
+  gap: 0.35rem;
+  /* As wide as its slots want, never wider than its container: the tracks then shrink to 44 px */
+  width: min(100%, calc(var(--grid-columns) * var(--slot) + (var(--grid-columns) - 1) * 0.35rem));
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.ui-slot {
+  position: relative;
+  aspect-ratio: 1;
+  min-width: 2.75rem; /* 44 px: a finger's target */
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.46));
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow:
+    inset 0 -2px 6px var(--ink-06),
+    0 2px 6px var(--ink-06);
+  color: var(--ink);
+  cursor: pointer;
+  touch-action: pan-y;
+  transition:
+    transform 0.14s ease,
+    box-shadow 0.18s ease,
+    opacity 0.18s ease;
+  outline: none;
+}
+
+.ui-slot.is-empty {
+  background: var(--ink-06);
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: inset 0 1px 3px var(--ink-06);
+  cursor: default;
+}
+
+.ui-slot.is-rare {
+  box-shadow:
+    inset 0 0 0 2px var(--slot-rarity),
+    inset 0 0 14px color-mix(in srgb, var(--slot-rarity) 45%, transparent),
+    0 2px 8px color-mix(in srgb, var(--slot-rarity) 30%, transparent);
+}
+
+.ui-slot:hover:not(.is-empty) {
+  transform: translateY(-1px);
+}
+
+.ui-slot:focus-visible {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px var(--ink);
+  transform: translateY(-1px);
+}
+
+.ui-slot.is-selected {
+  box-shadow:
+    0 0 0 2px var(--gold),
+    0 0 16px color-mix(in srgb, var(--gold) 55%, transparent);
+}
+
+.ui-slot.is-lifted {
+  opacity: 0.35;
+  border-style: dashed;
+}
+
+.ui-slot.is-target {
+  transform: scale(1.06);
+  box-shadow:
+    0 0 0 2px var(--gold),
+    0 0 18px color-mix(in srgb, var(--gold) 70%, transparent);
+}
+
+.ui-slot-icon {
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--slot-rarity-deep, var(--ink-70));
+  pointer-events: none;
+}
+
+.ui-slot-count {
+  position: absolute;
+  right: 0.3rem;
+  bottom: 0.15rem;
+  font-family: var(--font-numbers);
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-shadow:
+    0 0 3px #fff,
+    0 0 6px #fff;
+  pointer-events: none;
+}
+
+.ui-slot-cool {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: conic-gradient(color-mix(in srgb, var(--ink) 30%, transparent) calc(var(--slot-cool) * 360deg), transparent 0);
+  pointer-events: none;
+}
+
+.ui-slot-lock {
+  position: absolute;
+  top: 0.2rem;
+  right: 0.25rem;
+  color: var(--ink-45);
+}
+
+.ui-slot-ghost {
+  position: fixed;
+  z-index: 70;
+  width: 3.5rem;
+  pointer-events: none;
+  transform: translate(-50%, -62%) scale(1.12) rotate(-4deg);
+  box-shadow: 0 14px 28px color-mix(in srgb, var(--ink) 30%, transparent);
+  transition: none;
+}
+
+html.touch .ui-grid {
+  --slot: 3.5rem;
+}
+
+/* --- Tooltips -------------------------------------------------------------------------------------- */
+
+.ui-tip-anchor {
+  display: inline-flex;
+}
+
+.ui-tip {
+  position: fixed;
+  z-index: 60;
+  max-width: min(18rem, calc(100vw - 1rem));
+  padding: 0.75rem 0.9rem;
+  border-radius: 18px;
+  font-size: 0.92rem;
+  pointer-events: none;
+  animation: ui-fade 0.14s ease both;
+}
+
+.ui-tip-bottom-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 65;
+}
+
+.ui-tip-bottom {
+  position: absolute;
+  left: 50%;
+  bottom: calc(0.6rem + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(30rem, calc(100vw - 1.2rem));
+  max-height: 60dvh;
+  overflow: auto;
+  padding: 1rem 1.1rem;
+  border-radius: 24px;
+  animation: ui-sheet-up 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.05) both;
+}
+
+.ui-tip-close {
+  float: right;
+  width: 2.2rem;
+  height: 2.2rem;
+  margin: -0.3rem -0.3rem 0.3rem 0.5rem;
+}
+
+/* --- Radial menu --------------------------------------------------------------------------------- */
+
+dialog.ui-radial-veil {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: hidden;
+  outline: none;
+}
+
+dialog.ui-radial-veil::backdrop {
+  background: radial-gradient(circle, color-mix(in srgb, var(--ink, #2e1b3a) 12%, transparent), color-mix(in srgb, var(--ink, #2e1b3a) 38%, transparent));
+}
+
+.ui-radial {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  animation: ui-radial-in 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+.ui-radial svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.ui-radial-wedge {
+  fill: color-mix(in srgb, color-mix(in srgb, #fff 80%, var(--tint)) 90%, transparent);
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 1.2;
+  transition:
+    fill 0.12s,
+    filter 0.12s;
+}
+
+.ui-radial-wedge.is-on {
+  fill: #fff;
+  stroke: var(--gold);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--gold) 70%, transparent));
+}
+
+.ui-radial-wedge.is-off {
+  opacity: 0.45;
+}
+
+.ui-radial-core {
+  fill: color-mix(in srgb, #fff 55%, transparent);
+  stroke: rgba(255, 255, 255, 0.9);
+}
+
+.ui-radial-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0;
+  border: none;
+  background: none !important;
+  color: var(--ink);
+  pointer-events: none;
+  transition: transform 0.12s;
+}
+
+.ui-radial-label.is-on {
+  transform: translate(-50%, -50%) scale(1.12);
+}
+
+.ui-radial-label small {
+  font-size: 0.72rem;
+  font-weight: 700;
+  max-width: 5.2rem;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.ui-radial-name {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 4.6rem;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--ink-70);
+  pointer-events: none;
+}
+
+@keyframes ui-radial-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8) rotate(-12deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-radial {
+    animation: ui-fade 0.15s ease both;
+  }
+}
+
+/* --- Hold button --------------------------------------------------------------------------------- */
+
+.ui-hold {
+  position: relative;
+  min-height: 2.9rem;
+  padding-inline: 1.3rem;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ui-hold-ring {
+  position: absolute;
+  inset: -4px;
+  width: calc(100% + 8px);
+  height: calc(100% + 8px);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.ui-hold-ring rect {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 4;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--gold) 80%, transparent));
+}
+
+.ui-hold.is-done {
+  animation: ui-hold-done 0.45s ease;
+}
+
+@keyframes ui-hold-done {
+  40% {
+    transform: scale(1.06);
+    box-shadow: 0 0 22px color-mix(in srgb, var(--gold) 70%, transparent);
+  }
+}
+
+/* --- Tabs, counters ------------------------------------------------------------------------------ */
+
+.ui-tabs button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.ui-counter {
+  font-family: var(--font-numbers);
+  font-variant-numeric: tabular-nums;
+  transition: color 0.3s;
+}
+
+.ui-counter.is-rolling {
+  color: var(--warm-deep);
+}
+
+/* --- Toasts -------------------------------------------------------------------------------------- */
+
+.ui-toasts {
+  position: fixed;
+  z-index: 80;
+  left: 50%;
+  bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 0.4rem;
+  pointer-events: none;
+}
+
+.ui-toast {
+  pointer-events: auto;
+  border-radius: 999px;
+  padding: 0.45rem 1rem;
+  font-size: 0.92rem;
+  animation: ui-toast-in 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+.ui-toast b {
+  font-family: var(--font-numbers);
+  font-size: 0.8rem;
+  color: var(--ink-70);
+}
+
+.ui-toast-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--ink-45);
+}
+
+.ui-toast.tone-good .ui-toast-dot {
+  background: var(--good);
+}
+
+.ui-toast.tone-warn .ui-toast-dot {
+  background: var(--warm-deep);
+}
+
+@keyframes ui-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.6rem) scale(0.96);
+  }
+}

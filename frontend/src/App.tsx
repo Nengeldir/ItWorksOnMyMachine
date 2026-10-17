@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { defaultBindings, keyboardBinding } from "./game/bindings";
 import LessonCover from "./components/LessonCover";
 import { type User, getMe } from "./api";
@@ -8,6 +8,8 @@ import { FirstFlight } from "./components/Help";
 import Menu from "./components/Menu";
 import AchievementToast from "./components/AchievementToast";
 import { profileClient } from "./profile/client";
+import { worldUi } from "./worldUi";
+import { PERF_ON } from "./game/perfFlag";
 import { type Screen, screenFromSearch, urlFor } from "./route";
 import {
   type Settings,
@@ -21,10 +23,25 @@ import {
 
 export type { Screen } from "./route";
 
+// The open world's skill toast and level-up card: loaded once its inventory is in use (worldUi)
+const WorldOverlays = lazy(() => import("./components/world/WorldOverlays"));
+// The UI primitives' page (/?ui, plan F7): a chunk of its own
+const UiGallery = lazy(() => import("./components/ui/dev/UiGallery"));
+// ?perf: the performance corner panel (plan F11), loaded only when asked for
+const PerfOverlay = lazy(() => import("./components/PerfOverlay"));
+
 const screenFromUrl = (): Screen => screenFromSearch(location.search, Boolean(loadSettings().nickname));
 
 const App = () => {
   useEffect(() => { void profileClient.initialize(); }, []);
+  useEffect(() => {
+    if (import.meta.env.DEV) void import("./game/inventory/dev").then(({ installInventoryDevtools }) => installInventoryDevtools());
+  }, []);
+  const world = useSyncExternalStore(worldUi.subscribe, worldUi.get);
+  const overlays = <>
+    {world && <Suspense fallback={null}><WorldOverlays /></Suspense>}
+    {PERF_ON && <Suspense fallback={null}><PerfOverlay /></Suspense>}
+  </>;
   const [screen, setScreen] = useState<Screen>(screenFromUrl);
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [me, setMe] = useState<User | null>(null);
@@ -79,10 +96,12 @@ const App = () => {
   }, [settings, lesson]);
   const cover = lesson && <LessonCover onBack={endLesson} />;
 
+  if (screen.kind === "ui") return <Suspense fallback={null}><UiGallery frame={screen.frame} /></Suspense>;
   if (screen.kind === "menu") {
     return <>
       <Menu me={me} settings={settings} onSettings={updateSettings} joinCode={screen.joinCode} go={go} />
       <AchievementToast />
+      {overlays}
       {cover}
     </>;
   }
@@ -108,6 +127,7 @@ const App = () => {
       />
       {playing && newcomer && !asked && <FirstFlight onStart={() => answer("started")} onSkip={() => answer("skipped")} />}
       {screen.kind !== "test" && screen.kind !== "explore" && <AchievementToast />}
+      {overlays}
       {cover}
     </>
   );

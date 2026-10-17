@@ -100,6 +100,7 @@ export function noiseBuffer(ctx: AudioContext): AudioBuffer {
 }
 
 const C5 = 523.25, E5 = 659.25, G5 = 783.99, C6 = 1046.5, E6 = 1318.5, G6 = 1568, C7 = 2093;
+const D6 = 1174.7, A5 = 880, A6 = 1760;
 
 /** A collectible's signature, `level` 0..1 scales it down (an ambient pet call is quieter than a pick in the inventory) */
 export function voice(s: Synth, v: Voice, level = 1) {
@@ -205,8 +206,11 @@ export function voice(s: Synth, v: Voice, level = 1) {
   }
 }
 
-/** Chimes of the collection's moments: a treasure by its rarity, a purchase, the wheel's ticks and prizes */
-export type Chime = "treasure0" | "treasure1" | "treasure2" | "treasure3" | "buy" | "tick" | "nothing" | "win" | "jackpot" | "duplicate" | "denied";
+/**
+ * Chimes of the collection's moments: a treasure by its rarity, a purchase, the wheel's ticks and prizes;
+ * and the open world's skill XP (a soft pluck, pitch a little different each time) and level-up (a harp)
+ */
+export type Chime = "treasure0" | "treasure1" | "treasure2" | "treasure3" | "buy" | "tick" | "nothing" | "win" | "jackpot" | "duplicate" | "denied" | "skill" | "levelUp";
 
 export function chime(s: Synth, c: Chime) {
   switch (c) {
@@ -250,6 +254,19 @@ export function chime(s: Synth, c: Chime) {
     case "denied":
       s.tone(220, 0.18, "square", 0.03);
       break;
+    case "skill": {
+      // ±4% pitch so a run of gains never repeats exactly (plan §3.4)
+      const pitch = 0.96 + Math.random() * 0.08;
+      s.tone(G6 * pitch, 0.18, "triangle", 0.045);
+      s.tone(C7 * pitch, 0.22, "sine", 0.03, 0.04);
+      break;
+    }
+    case "levelUp":
+      // A rising pentatonic harp, then a warm chord under it
+      [C5, E5, G5, A5, C6, D6, E6, G6, A6].forEach((f, i) => s.tone(f, 1.1 - i * 0.05, "triangle", 0.05, i * 0.055));
+      [C5 / 2, G5 / 2, E5].forEach((f) => s.tone(f, 1.8, "sine", 0.06, 0.45));
+      s.hiss(3000, 9000, 0.9, 0.025, "highpass", 0.45);
+      break;
   }
 }
 
@@ -259,7 +276,8 @@ let page: { synth: Synth; gain: GainNode } | null = null;
 
 function pageSynth(): Synth | null {
   const settings = loadSettings();
-  const volume = settings.effectsVolume ?? 1;
+  // Menu chimes are interface sounds: the mixer's interface slider shares the effects volume
+  const volume = (settings.effectsVolume ?? 1) * (settings.uiVolume ?? 1);
   if (settings.muted || volume <= 0) return null;
   try {
     if (!page) {

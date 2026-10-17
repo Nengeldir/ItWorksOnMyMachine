@@ -1,4 +1,4 @@
-import { IconArrowLeft, IconBuildingStore, IconCompass, IconDiamond, IconDice5, IconFlag, IconMap, IconSettings, IconTrophy, IconUser, IconUsers, IconWind } from "@tabler/icons-react";
+import { IconArrowLeft, IconBuildingStore, IconCompass, IconDiamond, IconDice5, IconFlag, IconLeaf, IconMap, IconSettings, IconTrophy, IconUser, IconUsers, IconWind } from "@tabler/icons-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useId, useMemo, useState, useSyncExternalStore } from "react";
 import { type LeaderboardEntry, type User, getLeaderboard } from "../api";
 import type { Screen } from "../App";
@@ -79,6 +79,38 @@ const Emblem = ({ icon, name, line, onClick }: { icon: ReactNode; name: string; 
   );
 };
 
+/** Explore's sign: a leaf over a compass rose, drawn as a constellation (lines and star nodes) */
+const ExploreSign = () => (
+  <svg width="42" height="42" viewBox="-18 -18 36 36" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M0 -16 L0 -12 M16 0 L12 0 M0 16 L0 12 M-16 0 L-12 0" strokeWidth="1.5" />
+    <path d="M-8 9 C-11 -2 -3 -10 9 -10 C10 2 2 10 -8 9 Z" strokeWidth="1.7" />
+    <path d="M-8 9 L5 -5 M-3 4 L-3 -1 M1 0 L5 0" strokeWidth="1.2" opacity="0.85" />
+    <g fill="currentColor" stroke="none">
+      <circle cy="-16" r="1.7" /><circle cx="16" r="1.7" /><circle cy="16" r="1.7" /><circle cx="-16" r="1.7" />
+      <circle cx="9" cy="-10" r="1.3" /><circle cx="-8" cy="9" r="1.3" />
+    </g>
+  </svg>
+);
+
+/** The Gathering's sign: a ring of five lanterns linked by a thread of light */
+const GatheringSign = () => (
+  <svg width="42" height="42" viewBox="-18 -18 36 36" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle r="11.5" strokeWidth="1.1" strokeDasharray="2 2.6" opacity="0.85" />
+    {[0, 1, 2, 3, 4].map((i) => {
+      const a = (i / 5) * Math.PI * 2;
+      const x = Math.sin(a) * 11.5;
+      const y = -Math.cos(a) * 11.5;
+      return (
+        <g key={i} transform={`translate(${x.toFixed(2)} ${y.toFixed(2)})`}>
+          <path d="M-1.6 -4.2 L1.6 -4.2" strokeWidth="1.2" />
+          <rect x="-2.8" y="-3.2" width="5.6" height="6.4" rx="2.2" strokeWidth="1.5" />
+          <circle r="1.1" fill="currentColor" stroke="none" />
+        </g>
+      );
+    })}
+  </svg>
+);
+
 const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
   const [daily, setDaily] = useState(() => dailySeed());
   // Today's run has a seed of its own, so it starts on another map than today's course
@@ -99,9 +131,10 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
     const { biome, palette } = seedLevel(zenDaily);
     return { map: biome.name, mood: palette.name };
   }, [zenDaily]);
-  // The landing page's pages: the three modes, then each mode's page (Racing's two ways, and each way)
-  const [view, setView] = useState<"home" | "adventure" | "racing" | "solo" | "friends" | "zen">(joinCode ? "friends" : "home");
-  const back = () => setView(view === "solo" || view === "friends" ? "racing" : "home");
+  // The landing page's pages: the four modes, then each mode's page (Racing's two ways and each way,
+  // Explore's Reaches and Zen flight)
+  const [view, setView] = useState<"home" | "adventure" | "racing" | "solo" | "friends" | "explore" | "zen" | "gathering">(joinCode ? "friends" : "home");
+  const back = () => setView(view === "solo" || view === "friends" ? "racing" : view === "zen" ? "explore" : "home");
   const [code, setCode] = useState(joinCode ?? "");
   const [board, setBoard] = useState<LeaderboardEntry[]>([]);
   const best = useMemo(() => bestRun(dailyRun), [dailyRun]);
@@ -155,6 +188,7 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
       if (view === "home") setView("adventure");
       else if (view === "adventure") go({ kind: "run", seed: dailyRun });
       else if (view === "solo") go({ kind: "solo", seed: daily });
+      else if (view === "explore") setView("zen");
       else if (view === "zen") go({ kind: "zen", seed: zenDaily });
     };
     window.addEventListener("keydown", onKeyDown);
@@ -233,7 +267,8 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
             <section className="menu-modes" aria-label="Game modes">
               <Emblem icon={<IconFlag size={30} />} name="Racing" line="Time trials and races with friends" onClick={() => setView("racing")} />
               <Emblem icon={<IconCompass size={34} />} name="Adventure" line="Eight worlds, one flight" onClick={() => setView("adventure")} />
-              <Emblem icon={<IconWind size={30} />} name="Zen" line="One endless map, no clock" onClick={() => setView("zen")} />
+              <Emblem icon={<ExploreSign />} name="Explore" line="Zen flight now, the Reaches soon" onClick={() => setView("explore")} />
+              <Emblem icon={<GatheringSign />} name="Gathering" line="Lanternhaven together, soon" onClick={() => setView("gathering")} />
             </section>
           )}
 
@@ -243,7 +278,7 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
                 <button className="menu-back" onClick={back} aria-label="Back">
                   <IconArrowLeft size={18} /> Back
                 </button>
-                <b>{view === "adventure" ? "Adventure" : view === "racing" ? "Racing" : view === "solo" ? "Solo" : view === "friends" ? "With friends" : "Zen"}</b>
+                <b>{{ adventure: "Adventure", racing: "Racing", solo: "Solo", friends: "With friends", explore: "Explore", zen: "Zen flight", gathering: "Gathering" }[view]}</b>
               </header>
 
               {view === "adventure" ? (
@@ -289,6 +324,43 @@ const Menu = ({ me, settings, onSettings, joinCode, go }: MenuProps) => {
                     <small>A room: the same map, the same start, up to 12 pilots</small>
                   </button>
                 </div>
+              ) : view === "explore" ? (
+                <>
+                  <p className="menu-lede">Wander at your own pace: one endless map now, a whole world soon.</p>
+                  <div className="menu-ways">
+                    <button className="menu-way" onClick={() => setView("zen")}>
+                      <IconWind size={30} />
+                      <b>Zen flight</b>
+                      <small>One endless map, no clock, nothing to chase</small>
+                    </button>
+                    <div className="menu-way is-soon" aria-label="The Reaches, coming soon">
+                      <IconLeaf size={30} />
+                      <b>The Reaches</b>
+                      <small>A persistent world: gardens, canopies, crystal veins, a home isle</small>
+                      <span className="menu-soon">Coming soon</span>
+                    </div>
+                  </div>
+                </>
+              ) : view === "gathering" ? (
+                <>
+                  <p className="menu-lede">Lanternhaven with everyone: wave, hold hands, trade and fly as a flock.</p>
+                  <div className="menu-course menu-soon-card">
+                    <div>
+                      <small>The Gathering</small>
+                      <b>Coming soon</b>
+                    </div>
+                    <span>Live town</span>
+                    <span>Emotes</span>
+                    <span>Holding hands</span>
+                    <span>Trading</span>
+                    <span>Flocks</span>
+                  </div>
+                  <div className="menu-more">
+                    <button className="menu-link" onClick={() => setView("friends")}>
+                      <IconUsers size={18} /> Race with friends meanwhile
+                    </button>
+                  </div>
+                </>
               ) : view === "solo" ? (
                 <>
                   <div className="menu-course">

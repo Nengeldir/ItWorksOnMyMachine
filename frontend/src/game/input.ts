@@ -16,6 +16,11 @@ export interface ControlSettings {
   quality?: "auto" | "high" | "medium" | "low";
   musicVolume?: number;
   effectsVolume?: number;
+  /** The open world's mixer (plan F9): each a share of the effects volume */
+  ambienceVolume?: number;
+  combatVolume?: number;
+  uiVolume?: number;
+  voiceVolume?: number;
   muted?: boolean;
   /** The pilot's look: 1 (ponytail) or 2 (short hair); looks only */
   pilotStyle?: 1 | 2;

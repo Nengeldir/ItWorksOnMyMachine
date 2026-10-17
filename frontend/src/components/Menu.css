@@ -147,14 +147,16 @@ body:has(.menu-backdrop:empty) {
   font-size: 1.1rem;
 }
 
-/* The three modes: emblems of light floating on the sky, all alike, no panels */
+/* The four modes: emblems of light floating on the sky, all alike, no panels */
 .menu-modes {
-  width: min(56rem, 100%);
+  width: min(66rem, 100%);
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: start;
-  gap: 1.5rem;
-  margin-top: 2vh;
+  gap: 1.25rem;
+  /* Centred in the space between the title and the bottom row (the pilot, today's best): the emblems'
+     light lands on the screen's middle, a touch low, so the space above and below them balances */
+  margin-block: auto;
 }
 
 .menu .menu-emblem {
@@ -184,7 +186,7 @@ body:has(.menu-backdrop:empty) {
 
 .emblem-art {
   position: relative;
-  width: clamp(7.5rem, 15vw, 10rem);
+  width: clamp(6.8rem, 12.5vw, 9.5rem);
   aspect-ratio: 1;
   display: grid;
   place-items: center;
@@ -204,6 +206,7 @@ body:has(.menu-backdrop:empty) {
 
 .menu-emblem:nth-child(2) .emblem-halo { animation-delay: -1.6s; }
 .menu-emblem:nth-child(3) .emblem-halo { animation-delay: -3.2s; }
+.menu-emblem:nth-child(4) .emblem-halo { animation-delay: -4.4s; }
 
 @keyframes emblem-breathe {
   0%, 100% { transform: scale(0.94); }
@@ -340,24 +343,53 @@ body:has(.menu-backdrop:empty) {
   color: var(--ink-70);
 }
 
-/* Short screens (phones held sideways): smaller emblems, closer together */
+/* Short screens (phones held sideways): a row of four, smaller, closer together */
 @media (max-height: 520px) {
-  .menu-modes { gap: 0.75rem; margin-top: 0; }
-  .emblem-art { width: 6.4rem; }
-  .menu-emblem b { font-size: 1.2rem; }
-  .menu-emblem small { font-size: 0.78rem; }
+  .menu-modes { gap: 0.5rem; }
+  .emblem-art { width: 5.6rem; }
+  .menu .menu-emblem { gap: 0.2rem; padding-bottom: 0.4rem; }
+  .menu-emblem b { font-size: 1.1rem; }
+  .menu-emblem small { font-size: 0.72rem; max-width: 10rem; }
 
   .menu .menu-way {
     min-height: 7rem;
   }
 }
 
-/* Narrow portrait phones: the emblems shrink and lose their line */
+/* Narrow portrait phones: the four emblems in a 2 x 2 grid, their lines short */
 @media (max-width: 560px) {
-  .menu-modes { gap: 0.5rem; }
-  .emblem-art { width: 6.2rem; }
-  .menu-emblem b { font-size: 1.1rem; }
-  .menu-emblem small { display: none; }
+  .menu-modes { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem 0.5rem; }
+  .emblem-art { width: 6.4rem; }
+  .menu .menu-emblem { gap: 0.2rem; padding-bottom: 0.4rem; }
+  .menu-emblem b { font-size: 1.15rem; }
+  .menu-emblem small { font-size: 0.72rem; max-width: 9.5rem; }
+}
+
+/* Explore's Reaches and the Gathering, until their phases land: shown, softly, as coming */
+.menu .menu-way.is-soon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed color-mix(in srgb, var(--ink) 30%, transparent);
+  background: rgba(255, 255, 255, 0.35);
+  color: var(--ink-70);
+  cursor: default;
+}
+
+.menu-soon {
+  margin-top: 0.2rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--gold) 25%, transparent);
+  color: color-mix(in srgb, var(--ink) 85%, var(--gold));
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.menu-soon-card b {
+  color: var(--ink-70);
 }
 
 .menu-course {
@@ -608,8 +640,11 @@ body:has(.menu-backdrop:empty) {
 }
 
 @media (max-height: 520px) {
+  /* The bottom row sits in the corners, clear of the emblems: a smaller reserve keeps the page from
+     scrolling on a phone held sideways */
   .menu {
     gap: 1rem;
+    padding-bottom: 2.75rem;
   }
 
   .menu-title h1 {

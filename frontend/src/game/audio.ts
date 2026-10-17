@@ -4,6 +4,8 @@
 
 import type { AbilitySound2 } from "./abilities/fx2";
 import type { ItemSound } from "./items/fx";
+import { AudioBuses } from "./audio/buses";
+import type { AudioEngine } from "./audio/engine";
 import { MusicPlayer } from "./music";
 import type { Voice } from "./collection/abilities";
 import { Synth, chime, voice } from "./collection/sounds";
@@ -11,6 +13,9 @@ import { AUDIO } from "./tuning";
 import type { BiomeId } from "./world/biomes/types";
 
 const WINGBEAT = "audio/sfx/wingbeat.mp3";
+
+/** The mixer's sliders beyond music and effects (plan F9), each a share of the effects volume */
+export interface AudioMix { ambience: number; combat: number; ui: number; voice: number }
 
 export class GameAudio {
   private ctx: AudioContext | null = null;
@@ -31,6 +36,17 @@ export class GameAudio {
   private hum: { gain: GainNode; oscillators: OscillatorNode[] } | null = null;
   /** The collection's signature sounds (pets' calls, rare cosmetics, keepsakes), through the effects mixer */
   private synth: Synth | null = null;
+  /**
+   * The buses (plan F9) carry everything: the effects and the music below keep their own volume nodes
+   * and feed the `world` and `music` buses (left at 1); the other four take the mixer's sliders. The
+   * open world's engine (voice pool, recipes, ambience, panners) is loaded on demand (`loadEngine`), so
+   * races don't carry it
+   */
+  private buses: AudioBuses | null = null;
+  private audioEngine: AudioEngine | null = null;
+  private engineLoading: Promise<AudioEngine | null> | null = null;
+  private mix: AudioMix = { ambience: 1, combat: 1, ui: 1, voice: 1 };
+  private spatialQuality = 2;
 
   get isMuted(): boolean {
     return this.muted;
@@ -46,9 +62,11 @@ export class GameAudio {
     this.master = ctx.createGain();
     this.master.gain.value = this.muted || this.paused ? 0 : 0.8;
     this.master.connect(ctx.destination);
+    this.buses = new AudioBuses(ctx, this.master);
+    this.applyMix();
     this.effects = ctx.createGain();
     this.effects.gain.value = this.effectsVolume;
-    this.effects.connect(this.master);
+    this.effects.connect(this.buses.input.world);
 
     const length = ctx.sampleRate * 2;
     this.noise = ctx.createBuffer(1, length, ctx.sampleRate);
@@ -85,7 +103,7 @@ export class GameAudio {
     rush.connect(rushFilter).connect(this.rushGain).connect(this.effects!);
     rush.start();
 
-    this.music = new MusicPlayer(ctx, this.master);
+    this.music = new MusicPlayer(ctx, this.buses.input.music);
     this.music.volume = this.musicVolume;
     if (this.biome) this.music.setBiome(this.biome.id, this.biome.night);
     fetch(import.meta.env.BASE_URL + WINGBEAT)
@@ -130,9 +148,49 @@ export class GameAudio {
     return source;
   }
 
-  setPreferences(music: number, effects: number, muted?: boolean) {
+  /** The open world's engine once loaded (sounds, ambience, spatial pool); null before */
+  get engine(): AudioEngine | null {
+    return this.audioEngine;
+  }
+
+  /**
+   * Loads the open world's engine onto this game's buses (after `start`, which needs a gesture); null
+   * if audio hasn't started. Open-world sessions call it; races never do
+   */
+  loadEngine(): Promise<AudioEngine | null> {
+    if (!this.ctx || !this.buses) return Promise.resolve(null);
+    const ctx = this.ctx;
+    const buses = this.buses;
+    this.engineLoading ??= import("./audio/engine").then(({ AudioEngine }) => {
+      if (this.ctx !== ctx) return null;
+      this.audioEngine = new AudioEngine(ctx, buses, import.meta.env.BASE_URL + "audio/sheets/");
+      this.audioEngine.spatial.setQuality(this.spatialQuality);
+      return this.audioEngine;
+    });
+    return this.engineLoading;
+  }
+
+  /** Lowers a bus for a while: music under a level-up or a boss's tell */
+  duck(bus: "music" | "ambience" | "world" | "combat" | "ui" | "voice", db: number, seconds: number) {
+    this.buses?.duck(bus, db, seconds);
+  }
+
+  /** Quality 2 hears world sounds in HRTF, lower levels in equal-power panning */
+  setQuality(quality: number) {
+    this.spatialQuality = quality;
+    this.audioEngine?.spatial.setQuality(quality);
+  }
+
+  private applyMix() {
+    const e = this.effectsVolume;
+    this.buses?.setVolumes({ music: 1, world: 1, ambience: this.mix.ambience * e, combat: this.mix.combat * e, ui: this.mix.ui * e, voice: this.mix.voice * e });
+  }
+
+  setPreferences(music: number, effects: number, muted?: boolean, mix?: Partial<AudioMix>) {
     this.musicVolume = music; this.effectsVolume = effects;
     if (muted !== undefined) this.muted = muted;
+    if (mix) this.mix = { ...this.mix, ...Object.fromEntries(Object.entries(mix).filter(([, v]) => v !== undefined)) };
+    this.applyMix();
     if (this.music) { this.music.volume = music; this.music.update(); }
     if (this.effects && this.ctx) this.effects.gain.setTargetAtTime(effects, this.ctx.currentTime, 0.05);
     this.updateVolume();
@@ -533,6 +591,10 @@ export class GameAudio {
   }
 
   dispose() {
+    this.audioEngine?.dispose();
+    this.audioEngine = null;
+    this.engineLoading = null;
+    this.buses = null;
     void this.ctx?.close();
     this.ctx = null;
     this.synth = null;
