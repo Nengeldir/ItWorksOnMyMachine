@@ -29,7 +29,8 @@ export class ProfileClient {
     const equipped = this.store.get().profile?.equipped;
     if (!equipped) return { ...DEFAULT_APPEARANCE };
     const { cape, hat, shoes, wings, pet } = equipped;
-    return { cape, hat, shoes, wings, pet };
+    // A server from before the particle jars has no jar slot
+    return { cape, hat, shoes, wings, pet, jar: equipped.jar ?? "none" };
   }
   /** The looks and the charm (the keepsake carried on adventures) */
   equipped(): Equipment { return { ...this.appearance(), charm: this.store.get().profile?.equipped.charm ?? "none" }; }

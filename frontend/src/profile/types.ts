@@ -8,7 +8,7 @@ export type EquipSlot = keyof Equipment;
 
 export interface Collectible {
   key: string;
-  kind: "item" | "cape" | "hat" | "shoes" | "wings" | "pet" | "crystal";
+  kind: "item" | "cape" | "hat" | "shoes" | "wings" | "pet" | "jar" | "crystal";
   asset: string;
   name: string;
   rarity: Rarity;

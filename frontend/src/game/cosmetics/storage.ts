@@ -1,7 +1,9 @@
-import { CAPES, HATS, SHOES, WINGS, type CapeId, type HatId, type ShoeId, type WingId } from "./catalog";
+import { CAPES, HATS, JARS, SHOES, WINGS, type CapeId, type HatId, type JarId, type ShoeId, type WingId } from "./catalog";
 import { PETS, type PetId } from "../pets/catalog";
-export interface Appearance { cape: CapeId; hat: HatId; shoes: ShoeId; wings: WingId; pet: PetId }
-export const DEFAULT_APPEARANCE: Readonly<Appearance> = { cape: "classic", hat: "none", shoes: "classic", wings: "classic", pet: "none" };
+/** A particle jar worn, or none (like a pet, no jar is an equipment state, never an inventory jar) */
+export type JarSlot = JarId | "none";
+export interface Appearance { cape: CapeId; hat: HatId; shoes: ShoeId; wings: WingId; pet: PetId; jar: JarSlot }
+export const DEFAULT_APPEARANCE: Readonly<Appearance> = { cape: "classic", hat: "none", shoes: "classic", wings: "classic", pet: "none", jar: "none" };
 export const APPEARANCE_KEY = "windrider.appearance.v1";
 export const APPEARANCE_EVENT = "windrider:appearance";
 let memory: Appearance = { ...DEFAULT_APPEARANCE };
@@ -14,6 +16,7 @@ export function validateAppearance(value: unknown): Appearance {
     shoes: SHOES.find(c => c.id === data.shoes)?.id ?? DEFAULT_APPEARANCE.shoes,
     wings: WINGS.find(c => c.id === data.wings)?.id ?? DEFAULT_APPEARANCE.wings,
     pet: PETS.find(c => c.id === data.pet)?.id ?? DEFAULT_APPEARANCE.pet,
+    jar: JARS.find(c => c.id === data.jar)?.id ?? DEFAULT_APPEARANCE.jar,
   };
 }
 export function loadAppearance(): Appearance {

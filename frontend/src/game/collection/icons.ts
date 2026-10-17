@@ -10,7 +10,7 @@ const KEEPSAKES: Record<string, string> = {
 const PETS: Record<string, string> = {
   swallow: "🐦", owl: "🦉", crane: "🦢", phoenix: "🔥", dragon: "🐉", kirin: "🦄", fox: "🦊", griffin: "🦅", manta: "🐋", rabbit: "🐇", jelly: "🏮", koi: "🐟",
 };
-const KINDS: Record<string, string> = { cape: "🧣", hat: "👒", shoes: "👢", wings: "🪽", crystal: "💎" };
+const KINDS: Record<string, string> = { cape: "🧣", hat: "👒", shoes: "👢", wings: "🪽", jar: "🫙", crystal: "💎" };
 
 export function collectibleIcon(kind: string, asset: string): string {
   if (kind === "item") return KEEPSAKES[asset] ?? RUN_ITEMS.find((item) => item.id === asset || item.model === asset)?.icon ?? "◇";

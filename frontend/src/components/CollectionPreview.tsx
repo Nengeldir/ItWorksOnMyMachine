@@ -39,8 +39,8 @@ export default function CollectionPreview({ item, appearance, rear = false }: { 
     const root = new THREE.Group(); scene.add(root);
     let avatar: Avatar | null = null;
     let model: ReturnType<typeof collectionModel> | null = null;
-    // Cosmetics are shown on the pilot; pets and keepsakes by themselves
-    if (slot && kind !== "pet" && kind !== "item") {
+    // Cosmetics are shown on the pilot; pets, jars and keepsakes by themselves
+    if (slot && kind !== "pet" && kind !== "item" && kind !== "jar") {
       avatar = new Avatar("#c47f9d");
       avatar.setStyle(loadSettings().pilotStyle ?? 1);
       avatar.setAppearance({ ...(JSON.parse(state.current.look) as Appearance), [slot]: asset });

@@ -8,7 +8,8 @@ import { PICKUP_PREFS } from "./pickups";
 import type { World } from "../world/World";
 import { Builder, buildItem, leaf, star, type ItemId } from "../items/models";
 import { buildHat, buildShoe, disposeModel, paintedModel } from "../cosmetics/models";
-import { capeSpec, type CapeId, type HatId, type ShoeId } from "../cosmetics/catalog";
+import { capeSpec, type CapeId, type HatId, type JarId, type ShoeId } from "../cosmetics/catalog";
+import { loadJars } from "../cosmetics/jarLoader";
 import { PetModel } from "../pets/models";
 import type { PetId } from "../pets/catalog";
 import { Kind, fx, type Particles } from "../particles";
@@ -125,8 +126,32 @@ function placeCrystal(world: World, reward: Reward, rings: { position: THREE.Vec
   return null;
 }
 
+/**
+ * A jar's model, built once the jars' code has loaded (its own chunk). Until then the group holds an
+ * invisible box of the jar's size, so whoever fits the model to a pickup or a preview sizes it right
+ */
+function lazyJar(id: JarId): { group: THREE.Group; animate: (dt: number) => void; dispose: () => void } {
+  const group = new THREE.Group();
+  const size = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.42, 0.36).translate(0, 0.21, 0));
+  size.visible = false;
+  group.add(size);
+  let jar: ReturnType<typeof import("../cosmetics/jars").buildJar> | null = null;
+  let gone = false;
+  void loadJars().then(({ buildJar }) => {
+    if (gone) return;
+    jar = buildJar(id);
+    group.add(jar.group);
+  });
+  return {
+    group,
+    animate: (dt) => jar?.animate(dt),
+    dispose: () => { gone = true; jar?.dispose(); size.geometry.dispose(); group.removeFromParent(); },
+  };
+}
+
 /** The same toon models are used in the world and the inventory's animated preview. */
 export function collectionModel(reward: Pick<Reward, "kind" | "asset" | "rarity">): { group: THREE.Group; animate?: (dt: number) => void; dispose: () => void } {
+  if (reward.kind === "jar" && reward.asset !== "none") return lazyJar(reward.asset as JarId);
   if (reward.kind === "pet" && reward.asset !== "none") {
     const pet = new PetModel(reward.asset as Exclude<PetId, "none">);
     return { group: pet.group, animate: dt => pet.animate(dt), dispose: () => pet.dispose() };

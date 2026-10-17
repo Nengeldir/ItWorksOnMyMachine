@@ -26,7 +26,7 @@ export interface FittingRoom {
   giveUpgrade(id: UpgradeId): void;
 }
 
-const kinds = [["wings", "Wings"], ["cape", "Capes"], ["hat", "Hats"], ["shoes", "Shoes"], ["pet", "Pets"], ["item", "Keepsakes"], ["runItems", "Get items"], ["abilities", "Get abilities"]] as const;
+const kinds = [["wings", "Wings"], ["cape", "Capes"], ["hat", "Hats"], ["shoes", "Shoes"], ["pet", "Pets"], ["jar", "Jars"], ["item", "Keepsakes"], ["runItems", "Get items"], ["abilities", "Get abilities"]] as const;
 type Kind = (typeof kinds)[number][0];
 
 /**
@@ -108,6 +108,7 @@ export default function TestCollectionPanel({ session, onClose, start = "wings" 
     <footer className="journal-toolbar">
       {shop ? <p className="journal-saved" role="status">{given || "Tap a box to take it."}</p> : <>
         <button onClick={() => { const next = { ...look, pet: "none" as const }; setLook(next); session.previewAppearance(next); }}>Unequip pet</button>
+        <button onClick={() => { const next = { ...look, jar: "none" as const }; setLook(next); session.previewAppearance(next); }}>Put the jar away</button>
         <button onClick={() => { session.clearPreviewItems(); setFlame(false); }}>Put items away</button>
         <button onClick={() => { session.previewAppearance(null); session.previewCharm(null); setLook(profileClient.appearance()); session.clearPreviewItems(); setFlame(false); }}>Restore profile look</button>
       </>}

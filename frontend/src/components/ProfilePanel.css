@@ -272,8 +272,11 @@
   position: relative;
 }
 
+/* Pinned to the box: as a grid item its own pixel height grew the row past the box, cropping the model */
 .collection-preview canvas {
   display: block;
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
 }

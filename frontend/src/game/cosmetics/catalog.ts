@@ -48,27 +48,57 @@ export type CapeId = typeof CAPES[number]["id"];
  */
 export type WingRig = "feather" | "sail" | "jointed" | "rigid";
 
-/** Shapes share the pilot's two animated wing joints; all are visual only. `size` scales the model */
+/** Shapes share the pilot's two animated wing joints; all are visual only. `size` scales the model; `rarity` (0 common … 3
+ * legendary, as in the backend catalog) sets how rich their particles are (cosmetics/wingParticles.ts) */
 export const WINGS = [
-  { id: "classic", name: "Wayfarer feathers", description: "Your original feathered glider.", color: "#f1dce9", accent: "#f3c869", shape: "feather", rig: "feather", size: 1 },
-  { id: "prism", name: "Prismatic plumage", description: "Layered jewel-colored feathers with gilded shafts.", color: "#bc8aca", accent: "#69d9ce", shape: "feather", rig: "feather", size: 1 },
-  { id: "gale", name: "Zephyr filigree", description: "Sweeping jade sails, gold wind spirals and suspended pearls.", color: "#66bfaa", accent: "#e7ffe2", shape: "sail", rig: "sail", size: 1 },
-  { id: "tide", name: "Pearl tide", description: "Scalloped ocean fins with pearl chains and coral inlays.", color: "#638dc8", accent: "#a9f0ef", shape: "fin", rig: "sail", size: 1 },
-  { id: "frost", name: "Glacial cathedral", description: "Faceted ice blades around a silver snowflake lattice.", color: "#b1dfee", accent: "#faf4ff", shape: "crystal", rig: "jointed", size: 1 },
-  { id: "ember", name: "Phoenix sunrise", description: "Long flame feathers, gold veins and ember dust.", color: "#dd665b", accent: "#ffd181", shape: "flame", rig: "feather", size: 1 },
-  { id: "storm", name: "Thunder sovereign", description: "Angular violet blades, lightning tracery and amethyst gems.", color: "#8c72c9", accent: "#f1c7ff", shape: "blade", rig: "jointed", size: 1 },
-  { id: "astral", name: "Constellation wings", description: "Floating star fragments stitched into wings by golden constellations.", color: "#747ab8", accent: "#c4e5ff", shape: "stars", rig: "sail", size: 1 },
-  { id: "sparrow", name: "Sparrow wings", description: "Two little round wings that flutter as fast as a sparrow's.", color: "#c9a27e", accent: "#fff1dc", shape: "round", rig: "rigid", size: 0.55 },
-  { id: "cardboard", name: "Cardboard glider", description: "A festival costume: painted cardboard feathers, tape and string.", color: "#d6b07c", accent: "#e8584f", shape: "card", rig: "rigid", size: 0.85 },
-  { id: "paper", name: "Origami crane", description: "Crisp folded paper wings, creased like a thousand-crane wish.", color: "#fbf3ea", accent: "#e8546b", shape: "origami", rig: "jointed", size: 0.95 },
-  { id: "butterfly", name: "Swallowtail silk", description: "Butterfly wings of painted silk with eyespots and long tails.", color: "#f2a65a", accent: "#3c3f74", shape: "butterfly", rig: "sail", size: 0.9 },
-  { id: "maple", name: "Maple glider", description: "Two great autumn leaves, veined in gold, that bend in the wind.", color: "#e0703f", accent: "#ffd27a", shape: "leaf", rig: "sail", size: 1 },
-  { id: "clockwork", name: "Clockwork aviator", description: "Brass ribs, turning gears and canvas panels on ticking joints.", color: "#c9965a", accent: "#7fd0d6", shape: "clockwork", rig: "jointed", size: 1 },
-  { id: "ruin", name: "Ruin guard vanes", description: "Ancient stone-and-bronze machine vanes with glowing amber cores.", color: "#7b8c86", accent: "#ffad4a", shape: "ruin", rig: "jointed", size: 1 },
-  { id: "wyrm", name: "Cloud wyrm wings", description: "Jade dragon membranes stretched on ivory bones.", color: "#5fae96", accent: "#f4f0dc", shape: "wyrm", rig: "sail", size: 1.05 },
-  { id: "seraph", name: "Seraph of dawn", description: "Three tiers of white-and-gold flight feathers that burn with sunrise light.", color: "#fff6e6", accent: "#ffcf6a", shape: "seraph", rig: "feather", size: 1.12 },
+  { id: "classic", name: "Wayfarer feathers", description: "Your original feathered glider.", color: "#f1dce9", accent: "#f3c869", shape: "feather", rig: "feather", size: 1, rarity: 0 },
+  { id: "prism", name: "Prismatic plumage", description: "Layered jewel-colored feathers with gilded shafts.", color: "#bc8aca", accent: "#69d9ce", shape: "feather", rig: "feather", size: 1, rarity: 1 },
+  { id: "gale", name: "Zephyr filigree", description: "Sweeping jade sails, gold wind spirals and suspended pearls.", color: "#66bfaa", accent: "#e7ffe2", shape: "sail", rig: "sail", size: 1, rarity: 1 },
+  { id: "tide", name: "Pearl tide", description: "Scalloped ocean fins with pearl chains and coral inlays.", color: "#638dc8", accent: "#a9f0ef", shape: "fin", rig: "sail", size: 1, rarity: 1 },
+  { id: "frost", name: "Glacial cathedral", description: "Faceted ice blades around a silver snowflake lattice.", color: "#b1dfee", accent: "#faf4ff", shape: "crystal", rig: "jointed", size: 1, rarity: 2 },
+  { id: "ember", name: "Phoenix sunrise", description: "Long flame feathers, gold veins and ember dust.", color: "#dd665b", accent: "#ffd181", shape: "flame", rig: "feather", size: 1, rarity: 2 },
+  { id: "storm", name: "Thunder sovereign", description: "Angular violet blades, lightning tracery and amethyst gems.", color: "#8c72c9", accent: "#f1c7ff", shape: "blade", rig: "jointed", size: 1, rarity: 2 },
+  { id: "astral", name: "Constellation wings", description: "Floating star fragments stitched into wings by golden constellations.", color: "#747ab8", accent: "#c4e5ff", shape: "stars", rig: "sail", size: 1, rarity: 3 },
+  { id: "sparrow", name: "Sparrow wings", description: "Two little round wings that flutter as fast as a sparrow's.", color: "#c9a27e", accent: "#fff1dc", shape: "round", rig: "rigid", size: 0.55, rarity: 0 },
+  { id: "cardboard", name: "Cardboard glider", description: "A festival costume: painted cardboard feathers, tape and string.", color: "#d6b07c", accent: "#e8584f", shape: "card", rig: "rigid", size: 0.85, rarity: 0 },
+  { id: "paper", name: "Origami crane", description: "Crisp folded paper wings, creased like a thousand-crane wish.", color: "#fbf3ea", accent: "#e8546b", shape: "origami", rig: "jointed", size: 0.95, rarity: 1 },
+  { id: "butterfly", name: "Swallowtail silk", description: "Butterfly wings of painted silk with eyespots and long tails.", color: "#f2a65a", accent: "#3c3f74", shape: "butterfly", rig: "sail", size: 0.9, rarity: 1 },
+  { id: "maple", name: "Maple glider", description: "Two great autumn leaves, veined in gold, that bend in the wind.", color: "#e0703f", accent: "#ffd27a", shape: "leaf", rig: "sail", size: 1, rarity: 1 },
+  { id: "clockwork", name: "Clockwork aviator", description: "Brass ribs, turning gears and canvas panels on ticking joints.", color: "#c9965a", accent: "#7fd0d6", shape: "clockwork", rig: "jointed", size: 1, rarity: 2 },
+  { id: "ruin", name: "Ruin guard vanes", description: "Ancient stone-and-bronze machine vanes with glowing amber cores.", color: "#7b8c86", accent: "#ffad4a", shape: "ruin", rig: "jointed", size: 1, rarity: 2 },
+  { id: "wyrm", name: "Cloud wyrm wings", description: "Jade dragon membranes stretched on ivory bones.", color: "#5fae96", accent: "#f4f0dc", shape: "wyrm", rig: "sail", size: 1.05, rarity: 2 },
+  { id: "seraph", name: "Seraph of dawn", description: "Three tiers of white-and-gold flight feathers that burn with sunrise light.", color: "#fff6e6", accent: "#ffcf6a", shape: "seraph", rig: "feather", size: 1.12, rarity: 3 },
 ] as const;
 export type WingId = typeof WINGS[number]["id"];
+
+/**
+ * Particle jars: each holds one kind of particle of its own (cosmetics/jars.ts has how each looks and moves).
+ * Worn, its particles drift in an aura round the pilot and stream off behind them. Common and uncommon jars
+ * hold plain, solid shapes; rare and legendary ones glow (bloom). `rarity` as in the backend catalog
+ */
+export const JARS = [
+  { id: "hearts", name: "Heartbeat jar", description: "Little rosy hearts that bob around you and float away behind like a happy sigh.", color: "#ff7fa6", rarity: 0 },
+  { id: "notes", name: "Songbird jar", description: "Music notes in every color of the scale, humming along as you fly.", color: "#7fc8ff", rarity: 0 },
+  { id: "blossom", name: "Cherry blossom jar", description: "Pale pink petals that tumble out of the air all around you.", color: "#ffbfd3", rarity: 0 },
+  { id: "bubbles", name: "Bubble column jar", description: "A fizz of sea bubbles that rise around you and pop.", color: "#8fe3ff", rarity: 0 },
+  { id: "honey", name: "Honey drip jar", description: "Golden drops of honey that gather round you and drip away behind.", color: "#ffb43a", rarity: 1 },
+  { id: "puffs", name: "Cloud puff jar", description: "Round little clouds that puff out around you and bob along in your wake.", color: "#e6eeff", rarity: 1 },
+  { id: "joy", name: "Village joy jar", description: "Bright green sparkles of pure delight, like a trade that went very well.", color: "#4fd97f", rarity: 1 },
+  { id: "snow", name: "First snow jar", description: "Six-armed snowflakes that whirl round you and settle behind.", color: "#d6efff", rarity: 1 },
+  { id: "flame", name: "Hearthflame jar", description: "Dancing tongues of fire that circle you and stream away, warm and bright.", color: "#ff9440", rarity: 2 },
+  { id: "soulfire", name: "Soulfire jar", description: "Cold blue soul flames that burn without smoke and climb as you fly.", color: "#4fe3ff", rarity: 2 },
+  { id: "sparks", name: "Storm spark jar", description: "Crackling little bolts of lightning that jump about you.", color: "#fff06a", rarity: 2 },
+  { id: "glyphs", name: "Enchanter's glyphs", description: "Runes of an old enchanting script that drift in towards you and fade.", color: "#c2a2ff", rarity: 2 },
+  { id: "fireflies", name: "Firefly jar", description: "A summer meadow's worth of fireflies, blinking on and off around you.", color: "#d4ff63", rarity: 2 },
+  { id: "portal", name: "Void portal jar", description: "Violet spirals of a portal's light that turn in towards you.", color: "#a957ff", rarity: 3 },
+  { id: "souls", name: "Soul lantern jar", description: "Tiny friendly ghosts that rise around you and wave as they go.", color: "#7af2ff", rarity: 3 },
+  { id: "starlight", name: "Starlight rod jar", description: "White sparks of starlight that hang in the air long after you have passed.", color: "#f6f0ff", rarity: 3 },
+  { id: "totem", name: "Totem jar", description: "A shower of emerald and gold, as if you had just been saved at the last moment.", color: "#6fdc58", rarity: 3 },
+] as const;
+export type JarId = typeof JARS[number]["id"];
+export type JarSpec = typeof JARS[number];
+const jarById = Object.fromEntries(JARS.map(j => [j.id, j])) as Record<JarId, JarSpec>;
+export const jarSpec = (id: JarId): JarSpec | undefined => jarById[id];
 export type WingSpec = typeof WINGS[number];
 const wingById = Object.fromEntries(WINGS.map(w => [w.id, w])) as Record<WingId, WingSpec>;
 export const wingSpec = (id: WingId): WingSpec => wingById[id] ?? WINGS[0];

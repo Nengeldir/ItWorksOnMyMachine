@@ -31,8 +31,9 @@ const ease = (t: number) => {
 
 /** How each slot holds its item, in the slot's space */
 const HOLD: Record<ItemSlot, { position: THREE.Vector3; rotation: THREE.Euler; scale: number }> = {
-  // The rocket along the spine, nose past the head, nozzle down by the hips
-  back: { position: new THREE.Vector3(0, -0.22, 0.02), rotation: new THREE.Euler(0, 0, 0), scale: 1 },
+  // The rocket along the spine, nose past the head, nozzle down by the hips; far enough out that the cape
+  // drapes between it and the back (the avatar keeps cloth and wings out of it: items/clearance.ts)
+  back: { position: new THREE.Vector3(0, -0.22, 0.08), rotation: new THREE.Euler(0, 0, 0), scale: 1 },
   head: { position: new THREE.Vector3(0, 0.02, 0.01), rotation: new THREE.Euler(0.25, 0, 0), scale: 1 },
   hand: { position: new THREE.Vector3(0, -0.04, -0.02), rotation: new THREE.Euler(Math.PI, 0, 0), scale: 1 },
   // Boots: on the shin, the toe along the pointed foot
@@ -178,6 +179,8 @@ export class Equipment {
     this.animations.length = 0;
     this.flame = null;
     this.avatar.armPose.amount = 0;
+    this.avatar.carry("back", null, null);
+    this.avatar.carry("hand", null, null);
   }
 
   /** Call every frame after the avatar has animated (it needs the avatar's world matrices) */
@@ -327,6 +330,16 @@ export class Equipment {
     arm.elbow += (elbow - arm.elbow) * kArm;
 
     this.updateFlame(dt);
+    this.settle("back");
+    this.settle("hand");
+  }
+
+  /** Tells the pilot what sits still in a slot (nothing while it animates), so wings and cape keep out of it */
+  private settle(slot: "back" | "hand") {
+    const worn = this.worn[slot];
+    let settled = !!worn;
+    for (const a of this.animations) if (a.worn === worn) settled = false;
+    this.avatar.carry(slot, settled ? worn!.id : null, settled ? worn!.group : null);
   }
 
   /** The firework: appears in the hand, is swung over the shoulder, strapped onto the back */

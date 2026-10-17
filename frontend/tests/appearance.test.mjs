@@ -1,16 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CAPES, HATS, SHOES, WINGS } from "../src/game/cosmetics/catalog.ts";
+import { CAPES, HATS, JARS, SHOES, WINGS } from "../src/game/cosmetics/catalog.ts";
 import { PETS } from "../src/game/pets/catalog.ts";
 import { buildHat, buildShoe, disposeModel } from "../src/game/cosmetics/models.ts";
 import { APPEARANCE_KEY, DEFAULT_APPEARANCE, loadAppearance, saveAppearance, validateAppearance } from "../src/game/cosmetics/storage.ts";
 
 test("appearance rejects stale or malformed ids per slot without discarding valid slots", () => {
-  for (const value of [null, undefined, 42, "bad", [], { cape: "missing", hat: 2, shoes: {}, pet: "old" }]) {
+  for (const value of [null, undefined, 42, "bad", [], { cape: "missing", hat: 2, shoes: {}, pet: "old", jar: "pickle" }]) {
     assert.deepEqual(validateAppearance(value), DEFAULT_APPEARANCE);
   }
-  assert.deepEqual(validateAppearance({ cape: "aurora", hat: "lotus", shoes: "missing", pet: "dragon" }), { cape: "aurora", hat: "lotus", shoes: "classic", wings: "classic", pet: "dragon" });
-  for (const catalog of [CAPES, HATS, SHOES, WINGS, PETS]) assert.equal(new Set(catalog.map(c => c.id)).size, catalog.length);
+  assert.deepEqual(validateAppearance({ cape: "aurora", hat: "lotus", shoes: "missing", pet: "dragon" }), { cape: "aurora", hat: "lotus", shoes: "classic", wings: "classic", pet: "dragon", jar: "none" });
+  assert.equal(validateAppearance({ jar: "portal" }).jar, "portal");
+  for (const catalog of [CAPES, HATS, SHOES, WINGS, PETS, JARS]) assert.equal(new Set(catalog.map(c => c.id)).size, catalog.length);
 });
 
 test("selection round-trips independently of settings and survives unavailable storage", () => {
@@ -19,7 +20,7 @@ test("selection round-trips independently of settings and survives unavailable s
   globalThis.window = { dispatchEvent: () => updates++ };
   globalThis.localStorage = { getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value) };
   try {
-    const look = { cape: "verdant", hat: "antlers", shoes: "cloud", wings: "astral", pet: "fox" };
+    const look = { cape: "verdant", hat: "antlers", shoes: "cloud", wings: "astral", pet: "fox", jar: "fireflies" };
     saveAppearance(look); assert.deepEqual(loadAppearance(), look);
     assert.equal(data.get("wingrace.settings"), "leave me alone"); assert.equal(updates, 1);
     const copy = loadAppearance(); copy.cape = "classic"; assert.deepEqual(loadAppearance(), look);

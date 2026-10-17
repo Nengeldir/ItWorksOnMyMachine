@@ -4,7 +4,7 @@ import { ACTION_LABELS, bindingActions } from "../game/bindings";
 import { RARITY_STYLE, rarityAt, type Rarity } from "../game/collection/rarity";
 import { powerOf } from "../game/collection/abilities";
 import { collectibleIcon } from "../game/collection/icons";
-import { CAPES, HATS, SHOES, WINGS, type WingRig } from "../game/cosmetics/catalog";
+import { CAPES, HATS, JARS, SHOES, WINGS, type WingRig } from "../game/cosmetics/catalog";
 import { PETS } from "../game/pets/catalog";
 import { RUN_ITEMS, itemLevel } from "../game/run/items";
 import { UPGRADES, upgradeLevel, upgradeRarity } from "../game/run/upgrades";
@@ -77,7 +77,7 @@ export default function FieldGuide({ catalog }: { catalog: readonly Collectible[
       }));
     }
     if (section === "Cosmetics") {
-      const kinds = [["wings", WINGS], ["cape", CAPES], ["hat", HATS], ["shoes", SHOES]] as const;
+      const kinds = [["wings", WINGS], ["cape", CAPES], ["hat", HATS], ["shoes", SHOES], ["jar", JARS]] as const;
       return kinds.flatMap(([kind, list]) => (list as readonly { id: string; name: string; description: string }[])
         .filter((entry) => entry.id !== "none")
         .map((entry) => {
@@ -85,7 +85,7 @@ export default function FieldGuide({ catalog }: { catalog: readonly Collectible[
           const rig = kind === "wings" ? RIG[WINGS.find((w) => w.id === entry.id)!.rig] : null;
           return {
             id: catalogKey, icon: collectibleIcon(kind, entry.id), name: entry.name, rarity: rarityOf.get(catalogKey) ?? "common",
-            tags: [kind === "cape" ? "cape" : kind, `from level ${levelOf.get(catalogKey) ?? 1}`],
+            tags: [kind === "cape" ? "cape" : kind === "jar" ? (JARS.find((jar) => jar.id === entry.id)!.rarity >= 2 ? "jar · glows" : "jar") : kind, `from level ${levelOf.get(catalogKey) ?? 1}`],
             text: rig ? `${entry.description} ${rig}.` : entry.description, power: withPower(catalogKey),
           };
         }));
@@ -151,7 +151,7 @@ export default function FieldGuide({ catalog }: { catalog: readonly Collectible[
           <p>One map that never ends, every way: valleys, rivers, mountains and islands made around you as you fly. No gates, no clock, no score, nothing to lose. A crash puts you back in the air close to where you tumbled.</p>
 
           <h3>Your journal</h3>
-          <p>Everything you can collect, by kind, with a turning preview. Equip cosmetics and a companion, name your pets, carry a keepsake as your charm. Each rarity is three times rarer than the last: common, uncommon, rare, legendary. Duplicates become crystals.</p>
+          <p>Everything you can collect, by kind, with a turning preview. Equip cosmetics and a companion, name your pets, carry a keepsake as your charm. A particle jar fills the air round you with its own particles, an aura and a trail behind you (rare and legendary jars glow). Each rarity is three times rarer than the last: common, uncommon, rare, legendary. Duplicates become crystals.</p>
         </div>
       )}
 

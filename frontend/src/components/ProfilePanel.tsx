@@ -1,12 +1,12 @@
-import { type FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { IconArrowLeft, IconAward, IconBook, IconBook2, IconDiamond, IconLock, IconRotate, IconSparkles, IconX } from "@tabler/icons-react";
+import { type FormEvent, lazy, Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { IconArrowLeft, IconAward, IconBook, IconBook2, IconDiamond, IconLock, IconRotate, IconSparkles, IconStars, IconX } from "@tabler/icons-react";
 import { profileClient } from "../profile/client";
 import type { Collectible, Profile } from "../profile/types";
 import { RARITY_STYLE } from "../game/collection/rarity";
 import { powerOf } from "../game/collection/abilities";
 import { collectibleIcon } from "../game/collection/icons";
 import { playVoice } from "../game/collection/sounds";
-import { CAPES, HATS, SHOES, WINGS } from "../game/cosmetics/catalog";
+import { CAPES, HATS, JARS, SHOES, WINGS } from "../game/cosmetics/catalog";
 import { PETS } from "../game/pets/catalog";
 import { RUN_ITEMS } from "../game/run/items";
 import { loadSettings } from "../storage";
@@ -18,14 +18,22 @@ import Minifigure from "./Minifigure";
 import { rarityStyle } from "./rarity";
 import "./ProfilePanel.css";
 
+// The open world's skills (plan F4): their own chunk, loaded when the page opens
+const SkillsView = lazy(() => import("./world/SkillsView"));
+
 const tabs = ["All", "Cosmetics", "Pets", "Keepsakes"] as const;
 /** The cosmetics, by kind */
-const cosmeticKinds = [["all", "All"], ["wings", "Wings"], ["cape", "Capes"], ["hat", "Hats"], ["shoes", "Shoes"]] as const;
+const cosmeticKinds = [["all", "All"], ["wings", "Wings"], ["cape", "Capes"], ["hat", "Hats"], ["shoes", "Shoes"], ["jar", "Jars"]] as const;
+/** What the "All" cosmetics page shows */
+const COSMETIC_KINDS = ["cape", "hat", "shoes", "wings", "jar"];
+/** Slots that can be left empty */
+const CLEARABLE = { pet: "Leave at home", charm: "Put the charm away", jar: "Put the jar away" } as const;
+const CLEARED = { pet: "Companion resting at home.", charm: "Charm put away.", jar: "Jar put away." } as const;
 type CosmeticKind = (typeof cosmeticKinds)[number][0];
 
 /** A collectible's own description (its look or its adventure item's effect) */
 function lore(item: Collectible): string | undefined {
-  const lists: Record<string, readonly { id: string; description: string }[]> = { cape: CAPES, hat: HATS, shoes: SHOES, wings: WINGS, pet: PETS };
+  const lists: Record<string, readonly { id: string; description: string }[]> = { cape: CAPES, hat: HATS, shoes: SHOES, wings: WINGS, pet: PETS, jar: JARS };
   if (item.kind === "item") return RUN_ITEMS.find((run) => run.model === item.asset || run.id === item.asset)?.description;
   return lists[item.kind]?.find((entry) => entry.id === item.asset)?.description;
 }
@@ -61,7 +69,7 @@ export default function ProfilePanel({ onClose, pilot }: { onClose: () => void; 
   const [tab, setTab] = useState<typeof tabs[number]>("All");
   const [cosmetic, setCosmetic] = useState<CosmeticKind>("all");
   /** The collection, or one of the pages above it: the field guide and the achievements */
-  const [view, setView] = useState<"collection" | "guide" | "achievements">("collection");
+  const [view, setView] = useState<"collection" | "guide" | "achievements" | "skills">("collection");
   const [ownedOnly, setOwnedOnly] = useState(false);
   const [selected, setSelected] = useState("cape:classic");
   const [message, setMessage] = useState("");
@@ -78,7 +86,7 @@ export default function ProfilePanel({ onClose, pilot }: { onClose: () => void; 
     return () => { window.removeEventListener("keydown", stop, true); window.removeEventListener("keyup", stop, true); el.close(); };
   }, []);
   const entries = profile?.catalog.filter(item =>
-    (tab === "All" || (tab === "Cosmetics" ? (cosmetic === "all" ? ["cape", "hat", "shoes", "wings"].includes(item.kind) : item.kind === cosmetic) : item.kind === (tab === "Pets" ? "pet" : "item"))) &&
+    (tab === "All" || (tab === "Cosmetics" ? (cosmetic === "all" ? COSMETIC_KINDS.includes(item.kind) : item.kind === cosmetic) : item.kind === (tab === "Pets" ? "pet" : "item"))) &&
     (!ownedOnly || profile.inventory[item.key])) ?? [];
   const item = profile?.catalog.find(e => e.key === selected);
   const state = item && profile ? status(item, profile) : null;
@@ -117,16 +125,18 @@ export default function ProfilePanel({ onClose, pilot }: { onClose: () => void; 
       {view === "collection"
         ? <span className="overlay-badge"><IconBook2 size={22} /></span>
         : <button className="journal-back" onClick={() => setView("collection")} aria-label="Back to the journal"><IconArrowLeft size={18} /> Back</button>}
-      <div><small>{view === "collection" ? "Adventure journal" : view === "guide" ? "Field guide" : "Achievements"}</small>
-        <h2 id="profile-title">{view === "collection" ? title : view === "guide" ? "How everything works" : "Feats of the wind"}</h2></div>
+      <div><small>{view === "collection" ? "Adventure journal" : view === "guide" ? "Field guide" : view === "skills" ? "Skills" : "Achievements"}</small>
+        <h2 id="profile-title">{view === "collection" ? title : view === "guide" ? "How everything works" : view === "skills" ? "Your constellation" : "Feats of the wind"}</h2></div>
       {view === "collection" && <nav className="journal-pages" aria-label="Journal pages">
         <button onClick={() => setView("guide")}><IconBook size={18} /><span>Guide</span></button>
         <button onClick={() => setView("achievements")}><IconAward size={18} /><span>Achievements</span></button>
+        <button onClick={() => setView("skills")}><IconStars size={18} /><span>Skills</span></button>
       </nav>}
       <button className="sheet-close" autoFocus onClick={onClose} aria-label="Close the journal"><IconX size={20} /></button>
     </header>
     {view === "guide" && <FieldGuide catalog={profile?.catalog ?? []} />}
     {view === "achievements" && <AchievementsView />}
+    {view === "skills" && <Suspense fallback={null}><SkillsView /></Suspense>}
     {view === "collection" && <>
     <section className="journal-pilot sheet-panel">
       {pilot && !pilot.verified && <label className="journal-name"><span>Your name</span>
@@ -174,7 +184,7 @@ export default function ProfilePanel({ onClose, pilot }: { onClose: () => void; 
         </div>
         {item && state && <aside className={`journal-detail sheet-panel rarity-${item.rarity}`} style={rarityStyle(item)}>
           <div className="journal-preview"><CollectionPreview item={item} appearance={profile.equipped} rear={rear} />
-            {item.kind !== "item" && item.kind !== "pet" && <button className="journal-turn" onClick={() => setRear(!rear)} aria-label={rear ? "View front" : "View back"} title={rear ? "View front" : "View back"}><IconRotate size={18} /></button>}</div>
+            {item.kind !== "item" && item.kind !== "pet" && item.kind !== "jar" && <button className="journal-turn" onClick={() => setRear(!rear)} aria-label={rear ? "View front" : "View back"} title={rear ? "View front" : "View back"}><IconRotate size={18} /></button>}</div>
           <h3>{item.name}</h3>
           <div className="journal-chips"><span className="chip"><i className="journal-rarity" /> {RARITY_STYLE[item.rarity].name}</span><span className="chip">{item.kind === "item" ? "keepsake" : item.kind}</span></div>
           {lore(item) && <p className="journal-lore">{lore(item)}</p>}
@@ -188,8 +198,8 @@ export default function ProfilePanel({ onClose, pilot }: { onClose: () => void; 
           <p className="journal-detail-state">{state.locked ? <><IconLock size={13} /> {state.text}: it won't turn up before then.</> : state.owned ? state.text : "Find it on an adventure, at the market or on the wheel."}</p>
           {item.slot && <button className="primary" disabled={!state.owned || equipped || saving} onClick={() => void equip()}>
             {saving ? "Saving…" : equipped ? state.text : !state.owned ? "Not yet yours" : item.slot === "charm" ? "Carry as charm" : "Equip"}</button>}
-          {equipped && (item.slot === "pet" || item.slot === "charm") && <button disabled={saving} onClick={() => void act(() => profileClient.equip(item.slot!, "none"), item.slot === "pet" ? "Companion resting at home." : "Charm put away.")}>
-            {item.slot === "pet" ? "Leave at home" : "Put the charm away"}</button>}
+          {equipped && (item.slot === "pet" || item.slot === "charm" || item.slot === "jar") && <button disabled={saving} onClick={() => void act(() => profileClient.equip(item.slot!, "none"), CLEARED[item.slot as keyof typeof CLEARED])}>
+            {CLEARABLE[item.slot as keyof typeof CLEARABLE]}</button>}
           {item.kind === "pet" && state.owned && <form className="pet-name" onSubmit={rename}>
             <label htmlFor="pet-name">Name your companion</label>
             <div><input id="pet-name" value={petName} maxLength={20} placeholder={item.name} onChange={e => setPetName(e.target.value)} />
