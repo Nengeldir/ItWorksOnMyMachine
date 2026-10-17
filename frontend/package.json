@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "npm run catalog && tsc -b && vite build && node scripts/bundle-check.mjs",
+    "catalog": "node ../shared/catalog/check.mjs && node ../shared/catalog/types.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node --experimental-strip-types --import ./tests/register.mjs --test tests/*.test.mjs"
+    "test": "node --experimental-strip-types --import ./tests/register.mjs --test tests/*.test.mjs",
+    "bundle:accept": "node scripts/bundle-check.mjs --accept"
   },
   "dependencies": {
     "@fontsource-variable/cinzel": "^5.3.0",

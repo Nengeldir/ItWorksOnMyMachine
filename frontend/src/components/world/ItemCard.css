@@ -1,0 +1,55 @@
+.item-card {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 11rem;
+  max-width: 17rem;
+}
+
+.item-card-name {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  line-height: 1.15;
+  color: var(--rarity-deep, var(--ink));
+}
+
+.item-card-kind,
+.item-card-line,
+.item-card-sell {
+  font-size: 0.78rem;
+  color: var(--ink-70);
+}
+
+.item-card-stats {
+  list-style: none;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.85rem;
+}
+
+.item-card-stats li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.item-card-stats b {
+  margin-left: auto;
+  font-family: var(--font-numbers);
+  color: var(--good);
+}
+
+.item-card-lore {
+  margin: 0.25rem 0 0;
+  font-style: italic;
+  font-size: 0.85rem;
+  color: var(--ink-70);
+}
+
+.item-card-sell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-family: var(--font-numbers);
+}

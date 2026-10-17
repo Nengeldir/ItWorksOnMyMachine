@@ -1,0 +1,64 @@
+/* The stat sheet (StatSheet.tsx): groups of rows on soft glass; two columns when its container is wide */
+.stat-sheet {
+  container-type: inline-size;
+  display: grid;
+  gap: 0.9rem;
+}
+.stat-group h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-45);
+}
+.stat-group dl {
+  margin: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+@container (min-width: 460px) {
+  .stat-group dl { grid-template-columns: 1fr 1fr; column-gap: 0.6rem; }
+}
+.stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  min-height: 2.2rem;
+  padding: 0.3rem 0.7rem 0.3rem 0.4rem;
+  border-radius: 14px;
+  background: var(--ink-06);
+}
+.stat-row dt {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+.stat-icon {
+  width: 1.7rem;
+  height: 1.7rem;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--warm-deep, #a8730a);
+  background: rgba(255, 255, 255, 0.7);
+}
+.stat-row dd {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-family: var(--font-numbers);
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+.stat-row small { font-size: 0.75rem; font-weight: 700; }
+.stat-gain { color: #2f8a4f; }
+.stat-loss { color: #b0485a; }
+[data-sky="dark"] .stat-icon { background: rgba(255, 255, 255, 0.85); }
+html.touch .stat-row { min-height: 2.75rem; }

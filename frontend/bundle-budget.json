@@ -1,0 +1,5 @@
+{
+  "entryGzip": 525961,
+  "allowance": 2048,
+  "note": "The first load (entry chunk, its static imports and CSS), gzipped. Raise only on purpose: npm run bundle:accept."
+}
