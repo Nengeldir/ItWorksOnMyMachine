@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "recipes.schema.json",
+  "title": "RecipesFile",
+  "type": "object",
+  "required": ["recipes"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "recipes": { "type": "array", "items": { "$ref": "#/$defs/Recipe" } }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "Station": {
+      "description": "Where a recipe is made (plan F10).",
+      "enum": ["workbench", "loom", "kettle", "smith", "rune_pedestal"]
+    },
+    "RecipeUnlock": {
+      "description": "Either a skill level (skill + level) or a collection tier (collection + tier).",
+      "type": "object",
+      "properties": {
+        "skill": { "$ref": "common.schema.json#/$defs/Id" },
+        "level": { "type": "integer", "minimum": 1 },
+        "collection": { "$ref": "common.schema.json#/$defs/Id" },
+        "tier": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "Recipe": {
+      "type": "object",
+      "required": ["id", "station", "inputs", "output", "time"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/Id" },
+        "station": { "$ref": "#/$defs/Station" },
+        "inputs": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/Amount" }, "minItems": 1 },
+        "output": { "$ref": "common.schema.json#/$defs/Amount" },
+        "time": { "description": "Seconds; timed crafts finish while away (0 = at once).", "type": "number", "minimum": 0 },
+        "unlock": { "$ref": "#/$defs/RecipeUnlock" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

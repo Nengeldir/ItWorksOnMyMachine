@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quests.schema.json",
+  "title": "QuestsFile",
+  "type": "object",
+  "required": ["quests"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "quests": { "type": "array", "items": { "$ref": "#/$defs/Quest" } }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "QuestKind": { "enum": ["fetch", "gather", "deliver", "explore", "catch"] },
+    "QuestGoal": {
+      "description": "fetch/gather/catch: item + count; deliver: item + count + npc; explore: region.",
+      "type": "object",
+      "properties": {
+        "item": { "$ref": "common.schema.json#/$defs/Id" },
+        "count": { "type": "integer", "minimum": 1 },
+        "npc": { "$ref": "common.schema.json#/$defs/Id" },
+        "region": { "$ref": "common.schema.json#/$defs/Id" }
+      },
+      "additionalProperties": false
+    },
+    "QuestRewards": {
+      "type": "object",
+      "properties": {
+        "coins": { "type": "integer", "minimum": 0 },
+        "items": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/Amount" } },
+        "xp": {
+          "description": "Skill id -> XP.",
+          "type": "object",
+          "propertyNames": { "$ref": "common.schema.json#/$defs/Id" },
+          "additionalProperties": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "additionalProperties": false
+    },
+    "Quest": {
+      "type": "object",
+      "required": ["id", "name", "giver", "kind", "goal", "rewards", "text"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/Id" },
+        "name": { "type": "string", "minLength": 1 },
+        "giver": { "$ref": "common.schema.json#/$defs/Id" },
+        "kind": { "$ref": "#/$defs/QuestKind" },
+        "goal": { "$ref": "#/$defs/QuestGoal" },
+        "rewards": { "$ref": "#/$defs/QuestRewards" },
+        "requires": { "description": "Quests to finish first.", "type": "array", "items": { "$ref": "common.schema.json#/$defs/Id" } },
+        "board": { "description": "Offered on the Lantern Plaza's notice board.", "type": "boolean" },
+        "text": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

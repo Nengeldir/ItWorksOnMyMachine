@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stats.schema.json",
+  "title": "StatsFile",
+  "type": "object",
+  "required": ["stats", "swiftnessFlight"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "stats": { "description": "Every stat once, in display order.", "type": "array", "items": { "$ref": "#/$defs/StatInfo" } },
+    "swiftnessFlight": { "$ref": "#/$defs/SwiftnessFlight" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "StatUnit": { "description": "How the value reads: a plain number or a percentage.", "enum": ["", "%"] },
+    "StatGroup": { "enum": ["combat", "gathering", "general"] },
+    "StatInfo": {
+      "type": "object",
+      "required": ["id", "name", "group", "base", "unit", "description"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/StatId" },
+        "name": { "type": "string", "minLength": 1 },
+        "group": { "$ref": "#/$defs/StatGroup" },
+        "base": { "description": "Every pilot's value before any source.", "type": "number", "minimum": 0 },
+        "cap": { "description": "The most it can reach (absent: no cap). Stats never go below 0.", "type": "number", "exclusiveMinimum": 0 },
+        "unit": { "$ref": "#/$defs/StatUnit" },
+        "description": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "SwiftnessFlight": {
+      "description": "Runs only (rule 6): swiftness raises top speed by perPoint each, never more than cap (fractions: 0.08 = +8%).",
+      "type": "object",
+      "required": ["perPoint", "cap"],
+      "properties": {
+        "perPoint": { "type": "number", "minimum": 0 },
+        "cap": { "type": "number", "minimum": 0, "maximum": 0.25 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

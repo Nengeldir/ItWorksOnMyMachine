@@ -1,0 +1,64 @@
+{
+  "description": "Stat vectors (plan F2): run by frontend/tests/stats.test.mjs (game/stats.ts) and backend/tests/test_stats.py (stats.py). Each case starts from stats.json's bases (overridden by `base`), applies `sources` in order (literal {add, percent}, {item: id} or {skills: {id: level}}), and checks the stats in `expect` (others must stay at their base) and, if given, `topSpeed` (the runs-only swiftness bonus).",
+  "cases": [
+    {
+      "name": "no sources: the bases",
+      "sources": [],
+      "expect": { "light": 100, "ward": 0, "might": 10, "crit": 5, "critPower": 50, "haste": 0, "focus": 100 },
+      "topSpeed": 0
+    },
+    {
+      "name": "gear adds its stats",
+      "sources": [{ "item": "wing_blades" }, { "item": "wayfarer_mantle" }],
+      "expect": { "might": 40, "crit": 10, "light": 120, "ward": 5 }
+    },
+    {
+      "name": "percentages add together, then multiply",
+      "sources": [{ "item": "wing_blades" }, { "percent": { "might": 25 } }, { "percent": { "might": 15 } }],
+      "expect": { "might": 56, "crit": 10 }
+    },
+    {
+      "name": "caps hold",
+      "sources": [{ "add": { "crit": 80 } }, { "add": { "crit": 40 } }, { "add": { "angling": 90 } }],
+      "expect": { "crit": 100, "angling": 75 }
+    },
+    {
+      "name": "never below zero",
+      "sources": [{ "add": { "ward": -30 } }, { "percent": { "might": -150 } }],
+      "expect": { "ward": 0, "might": 0 }
+    },
+    {
+      "name": "skill levels: perLevel for each level above the first",
+      "sources": [{ "skills": { "farming": 10, "purification": 21 } }],
+      "expect": { "harvestFortune": 18, "crit": 15 }
+    },
+    {
+      "name": "skill levels stop at the skill's max",
+      "sources": [{ "skills": { "farming": 60, "runecrafting": 99 } }],
+      "expect": { "harvestFortune": 98 }
+    },
+    {
+      "name": "small fractions round cleanly",
+      "sources": [{ "add": { "luck": 0.1 } }, { "add": { "luck": 0.2 } }, { "percent": { "luck": 10 } }],
+      "expect": { "luck": 0.33 }
+    },
+    {
+      "name": "a changed base",
+      "base": { "light": 50 },
+      "sources": [{ "percent": { "light": -50 } }],
+      "expect": { "light": 25 }
+    },
+    {
+      "name": "swiftness lifts top speed a little in runs",
+      "sources": [{ "add": { "swiftness": 150 } }],
+      "expect": { "swiftness": 150 },
+      "topSpeed": 0.06
+    },
+    {
+      "name": "the top speed bonus is capped at 8%",
+      "sources": [{ "add": { "swiftness": 300 } }, { "add": { "swiftness": 300 } }],
+      "expect": { "swiftness": 400 },
+      "topSpeed": 0.08
+    }
+  ]
+}

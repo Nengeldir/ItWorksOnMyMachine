@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "npcs.schema.json",
+  "title": "NpcsFile",
+  "type": "object",
+  "required": ["npcs"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "npcs": { "type": "array", "items": { "$ref": "#/$defs/Npc" } }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "Choice": {
+      "type": "object",
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1 },
+        "next": { "description": "A line of the same NPC.", "$ref": "common.schema.json#/$defs/Id" },
+        "quest": { "description": "Offers this quest.", "$ref": "common.schema.json#/$defs/Id" }
+      },
+      "additionalProperties": false
+    },
+    "Line": {
+      "type": "object",
+      "required": ["id", "text"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/Id" },
+        "text": { "type": "string", "minLength": 1 },
+        "choices": { "type": "array", "items": { "$ref": "#/$defs/Choice" } }
+      },
+      "additionalProperties": false
+    },
+    "Npc": {
+      "type": "object",
+      "required": ["id", "name", "role", "region", "voice", "idle", "lines"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/Id" },
+        "name": { "type": "string", "minLength": 1 },
+        "role": { "type": "string", "minLength": 1 },
+        "region": { "description": "A region or the hub.", "$ref": "common.schema.json#/$defs/Id" },
+        "station": { "$ref": "recipes.schema.json#/$defs/Station" },
+        "voice": { "description": "Babble pitch, 1 = neutral.", "type": "number", "exclusiveMinimum": 0 },
+        "idle": { "description": "What they do while nobody talks to them.", "type": "string", "minLength": 1 },
+        "lines": { "type": "array", "items": { "$ref": "#/$defs/Line" }, "minItems": 1 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

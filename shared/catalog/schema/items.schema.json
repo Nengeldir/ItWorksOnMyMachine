@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "items.schema.json",
+  "title": "ItemsFile",
+  "type": "object",
+  "required": ["items"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "items": { "type": "array", "items": { "$ref": "#/$defs/Item" } }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "ItemKind": {
+      "enum": ["currency", "material", "tool", "weapon", "mantle", "charm", "rune", "tea", "seed", "furniture", "book", "gem", "stone", "essence"]
+    },
+    "GearSlot": {
+      "description": "Where gear is worn (plan A6). Cosmetics stay the look; gear is a stat item.",
+      "enum": ["weapon", "mantle", "circlet", "boots", "charm"]
+    },
+    "NodeKind": {
+      "description": "Kinds of resource node a tool breaks (plan R2).",
+      "enum": ["crop", "fruit", "tree", "vein", "fish", "herb", "feather"]
+    },
+    "Item": {
+      "type": "object",
+      "required": ["id", "name", "kind", "rarity", "stack", "model", "icon", "sell", "lore"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/Id" },
+        "name": { "type": "string", "minLength": 1 },
+        "kind": { "$ref": "#/$defs/ItemKind" },
+        "rarity": { "$ref": "common.schema.json#/$defs/Rarity" },
+        "stack": { "description": "Most in one bag slot; 1 for tools and gear.", "type": "integer", "minimum": 1, "maximum": 1024 },
+        "model": { "description": "A model builder in game/reaches/models: group/name.", "type": "string", "pattern": "^[a-z][a-z0-9_]*/[a-z][a-z0-9_]*$" },
+        "icon": { "description": "\"auto\": rendered from the model at build time (plan F8).", "type": "string", "minLength": 1 },
+        "sell": { "description": "Coins an NPC pays for one.", "type": "integer", "minimum": 0 },
+        "region": { "description": "Where it is found, if one place.", "$ref": "common.schema.json#/$defs/Id" },
+        "lore": { "type": "string", "minLength": 1 },
+        "slot": { "$ref": "#/$defs/GearSlot" },
+        "stats": { "$ref": "common.schema.json#/$defs/StatBlock" },
+        "ability": { "description": "A gear ability (plan A6), e.g. gale_lunge.", "$ref": "common.schema.json#/$defs/Id" },
+        "requires": { "$ref": "common.schema.json#/$defs/SkillLevels" },
+        "skill": { "description": "Tools: the skill they serve.", "$ref": "common.schema.json#/$defs/Id" },
+        "fortune": { "description": "Tools: bonus yield, in percent.", "type": "number", "minimum": 0 },
+        "speed": { "description": "Tools: gathering speed multiplier.", "type": "number", "exclusiveMinimum": 0 },
+        "breaks": { "description": "Tools: the node kinds they gather.", "type": "array", "items": { "$ref": "#/$defs/NodeKind" }, "minItems": 1 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

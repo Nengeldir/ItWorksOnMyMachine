@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "enemies.schema.json",
+  "title": "EnemiesFile",
+  "type": "object",
+  "required": ["enemies"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "enemies": { "type": "array", "items": { "$ref": "#/$defs/Enemy" } }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "Behaviour": {
+      "description": "The AI behaviours of plan A2.",
+      "enum": ["drift", "orbit", "chase", "strafe", "guard", "dive", "swarm"]
+    },
+    "Telegraph": {
+      "type": "object",
+      "required": ["cue", "seconds"],
+      "properties": {
+        "cue": { "description": "What the player sees and hears.", "type": "string", "minLength": 1 },
+        "seconds": { "description": "Warning before damage; at least 0.6 s (plan A4).", "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "Enemy": {
+      "description": "A Murk family (plan A4). Murk are purified, never killed (ground rule 5).",
+      "type": "object",
+      "required": ["id", "name", "behaviour", "light", "might", "ward", "speed", "telegraph", "freed", "loot", "model", "lore"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/Id" },
+        "name": { "type": "string", "minLength": 1 },
+        "behaviour": { "$ref": "#/$defs/Behaviour" },
+        "light": { "description": "Its Light (health) before it is purified.", "type": "number", "exclusiveMinimum": 0 },
+        "might": { "description": "Light a hit takes from the pilot.", "type": "number", "minimum": 0 },
+        "ward": { "description": "Damage it shrugs off per hit.", "type": "number", "minimum": 0 },
+        "speed": { "description": "Cruising speed, m/s.", "type": "number", "exclusiveMinimum": 0 },
+        "telegraph": { "$ref": "#/$defs/Telegraph" },
+        "freed": { "description": "The happy spirit it becomes when purified.", "type": "string", "minLength": 1 },
+        "loot": { "description": "A loot.json table rolled on purification.", "$ref": "common.schema.json#/$defs/Id" },
+        "model": { "type": "string", "pattern": "^[a-z][a-z0-9_]*/[a-z][a-z0-9_]*$" },
+        "lore": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

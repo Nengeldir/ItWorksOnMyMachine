@@ -1,0 +1,37 @@
+{
+  "$schema": "./schema/quests.schema.json",
+  "quests": [
+    {
+      "id": "first_harvest", "name": "The first harvest", "giver": "gardener", "kind": "gather", "board": true,
+      "goal": { "item": "moonwheat", "count": 20 },
+      "rewards": { "coins": 40, "items": [{ "item": "moonwheat_seeds", "count": 10 }], "xp": { "farming": 60 } },
+      "text": "Harvest 20 Moonwheat on the Meadow Rise terraces. Fly low and keep it smooth."
+    },
+    {
+      "id": "sickle_of_your_own", "name": "A sickle of your own", "giver": "gardener", "kind": "fetch", "board": true,
+      "requires": ["first_harvest"],
+      "goal": { "item": "wooden_sickle", "count": 1 },
+      "rewards": { "coins": 60, "xp": { "farming": 80, "carpentry": 40 } },
+      "text": "Make a Wooden sickle at Tobin's workbench and show it to Bramble."
+    },
+    {
+      "id": "tea_for_wick", "name": "Tea for the Lamplighter", "giver": "gardener", "kind": "deliver", "board": true,
+      "requires": ["sickle_of_your_own"],
+      "goal": { "item": "meadow_tea", "count": 1, "npc": "lamplighter" },
+      "rewards": { "coins": 80, "items": [{ "item": "sky_apple", "count": 3 }], "xp": { "alchemy": 120 } },
+      "text": "Brew a Meadow tea at Master Pei's kettle and bring it to Wick before the lanterns are lit."
+    },
+    {
+      "id": "glacier_road", "name": "The glacier road", "giver": "forgekeeper", "kind": "explore",
+      "goal": { "region": "frostspine" },
+      "rewards": { "coins": 50, "xp": { "mining": 100 } },
+      "text": "Find your way to Frostspine and the Ice Galleries."
+    },
+    {
+      "id": "star_minnows", "name": "Starlight supper", "giver": "angler", "kind": "catch",
+      "goal": { "item": "star_minnow", "count": 3 },
+      "rewards": { "coins": 45, "xp": { "fishing": 90 } },
+      "text": "Catch three Star minnows in the cloud sea for Old Reed."
+    }
+  ]
+}

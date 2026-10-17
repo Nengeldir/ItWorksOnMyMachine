@@ -1,0 +1,31 @@
+{
+  "description": "Skill XP vectors (plan F4): run by frontend/tests/skills.test.mjs (game/skills.ts) and backend/tests/test_skills.py (skills.py). levels: [skill, total XP] -> [level, XP into it, XP the next level costs (0 at max)]; wisdom: [XP, wisdom %] -> XP gained; rank: [skill XP total before, after] -> Wind Rank XP gained.",
+  "levels": [
+    [["farming", 0], [1, 0, 50]],
+    [["farming", 49], [1, 49, 50]],
+    [["farming", 50], [2, 0, 61]],
+    [["farming", 111], [3, 0, 73]],
+    [["farming", 1092], [9, 229, 230]],
+    [["farming", 1093], [10, 0, 280]],
+    [["mining", 2707402], [49, 469999, 470000]],
+    [["mining", 2707403], [50, 0, 0]],
+    [["mining", 9999999], [50, 0, 0]],
+    [["runecrafting", 99], [1, 99, 100]],
+    [["runecrafting", 100], [2, 0, 130]],
+    [["runecrafting", 181210], [25, 0, 0]]
+  ],
+  "wisdom": [
+    [[37, 0], 37],
+    [[37, 50], 55],
+    [[10, 0.5], 10],
+    [[200, 12.5], 225],
+    [[1, 100], 2]
+  ],
+  "rank": [
+    [[0, 15], 1],
+    [[15, 30], 2],
+    [[30, 39], 0],
+    [[39, 40], 1],
+    [[0, 2707403], 270740]
+  ]
+}

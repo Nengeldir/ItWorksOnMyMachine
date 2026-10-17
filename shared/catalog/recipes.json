@@ -1,0 +1,54 @@
+{
+  "$schema": "./schema/recipes.schema.json",
+  "recipes": [
+    {
+      "id": "moonwheat_seeds", "station": "workbench", "time": 0,
+      "inputs": [{ "item": "moonwheat", "count": 1 }],
+      "output": { "item": "moonwheat_seeds", "count": 2 }
+    },
+    {
+      "id": "wooden_sickle", "station": "workbench", "time": 0,
+      "inputs": [{ "item": "ashwind_log", "count": 6 }],
+      "output": { "item": "wooden_sickle", "count": 1 }
+    },
+    {
+      "id": "ashwind_axe", "station": "workbench", "time": 0,
+      "inputs": [{ "item": "ashwind_log", "count": 8 }, { "item": "quartzlight", "count": 2 }],
+      "output": { "item": "ashwind_axe", "count": 1 }
+    },
+    {
+      "id": "quartz_pick", "station": "workbench", "time": 0,
+      "inputs": [{ "item": "ashwind_log", "count": 4 }, { "item": "quartzlight", "count": 6 }],
+      "output": { "item": "quartz_pick", "count": 1 }
+    },
+    {
+      "id": "driftwood_rod", "station": "workbench", "time": 0,
+      "inputs": [{ "item": "ashwind_log", "count": 3 }, { "item": "cloudcotton", "count": 4 }],
+      "output": { "item": "driftwood_rod", "count": 1 }
+    },
+    {
+      "id": "meadow_stool", "station": "workbench", "time": 30,
+      "inputs": [{ "item": "ashwind_log", "count": 10 }, { "item": "cloudcotton", "count": 2 }],
+      "output": { "item": "meadow_stool", "count": 1 },
+      "unlock": { "collection": "ashwind_log", "tier": 1 }
+    },
+    {
+      "id": "meadow_tea", "station": "kettle", "time": 20,
+      "inputs": [{ "item": "sunberry", "count": 4 }, { "item": "glowcap", "count": 1 }],
+      "output": { "item": "meadow_tea", "count": 1 },
+      "unlock": { "skill": "alchemy", "level": 2 }
+    },
+    {
+      "id": "wing_blades", "station": "smith", "time": 60,
+      "inputs": [{ "item": "frostglass", "count": 12 }, { "item": "wind_essence", "count": 4 }, { "item": "ashwind_log", "count": 4 }],
+      "output": { "item": "wing_blades", "count": 1 },
+      "unlock": { "skill": "purification", "level": 5 }
+    },
+    {
+      "id": "petal_rune_2", "station": "rune_pedestal", "time": 10,
+      "inputs": [{ "item": "petal_rune_1", "count": 3 }],
+      "output": { "item": "petal_rune_2", "count": 1 },
+      "unlock": { "skill": "runecrafting", "level": 3 }
+    }
+  ]
+}

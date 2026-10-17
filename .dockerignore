@@ -1,0 +1,11 @@
+# Both images build from the repo root (docker-compose.yml), so one ignore file for both
+.git
+docs
+footage
+**/node_modules
+**/dist
+**/.venv
+**/venv
+**/__pycache__
+**/.pytest_cache
+backend/data

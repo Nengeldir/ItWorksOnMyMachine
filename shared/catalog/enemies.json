@@ -1,0 +1,40 @@
+{
+  "$schema": "./schema/enemies.schema.json",
+  "enemies": [
+    {
+      "id": "wisp", "name": "Wisp", "behaviour": "swarm",
+      "light": 12, "might": 4, "ward": 0, "speed": 18,
+      "telegraph": { "cue": "Flickers brighter before it brushes you", "seconds": 0.7 },
+      "freed": "A tiny light mote with eyes", "loot": "wisp_freed", "model": "murk/wisp",
+      "lore": "Scraps of stolen wind that drift together in flocks. Alone they are only shy."
+    },
+    {
+      "id": "thornbat", "name": "Thornbat", "behaviour": "dive",
+      "light": 30, "might": 10, "ward": 0, "speed": 34,
+      "telegraph": { "cue": "Folds its wings with a screech", "seconds": 0.8 },
+      "freed": "A little bat holding a flower", "loot": "thornbat_freed", "model": "murk/thornbat",
+      "lore": "Hangs under cliffs and drops on whatever flies past. Purified, it only wants to share its flower."
+    },
+    {
+      "id": "stone_sentinel", "name": "Stone Sentinel", "behaviour": "guard",
+      "light": 90, "might": 14, "ward": 6, "speed": 4,
+      "telegraph": { "cue": "A rune ring charges around it", "seconds": 1.1 },
+      "freed": "A moss creature that waves", "loot": "sentinel_freed", "model": "murk/stone_sentinel",
+      "lore": "An old island guardian the Murk has taught to be afraid. It fires slow orbs at everything."
+    },
+    {
+      "id": "murk_eel", "name": "Murk Eel", "behaviour": "orbit",
+      "light": 60, "might": 12, "ward": 2, "speed": 22,
+      "telegraph": { "cue": "Its searchlight cone turns red-violet", "seconds": 0.9 },
+      "freed": "A ribbon fish", "loot": "eel_freed", "model": "murk/murk_eel",
+      "lore": "Patrols the same loop under bridges and arches, sweeping a cone of cold light."
+    },
+    {
+      "id": "storm_hawk", "name": "Storm Hawk", "behaviour": "chase",
+      "light": 75, "might": 16, "ward": 3, "speed": 42,
+      "telegraph": { "cue": "A screech and a flare of its wings", "seconds": 0.6 },
+      "freed": "A white hawk circling away", "loot": "hawk_freed", "model": "murk/storm_hawk",
+      "lore": "Matches your speed, whatever it is. Fly well and it will tire before you do."
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Any
 
 from pydantic import BaseModel, Field, FiniteFloat, field_validator
 
@@ -125,8 +125,13 @@ class PickupClaimRequest(JoinRequest):
     pickups: Annotated[list[Annotated[str, Field(max_length=32)]], Field(min_length=1, max_length=24)]
 
 
+class InventoryActionsRequest(JoinRequest):
+    """A batch of inventory actions (inventory.py checks each one: kinds, ids, counts)"""
+    actions: Annotated[list[dict[str, Any]], Field(min_length=1, max_length=50)]
+
+
 class EquipRequest(JoinRequest):
-    slot: Annotated[str, Field(pattern=r"^(cape|hat|shoes|wings|pet|charm)$")]
+    slot: Annotated[str, Field(pattern=r"^(cape|hat|shoes|wings|pet|jar|charm)$")]
     asset: Annotated[str, Field(min_length=1, max_length=40, pattern=r"^[A-Za-z0-9_-]+$")]
 
 

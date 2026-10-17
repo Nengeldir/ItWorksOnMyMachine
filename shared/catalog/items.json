@@ -1,0 +1,142 @@
+{
+  "$schema": "./schema/items.schema.json",
+  "items": [
+    {
+      "id": "crystal", "name": "Wind crystals", "kind": "currency", "rarity": "common", "stack": 1024,
+      "model": "currency/crystal", "icon": "auto", "sell": 0,
+      "lore": "The sky's own coin. Kept in your purse, never in a bag slot."
+    },
+    {
+      "id": "moonwheat", "name": "Moonwheat", "kind": "material", "rarity": "common", "stack": 512,
+      "model": "crop/moonwheat", "icon": "auto", "sell": 2, "region": "meadow_rise",
+      "lore": "Silver ears that open at moonrise."
+    },
+    {
+      "id": "moonwheat_seeds", "name": "Moonwheat seeds", "kind": "seed", "rarity": "common", "stack": 512,
+      "model": "seed/moonwheat", "icon": "auto", "sell": 1, "region": "meadow_rise",
+      "lore": "Sow them where the wind turns the windmills."
+    },
+    {
+      "id": "sunberry", "name": "Sunberry", "kind": "material", "rarity": "common", "stack": 512,
+      "model": "crop/sunberry", "icon": "auto", "sell": 3, "region": "meadow_rise",
+      "lore": "Warm to the touch, even after sunset."
+    },
+    {
+      "id": "cloudcotton", "name": "Cloudcotton", "kind": "material", "rarity": "common", "stack": 512,
+      "model": "crop/cloudcotton", "icon": "auto", "sell": 3, "region": "meadow_rise",
+      "lore": "Spun by the plant from passing clouds. It never quite stops drifting."
+    },
+    {
+      "id": "glowcap", "name": "Glowcap", "kind": "material", "rarity": "uncommon", "stack": 512,
+      "model": "crop/glowcap", "icon": "auto", "sell": 8, "region": "lantern_wood",
+      "lore": "A mushroom that keeps a lantern's light for whoever picks it."
+    },
+    {
+      "id": "sky_apple", "name": "Sky apple", "kind": "material", "rarity": "common", "stack": 512,
+      "model": "fruit/sky_apple", "icon": "auto", "sell": 4, "region": "meadow_rise",
+      "lore": "Ripens in the crowns of the tallest trees, where only fliers reach."
+    },
+    {
+      "id": "ashwind_log", "name": "Ashwind log", "kind": "material", "rarity": "common", "stack": 512,
+      "model": "wood/ashwind", "icon": "auto", "sell": 2, "region": "meadow_rise",
+      "lore": "Pale, light wood that hums faintly in a breeze."
+    },
+    {
+      "id": "moonbark_log", "name": "Moonbark log", "kind": "material", "rarity": "rare", "stack": 512,
+      "model": "wood/moonbark", "icon": "auto", "sell": 40, "region": "lantern_wood",
+      "lore": "From the Elder Canopy. Its rings glow like ripples on a moonlit pond."
+    },
+    {
+      "id": "quartzlight", "name": "Quartzlight", "kind": "material", "rarity": "common", "stack": 512,
+      "model": "ore/quartzlight", "icon": "auto", "sell": 3, "region": "frostspine",
+      "lore": "Clear crystal that rings when the wind passes over it."
+    },
+    {
+      "id": "frostglass", "name": "Frostglass", "kind": "material", "rarity": "uncommon", "stack": 512,
+      "model": "ore/frostglass", "icon": "auto", "sell": 10, "region": "frostspine",
+      "lore": "Ice that forgot how to melt."
+    },
+    {
+      "id": "sunstone", "name": "Sunstone", "kind": "gem", "rarity": "rare", "stack": 64,
+      "model": "gem/sunstone", "icon": "auto", "sell": 120, "region": "hollow_deeps",
+      "lore": "Found in geodes of the Hollow Deeps, warm as a sunrise held in the hand."
+    },
+    {
+      "id": "star_minnow", "name": "Star minnow", "kind": "material", "rarity": "uncommon", "stack": 512,
+      "model": "fish/star_minnow", "icon": "auto", "sell": 12, "region": "cloudsea_isles",
+      "lore": "Schools of them swim through the cloud sea at night, like a second sky."
+    },
+    {
+      "id": "drift_feather", "name": "Drift feather", "kind": "material", "rarity": "common", "stack": 512,
+      "model": "feather/drift", "icon": "auto", "sell": 4, "region": "cloudsea_isles",
+      "lore": "Shed by sky whales' companions and carried for leagues on the wind."
+    },
+    {
+      "id": "wind_essence", "name": "Wind essence", "kind": "essence", "rarity": "rare", "stack": 512,
+      "model": "essence/wind", "icon": "auto", "sell": 0,
+      "lore": "What is left when Murk lets go of the wind it stole."
+    },
+    {
+      "id": "petal_rune_1", "name": "Petal rune I", "kind": "rune", "rarity": "uncommon", "stack": 64,
+      "model": "rune/petal", "icon": "auto", "sell": 20,
+      "lore": "A glyph stone that leaves a few petals in your wake."
+    },
+    {
+      "id": "petal_rune_2", "name": "Petal rune II", "kind": "rune", "rarity": "rare", "stack": 64,
+      "model": "rune/petal", "icon": "auto", "sell": 80,
+      "lore": "Three runes fused into one. The petals fall thicker now."
+    },
+    {
+      "id": "swift_stone", "name": "Swift tempering stone", "kind": "stone", "rarity": "uncommon", "stack": 64,
+      "model": "stone/swift", "icon": "auto", "sell": 30,
+      "lore": "The Smith tempers gear with it for a quicker hand."
+    },
+    {
+      "id": "meadow_tea", "name": "Meadow tea", "kind": "tea", "rarity": "uncommon", "stack": 64,
+      "model": "tea/meadow", "icon": "auto", "sell": 15,
+      "lore": "Sweet and grassy. Farmers swear the crops grow fuller after a cup."
+    },
+    {
+      "id": "meadow_stool", "name": "Meadow stool", "kind": "furniture", "rarity": "common", "stack": 16,
+      "model": "furniture/meadow_stool", "icon": "auto", "sell": 12,
+      "lore": "Three legs, a woven seat, and a view of the clouds."
+    },
+    {
+      "id": "wooden_sickle", "name": "Wooden sickle", "kind": "tool", "rarity": "common", "stack": 1,
+      "model": "tool/wooden_sickle", "icon": "auto", "sell": 5,
+      "lore": "Cuts a 2 m swathe through ripe crops as you fly low.",
+      "skill": "farming", "fortune": 0, "speed": 1, "breaks": ["crop"]
+    },
+    {
+      "id": "ashwind_axe", "name": "Ashwind axe", "kind": "tool", "rarity": "common", "stack": 1,
+      "model": "tool/ashwind_axe", "icon": "auto", "sell": 6,
+      "lore": "Fells a tree in a few clean chops; the tree folds back into a sapling.",
+      "skill": "foraging", "fortune": 0, "speed": 1, "breaks": ["tree"]
+    },
+    {
+      "id": "quartz_pick", "name": "Quartz pick", "kind": "tool", "rarity": "common", "stack": 1,
+      "model": "tool/quartz_pick", "icon": "auto", "sell": 8,
+      "lore": "Tuned to the pitch of common veins.",
+      "skill": "mining", "fortune": 0, "speed": 1, "breaks": ["vein"]
+    },
+    {
+      "id": "driftwood_rod", "name": "Driftwood rod", "kind": "tool", "rarity": "common", "stack": 1,
+      "model": "tool/driftwood_rod", "icon": "auto", "sell": 6,
+      "lore": "Casts a line of light into water or cloud.",
+      "skill": "fishing", "fortune": 0, "speed": 1, "breaks": ["fish"]
+    },
+    {
+      "id": "wing_blades", "name": "Wing blades", "kind": "weapon", "rarity": "uncommon", "stack": 1,
+      "model": "weapon/wing_blades", "icon": "auto", "sell": 60,
+      "lore": "Twin blades of wind-steel with gold guards. They appear in your hands only to strike.",
+      "slot": "weapon", "stats": { "might": 30, "crit": 5 }, "ability": "gale_lunge",
+      "requires": { "purification": 5 }
+    },
+    {
+      "id": "wayfarer_mantle", "name": "Wayfarer mantle", "kind": "mantle", "rarity": "common", "stack": 1,
+      "model": "mantle/wayfarer", "icon": "auto", "sell": 20,
+      "lore": "A traveller's cloak, stitched with a little extra Light.",
+      "slot": "mantle", "stats": { "light": 20, "ward": 5 }
+    }
+  ]
+}

@@ -1,0 +1,408 @@
+{
+  "description": "Broken catalogs. Each case changes one thing in a copy of the real catalog (file, then an entry by id: set or drop fields; or add an entry; or top: set top-level fields) and lists text the checker's messages must contain. Run by frontend/tests/catalog.test.mjs (check.mjs) and backend/tests/test_catalog.py (catalog.py). Messages from the meaning layer are word for word the same in both; shape messages differ, so those cases only name the file, entry and field.",
+  "cases": [
+    {
+      "name": "an item in an unknown region",
+      "file": "items",
+      "id": "moonwheat",
+      "set": {
+        "region": "nowhere"
+      },
+      "expect": [
+        "items.json: moonwheat: region \"nowhere\" is not in regions.json"
+      ]
+    },
+    {
+      "name": "a recipe input that isn't an item",
+      "file": "recipes",
+      "id": "wooden_sickle",
+      "set": {
+        "inputs": [
+          {
+            "item": "oak_log",
+            "count": 6
+          }
+        ]
+      },
+      "expect": [
+        "recipes.json: wooden_sickle: input \"oak_log\" is not in items.json"
+      ]
+    },
+    {
+      "name": "a loot weight of zero",
+      "file": "loot",
+      "id": "moonwheat_crop",
+      "set": {
+        "entries": [
+          {
+            "item": "moonwheat",
+            "weight": 0,
+            "count": [
+              1,
+              3
+            ]
+          }
+        ]
+      },
+      "expect": [
+        "loot.json: moonwheat_crop: weight of \"moonwheat\" must be > 0"
+      ]
+    },
+    {
+      "name": "loot count with min above max",
+      "file": "loot",
+      "id": "ashwind_tree",
+      "set": {
+        "entries": [
+          {
+            "item": "ashwind_log",
+            "weight": 1,
+            "count": [
+              4,
+              2
+            ]
+          }
+        ]
+      },
+      "expect": [
+        "loot.json: ashwind_tree: count of \"ashwind_log\" is [4, 2]: min above max"
+      ]
+    },
+    {
+      "name": "recipes that loop",
+      "file": "recipes",
+      "add": {
+        "id": "seeds_to_wheat",
+        "station": "workbench",
+        "time": 0,
+        "inputs": [
+          {
+            "item": "moonwheat_seeds",
+            "count": 2
+          }
+        ],
+        "output": {
+          "item": "moonwheat",
+          "count": 1
+        }
+      },
+      "expect": [
+        "recipes.json: recipes loop: moonwheat → moonwheat_seeds → moonwheat"
+      ]
+    },
+    {
+      "name": "a duplicate item id",
+      "file": "items",
+      "add": {
+        "id": "moonwheat",
+        "name": "Moonwheat again",
+        "kind": "material",
+        "rarity": "common",
+        "stack": 512,
+        "model": "crop/moonwheat",
+        "icon": "auto",
+        "sell": 2,
+        "lore": "Twice."
+      },
+      "expect": [
+        "items.json: duplicate id \"moonwheat\""
+      ]
+    },
+    {
+      "name": "an item without a rarity",
+      "file": "items",
+      "id": "moonwheat",
+      "drop": [
+        "rarity"
+      ],
+      "expect": [
+        "items.json: moonwheat",
+        "rarity"
+      ]
+    },
+    {
+      "name": "an item without a model",
+      "file": "items",
+      "id": "sunberry",
+      "drop": [
+        "model"
+      ],
+      "expect": [
+        "items.json: sunberry",
+        "model"
+      ]
+    },
+    {
+      "name": "a rarity outside the palette",
+      "file": "items",
+      "id": "glowcap",
+      "set": {
+        "rarity": "mythic"
+      },
+      "expect": [
+        "items.json: glowcap",
+        "rarity",
+        "mythic"
+      ]
+    },
+    {
+      "name": "an unknown field",
+      "file": "items",
+      "id": "moonwheat",
+      "set": {
+        "colour": "gold"
+      },
+      "expect": [
+        "items.json: moonwheat",
+        "colour"
+      ]
+    },
+    {
+      "name": "an unknown stat",
+      "file": "items",
+      "id": "wing_blades",
+      "set": {
+        "stats": {
+          "power": 3
+        }
+      },
+      "expect": [
+        "items.json: wing_blades",
+        "stats",
+        "power"
+      ]
+    },
+    {
+      "name": "a stacking tool",
+      "file": "items",
+      "id": "wooden_sickle",
+      "set": {
+        "stack": 5
+      },
+      "expect": [
+        "items.json: wooden_sickle: a tool doesn't stack (stack must be 1)"
+      ]
+    },
+    {
+      "name": "a tool without a skill",
+      "file": "items",
+      "id": "wooden_sickle",
+      "drop": [
+        "skill"
+      ],
+      "expect": [
+        "items.json: wooden_sickle: a tool needs a \"skill\""
+      ]
+    },
+    {
+      "name": "gear needing an unknown skill",
+      "file": "items",
+      "id": "wing_blades",
+      "set": {
+        "requires": {
+          "swordplay": 5
+        }
+      },
+      "expect": [
+        "items.json: wing_blades: requires \"swordplay\" is not in skills.json"
+      ]
+    },
+    {
+      "name": "a telegraph too short to read",
+      "file": "enemies",
+      "id": "wisp",
+      "set": {
+        "telegraph": {
+          "cue": "Flickers",
+          "seconds": 0.3
+        }
+      },
+      "expect": [
+        "enemies.json: wisp: telegraph of 0.3 s is under 0.6 s"
+      ]
+    },
+    {
+      "name": "an enemy with an unknown loot table",
+      "file": "enemies",
+      "id": "wisp",
+      "set": {
+        "loot": "nothing"
+      },
+      "expect": [
+        "enemies.json: wisp: loot \"nothing\" is not in loot.json"
+      ]
+    },
+    {
+      "name": "quests that loop",
+      "file": "quests",
+      "id": "first_harvest",
+      "set": {
+        "requires": [
+          "tea_for_wick"
+        ]
+      },
+      "expect": [
+        "quests.json: quests loop: first_harvest → tea_for_wick → sickle_of_your_own → first_harvest"
+      ]
+    },
+    {
+      "name": "a quest goal of the wrong shape",
+      "file": "quests",
+      "id": "glacier_road",
+      "set": {
+        "kind": "gather"
+      },
+      "expect": [
+        "quests.json: glacier_road: a gather goal takes \"item\", \"count\""
+      ]
+    },
+    {
+      "name": "a curve of the wrong length",
+      "file": "skills",
+      "id": "runecrafting",
+      "set": {
+        "maxLevel": 30
+      },
+      "expect": [
+        "skills.json: runecrafting: curve \"short\" has 24 steps, 30 levels need 29"
+      ]
+    },
+    {
+      "name": "a missing curve",
+      "file": "skills",
+      "id": "runecrafting",
+      "set": {
+        "curve": "tiny"
+      },
+      "expect": [
+        "skills.json: runecrafting: curve \"tiny\" is not in curves"
+      ]
+    },
+    {
+      "name": "a skill unlocking an unknown recipe",
+      "file": "skills",
+      "id": "foraging",
+      "set": {
+        "unlocks": [
+          {
+            "level": 5,
+            "kind": "recipe",
+            "id": "golden_axe"
+          }
+        ]
+      },
+      "expect": [
+        "skills.json: foraging: unlock at level 5: recipe \"golden_axe\" is not in recipes.json"
+      ]
+    },
+    {
+      "name": "a region beyond the world's edge",
+      "file": "regions",
+      "id": "shellshore",
+      "set": {
+        "center": [
+          -6000,
+          0
+        ]
+      },
+      "expect": [
+        "regions.json: shellshore: reaches 7500 m from the hub, beyond worldRadius 6000"
+      ]
+    },
+    {
+      "name": "an unknown biome",
+      "file": "regions",
+      "id": "shellshore",
+      "set": {
+        "biome": "desert"
+      },
+      "expect": [
+        "regions.json: shellshore",
+        "biome",
+        "desert"
+      ]
+    },
+    {
+      "name": "an NPC offering an unknown quest",
+      "file": "npcs",
+      "id": "angler",
+      "set": {
+        "lines": [
+          {
+            "id": "hello",
+            "text": "Fish?",
+            "choices": [
+              {
+                "text": "Yes",
+                "quest": "big_fish"
+              }
+            ]
+          }
+        ]
+      },
+      "expect": [
+        "npcs.json: angler: line \"hello\" offers quest \"big_fish\", not in quests.json"
+      ]
+    },
+    {
+      "name": "an NPC line leading nowhere",
+      "file": "npcs",
+      "id": "lamplighter",
+      "set": {
+        "lines": [
+          {
+            "id": "hello",
+            "text": "Hm.",
+            "choices": [
+              {
+                "text": "And?",
+                "next": "later"
+              }
+            ]
+          }
+        ]
+      },
+      "expect": [
+        "npcs.json: lamplighter: line \"hello\" leads to \"later\", not a line of lamplighter"
+      ]
+    },
+    {
+      "name": "a recipe unlock of both kinds",
+      "file": "recipes",
+      "id": "meadow_tea",
+      "set": {
+        "unlock": {
+          "skill": "alchemy",
+          "level": 2,
+          "tier": 1
+        }
+      },
+      "expect": [
+        "recipes.json: meadow_tea: unlock needs \"skill\" and \"level\", or \"collection\" and \"tier\""
+      ]
+    },
+    {
+      "name": "a stat missing from stats.json",
+      "file": "stats",
+      "id": "luck",
+      "set": {
+        "id": "wisdom"
+      },
+      "expect": [
+        "stats.json: duplicate id \"wisdom\"",
+        "stats.json: missing stat \"luck\""
+      ]
+    },
+    {
+      "name": "a base above its cap",
+      "file": "stats",
+      "id": "crit",
+      "set": {
+        "base": 120
+      },
+      "expect": [
+        "stats.json: crit: base 120 is above its cap 100"
+      ]
+    }
+  ]
+}

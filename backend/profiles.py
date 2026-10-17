@@ -14,6 +14,7 @@ import secrets
 import time
 from datetime import datetime, timedelta, timezone
 
+import inventory as inv
 from store import Store
 
 RARITIES = ["common", "uncommon", "rare", "legendary"]
@@ -32,7 +33,11 @@ MIN_LEVEL = {
     "wings:seraph": 10, "hat:crown": 9, "cape:celestial": 8, "pet:koi": 11,
     "item:foresightCharm": 3,
 }
-DEFAULT_EQUIPPED = {"cape": "classic", "hat": "none", "shoes": "classic", "wings": "classic", "pet": "none", "charm": "none"}
+DEFAULT_EQUIPPED = {"cape": "classic", "hat": "none", "shoes": "classic", "wings": "classic", "pet": "none", "jar": "none", "charm": "none"}
+# Slots that may be left empty (asset "none")
+CLEARABLE = ("pet", "jar", "charm")
+# What the treasure pools call cosmetics
+COSMETIC_KINDS = ("cape", "hat", "shoes", "wings", "jar")
 SLOTS = tuple(DEFAULT_EQUIPPED)
 
 # Adventure reports: a level can't be flown faster than this, nor carry more than this
@@ -122,6 +127,18 @@ CATALOG = [
         ("maple", "Maple glider", 1), ("clockwork", "Clockwork aviator", 2),
         ("ruin", "Ruin guard vanes", 2), ("wyrm", "Cloud wyrm wings", 2),
         ("seraph", "Seraph of dawn", 3)]],
+    # Particle jars: one kind of particle each, worn as an aura and a trail (frontend cosmetics/jars.ts);
+    # rare and legendary ones glow
+    *[entry("jar", asset, name, rarity, "jar") for asset, name, rarity in [
+        ("hearts", "Heartbeat jar", 0), ("notes", "Songbird jar", 0),
+        ("blossom", "Cherry blossom jar", 0), ("bubbles", "Bubble column jar", 0),
+        ("honey", "Honey drip jar", 1), ("puffs", "Cloud puff jar", 1),
+        ("joy", "Village joy jar", 1), ("snow", "First snow jar", 1),
+        ("flame", "Hearthflame jar", 2), ("soulfire", "Soulfire jar", 2),
+        ("sparks", "Storm spark jar", 2), ("glyphs", "Enchanter's glyphs", 2),
+        ("fireflies", "Firefly jar", 2), ("portal", "Void portal jar", 3),
+        ("souls", "Soul lantern jar", 3), ("starlight", "Starlight rod jar", 3),
+        ("totem", "Totem jar", 3)]],
     # Keepsakes: one is carried as the charm, its power on every adventure. The adventure items' rarities
 # match their run rarity (frontend run/items.ts), which is what their power is balanced on
     *[entry("item", asset, name, rarity, "charm") for asset, name, rarity in [
@@ -146,7 +163,7 @@ CATALOG = [
         ("firecrackers", "String of Firecrackers", 0)]],
 ]
 BY_KEY = {e["key"]: e for e in CATALOG}
-STARTERS = {f"{slot}:{asset}": 1 for slot, asset in DEFAULT_EQUIPPED.items() if slot not in ("pet", "charm")}
+STARTERS = {f"{slot}:{asset}": 1 for slot, asset in DEFAULT_EQUIPPED.items() if slot not in CLEARABLE}
 ACHIEVEMENTS = [
     ("firstFlight", "First flight", "Finish a race or an adventure"),
     ("journeysEnd", "Journey's end", "Fly all eight maps of an adventure"),
@@ -199,7 +216,7 @@ def treasure_pool(rarity, kind, player_level):
     """Finds of this rarity and kind open to this level; falls back to other kinds, then rarer-to-commoner"""
     def pool(r, k):
         return [e for e in CATALOG if unlocked(e, player_level) and e["rarity"] == RARITIES[r]
-                and (e["kind"] in ("cape", "hat", "shoes", "wings") if k == "cosmetic" else e["kind"] == k)]
+                and (e["kind"] in COSMETIC_KINDS if k == "cosmetic" else e["kind"] == k)]
     for r in range(rarity, -1, -1):
         for k in dict.fromkeys([kind, "cosmetic", "item", "pet"]):
             found = pool(r, k)
@@ -296,6 +313,14 @@ class Profiles:
                 CREATE INDEX IF NOT EXISTS adventures_user ON adventures (user_id, created_at);
                 CREATE INDEX IF NOT EXISTS results_user ON adventure_results (user_id);
             """)
+            # The crystals live in the persistent inventory's wallet (open-world plan F3); moved once
+            inv.create_tables(store.db)
+            if not store.db.execute("SELECT 1 FROM meta WHERE key = 'inventory_v1'").fetchone():
+                for row in store.db.execute("SELECT user_id, data FROM profiles").fetchall():
+                    if inv.wallet(store.db, row["user_id"]) is None:
+                        crystals = max(0, int(json.loads(row["data"]).get("crystals", 0)))
+                        inv.set_wallet(store.db, row["user_id"], crystals)
+                store.db.execute("INSERT INTO meta VALUES ('inventory_v1', '1')")
             if "plan" not in {row["name"] for row in store.db.execute("PRAGMA table_info(adventures)")}:
                 store.db.execute("ALTER TABLE adventures ADD COLUMN plan TEXT")
             # Columns the public leaderboard sorts and looks up by (the JSON stays the source of truth)
@@ -333,6 +358,10 @@ class Profiles:
         data["version"] = 3
         data["xp"] = max(0, int(data.get("xp", 0)))
         data["crystals"] = max(0, int(data.get("crystals", 0)))
+        # The balance is the wallet's once it moved there (the JSON keeps a copy for old readers)
+        in_wallet = inv.wallet(self.store.db, user_id)
+        if in_wallet is not None:
+            data["crystals"] = in_wallet
         inventory = data.get("inventory") if isinstance(data.get("inventory"), dict) else {}
         data["inventory"] = {key: int(count) for key, count in inventory.items() if key in BY_KEY and int(count) > 0}
         for key in STARTERS:
@@ -356,6 +385,18 @@ class Profiles:
             "INSERT INTO profiles (user_id, data, public_id, xp, name) VALUES (?, ?, ?, ?, ?) "
             "ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, xp = excluded.xp, name = excluded.name",
             (user.id, json.dumps(data), self.public_id(user.id), data["xp"], user.name))
+        inv.set_wallet(self.store.db, user.id, data["crystals"])
+
+    def add_rank_xp(self, user_id, xp):
+        """Wind Rank XP from skills (open-world plan F4). Called inside an inventory action, with the lock held"""
+        data = self._load_id(user_id)
+        data["xp"] += xp
+        data["revision"] += 1
+        updated = self.store.db.execute("UPDATE profiles SET data = ?, xp = ? WHERE user_id = ?",
+                                        (json.dumps(data), data["xp"], user_id)).rowcount
+        if not updated:
+            self.store.db.execute("INSERT INTO profiles (user_id, data, public_id, xp, name) VALUES (?, ?, ?, ?, ?)",
+                                  (user_id, json.dumps(data), self.public_id(user_id), data["xp"], data.get("name") or "Guest"))
 
     def _view(self, user, data):
         level, progress, cost = level_progress(data["xp"])
@@ -510,7 +551,7 @@ class Profiles:
         key = f"{'item' if slot == 'charm' else slot}:{asset}"
         with self.store.lock, self.store.db:
             data = self._load(user)
-            clearing = slot in ("pet", "charm") and asset == "none"
+            clearing = slot in CLEARABLE and asset == "none"
             if not clearing and (slot not in DEFAULT_EQUIPPED or key not in BY_KEY or not data["inventory"].get(key)):
                 raise ValueError("Collect this cosmetic or pet before equipping it")
             data["equipped"][slot] = asset

@@ -1,0 +1,20 @@
+{
+  "$schema": "./schema/stats.schema.json",
+  "stats": [
+    { "id": "light", "name": "Light", "group": "combat", "base": 100, "unit": "", "description": "Your wing light. At 0 you glide down gently (a crash in a run)." },
+    { "id": "ward", "name": "Ward", "group": "combat", "base": 0, "unit": "", "description": "Light a hit can't take from you." },
+    { "id": "might", "name": "Might", "group": "combat", "base": 10, "unit": "", "description": "Added to every strike, dart and burst." },
+    { "id": "crit", "name": "Crit chance", "group": "combat", "base": 5, "cap": 100, "unit": "%", "description": "The chance a hit lands as a critical." },
+    { "id": "critPower", "name": "Crit power", "group": "combat", "base": 50, "unit": "%", "description": "How much more a critical hit does." },
+    { "id": "haste", "name": "Haste", "group": "combat", "base": 0, "cap": 100, "unit": "%", "description": "Faster cooldowns and attacks." },
+    { "id": "focus", "name": "Focus", "group": "combat", "base": 100, "unit": "", "description": "What abilities and Gale Bursts spend." },
+    { "id": "swiftness", "name": "Swiftness", "group": "general", "base": 0, "cap": 400, "unit": "", "description": "Attack speed in combat; in runs only, a little top speed (at most +8%)." },
+    { "id": "harvestFortune", "name": "Harvest fortune", "group": "gathering", "base": 0, "unit": "%", "description": "More from every crop you harvest." },
+    { "id": "timberFortune", "name": "Timber fortune", "group": "gathering", "base": 0, "unit": "%", "description": "More logs and fruit from every tree." },
+    { "id": "oreFortune", "name": "Ore fortune", "group": "gathering", "base": 0, "unit": "%", "description": "More crystal from every vein." },
+    { "id": "angling", "name": "Angling", "group": "gathering", "base": 0, "cap": 75, "unit": "%", "description": "Bites come sooner and the catch band is wider." },
+    { "id": "luck", "name": "Luck", "group": "general", "base": 0, "cap": 300, "unit": "%", "description": "Rare drops a little less rare." },
+    { "id": "wisdom", "name": "Wisdom", "group": "general", "base": 0, "unit": "%", "description": "More skill XP from everything you do." }
+  ],
+  "swiftnessFlight": { "perPoint": 0.0004, "cap": 0.08 }
+}

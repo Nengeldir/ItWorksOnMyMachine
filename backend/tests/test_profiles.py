@@ -104,7 +104,8 @@ def test_xp_boundaries_multiple_levels_and_cap():
 def test_plan_is_seeded_balanced_and_catalog_complete():
     assert reward_plan(42) == reward_plan(42)
     assert reward_plan(42) != reward_plan(43)
-    assert len(BY_KEY) == len(CATALOG) == 99
+    # 99, then 17 particle jars (2026-10-17)
+    assert len(BY_KEY) == len(CATALOG) == 116
     plans = [r for seed in range(1, 101) for r in reward_plan(seed)]
     treasures = [r for r in plans if r["kind"] != "crystal"]
     assert len(treasures) == 4800
@@ -147,7 +148,7 @@ def test_every_inventory_asset_has_a_frontend_model_catalog():
     from pathlib import Path
     root = Path(__file__).resolve().parents[2] / "frontend" / "src" / "game"
     catalog = (root / "cosmetics" / "catalog.ts").read_text()
-    for kind, array in [("cape", "CAPES"), ("hat", "HATS"), ("shoes", "SHOES"), ("wings", "WINGS")]:
+    for kind, array in [("cape", "CAPES"), ("hat", "HATS"), ("shoes", "SHOES"), ("wings", "WINGS"), ("jar", "JARS")]:
         block = catalog.split(f"export const {array} = [")[1].split("] as const")[0]
         ids = set(re.findall(r'id: "([^"\n]+)"', block))
         assert ids == {e["asset"] for e in CATALOG if e["kind"] == kind}
@@ -202,3 +203,25 @@ def test_old_adventure_plans_are_pruned(monkeypatch):
     with store.lock:
         kept = {row["token"] for row in store.db.execute("SELECT token FROM adventures WHERE user_id = ?", ("prune-pilot",))}
     assert kept == set(tokens[-3:])
+
+
+def test_particle_jars_equip_only_when_owned_and_can_be_put_away():
+    import json
+    store = Store(":memory:")
+    profiles = Profiles(store)
+    user = User(id="jars", name="Pilot")
+    # A profile saved before the jars gains an empty jar slot
+    assert profiles.get(user)["equipped"]["jar"] == "none"
+    with pytest.raises(ValueError):
+        profiles.equip(user, "jar", "portal")
+    data = profiles._load(user)
+    data["inventory"]["jar:portal"] = 1
+    with store.db:
+        profiles._save(user, data)
+    assert profiles.equip(user, "jar", "portal")["equipped"]["jar"] == "portal"
+    assert profiles.equip(user, "jar", "none")["equipped"]["jar"] == "none"
+    # Jars are cosmetics with rarities, never starters
+    jars = [e for e in CATALOG if e["kind"] == "jar"]
+    assert len(jars) == 17 and not any(key.startswith("jar:") for key in STARTERS)
+    assert {e["rarity"] for e in jars} == {"common", "uncommon", "rare", "legendary"}
+    assert json.dumps(profiles.get(user))  # still serialises

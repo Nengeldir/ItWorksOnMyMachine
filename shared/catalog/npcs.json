@@ -1,0 +1,90 @@
+{
+  "$schema": "./schema/npcs.schema.json",
+  "npcs": [
+    {
+      "id": "gardener", "name": "Bramble", "role": "The Gardener", "region": "lanternhaven",
+      "voice": 1.1, "idle": "Waters the terrace pots and hums",
+      "lines": [
+        {
+          "id": "hello", "text": "Oh! A flier! The wheat's been waiting for someone who can reach the high rows.",
+          "choices": [
+            { "text": "I can help.", "quest": "first_harvest" },
+            { "text": "What grows up here?", "next": "crops" }
+          ]
+        },
+        { "id": "crops", "text": "Moonwheat, sunberries, cloudcotton. Fly low over a ripe row and it gives itself to you." }
+      ]
+    },
+    {
+      "id": "smith", "name": "Hollis", "role": "The Smith", "region": "lanternhaven", "station": "smith",
+      "voice": 0.8, "idle": "Hammers a glowing blade, sparks like fireflies",
+      "lines": [{ "id": "hello", "text": "Bring me frostglass and essence and I'll fold the wind into steel for you." }]
+    },
+    {
+      "id": "angler", "name": "Old Reed", "role": "The Angler", "region": "lanternhaven",
+      "voice": 0.85, "idle": "Naps on the harbour steps with a rod in hand",
+      "lines": [
+        {
+          "id": "hello", "text": "Mm? Ah. The minnows are running in the cloud sea tonight. You've a rod?",
+          "choices": [{ "text": "I'll catch you some.", "quest": "star_minnows" }]
+        }
+      ]
+    },
+    {
+      "id": "forgekeeper", "name": "Ingrid", "role": "The Forgekeeper", "region": "hollow_deeps",
+      "voice": 0.9, "idle": "Taps the cavern walls and listens",
+      "lines": [
+        {
+          "id": "hello", "text": "The Deeps sing if you listen. Frostspine first, little flier. Then we talk.",
+          "choices": [{ "text": "I'll go.", "quest": "glacier_road" }]
+        }
+      ]
+    },
+    {
+      "id": "stargazer", "name": "Celeste", "role": "The Stargazer", "region": "starfall_summit", "station": "loom",
+      "voice": 1.2, "idle": "Traces constellations in the air with one finger",
+      "lines": [{ "id": "hello", "text": "Every star is a note. Trace them in order and the Loom will sing for you." }]
+    },
+    {
+      "id": "tea_master", "name": "Master Pei", "role": "The Tea Master", "region": "lanternhaven", "station": "kettle",
+      "voice": 0.95, "idle": "Pours tea from a great height without spilling a drop",
+      "lines": [{ "id": "hello", "text": "Patience is the first leaf in every pot. Sit, if you like." }]
+    },
+    {
+      "id": "rune_sage", "name": "Maris", "role": "The Rune Sage", "region": "drowned_garden", "station": "rune_pedestal",
+      "voice": 1.05, "idle": "Turns three glyph stones over and over in the current",
+      "lines": [{ "id": "hello", "text": "Three of a kind, and the pedestal makes one that remembers all three." }]
+    },
+    {
+      "id": "carpenter", "name": "Tobin", "role": "The Carpenter", "region": "lanternhaven", "station": "workbench",
+      "voice": 1.0, "idle": "Measures a plank twice, then once more",
+      "lines": [{ "id": "hello", "text": "Ashwind's light and honest. Bring me logs and I'll show you the bench." }]
+    },
+    {
+      "id": "banker", "name": "Penny", "role": "The Banker", "region": "lanternhaven",
+      "voice": 1.15, "idle": "Stacks coins into neat little towers",
+      "lines": [{ "id": "hello", "text": "Your coins are safe with me. Every last one. I counted twice." }]
+    },
+    {
+      "id": "market_keeper", "name": "Juniper", "role": "The Market Keeper", "region": "lanternhaven",
+      "voice": 1.1, "idle": "Rearranges the lantern stalls' wares",
+      "lines": [{ "id": "hello", "text": "Buying or selling? The Lantern Market's open from dawn to the last lantern." }]
+    },
+    {
+      "id": "courier", "name": "Skip", "role": "The Courier", "region": "lanternhaven",
+      "voice": 1.3, "idle": "Bounces on their toes, satchel full of letters",
+      "lines": [{ "id": "hello", "text": "Letters, parcels, gossip! I fly faster than any of them. Almost as fast as you." }]
+    },
+    {
+      "id": "lamplighter", "name": "Wick", "role": "The Lamplighter", "region": "lanternhaven",
+      "voice": 0.9, "idle": "Carries a long pole and lights the lanterns at dusk",
+      "lines": [
+        {
+          "id": "hello", "text": "Every lantern I light is a little less dark for someone. Have you seen any lost lights out there?",
+          "choices": [{ "text": "Not yet.", "next": "lights" }]
+        },
+        { "id": "lights", "text": "They hide in the strangest places. Under arches. Behind waterfalls. Listen for the hum." }
+      ]
+    }
+  ]
+}

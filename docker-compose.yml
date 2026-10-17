@@ -1,6 +1,9 @@
 services:
   backend:
-    build: ./backend
+    # Both images build from the repo root so they can copy shared/ (the catalog)
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     env_file:
       - path: .env
         required: false
@@ -12,7 +15,9 @@ services:
     restart: unless-stopped
 
   frontend:
-    build: ./frontend
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
     ports:
       - 8080:8080 # The VIScon portal forwards your team's address to this port
     depends_on:

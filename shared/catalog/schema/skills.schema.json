@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "skills.schema.json",
+  "title": "SkillsFile",
+  "type": "object",
+  "required": ["windRankShare", "curves", "skills"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "windRankShare": {
+      "description": "The part of every skill XP that is also Wind Rank XP (the profile's level), plan F4.",
+      "type": "number", "exclusiveMinimum": 0, "maximum": 1
+    },
+    "curves": {
+      "description": "Curve id -> XP needed for each level after the first (index 0: level 1 -> 2).",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/Id" },
+      "additionalProperties": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 1 }
+    },
+    "skills": { "type": "array", "items": { "$ref": "#/$defs/Skill" } }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "UnlockKind": { "enum": ["recipe", "region", "item"] },
+    "SkillUnlock": {
+      "type": "object",
+      "required": ["level", "kind", "id"],
+      "properties": {
+        "level": { "type": "integer", "minimum": 2 },
+        "kind": { "$ref": "#/$defs/UnlockKind" },
+        "id": { "$ref": "common.schema.json#/$defs/Id" }
+      },
+      "additionalProperties": false
+    },
+    "Skill": {
+      "type": "object",
+      "required": ["id", "name", "color", "curve", "maxLevel", "perLevel", "unlocks"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/Id" },
+        "name": { "type": "string", "minLength": 1 },
+        "color": { "description": "The skill's colour (emblem, toast).", "type": "string", "pattern": "^#[0-9a-f]{6}$" },
+        "curve": { "$ref": "common.schema.json#/$defs/Id" },
+        "maxLevel": { "type": "integer", "minimum": 2 },
+        "perLevel": { "description": "Stats gained at every level.", "$ref": "common.schema.json#/$defs/StatBlock" },
+        "unlocks": { "type": "array", "items": { "$ref": "#/$defs/SkillUnlock" } }
+      },
+      "additionalProperties": false
+    }
+  }
+}

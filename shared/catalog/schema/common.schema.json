@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "common.schema.json",
+  "title": "Common",
+  "description": "Shapes shared by every catalog file.",
+  "$defs": {
+    "Id": {
+      "description": "A catalog id: lower case, digits and underscores, starting with a letter.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "Rarity": {
+      "description": "The game's one rarity palette (frontend collection/rarity.ts, backend profiles.py RARITIES).",
+      "enum": ["common", "uncommon", "rare", "legendary"]
+    },
+    "BiomeId": {
+      "description": "A biome of frontend game/world/biomes (a test checks this list against BIOMES).",
+      "enum": ["skyIsles", "verdant", "glacier", "archipelago", "lagoon", "twilight", "ember", "aurora", "reef"]
+    },
+    "StatId": {
+      "description": "Every stat the stat system (F2) knows. wisdom = skill XP bonus in percent.",
+      "enum": [
+        "light", "ward", "might", "crit", "critPower", "haste", "focus", "swiftness",
+        "harvestFortune", "timberFortune", "oreFortune", "angling", "luck", "wisdom"
+      ]
+    },
+    "StatBlock": {
+      "description": "Some stats and their amounts.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/StatId" },
+      "additionalProperties": { "type": "number" }
+    },
+    "Amount": {
+      "description": "A number of one item.",
+      "type": "object",
+      "required": ["item", "count"],
+      "properties": {
+        "item": { "$ref": "#/$defs/Id" },
+        "count": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "CountRange": {
+      "description": "[min, max], both included.",
+      "type": "array",
+      "prefixItems": [
+        { "type": "integer", "minimum": 0 },
+        { "type": "integer", "minimum": 0 }
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "SkillLevels": {
+      "description": "Skill id -> the level needed.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/Id" },
+      "additionalProperties": { "type": "integer", "minimum": 1 }
+    },
+    "Point": {
+      "description": "[x, z] in metres on the Reaches' map, Lanternhaven at [0, 0].",
+      "type": "array",
+      "prefixItems": [{ "type": "number" }, { "type": "number" }],
+      "minItems": 2,
+      "maxItems": 2
+    }
+  }
+}

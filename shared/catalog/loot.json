@@ -1,0 +1,70 @@
+{
+  "$schema": "./schema/loot.schema.json",
+  "tables": [
+    {
+      "id": "moonwheat_crop", "rolls": 1,
+      "entries": [{ "item": "moonwheat", "weight": 1, "count": [1, 3] }],
+      "rare": [{ "item": "moonwheat_seeds", "chance": 0.1, "count": [1, 2] }]
+    },
+    {
+      "id": "ashwind_tree", "rolls": 1,
+      "entries": [{ "item": "ashwind_log", "weight": 1, "count": [2, 4] }],
+      "rare": [{ "item": "sky_apple", "chance": 0.05, "count": [1, 1] }]
+    },
+    {
+      "id": "quartzlight_vein", "rolls": 1,
+      "entries": [
+        { "item": "quartzlight", "weight": 9, "count": [1, 3] },
+        { "item": "frostglass", "weight": 1, "count": [1, 1] }
+      ],
+      "rare": [{ "item": "sunstone", "chance": 0.002, "pity": 400, "count": [1, 1] }]
+    },
+    {
+      "id": "cloud_fishing", "rolls": 1,
+      "entries": [
+        { "item": "star_minnow", "weight": 6, "count": [1, 1] },
+        { "item": "drift_feather", "weight": 3, "count": [1, 2] },
+        { "item": "cloudcotton", "weight": 1, "count": [1, 1] }
+      ],
+      "rare": [{ "item": "petal_rune_1", "chance": 0.01, "pity": 150, "count": [1, 1] }]
+    },
+    {
+      "id": "wisp_freed", "rolls": 0, "entries": [],
+      "rare": [{ "item": "wind_essence", "chance": 0.08, "pity": 30, "count": [1, 1] }]
+    },
+    {
+      "id": "thornbat_freed", "rolls": 1,
+      "entries": [{ "item": "drift_feather", "weight": 1, "count": [1, 2] }],
+      "rare": [{ "item": "wind_essence", "chance": 0.12, "count": [1, 1] }]
+    },
+    {
+      "id": "sentinel_freed", "rolls": 1,
+      "entries": [
+        { "item": "quartzlight", "weight": 3, "count": [2, 4] },
+        { "item": "frostglass", "weight": 1, "count": [1, 2] }
+      ],
+      "rare": [{ "item": "swift_stone", "chance": 0.04, "pity": 60, "count": [1, 1] }]
+    },
+    {
+      "id": "eel_freed", "rolls": 1,
+      "entries": [{ "item": "star_minnow", "weight": 1, "count": [1, 2] }],
+      "rare": [{ "item": "petal_rune_1", "chance": 0.03, "count": [1, 1] }]
+    },
+    {
+      "id": "hawk_freed", "rolls": 1,
+      "guaranteed": [{ "item": "drift_feather", "count": [1, 1] }],
+      "entries": [{ "item": "wind_essence", "weight": 1, "count": [1, 1] }],
+      "rare": [{ "item": "wing_blades", "chance": 0.005, "pity": 300, "count": [1, 1] }]
+    },
+    {
+      "id": "paper_lantern", "rolls": 2,
+      "guaranteed": [{ "item": "wind_essence", "count": [2, 4] }],
+      "entries": [
+        { "item": "frostglass", "weight": 4, "count": [2, 5] },
+        { "item": "swift_stone", "weight": 1, "count": [1, 1] },
+        { "item": "petal_rune_1", "weight": 1, "count": [1, 1] }
+      ],
+      "rare": [{ "item": "wing_blades", "chance": 0.05, "pity": 20, "count": [1, 1] }]
+    }
+  ]
+}

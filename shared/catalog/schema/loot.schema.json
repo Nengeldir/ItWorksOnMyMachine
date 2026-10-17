@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "loot.schema.json",
+  "title": "LootFile",
+  "type": "object",
+  "required": ["tables"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "tables": { "type": "array", "items": { "$ref": "#/$defs/LootTable" } }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "Drop": {
+      "type": "object",
+      "required": ["item", "count"],
+      "properties": {
+        "item": { "$ref": "common.schema.json#/$defs/Id" },
+        "count": { "$ref": "common.schema.json#/$defs/CountRange" }
+      },
+      "additionalProperties": false
+    },
+    "WeightedDrop": {
+      "type": "object",
+      "required": ["item", "weight", "count"],
+      "properties": {
+        "item": { "$ref": "common.schema.json#/$defs/Id" },
+        "weight": { "description": "Relative chance among the table's entries; must be > 0.", "type": "number" },
+        "count": { "$ref": "common.schema.json#/$defs/CountRange" }
+      },
+      "additionalProperties": false
+    },
+    "RareDrop": {
+      "type": "object",
+      "required": ["item", "chance", "count"],
+      "properties": {
+        "item": { "$ref": "common.schema.json#/$defs/Id" },
+        "chance": { "description": "Rolled once per opening, on top of the entries.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "pity": { "description": "After this many misses in a row the next one is certain (0 or absent: no pity).", "type": "integer", "minimum": 0 },
+        "count": { "$ref": "common.schema.json#/$defs/CountRange" }
+      },
+      "additionalProperties": false
+    },
+    "LootTable": {
+      "type": "object",
+      "required": ["id", "rolls", "entries"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/Id" },
+        "rolls": { "description": "Picks from entries, by weight, with replacement.", "type": "integer", "minimum": 0 },
+        "guaranteed": { "type": "array", "items": { "$ref": "#/$defs/Drop" } },
+        "entries": { "type": "array", "items": { "$ref": "#/$defs/WeightedDrop" } },
+        "rare": { "type": "array", "items": { "$ref": "#/$defs/RareDrop" } }
+      },
+      "additionalProperties": false
+    }
+  }
+}

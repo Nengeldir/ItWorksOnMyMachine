@@ -21,6 +21,7 @@ from models import (
     ClientId,
     EquipRequest,
     FinishRequest,
+    InventoryActionsRequest,
     GhostRun,
     JoinRequest,
     LeaderboardEntry,
@@ -39,6 +40,8 @@ from models import (
     TokenRequest,
     User,
 )
+from catalog import load_catalog
+from inventory import Inventory
 from rooms import Listener, Player, Room, RoomError, RoomLimitError, RoomManager, check_finish_time, encode, now_ms
 from store import Store
 from profiles import Profiles
@@ -50,9 +53,14 @@ ROOM_CODE = re.compile(r"^[A-Z0-9]{3,8}$")
 RUN_TOKEN_TTL_MS = 60 * 60 * 1000
 MAX_OPEN_RUNS = 10_000
 
+# The shared catalog (shared/catalog): checked here, so a broken catalog stops the server from starting
+catalog = load_catalog()
 rooms = RoomManager()
 store = Store(os.path.join(os.getenv("DATA_DIR", "data"), "game.db"))
 profiles = Profiles(store)
+# The open world's inventory (plan F3); DEV_TOOLS=1 allows granting items (tests, local play)
+inventory = Inventory(store, catalog, dev=os.getenv("DEV_TOOLS", "") == "1")
+inventory.on_rank_xp = profiles.add_rank_xp
 # Solo time trials in progress: run token -> (seed, server time the clock started)
 solo_runs: dict[str, tuple[int, int]] = {}
 
@@ -127,6 +135,7 @@ class RateLimit:
 LIMITS = {
     "claim": RateLimit(90, 60), "start": RateLimit(12, 60), "report": RateLimit(12, 60),
     "equip": RateLimit(60, 60), "shop": RateLimit(30, 60), "spin": RateLimit(6, 60),
+    "inventory": RateLimit(120, 60),
 }
 
 
@@ -227,6 +236,18 @@ def buy(body: BuyRequest, request: Request):
 @app.post("/api/shop/spin")
 def spin(body: JoinRequest, request: Request):
     return profile_call("spin", request, body, lambda user: profiles.spin(user))
+
+
+@app.get("/api/inv")
+def get_inventory(request: Request, client_id: ClientId, nickname: str = ""):
+    """The open world's inventory: bag, storage, equipped gear, wallet, slots and its revision"""
+    return inventory.state(extract_user(request, client_id, nickname).id)
+
+
+@app.post("/api/inv/actions")
+def inventory_actions(body: InventoryActionsRequest, request: Request):
+    """Up to 50 actions, applied in order; each answers once, and the same action_id again returns that answer"""
+    return profile_call("inventory", request, body, lambda user: inventory.apply_batch(user.id, body.actions))
 
 
 @app.get("/api/players")

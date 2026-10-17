@@ -1,0 +1,72 @@
+{
+  "$schema": "./schema/skills.schema.json",
+  "windRankShare": 0.1,
+  "curves": {
+    "standard": [
+      50, 61, 73, 89, 110, 130, 160, 190, 230, 280, 340, 410, 490, 600, 720, 870, 1100, 1300, 1500, 1900,
+      2300, 2700, 3300, 4000, 4900, 5900, 7100, 8600, 10000, 13000, 15000, 18000, 22000, 27000, 33000, 39000,
+      48000, 58000, 70000, 85000, 100000, 120000, 150000, 180000, 220000, 270000, 320000, 390000, 470000
+    ],
+    "short": [
+      100, 130, 170, 220, 290, 370, 480, 630, 820, 1100, 1400, 1800, 2300, 3000, 3900, 5100, 6700, 8700,
+      11000, 15000, 19000, 25000, 32000, 42000
+    ]
+  },
+  "skills": [
+    {
+      "id": "farming", "name": "Farming", "color": "#e7c45a", "curve": "standard", "maxLevel": 50,
+      "perLevel": { "harvestFortune": 2 },
+      "unlocks": [{ "level": 5, "kind": "region", "id": "lantern_wood" }]
+    },
+    {
+      "id": "foraging", "name": "Foraging", "color": "#7fbf6a", "curve": "standard", "maxLevel": 50,
+      "perLevel": { "timberFortune": 2 },
+      "unlocks": [{ "level": 5, "kind": "recipe", "id": "ashwind_axe" }]
+    },
+    {
+      "id": "mining", "name": "Mining", "color": "#8fc7e8", "curve": "standard", "maxLevel": 50,
+      "perLevel": { "oreFortune": 2 },
+      "unlocks": [{ "level": 5, "kind": "region", "id": "hollow_deeps" }]
+    },
+    {
+      "id": "fishing", "name": "Fishing", "color": "#5fb3c9", "curve": "standard", "maxLevel": 50,
+      "perLevel": { "angling": 1 },
+      "unlocks": [{ "level": 5, "kind": "region", "id": "cloudsea_isles" }]
+    },
+    {
+      "id": "enchanting", "name": "Enchanting", "color": "#b48cff", "curve": "standard", "maxLevel": 50,
+      "perLevel": { "focus": 1 },
+      "unlocks": []
+    },
+    {
+      "id": "alchemy", "name": "Tea brewing", "color": "#d98fb0", "curve": "standard", "maxLevel": 50,
+      "perLevel": { "focus": 1 },
+      "unlocks": [{ "level": 2, "kind": "recipe", "id": "meadow_tea" }]
+    },
+    {
+      "id": "taming", "name": "Companion bonds", "color": "#f2a65a", "curve": "standard", "maxLevel": 50,
+      "perLevel": { "luck": 0.5 },
+      "unlocks": []
+    },
+    {
+      "id": "carpentry", "name": "Hearthcraft", "color": "#c49a6c", "curve": "standard", "maxLevel": 50,
+      "perLevel": { "light": 1 },
+      "unlocks": [{ "level": 5, "kind": "recipe", "id": "meadow_stool" }]
+    },
+    {
+      "id": "runecrafting", "name": "Wind runes", "color": "#7fd6c4", "curve": "short", "maxLevel": 25,
+      "perLevel": {},
+      "unlocks": [{ "level": 3, "kind": "recipe", "id": "petal_rune_2" }]
+    },
+    {
+      "id": "purification", "name": "Purification", "color": "#fff0bf", "curve": "standard", "maxLevel": 50,
+      "perLevel": { "crit": 0.5 },
+      "unlocks": [{ "level": 5, "kind": "recipe", "id": "wing_blades" }]
+    },
+    {
+      "id": "windspire", "name": "The Windspire", "color": "#c4ecff", "curve": "standard", "maxLevel": 50,
+      "perLevel": { "light": 2 },
+      "unlocks": []
+    }
+  ]
+}

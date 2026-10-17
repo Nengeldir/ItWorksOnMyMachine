@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "regions.schema.json",
+  "title": "RegionsFile",
+  "type": "object",
+  "required": ["worldRadius", "cell", "seed", "borders", "hub", "regions"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "worldRadius": { "description": "Metres from the hub to the edge of the Reaches.", "type": "number", "exclusiveMinimum": 0 },
+    "cell": { "description": "The region map's cell size in metres (plan R1).", "type": "number", "exclusiveMinimum": 0 },
+    "seed": { "description": "The world seed: the same Reaches for everyone (plan R1).", "type": "integer", "minimum": 0 },
+    "borders": { "$ref": "#/$defs/Borders" },
+    "hub": { "$ref": "#/$defs/Hub" },
+    "regions": { "type": "array", "items": { "$ref": "#/$defs/Region" } }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "Layer": { "enum": ["surface", "deep"] },
+    "Borders": {
+      "description": "How regions meet (game/reaches/regions.ts, backend/regions.py): metres over which two regions blend, and the hub into them; how far, and over what distance, the borders wander.",
+      "type": "object",
+      "required": ["band", "hubBand", "warp", "warpScale"],
+      "properties": {
+        "band": { "type": "number", "exclusiveMinimum": 0 },
+        "hubBand": { "type": "number", "exclusiveMinimum": 0 },
+        "warp": { "type": "number", "minimum": 0 },
+        "warpScale": { "type": "number", "exclusiveMinimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "Hub": {
+      "description": "Lanternhaven, a hand-authored set piece at the centre (plan R3).",
+      "type": "object",
+      "required": ["id", "name", "center", "radius"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/Id" },
+        "name": { "type": "string", "minLength": 1 },
+        "center": { "$ref": "common.schema.json#/$defs/Point" },
+        "radius": { "type": "number", "exclusiveMinimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "Region": {
+      "type": "object",
+      "required": ["id", "name", "biome", "skills", "places", "center", "radius", "layer"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/Id" },
+        "name": { "type": "string", "minLength": 1 },
+        "biome": { "$ref": "common.schema.json#/$defs/BiomeId" },
+        "skills": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/Id" } },
+        "places": { "description": "Signature places.", "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "center": { "$ref": "common.schema.json#/$defs/Point" },
+        "radius": { "type": "number", "exclusiveMinimum": 0 },
+        "layer": { "description": "deep: under other regions (the Hollow Deeps).", "$ref": "#/$defs/Layer" },
+        "note": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

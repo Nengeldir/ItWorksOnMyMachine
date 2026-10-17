@@ -1,0 +1,62 @@
+{
+  "$schema": "./schema/regions.schema.json",
+  "worldRadius": 6000,
+  "cell": 1024,
+  "seed": 1015,
+  "borders": { "band": 300, "hubBand": 200, "warp": 280, "warpScale": 1100 },
+  "hub": { "id": "lanternhaven", "name": "Lanternhaven", "center": [0, 0], "radius": 900 },
+  "regions": [
+    {
+      "id": "meadow_rise", "name": "Meadow Rise", "biome": "verdant", "layer": "surface",
+      "skills": ["farming", "foraging"], "places": ["The Windmill Terraces", "The Barn Fair"],
+      "center": [0, -3800], "radius": 1500
+    },
+    {
+      "id": "lantern_wood", "name": "Lantern Wood", "biome": "twilight", "layer": "surface",
+      "skills": ["foraging", "alchemy"], "places": ["The Elder Canopy", "Glowcap groves"],
+      "center": [2440, -2910], "radius": 1500
+    },
+    {
+      "id": "starfall_summit", "name": "Starfall Summit", "biome": "aurora", "layer": "surface",
+      "skills": ["enchanting"], "places": ["The Observatory", "The Star Loom"],
+      "center": [3740, -660], "radius": 1500
+    },
+    {
+      "id": "frostspine", "name": "Frostspine", "biome": "glacier", "layer": "surface",
+      "skills": ["mining"], "places": ["The Ice Galleries", "The way into the Deeps"],
+      "center": [3290, 1900], "radius": 1500
+    },
+    {
+      "id": "cinder_steps", "name": "Cinder Steps", "biome": "ember", "layer": "surface",
+      "skills": ["mining", "alchemy"], "places": ["Lava-lit obsidian terraces", "The Smith"],
+      "center": [1300, 3570], "radius": 1500
+    },
+    {
+      "id": "old_isles", "name": "Old Isles", "biome": "skyIsles", "layer": "surface",
+      "skills": [], "places": ["Lost Lights", "Ruins and lore"],
+      "center": [-1300, 3570], "radius": 1500,
+      "note": "Decision D3: Sky Isles' race generator is frozen; the Reaches skip it or copy its look on generator v2."
+    },
+    {
+      "id": "cloudsea_isles", "name": "Cloudsea Isles", "biome": "archipelago", "layer": "surface",
+      "skills": ["fishing", "foraging"], "places": ["Cloud sea docks", "Sky-whale migrations"],
+      "center": [-3290, 1900], "radius": 1500
+    },
+    {
+      "id": "drowned_garden", "name": "The Drowned Garden", "biome": "reef", "layer": "surface",
+      "skills": ["fishing", "runecrafting"], "places": ["Glowing reef arches", "The Rune Pedestal"],
+      "center": [-3740, -660], "radius": 1500
+    },
+    {
+      "id": "shellshore", "name": "Shellshore", "biome": "lagoon", "layer": "surface",
+      "skills": ["fishing"], "places": ["The Pier", "Tide pools", "The Lighthouse"],
+      "center": [-2440, -2910], "radius": 1500
+    },
+    {
+      "id": "hollow_deeps", "name": "The Hollow Deeps", "biome": "glacier", "layer": "deep",
+      "skills": ["mining"], "places": ["Crystal caverns", "The Forgekeepers' hall"],
+      "center": [2190, 2600], "radius": 1400,
+      "note": "Under Frostspine and Cinder Steps, entered through the Ice Galleries."
+    }
+  ]
+}
