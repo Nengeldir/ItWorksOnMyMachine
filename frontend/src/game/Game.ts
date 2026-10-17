@@ -24,12 +24,13 @@ import type { ItemId, ItemSlot } from "./items/models";
 import { type GhostData, GhostRecorder, type GhostRun, ghostSamples } from "./ghost";
 import { type ControlSettings, type InputObserver, type TestAction, Input, controlsBlocked } from "./input";
 import { FX_LIGHT, Kind, Particles, fx, fxTime, sceneryTime } from "./particles";
+import { PERF_ON } from "./perfFlag";
 import { PilotFx } from "./pilotfx";
 import { INTERPOLATION_DELAY_MS, Pilot, type PilotSample } from "./pilots";
 import { clamp } from "./math";
 import { SpeedLines } from "./speedlines";
 import { TOON_LIGHT } from "./toon";
-import { FX, RANGES, RINGS, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveTuning } from "./tuning";
+import { COSMETIC_FX, FX, RANGES, RINGS, TUNING_GROUPS, WATER, loadTuning, resetTuning, saveTuning } from "./tuning";
 import { ABILITY } from "./run/abilities";
 import { PICKUP, PICKUP_PREFS } from "./run/pickups";
 import { ITEM, RUN_ITEMS, type RunItemId } from "./run/items";
@@ -46,7 +47,7 @@ import { type Level, levelId, seedLevel } from "./world/biomes";
 import type { WaterKind } from "./world/terrain/river";
 import { type WaterHit, World } from "./world/World";
 import { WorldView } from "./world/WorldView";
-import type { Palette } from "./world/palette";
+import { type Palette, skyIsDark } from "./world/palette";
 import { reloadForNewBuild } from "../staleBuild";
 import { onHold } from "./hold";
 
@@ -213,6 +214,10 @@ export class Game implements RunHost {
   private readonly prevVelocity = new THREE.Vector3();
   private readonly renderVelocity = new THREE.Vector3();
   private readonly prevQuaternion = new THREE.Quaternion();
+  /** The dodge at the previous physics step, so the roll and the camera interpolate like the body */
+  private prevDodge = 0;
+  private readonly prevDodgeVelocity = new THREE.Vector3();
+  private readonly renderDodgeVelocity = new THREE.Vector3();
   private readonly avatar: Avatar;
   private readonly companion: Companion;
   private testLook: Appearance | null = null;
@@ -428,7 +433,7 @@ export class Game implements RunHost {
     });
     this.appearanceChanged();
     window.addEventListener(APPEARANCE_EVENT, this.appearanceChanged);
-    this.fx = new PilotFx(this.avatar, options.color, this.particles);
+    this.fx = new PilotFx(this.avatar, options.color, this.particles, { solid: this.softParticles });
     if (!this.attract) {
       // Your own wings make a sound on each downstroke (the effects keep their own hook)
       const puff = this.avatar.onDownstroke;
@@ -475,6 +480,8 @@ export class Game implements RunHost {
     this.setControls(options.controls);
     this.audio.setPreferences(options.controls.musicVolume ?? 1, options.controls.effectsVolume ?? 1, options.controls.muted ?? false);
     this.resize();
+    // ?perf: the overlay's meter times this game's loop and steps (never a menu backdrop)
+    if (PERF_ON && !this.attract) void import("./perf").then(({ perf }) => perf.attach(this));
     this.frame = requestAnimationFrame(this.loop);
     if (!this.attract) this.unhold = onHold((held) => this.hold(held));
 
@@ -894,6 +901,7 @@ export class Game implements RunHost {
     // How effects react to this biome's light: glows pop at night, and get a push in bright daylight
     const palette = this.world.palette;
     FX_LIGHT.boost.value = palette.glow;
+    FX_LIGHT.dark = skyIsDark(palette);
     TOON_LIGHT.rimColor.value.set(palette.sun).lerp(WHITE, 0.35);
     TOON_LIGHT.glow.value = 0.15 + palette.night * 1.3;
     this.audio.setBiome(level.biome.id, palette.night);
@@ -930,7 +938,7 @@ export class Game implements RunHost {
     this.avatar.setStyle(controls.pilotStyle ?? 1);
     PICKUP_PREFS.crystalsOnly = !!controls.crystalsOnly;
     this.audio.setPreferences(controls.musicVolume ?? 1, controls.effectsVolume ?? 1,
-      controls.muted ?? false);
+      controls.muted ?? false, { ambience: controls.ambienceVolume, combat: controls.combatVolume, ui: controls.uiVolume, voice: controls.voiceVolume });
     const mode = controls.quality ?? "auto";
     if (previous.quality !== controls.quality || this.frame === 0) {
       this.setQuality(mode === "low" ? 0 : mode === "medium" ? 1 : 2);
@@ -1011,6 +1019,8 @@ export class Game implements RunHost {
 
   dispose() {
     cancelAnimationFrame(this.frame);
+    // After the attach above (both wait on the same import), so a quick dispose still detaches
+    if (PERF_ON) void import("./perf").then(({ perf }) => perf.detach(this));
     this.unhold?.();
     this.resizeObserver.disconnect();
     this.renderer.domElement.removeEventListener("click", this.engage);
@@ -1075,6 +1085,8 @@ export class Game implements RunHost {
     this.prevPosition.copy(this.flight.position);
     this.prevQuaternion.copy(this.flight.quaternion);
     this.prevVelocity.copy(this.flight.velocity);
+    this.prevDodge = this.flight.dodgePhase;
+    this.prevDodgeVelocity.copy(this.flight.dodgeVelocity);
     this.accumulator = 0;
     this.crashedAt = null;
     this.proximity = 0;
@@ -1187,10 +1199,30 @@ export class Game implements RunHost {
     }
   }
 
+  /**
+   * The roll's progress between the last two physics steps, like the body's position: signed, 0 for
+   * none. A roll that just ended runs on to its end (1) instead of unwinding, and a new one starts
+   * from zero
+   */
+  private renderDodge(alpha: number): number {
+    const before = this.prevDodge;
+    const after = this.flight.dodgePhase;
+    if (before === 0 && after === 0) return 0;
+    const direction = Math.sign(after || before);
+    const from = before === 0 || Math.sign(before) !== direction ? 0 : Math.abs(before);
+    const to = after === 0 ? 1 : Math.abs(after);
+    // A forced roll restarting mid-roll: show the new one as it is
+    if (to < from) return after;
+    const phase = from + (to - from) * alpha;
+    return phase >= 1 && after === 0 ? 0 : direction * Math.max(0.0001, phase);
+  }
+
   private step(input: FlightInput) {
     this.prevPosition.copy(this.flight.position);
     this.prevQuaternion.copy(this.flight.quaternion);
     this.prevVelocity.copy(this.flight.velocity);
+    this.prevDodge = this.flight.dodgePhase;
+    this.prevDodgeVelocity.copy(this.flight.dodgeVelocity);
     if (this.run && this.guardTime < 0 && !this.run.items.phasing && !this.run.items.invulnerable && this.crashAhead() && this.run.foresee()) {
       this.guardTime = 0;
       this.guardRails.reset();
@@ -1374,6 +1406,8 @@ export class Game implements RunHost {
     this.prevPosition.copy(this.flight.position);
     this.prevQuaternion.copy(this.flight.quaternion);
     this.prevVelocity.copy(this.flight.velocity);
+    this.prevDodge = this.flight.dodgePhase;
+    this.prevDodgeVelocity.copy(this.flight.dodgeVelocity);
     this.accumulator = 0;
     this.proximity = 0;
     this.run?.wait(dt);
@@ -1386,6 +1420,8 @@ export class Game implements RunHost {
     this.prevPosition.copy(this.flight.position);
     this.prevQuaternion.copy(this.flight.quaternion);
     this.prevVelocity.copy(this.flight.velocity);
+    this.prevDodge = this.flight.dodgePhase;
+    this.prevDodgeVelocity.copy(this.flight.dodgeVelocity);
     this.accumulator = 0;
   }
 
@@ -1397,6 +1433,8 @@ export class Game implements RunHost {
     this.prevPosition.copy(this.flight.position);
     this.prevQuaternion.copy(this.flight.quaternion);
     this.prevVelocity.copy(this.flight.velocity);
+    this.prevDodge = this.flight.dodgePhase;
+    this.prevDodgeVelocity.copy(this.flight.dodgeVelocity);
     this.rails.step(STEP, this.flight, this.world.course);
     const { x, y, z } = this.flight.position;
     const distance = Math.min(this.world.rock.distance(x, y, z), this.world.otherDistance(x, y, z));
@@ -1725,6 +1763,7 @@ export class Game implements RunHost {
     }
     this.elapsed += dt;
     fxTime.value = this.elapsed;
+    TOON_LIGHT.aura.value = COSMETIC_FX.wingGlow;
     const worldDt=dt * (this.run?.items.worldRate ?? 1);
     this.sceneryClock+=worldDt;sceneryTime.value=this.sceneryClock;
     this.adaptQuality(realDt);
@@ -1794,6 +1833,7 @@ export class Game implements RunHost {
     body.position.lerpVectors(this.prevPosition, this.flight.position, alpha);
     body.quaternion.slerpQuaternions(this.prevQuaternion, this.flight.quaternion, alpha);
     this.renderVelocity.lerpVectors(this.prevVelocity, this.flight.velocity, alpha);
+    this.renderDodgeVelocity.lerpVectors(this.prevDodgeVelocity, this.flight.dodgeVelocity, alpha);
     this.smoothProximity += (this.proximity - this.smoothProximity) * (1 - Math.exp(-dt * 8));
 
     const crashed = this.crashedAt !== null;
@@ -1803,7 +1843,7 @@ export class Game implements RunHost {
       this.abilityFx.pose(dt, this.run && !waiting ? this.run.abilities : null);
       this.abilityFx2.pose(dt, this.run && !waiting ? this.run.abilities : null);
       this.itemFx.pose(dt, this.run && !waiting ? this.run.items : null);
-      this.avatar.setDodge(this.flight.dodgePhase);
+      this.avatar.setDodge(this.renderDodge(alpha));
       this.avatar.setSpeedControls(this.flight.boost, this.flight.brake);
       const finale = this.run?.phase === "finale";
       this.avatar.update(dt, finale ? FINALE_GLIDE : this.flight.speed, this.smoothProximity);
@@ -1837,7 +1877,7 @@ export class Game implements RunHost {
         this.smoothProximity,
         this.clearance,
         // The chase follows the flight path, not a dodge's sideways slide (it swung back like a rubber band)
-        tmp3.subVectors(this.renderVelocity, this.flight.dodgeVelocity),
+        tmp3.subVectors(this.renderVelocity, this.renderDodgeVelocity),
         this.flight.boost,
       );
     } else {
@@ -2153,6 +2193,7 @@ export class Game implements RunHost {
     }
     this.renderer.setPixelRatio(this.pixelRatio(quality));
     this.particles.budget = QUALITY[quality].particles;
+    this.audio.setQuality(quality);
     this.resize();
     // With or without bloom is another set of programs: build them now, not one by one in flight
     if (bloomWas !== this.bloomOn) this.compileShaders();

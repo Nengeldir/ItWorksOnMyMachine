@@ -7,7 +7,7 @@ import { Particles, fx, fxTime, Kind } from "../src/game/particles.ts";
 function emitter() {
   const group = new Group();
   const avatar = {
-    group, wingStyle: "classic", barrelProgress: -1, boost: 0, brake: 0,
+    group, rigMatrix: group.matrixWorld, wingStyle: "classic", jarStyle: "none", dying: false, barrelProgress: -1, boost: 0, brake: 0,
     wingtips(left, right) { left.copy(group.position).x -= 2; right.copy(group.position).x += 2; },
     span(out) { out.set(1, 0, 0); },
     capeTip(out) { out.copy(group.position); },
@@ -61,12 +61,17 @@ test("decorated wings also distribute their accent grains across the frame", () 
     avatar.wingStyle = "astral";
     const velocity = new Vector3(0, 0, 60);
     effects.update(0, 60, velocity, 0);
-    avatar.group.position.z = 6;
-    effects.update(.1, 60, velocity, 0);
-    const accents = emitted.filter(p => p.kind === Kind.Star);
+    avatar.group.position.z = 15;
+    effects.update(.25, 60, velocity, 0);
+    // The wings' own shapes (cosmetics/wingParticles.ts): stars, rings, sparkles
+    const accents = emitted.filter(p => p.kind >= Kind.Feather);
     assert.ok(accents.length >= 3);
-    assert.ok(new Set(accents.map(p => p.position.z)).size === accents.length);
-    assert.ok(accents.every(p => p.size <= .2 && p.age >= 0 && p.age <= .1));
+    // Within each layer (one shape here, the random picks being fixed) no two are born at one spot
+    for (const kind of new Set(accents.map(p => p.kind))) {
+      const layer = accents.filter(p => p.kind === kind);
+      assert.ok(new Set(layer.map(p => p.position.z)).size === layer.length);
+    }
+    assert.ok(accents.every(p => p.size <= .45 && p.age >= 0 && p.age <= .25));
     effects.dispose();
   } finally { Math.random = random; }
 });

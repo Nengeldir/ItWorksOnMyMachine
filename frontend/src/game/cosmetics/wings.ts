@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { Builder, blend, cyl, leaf, sphere } from "../items/builder";
 import type { FeatherBone } from "../wingRig";
+import { toonMaterial } from "../toon";
 import { paintedModel, disposeModel, skinnedModel } from "./models";
 import { wingSpec, type WingId, type WingRig } from "./catalog";
 
@@ -13,6 +14,32 @@ import { wingSpec, type WingId, type WingRig } from "./catalog";
 // (rigid) put everything on the inner part. Looks only.
 
 const GOLD = "#f3c869";
+
+/**
+ * The pairs that glow, and in what light: every legendary pair and the elemental rare ones. Their material
+ * lights the whole surface softly, burns their trims bright enough to bloom and edges them in light
+ * (toon.ts `aura`, `COSMETIC_FX.wingGlow`); some of their particle layers glow too (wingParticles.ts)
+ */
+const AURA: Partial<Record<WingId, string>> = {
+  frost: "#bfeaff",
+  ember: "#ffa04a",
+  storm: "#c99cff",
+  astral: "#b9d4ff",
+  seraph: "#ffd98a",
+};
+const auraMaterials = new Map<WingId, THREE.Material>();
+
+/** The shared material of a glowing pair (undefined: the ordinary toon) */
+function auraMaterial(id: WingId): THREE.Material | undefined {
+  const color = AURA[id];
+  if (!color) return undefined;
+  let material = auraMaterials.get(id);
+  if (!material) {
+    material = toonMaterial({ side: THREE.DoubleSide, rim: 0.35, aura: color });
+    auraMaterials.set(id, material);
+  }
+  return material;
+}
 
 /** Where a wing's tip or trailing corner is: on which part, on which of its bones (-1: none), and where */
 export interface WingAnchor {
@@ -361,14 +388,14 @@ function shapesFor(id: WingId): Built {
 
 /** One side's wing (`hand` 1 right, -1 left: mirrored), its two parts for the pilot's two wing joints */
 export function buildWing(id: WingId, hand: number): WingModel {
-  const spec = wingSpec(id), built = shapesFor(id);
-  const inside = paintedModel(built.inner);
+  const spec = wingSpec(id), built = shapesFor(id), material = auraMaterial(id);
+  const inside = paintedModel(built.inner, material);
   let outside: THREE.Group, bones: THREE.Bone[] = [], rest: number[] = [];
   if (!built.outer) outside = new THREE.Group();
   else if (built.feathers.length) {
-    const skinned = skinnedModel(built.outer, built.feathers);
+    const skinned = skinnedModel(built.outer, built.feathers, material);
     outside = skinned.group; bones = skinned.bones; rest = skinned.rest;
-  } else outside = paintedModel(built.outer);
+  } else outside = paintedModel(built.outer, material);
   inside.scale.set(hand * spec.size, spec.size, spec.size);
   outside.scale.set(hand * spec.size, spec.size, spec.size);
   inside.name = `${id}-inner`; outside.name = `${id}-outer`;

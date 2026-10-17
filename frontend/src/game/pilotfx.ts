@@ -1,9 +1,12 @@
 import * as THREE from "three";
 import type { Avatar } from "./avatar";
-import { Kind, type Particles, fx } from "./particles";
+import { FX_LIGHT, Kind, type Particles, fx } from "./particles";
 import { Trail } from "./trail";
-import { FX, COSMETIC_FX } from "./tuning";
-import { type WingId, wingSpec } from "./cosmetics/catalog";
+import { FX, COSMETIC_FX, JAR_FX } from "./tuning";
+import { type WingLayer, skyTint, wingParticles } from "./cosmetics/wingParticles";
+import type { JarMotes } from "./cosmetics/jars";
+import { type JarsModule, jarsModule } from "./cosmetics/jarLoader";
+import type { JarId } from "./cosmetics/catalog";
 
 const tipL = new THREE.Vector3();
 const tipR = new THREE.Vector3();
@@ -12,49 +15,42 @@ const cape = new THREE.Vector3();
 const at = new THREE.Vector3();
 const vel = new THREE.Vector3();
 const color = new THREE.Color();
+const tinted = new THREE.Color();
 const down = new THREE.Vector3();
 const jitter = new THREE.Vector3();
 const drift = new THREE.Vector3();
+const settledL = new THREE.Vector3();
+const settledR = new THREE.Vector3();
+const toRig = new THREE.Matrix4();
+
+/** Half the size of the space round the pilot a worn jar's aura drifts in (m: across, up, along the body) */
+const JAR_AURA = new THREE.Vector3(1.05, 0.75, 1.25);
+/** The richest aura (a legendary jar's): the most motes one can show */
+const JAR_MOTES = 28;
+
+/** Seconds over which the ribbons calm the wingtips' flap: fast beats leave a gentle wave, not a zigzag */
+const RIBBON_CALM = 0.07;
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
-
-/** The grain each wardrobe pair sheds from its tips (the original pair sheds the pilot's own motes) */
-const WING_GRAIN: Partial<Record<WingId, Kind>> = {
-  astral: Kind.Star, frost: Kind.Shard, storm: Kind.Shard, tide: Kind.Bubble, cardboard: Kind.Shard, paper: Kind.Shard,
-  clockwork: Kind.Shard, ruin: Kind.Firefly, butterfly: Kind.Firefly, maple: Kind.Shard, seraph: Kind.Star,
-};
-
-/**
- * Rare and legendary wings shed a second, richer layer all along the span, not just at the tips:
- * `color`/`accent` alternate, `rise` lifts them (negative gravity), `burst` (legendary) throws a fan of
- * them off every downstroke
- */
-const WING_FLOURISH: Partial<Record<WingId, { color: string; accent: string; kind: Kind; rate: number; size: number; rise: number; burst?: number }>> = {
-  frost: { color: "#e8fbff", accent: "#a8e4ff", kind: Kind.Shard, rate: 18, size: 0.09, rise: 0.6 }, // falling snow crystals
-  ember: { color: "#ffb469", accent: "#ff6a3a", kind: Kind.Glow, rate: 24, size: 0.09, rise: -1.2 }, // rising embers
-  storm: { color: "#f1c7ff", accent: "#ffffff", kind: Kind.Star, rate: 16, size: 0.08, rise: 0 }, // static sparks
-  clockwork: { color: "#ffd27a", accent: "#e9f6ff", kind: Kind.Shard, rate: 14, size: 0.07, rise: 1.4 }, // brass sparks and steam
-  ruin: { color: "#ffad4a", accent: "#ffe2a8", kind: Kind.Firefly, rate: 16, size: 0.09, rise: -0.3 }, // amber core motes
-  wyrm: { color: "#bff1e0", accent: "#ffffff", kind: Kind.Wisp, rate: 12, size: 0.3, rise: -0.1 }, // cloud breath
-  astral: { color: "#c4e5ff", accent: "#fff3c2", kind: Kind.Star, rate: 26, size: 0.11, rise: -0.15, burst: 10 }, // constellation dust
-  seraph: { color: "#fff1c8", accent: "#ffcf6a", kind: Kind.Star, rate: 30, size: 0.12, rise: -0.5, burst: 14 }, // sunrise feathers of light
-};
 
 export interface PilotFxOptions {
   /** Share of the particle effects this pilot gets (others' pilots get fewer than yours) */
   share?: number;
   ghost?: boolean;
+  /** Ordinarily blended particles: the wings' non-glowing shapes go here on light skies (none: always added light) */
+  solid?: Particles;
 }
 
 /**
  * Everything a pilot leaves in the air: glowing ribbons from the wingtips and
  * the cape, light motes shed from the wings like in Sky, puffs of air on each
- * downstroke, and a spiral of stars during barrel rolls.
+ * downstroke, a spiral of stars during barrel rolls, and a worn particle jar's aura and trail.
  */
 export class PilotFx {
   readonly trails: Trail[];
   private readonly avatar: Avatar;
   private readonly particles: Particles | null;
+  private readonly solid: Particles | null;
   private readonly share: number;
   private readonly ghost: boolean;
   private readonly head = new THREE.Color();
@@ -72,16 +68,26 @@ export class PilotFx {
   private moving = true;
   private wind = false;
   private brakeDebt = 0;
-  private wingDebt = 0;
-  private flourishDebt = 0;
+  /** Particles owed to each layer of the worn wings' recipe */
+  private readonly wingDebts = [0, 0, 0, 0, 0, 0];
   private readonly previousL = new THREE.Vector3();
   private readonly previousR = new THREE.Vector3();
   private readonly previousCenter = new THREE.Vector3();
   private hasPrevious = false;
+  /** The wingtips in the body's frame, with the flap calmed (`RIBBON_CALM`) */
+  private readonly calmL = new THREE.Vector3();
+  private readonly calmR = new THREE.Vector3();
+  private calmed = false;
+  /** A worn particle jar's aura (carried by the pilot, made once the jars' code has loaded), how much of it shows, and its trail's debt */
+  private jarMotes: JarMotes | null = null;
+  private jarShown = 0;
+  private jarDebt = 0;
+  private jarGrain = 0;
 
   constructor(avatar: Avatar, color: string, particles: Particles | null, options: PilotFxOptions = {}) {
     this.avatar = avatar;
     this.particles = particles;
+    this.solid = options.solid ?? null;
     this.share = options.share ?? 1;
     this.ghost = !!options.ghost;
     this.trails = [
@@ -109,7 +115,9 @@ export class PilotFx {
   reset() {
     this.trails.forEach((t) => t.reset());
     this.hasPrevious = false;
-    this.debtL = this.debtR = this.spiralDebt = this.boostDebt = this.brakeDebt = this.wingDebt = 0;
+    this.calmed = false;
+    this.debtL = this.debtR = this.spiralDebt = this.boostDebt = this.brakeDebt = this.jarDebt = 0;
+    this.wingDebts.fill(0);
     this.rollGrain = this.boostGrain = 0;
   }
 
@@ -141,14 +149,45 @@ export class PilotFx {
     const wingOpacity = THREE.MathUtils.clamp(0.18 + (speed - 30) / 45 + proximity * 0.5 + barrel * 0.6 + avatar.boost * 0.3 - avatar.brake * 0.2, 0, 0.95);
     const lengthScale = 1 + avatar.boost * 0.45 - avatar.brake * 0.35;
     for (const trail of this.trails) trail.glowScale = 1 + avatar.boost * FX.boostTrailGlow;
-    this.trails[0].push(tipL, span, lengthScale);
-    this.trails[1].push(tipR, span, lengthScale);
+    // The ribbons keep the tips' path with the flap calmed, in the body's (rolled) frame so a barrel
+    // roll still draws its spiral exactly
+    const rig = avatar.rigMatrix;
+    toRig.copy(rig).invert();
+    settledL.copy(tipL).applyMatrix4(toRig);
+    settledR.copy(tipR).applyMatrix4(toRig);
+    if (!this.calmed) {
+      this.calmL.copy(settledL);
+      this.calmR.copy(settledR);
+      this.calmed = true;
+    }
+    const calm = 1 - Math.exp(-dt / RIBBON_CALM);
+    this.calmL.lerp(settledL, calm);
+    this.calmR.lerp(settledR, calm);
+    settledL.copy(this.calmL).applyMatrix4(rig);
+    settledR.copy(this.calmR).applyMatrix4(rig);
+    this.trails[0].push(tipL, span, lengthScale, settledL);
+    this.trails[1].push(tipR, span, lengthScale, settledR);
     this.trails[0].opacity = wingOpacity * (this.ghost ? 0.6 : 1);
     this.trails[1].opacity = wingOpacity * (this.ghost ? 0.6 : 1);
     this.trails[2].push(cape, span, lengthScale);
     this.trails[2].opacity = FX.bodyTrail
       ? THREE.MathUtils.clamp(0.12 + (speed - 25) / 70 + proximity * 0.3, 0, 0.6) * (this.ghost ? 0.4 : 1)
       : 0;
+
+    // A worn jar's aura shows whenever the pilot is about (not mid-crash); its trail only streams in flight
+    const jar = avatar.jarStyle;
+    const jars = jar !== "none" || this.jarMotes ? jarsModule() : null;
+    if (jars && !this.jarMotes) {
+      this.jarMotes = new jars.JarMotes(JAR_MOTES, JAR_AURA);
+      avatar.group.add(this.jarMotes.points);
+    }
+    this.jarMotes?.set(jar);
+    this.jarShown += ((jar !== "none" && !avatar.dying ? 1 : 0) - this.jarShown) * (1 - Math.exp(-dt * 4));
+    if (jars && this.jarMotes && jar !== "none") {
+      this.jarMotes.opacity = this.jarShown * (this.ghost ? 0.5 : 1);
+      this.jarMotes.scale = JAR_FX.auraSize;
+      this.jarMotes.update(dt, jars.jarLook(jar).auraCount * JAR_FX.aura * (this.particles?.budget ?? 1) * this.share);
+    }
 
     if (!this.hasPrevious || !moving) this.rememberPose();
     const particles = this.particles;
@@ -157,36 +196,24 @@ export class PilotFx {
       return;
     }
     const budget = particles.budget * this.share;
-    const style = avatar.wingStyle;
-    if (style !== "classic") {
-      const wingRate = COSMETIC_FX.wingParticles * budget * (style === "astral" ? 1.5 : 1);
-      this.wingDebt += dt * wingRate;
-      color.set(wingSpec(style).accent);
-      for (; this.wingDebt >= 1; this.wingDebt--) {
-        const age = (this.wingDebt - 1) / wingRate;
+    // The worn wings' own particles: each layer of their recipe (cosmetics/wingParticles.ts)
+    const layers = wingParticles(avatar.wingStyle).layers;
+    for (let l = 0; l < layers.length && l < this.wingDebts.length; l++) {
+      const layer = layers[l];
+      const layerRate = layer.rate * COSMETIC_FX.wingParticles * budget;
+      if (layerRate <= 0) continue;
+      this.wingDebts[l] += dt * layerRate;
+      for (; this.wingDebts[l] >= 1; this.wingDebts[l]--) {
+        const age = (this.wingDebts[l] - 1) / layerRate;
         const left = Math.random() < .5;
         this.sampleTip(left ? tipL : tipR, left ? this.previousL : this.previousR, age, dt);
-        jitter.lerpVectors(this.center, this.previousCenter, age / dt);
-        at.lerp(jitter, rand(0, .65));
-        this.emit(at, vel.copy(velocity).multiplyScalar(.08), fx(.55, COSMETIC_FX.wingParticleSize * rand(.75, 1.15), color,
-          WING_GRAIN[style] ?? Kind.Glow, -.3, 1.5, .9), age);
-      }
-      // The richer layer of rare and legendary wings: along the whole span, alternating two colors
-      const flourish = WING_FLOURISH[style];
-      if (flourish) {
-        const flourishRate = flourish.rate * budget * COSMETIC_FX.wingParticles;
-        this.flourishDebt += dt * flourishRate;
-        for (; this.flourishDebt >= 1; this.flourishDebt--) {
-          const age = (this.flourishDebt - 1) / flourishRate;
-          const left = Math.random() < .5;
-          this.sampleTip(left ? tipL : tipR, left ? this.previousL : this.previousR, age, dt);
-          at.lerp(this.center, rand(0, .7));
-          color.set(Math.random() < .3 ? flourish.accent : flourish.color);
-          this.emit(at, vel.copy(velocity).multiplyScalar(.06).add(jitter.set(rand(-.4, .4), rand(-.2, .4), rand(-.4, .4))),
-            fx(rand(.6, 1.1), flourish.size * rand(.75, 1.3), color, flourish.kind, flourish.rise, 1.4, 1.2), age);
-        }
+        jitter.lerpVectors(this.center, this.previousCenter, THREE.MathUtils.clamp(age / dt, 0, 1));
+        // From somewhere between `from` and the tip, towards the shoulder
+        at.lerp(jitter, rand(0, 1 - layer.from));
+        this.wingGrain(layer, at, vel.copy(velocity).multiplyScalar(.07), 1, age);
       }
     }
+    if (jars && jar !== "none" && !avatar.dying) this.jarTrail(jars, jar, dt, budget);
     const brakeRate = FX.brakeWisps * avatar.brake * budget;
     this.brakeDebt += dt * brakeRate;
     for (; this.brakeDebt >= 1; this.brakeDebt--) {
@@ -279,13 +306,12 @@ export class PilotFx {
     if (!particles || FX.flapPuffs <= 0 || !this.moving) return;
     const count = Math.round((2 + strength * 6) * FX.flapPuffs * particles.budget * this.share);
     down.set(0, -1, 0).applyQuaternion(this.avatar.group.quaternion);
-    // Legendary wings throw a fan of their light off every beat
-    const flourish = WING_FLOURISH[this.avatar.wingStyle];
-    for (let i = 0; flourish?.burst && i < Math.round(flourish.burst * strength * particles.budget * this.share); i++) {
-      const tip = i % 2 ? tipL : tipR;
-      at.lerpVectors(this.center, tip, rand(0.4, 1));
-      color.set(i % 3 ? flourish.color : flourish.accent);
-      this.emit(at, vel.copy(down).multiplyScalar(rand(2, 5)).addScaledVector(this.velocity, 0.2), fx(rand(0.6, 1), flourish.size * 1.4, color, flourish.kind, flourish.rise, 1.5, 1.8));
+    // Rare and legendary wings throw a fan of their first layer off every beat
+    const recipe = wingParticles(this.avatar.wingStyle);
+    const fan = Math.round(recipe.burst * strength * particles.budget * this.share);
+    for (let i = 0; i < fan; i++) {
+      at.lerpVectors(this.center, i % 2 ? tipL : tipR, rand(0.35, 1));
+      this.wingGrain(recipe.layers[0], at, vel.copy(down).multiplyScalar(rand(2, 5)).addScaledVector(this.velocity, 0.2), 1.25);
     }
     for (let i = 0; i < count; i++) {
       const tip = i % 2 ? tipL : tipR;
@@ -306,13 +332,55 @@ export class PilotFx {
     }
   }
 
+  /**
+   * A worn jar's particles streaming off behind: born round the body along this frame's path, drifting slowly
+   * so they hang in the air the pilot has passed through. Glowing jars add light; plain ones are drawn solid
+   */
+  private jarTrail(jars: JarsModule, jar: JarId, dt: number, budget: number) {
+    const look = jars.jarLook(jar);
+    const { trail, kind } = look.recipe;
+    const rate = trail.rate * look.trailRichness * JAR_FX.trail * budget;
+    if (rate <= 0) return;
+    this.jarDebt += dt * rate;
+    const into = look.glow ? null : this.solid;
+    const spread = trail.scatter;
+    for (; this.jarDebt >= 1; this.jarDebt--) {
+      const age = (this.jarDebt - 1) / rate;
+      at.lerpVectors(this.center, this.previousCenter, THREE.MathUtils.clamp(age / dt, 0, 1))
+        .add(jitter.set(rand(-0.5, 0.5), rand(-0.35, 0.4), rand(-0.5, 0.5)));
+      vel.copy(this.velocity).multiplyScalar(0.06).add(jitter.set(rand(-spread, spread), rand(-spread * 0.6, spread), rand(-spread, spread)));
+      // Legendary trails throw a big "hero" piece now and then
+      const hero = look.rarity >= 3 && this.jarGrain++ % 5 === 0;
+      const size = rand(trail.size[0], trail.size[1]) * JAR_FX.trailSize * (hero ? 1.8 : 1);
+      const bright = look.glow ? look.recipe.light * JAR_FX.glow * (this.ghost ? 0.6 : 1) : into ? 1 : 0.8;
+      this.emit(at, vel, fx(rand(trail.life[0], trail.life[1]) * (hero ? 1.3 : 1), size,
+        look.colors[Math.floor(Math.random() * look.colors.length)], kind, trail.gravity, trail.drag, bright), age, into);
+    }
+  }
+
+  /** One particle of a wing recipe's layer, its shape and color picked from the layer's */
+  private wingGrain(layer: WingLayer, position: THREE.Vector3, velocity: THREE.Vector3, light: number, age = 0) {
+    const spread = layer.scatter;
+    velocity.add(jitter.set(rand(-spread, spread), rand(-spread * 0.6, spread), rand(-spread, spread)));
+    const kind = layer.kinds[Math.floor(Math.random() * layer.kinds.length)];
+    const dark = FX_LIGHT.dark;
+    const tint = skyTint(layer.colors[Math.floor(Math.random() * layer.colors.length)], dark, tinted);
+    // On a light sky added light vanishes: plain shapes are drawn solid (full color, no extra brightness)
+    const solid = !layer.glow && !dark && this.solid ? this.solid : null;
+    const bright = solid ? 1 : layer.light * light * (layer.glow ? COSMETIC_FX.glowParticles : 1) * (this.ghost ? 0.6 : 1);
+    this.emit(position, velocity, fx(rand(layer.life[0], layer.life[1]),
+      COSMETIC_FX.wingParticleSize * rand(layer.size[0], layer.size[1]), tint, kind, layer.gravity, layer.drag,
+      bright), age, solid);
+  }
+
   /** Emits a particle; held still in moving air, it is blown back as if the pilot were flying on */
-  private emit(position: THREE.Vector3, velocity: THREE.Vector3, spec: Parameters<Particles["emit"]>[2], age = 0) {
+  private emit(position: THREE.Vector3, velocity: THREE.Vector3, spec: Parameters<Particles["emit"]>[2], age = 0, into: Particles | null = null) {
     if (this.wind) velocity.sub(this.velocity);
-    this.particles!.emit(position, velocity, spec, age);
+    (into ?? this.particles!).emit(position, velocity, spec, age);
   }
 
   dispose() {
     this.trails.forEach((t) => t.dispose());
+    this.jarMotes?.dispose();
   }
 }

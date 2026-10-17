@@ -1,8 +1,5 @@
 import type { Rng } from "../rng";
 
-// Zen mode: creative direction and code by Stella (GitHub: stella-sy-x), from
-// PR #51. Ported onto other branches by teammates; see CREDITS.md.
-
 // Zen's open world: one map with no racing line, going on in every direction.
 // Its land, water, clouds and sea life are made in square cells around you,
 // each from its own seeded streams (`land/<cx>,<cz>`…), so a cell is the same

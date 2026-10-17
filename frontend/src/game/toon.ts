@@ -12,6 +12,8 @@ import { fxTime } from "./particles";
 export const TOON_LIGHT = {
   rimColor: { value: new THREE.Color("#fff4e0") },
   glow: { value: 0.15 },
+  /** How strongly glowing wings shine (`COSMETIC_FX.wingGlow`) */
+  aura: { value: 1 },
   time: fxTime,
 };
 
@@ -36,6 +38,9 @@ export interface ToonOptions {
   emissive?: THREE.ColorRepresentation;
   side?: THREE.Side;
   ghost?: boolean;
+  /** A glow of its own in this color (epic and legendary wings): the whole surface softly lit, its glowing
+   * trims burning bright enough to bloom, a bright rim where it turns away, a slow breath */
+  aura?: THREE.ColorRepresentation;
 }
 
 /** A toon material with vertex colors and a rim light that wraps the silhouette */
@@ -52,12 +57,16 @@ export function toonMaterial(options: ToonOptions = {}): THREE.MeshToonMaterial 
   });
   const rim = { value: options.rim ?? 0.45 };
   const rimColor = { value: new THREE.Color(options.rimColor ?? "#fff4e0") };
+  const aura = options.aura !== undefined ? { value: new THREE.Color(options.aura) } : null;
+  if (aura) material.defines = { TOON_AURA: "" };
   material.onBeforeCompile = (shader) => {
     shader.uniforms.rimStrength = rim;
     shader.uniforms.rimColor = rimColor;
     shader.uniforms.toonRimColor = TOON_LIGHT.rimColor;
     shader.uniforms.toonGlow = TOON_LIGHT.glow;
     shader.uniforms.toonTime = TOON_LIGHT.time;
+    shader.uniforms.auraColor = aura ?? { value: new THREE.Color() };
+    shader.uniforms.toonAura = TOON_LIGHT.aura;
     shader.vertexShader = shader.vertexShader
       .replace("void main() {", "attribute float glow;\nvarying float vGlow;\nvoid main() {")
       .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGlow = glow;");
@@ -69,13 +78,20 @@ export function toonMaterial(options: ToonOptions = {}): THREE.MeshToonMaterial 
         uniform vec3 toonRimColor;
         uniform float toonGlow;
         uniform float toonTime;
+        uniform vec3 auraColor;
+        uniform float toonAura;
         varying float vGlow;
         void main() {`,
       )
       .replace(
         "#include <emissivemap_fragment>",
         `#include <emissivemap_fragment>
-        totalEmissiveRadiance += diffuseColor.rgb * vGlow * toonGlow * (0.85 + 0.15 * sin(toonTime * 2.4 + vGlow * 6.0));`,
+        totalEmissiveRadiance += diffuseColor.rgb * vGlow * toonGlow * (0.85 + 0.15 * sin(toonTime * 2.4 + vGlow * 6.0));
+        #ifdef TOON_AURA
+          // Brighter at night (toonGlow grows with it), breathing slowly
+          float auraBreath = toonAura * (1.0 + 0.3 * toonGlow) * (0.82 + 0.18 * sin(toonTime * 1.7));
+          totalEmissiveRadiance += mix(diffuseColor.rgb, auraColor, 0.6) * auraBreath * (0.16 + 1.1 * vGlow);
+        #endif`,
       )
       .replace(
         "#include <opaque_fragment>",
@@ -83,11 +99,14 @@ export function toonMaterial(options: ToonOptions = {}): THREE.MeshToonMaterial 
           float facing = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
           float rimBand = smoothstep(0.55, 0.75, 1.0 - facing);
           outgoingLight += rimColor * toonRimColor * rimBand * rimStrength;
+          #ifdef TOON_AURA
+            outgoingLight += auraColor * toonAura * smoothstep(0.35, 0.85, 1.0 - facing) * 0.85;
+          #endif
         }
         #include <opaque_fragment>`,
       );
   };
-  material.customProgramCacheKey = () => "windrider-toon";
+  material.customProgramCacheKey = () => (aura ? "windrider-toon-aura" : "windrider-toon");
   return material;
 }
 

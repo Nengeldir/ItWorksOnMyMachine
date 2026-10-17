@@ -6,7 +6,8 @@ import { Scene } from "three";
 const context = new Proxy({}, { get: (target, key) => key in target ? target[key] : () => ({ addColorStop() {} }), set: (target, key, value) => { target[key] = value; return true; } });
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: () => context }) };
 
-const { Avatar } = await import("../src/game/avatar.ts");
+const { Avatar, loadClearance } = await import("../src/game/avatar.ts");
+await loadClearance();
 const { Equipment } = await import("../src/game/items/equip.ts");
 const { ItemFx } = await import("../src/game/items/fx.ts");
 const { Items } = await import("../src/game/run/items.ts");

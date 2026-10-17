@@ -205,7 +205,20 @@ export const ITEMS_FX = {
 /** `spacing`: the orbit's radius (m), `orbit`: seconds per lap, `roam`: seconds of free play after a hoop, `follow`: the spring's stiffness */
 export const PET_LOOKS = { size: 1.8, spacing: 3.2, height: 0.5, trail: 0.8, follow: 5, snapDistance: 30, bob: 0.12, wingbeat: 1, tailSway: 1, lead: 9, sparkle: 1, gallop: 1.6, stride: 1, hoopRange: 80, guideBlend: 0.8, orbit: 5.5, roam: 4 };
 /** Small ornaments and particle emission, never the pilot's hitbox. */
-export const COSMETIC_FX = { capeDetail: 1, wingParticles: 22, wingParticleSize: .1, sparkle: 1 };
+export const COSMETIC_FX = {
+  // Wing particles per second (× each recipe's rate; 22 until 2026-10-17, then 30% more)
+  capeDetail: 1, wingParticles: 28.6, wingParticleSize: .1, sparkle: 1,
+  // Wing particles' colors by sky: saturation × this, and pastels pulled this far towards mid lightness
+  // (deeper, so they read). Dark maps a little; light maps much more, and drawn as solid shapes there
+  saturationDark: 1.15, deepenDark: 0.08, saturationLight: 1.6, deepenLight: 0.34,
+  // Glowing layers' brightness × this (blooms), and the glowing wings' aura (cosmetics/wings.ts)
+  glowParticles: 1.35, wingGlow: 1,
+};
+/**
+ * Particle jars (cosmetics/jars.ts), looks only: `aura` scales how many motes drift round the pilot, `trail`
+ * how many stream off behind, the sizes theirs; glowing (rare and legendary) jars' brightness × `glow` (blooms)
+ */
+export const JAR_FX = { aura: 1, auraSize: 1, trail: 1, trailSize: 1, glow: 1.45 };
 /** Collection models and motion; reward rules live on the server. */
 export const COLLECTION_FX = { bob: 0.5, spin: 0.65, size: 2.2, crystalSize: 3.8, crystalMotes: 10, moteDistance: 80, viewDistance: 240, burst: 1 };
 
@@ -219,7 +232,7 @@ export const AUDIO = {
   nightMuffle: 0.55, // how much the highs are rolled off at night
 };
 
-const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, STRUCTURES, WATER, DEEP, RUN, AUTOPILOT, ABILITIES_FX, ITEMS_FX, PET_LOOKS, COSMETIC_FX, COLLECTION_FX, AUDIO } as const;
+const GROUPS = { ANIM, FX, RINGS, CAMERA, TERRAIN, FLORA, STRUCTURES, WATER, DEEP, RUN, AUTOPILOT, ABILITIES_FX, ITEMS_FX, PET_LOOKS, COSMETIC_FX, JAR_FX, COLLECTION_FX, AUDIO } as const;
 const DEFAULTS = JSON.parse(JSON.stringify(GROUPS)) as typeof GROUPS;
 const STORAGE_KEY = "windrider.tuning.speed-control-v1";
 
@@ -272,6 +285,12 @@ export const RANGES: Record<string, [number, number, number?]> = {
   capeDetail: [0, 2],
   wingParticles: [0, 50],
   wingParticleSize: [0.05, 0.5],
+  saturationDark: [0.5, 2.5],
+  deepenDark: [0, 0.8],
+  saturationLight: [0.5, 2.5],
+  deepenLight: [0, 0.8],
+  glowParticles: [0.5, 3],
+  wingGlow: [0, 3],
   spacing: [2.5, 4.5],
   trail: [0, 3],
   follow: [2, 16],
@@ -417,6 +436,7 @@ export const TUNING_GROUPS: [string, Group][] = [
   ["Item looks", ITEMS_FX],
   ["Companions", PET_LOOKS],
   ["Cosmetic detail", COSMETIC_FX],
+  ["Particle jars", JAR_FX],
   ["Collection pickups", COLLECTION_FX],
   ["Audio", AUDIO],
 ];

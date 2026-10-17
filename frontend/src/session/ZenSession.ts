@@ -1,6 +1,3 @@
-// Zen mode: creative direction and code by Stella (GitHub: stella-sy-x), from
-// PR #51. Ported onto other branches by teammates; see CREDITS.md.
-
 import { Game, type HudState } from "../game/Game";
 import type { InputObserver } from "../game/input";
 import { type Level, zenLevel } from "../game/world/biomes";

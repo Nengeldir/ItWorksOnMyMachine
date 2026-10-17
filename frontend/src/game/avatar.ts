@@ -6,10 +6,11 @@ import { ANIM, FX, COSMETIC_FX } from "./tuning";
 import { clamp, smoothstep } from "./math";
 import { DISSOLVE_AT, type DeathKind, WING_POINTS } from "./death";
 import type { ItemSlot } from "./items/models";
+import type { Clearance, FrontMap } from "./items/clearance";
 import { capeSpec, wingSpec, type CapeId, type WingId, type WingRig } from "./cosmetics/catalog";
 import { buildWing, type WingAnchor, type WingModel } from "./cosmetics/wings";
 import { type FeatherBone, type WingDrive, articulate, rigAmplitude, rigRate, skinnedMesh } from "./wingRig";
-import type { Appearance } from "./cosmetics/storage";
+import type { Appearance, JarSlot } from "./cosmetics/storage";
 import { buildHat, buildShoe, disposeModel } from "./cosmetics/models";
 
 // The pilot: a small cel-shaded flyer with Genshin / Sky proportions (a big
@@ -370,6 +371,41 @@ const localOmega = new THREE.Vector3();
 const dq = new THREE.Quaternion();
 const prevInverse = new THREE.Quaternion();
 const forwardTmp = new THREE.Vector3();
+const sampleTmp = new THREE.Vector3();
+const itemTmp = new THREE.Vector3();
+const toItem = new THREE.Matrix4();
+const bodyInverse = new THREE.Matrix4();
+/** How a wing turns at the shoulder to clear a carried item: coarse steps first, then halving */
+const CLEAR_STEP = 0.12;
+const CLEAR_REACH = 1.44;
+const CLEAR_REFINE = 4;
+const CLEAR_DIRS = [[1, -1], [-1, 1]] as const;
+const BACKWARD = new THREE.Vector3(0, 0, 1);
+const OUTWARD = new THREE.Vector3(1, 0, 0);
+const clearTurnQuaternion = new THREE.Quaternion();
+const clearTurnMatrix = new THREE.Matrix4();
+const clearPivot = new THREE.Matrix4();
+const clearPivotInverse = new THREE.Matrix4();
+const clearWorld = new THREE.Matrix4();
+const turnedInverse = new THREE.Matrix4();
+const clearAlong = new THREE.Vector3();
+const clearAxis = new THREE.Vector3();
+
+/**
+ * Carried items' shapes (items/clearance.ts) are a chunk of their own: only adventures carry items, so races
+ * never load it. Until it has loaded, an item doesn't count as carried yet (a frame or two)
+ */
+type ClearanceModule = typeof import("./items/clearance");
+let clearanceModule: ClearanceModule | null = null;
+let clearanceLoading: Promise<ClearanceModule> | null = null;
+export function loadClearance(): Promise<ClearanceModule> {
+  return (clearanceLoading ??= import("./items/clearance").then((module) => (clearanceModule = module)));
+}
+
+/** Points on a wing riding on one of its parts (or feather bones), in its frame, and a sphere round them */
+interface WingSample { object: THREE.Object3D; points: Float32Array; center: THREE.Vector3; radius: number }
+/** Something carried, settled in place, and its solid shape (items/clearance.ts) */
+interface Carried { group: THREE.Object3D; shape: Clearance; inverse: THREE.Matrix4 }
 const elbowTmp = new THREE.Vector3();
 
 function springStep(value: number, velocity: number, target: number, stiffness: number, damping: number, dt: number) {
@@ -402,16 +438,27 @@ export class Avatar {
   private capeId: CapeId = "classic";
   private hat: THREE.Group | null = null;
   private shoes: THREE.Group[] = [];
-  private appearance: Appearance = { cape: "classic", hat: "none", shoes: "classic", wings: "classic", pet: "none" };
+  private appearance: Appearance = { cape: "classic", hat: "none", shoes: "classic", wings: "classic", pet: "none", jar: "none" };
   private wingModels: WingModel[] = [];
   /** How the worn wings move, and how big they are (wingRig.ts) */
   private wingRig: WingRig = "feather";
   private wingSize = 1;
   get wingStyle(): WingId { return this.appearance.wings; }
+  /** The particle jar worn (its aura and trail are the pilot's effects', pilotfx.ts) */
+  get jarStyle(): JarSlot { return this.appearance.jar ?? "none"; }
   private readonly scarf: Cloth[];
   // Conservative bounds of the animated legs, reused for cloth self-collision.
   private readonly clothObstacles: { mesh: THREE.Mesh; local: THREE.Box3; bounds: THREE.Box3 }[] = [];
   private readonly clothInverse = new THREE.Matrix4();
+  /** What's carried in the hand and on the back, settled in place: wings turn out of them, the cape drapes in front of the back one */
+  private readonly carried: { back: Carried | null; hand: Carried | null } = { back: null, hand: null };
+  private backFront: FrontMap | null = null;
+  /** Points over each wing (right, left), sampled from the worn pair when first needed */
+  private wingSamples: WingSample[][] | null = null;
+  /** Which way each wing last turned to clear a carried item, so it doesn't flip from one side of it to the other */
+  private readonly clearTurn = [-1, -1];
+  /** And how far it had to turn (where the next frame's search starts) */
+  private readonly clearAngle = [0, 0];
   private readonly clothMatrix = new THREE.Matrix4();
   private readonly painted: Painted[] = [];
   private readonly outlines: THREE.Mesh[] = [];
@@ -435,15 +482,21 @@ export class Avatar {
   private lastFlap = 0;
   private barrel = { t: -1, dir: 1 };
   private speed = 30;
+  /** Boost and brake as the pose shows them: eased, since the flight's can drop to zero in one step */
   boost = 0;
   brake = 0;
+  private boostTarget = 0;
+  private brakeTarget = 0;
   private boostOn = false;
+  /** A wingbeat asked for (boost, the flap ability): effort swells to full, then lets go */
+  private kick = 0;
 
   setSpeedControls(boost: number, brake: number) {
-    if (boost > 0.1 && !this.boostOn) { this.flapPhase = 0; this.beat(); }
+    // A strong beat as the boost kicks in; the stroke carries on from where it was, never snapping
+    if (boost > 0.1 && !this.boostOn) this.beat();
     this.boostOn = boost > 0.1;
-    this.boost = boost;
-    this.brake = brake;
+    this.boostTarget = boost;
+    this.brakeTarget = brake;
   }
 
   resetMotion() {
@@ -452,7 +505,7 @@ export class Avatar {
     this.lean = this.leanVelocity = 0;
     this.barrel.t = -1;
     this.barrelProgress = -1;
-    this.boost = this.brake = 0;
+    this.boost = this.brake = this.boostTarget = this.brakeTarget = this.kick = 0;
     this.boostOn = false;
     this.climbing = this.diving = 0;
   }
@@ -939,6 +992,7 @@ export class Avatar {
     for (const side of [this.left, this.right]) { side.wingOuter.add(side.tip); side.wingOuter.add(side.trail); }
     this.wingModels.forEach(model => model.dispose());
     this.wingModels = [];
+    this.wingSamples = null;
     const spec = wingSpec(id);
     this.wingRig = spec.rig;
     this.wingSize = spec.size;
@@ -974,6 +1028,183 @@ export class Avatar {
   private articulateWings(dt: number, drive: Omit<WingDrive, "dt">) {
     for (const [side, s] of [[this.right, 1], [this.left, -1]] as [Side, 1 | -1][]) {
       articulate(this.wingRig, { wing: side.wing, wingOuter: side.wingOuter, bones: side.bones, rest: side.rest }, s, { ...drive, dt });
+    }
+  }
+
+  /**
+   * What's carried, settled in place (items/equip.ts calls this every frame; null: nothing there). The wings
+   * keep out of what's in the hand or on the back, and the cape drapes in front of what's on the back. Looks only
+   */
+  carry(slot: ItemSlot, id: string | null, group: THREE.Object3D | null) {
+    if (slot !== "back" && slot !== "hand") return;
+    if ((this.carried[slot]?.group ?? null) === group) return;
+    if (!group || !id) {
+      this.carried[slot] = null;
+      if (slot === "back") this.backFront = null;
+      return;
+    }
+    const lib = clearanceModule;
+    if (!lib) {
+      void loadClearance();
+      return;
+    }
+    const shape = lib.clearanceOf(id, group);
+    this.carried[slot] = { group, shape, inverse: new THREE.Matrix4() };
+    if (slot === "back") {
+      // Where it sits on the back doesn't change: its outline in the chest's frame, once
+      this.chest.updateWorldMatrix(true, false);
+      group.updateWorldMatrix(true, false);
+      this.backFront = new lib.FrontMap(shape, bodyInverse.copy(this.chest.matrixWorld).invert().multiply(group.matrixWorld));
+    }
+  }
+
+  /** Points every 3 cm over each wing as worn, grouped by the part, or the feather bone, that moves them most */
+  private sampleWings(): WingSample[][] {
+    return [this.right, this.left].map((side) => {
+      side.wing.updateMatrixWorld(true);
+      const toWing = new THREE.Matrix4().copy(side.wing.matrixWorld).invert();
+      const seen = new Set<string>();
+      // Grouped by part, and by 15 cm patch of it, so each group's sphere is tight
+      const groups = new Map<string, { object: THREE.Object3D; list: number[] }>();
+      const ids = new Map<THREE.Object3D, number>();
+      const local = new THREE.Vector3();
+      side.wing.traverse((node) => {
+        const mesh = node as THREE.Mesh;
+        // Ink outlines ride on their mesh
+        if (!mesh.isMesh || (mesh.parent as THREE.Mesh | null)?.isMesh) return;
+        for (let n: THREE.Object3D | null = mesh; n && n !== side.wing; n = n.parent) if (!n.visible) return;
+        const position = mesh.geometry.getAttribute("position");
+        const skinned = (mesh as THREE.SkinnedMesh).isSkinnedMesh ? (mesh as THREE.SkinnedMesh) : null;
+        const index = skinned?.geometry.getAttribute("skinIndex");
+        const weight = skinned?.geometry.getAttribute("skinWeight");
+        for (let i = 0; i < position.count; i++) {
+          local.fromBufferAttribute(position, i);
+          let object: THREE.Object3D = mesh;
+          if (skinned && index && weight) {
+            let strongest = 0;
+            for (let k = 1; k < 4; k++) if (weight.getComponent(i, k) > weight.getComponent(i, strongest)) strongest = k;
+            const bone = index.getComponent(i, strongest);
+            object = skinned.skeleton.bones[bone];
+            local.applyMatrix4(skinned.bindMatrix).applyMatrix4(skinned.skeleton.boneInverses[bone]);
+          }
+          // One point every 3 cm (where it is now, in the wing's frame)
+          sampleTmp.copy(local).applyMatrix4(object.matrixWorld).applyMatrix4(toWing);
+          const key = `${Math.round(sampleTmp.x / 0.03)},${Math.round(sampleTmp.y / 0.03)},${Math.round(sampleTmp.z / 0.03)}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          if (!ids.has(object)) ids.set(object, ids.size);
+          const patch = `${ids.get(object)}:${Math.floor(local.x / 0.15)},${Math.floor(local.y / 0.15)},${Math.floor(local.z / 0.15)}`;
+          let group = groups.get(patch);
+          if (!group) groups.set(patch, (group = { object, list: [] }));
+          group.list.push(local.x, local.y, local.z);
+        }
+      });
+      return [...groups.values()].map(({ object, list }) => {
+        const points = new Float32Array(list);
+        const sphere = new THREE.Sphere().setFromPoints(Array.from({ length: points.length / 3 }, (_, i) => new THREE.Vector3().fromArray(points, i * 3)));
+        return { object, points, center: sphere.center, radius: sphere.radius };
+      });
+    });
+  }
+
+  /**
+   * Whether any point of a wing is inside something carried, with the wing's world matrices as they are, or
+   * moved rigidly by `turn` (a world-space turn at the shoulder: no matrices need updating to try one)
+   */
+  private wingBlocked(samples: WingSample[], turn: THREE.Matrix4 | null = null): boolean {
+    return this.blockedBy(this.carried.back, samples, turn) || this.blockedBy(this.carried.hand, samples, turn);
+  }
+
+  private blockedBy(carried: Carried | null, samples: WingSample[], turn: THREE.Matrix4 | null): boolean {
+    if (!carried) return false;
+    if (turn) turnedInverse.multiplyMatrices(carried.inverse, turn);
+    else turnedInverse.copy(carried.inverse);
+    for (const { object, points, center, radius } of samples) {
+      toItem.multiplyMatrices(turnedInverse, object.matrixWorld);
+      // Patches that can't reach it are skipped whole
+      if (!carried.shape.near(itemTmp.copy(center).applyMatrix4(toItem), radius * toItem.getMaxScaleOnAxis())) continue;
+      for (let i = 0; i < points.length; i += 3) {
+        if (carried.shape.inside(itemTmp.set(points[i], points[i + 1], points[i + 2]).applyMatrix4(toItem))) return true;
+      }
+    }
+    return false;
+  }
+
+  /** Whether the wing is blocked turned at the shoulder by `angle` about `clearAxis` (`clearPivot` set for it) */
+  private turnBlocked(angle: number, samples: WingSample[]): boolean {
+    clearTurnMatrix.makeRotationAxis(clearAxis, angle);
+    clearWorld.multiplyMatrices(clearPivot, clearTurnMatrix).multiply(clearPivotInverse);
+    return this.wingBlocked(samples, clearWorld);
+  }
+
+  /**
+   * The smallest turn in direction `dir` that clears the wing, or NaN if none does within reach; `from`: where
+   * last frame's search ended (it moves smoothly, so most frames need only a few tries)
+   */
+  private clearingTurn(dir: number, from: number, samples: WingSample[]): number {
+    let lo = 0, hi = NaN;
+    if (from > 0) {
+      if (this.turnBlocked(dir * from, samples)) lo = from;
+      else hi = from;
+    }
+    for (let a = lo + CLEAR_STEP; Number.isNaN(hi) && a <= CLEAR_REACH; a += CLEAR_STEP) {
+      if (this.turnBlocked(dir * a, samples)) lo = a;
+      else hi = a;
+    }
+    if (Number.isNaN(hi)) return NaN;
+    for (let r = 0; r < CLEAR_REFINE; r++) {
+      const mid = (lo + hi) / 2;
+      if (this.turnBlocked(dir * mid, samples)) lo = mid;
+      else hi = mid;
+    }
+    return dir * hi;
+  }
+
+  /**
+   * Keeps each wing out of what's carried: if the pose puts it inside, it turns at the shoulder just far enough
+   * to clear, about the axis that carries it off the back whichever way it points (spread out, that's the
+   * flap; swept down a dive's fold, it swings forward), in front or behind, whichever is nearer (keeping to the
+   * way it went last, so it doesn't flip); failing that, it swings out sideways
+   */
+  private clearWings() {
+    const { back, hand } = this.carried;
+    if (!back && !hand) return;
+    this.wingSamples ??= this.sampleWings();
+    this.chest.updateWorldMatrix(true, false);
+    if (back) { back.group.updateWorldMatrix(true, false); back.inverse.copy(back.group.matrixWorld).invert(); }
+    if (hand) { hand.group.updateWorldMatrix(true, false); hand.inverse.copy(hand.group.matrixWorld).invert(); }
+    for (let k = 0; k < 2; k++) {
+      const side = k === 0 ? this.right : this.left, s = k === 0 ? 1 : -1;
+      const samples = this.wingSamples[k];
+      side.wing.updateMatrixWorld(true);
+      if (!this.wingBlocked(samples)) {
+        this.clearAngle[k] = 0;
+        continue;
+      }
+      // Turns happen about the shoulder, in the chest's frame
+      clearPivot.copy(this.chest.matrixWorld).multiply(clearTurnMatrix.makeTranslation(side.wing.position));
+      clearPivotInverse.copy(clearPivot).invert();
+      // Which way the wing points from the shoulder (to its wrist)
+      clearAlong.copy(side.wingOuter.position).applyQuaternion(side.wing.quaternion).normalize();
+      let best = NaN;
+      for (let a = 0; a < 2 && Number.isNaN(best); a++) {
+        if (a === 0) clearAxis.crossVectors(clearAlong, BACKWARD);
+        else clearAxis.crossVectors(clearAlong, OUTWARD).multiplyScalar(s);
+        if (clearAxis.lengthSq() < 1e-4) clearAxis.set(0, 1, 0);
+        clearAxis.normalize();
+        for (const dir of CLEAR_DIRS[this.clearTurn[k] > 0 ? 0 : 1]) {
+          const from = a === 0 && dir === this.clearTurn[k] ? this.clearAngle[k] : 0;
+          const found = this.clearingTurn(dir, from, samples);
+          // The other way only if it is clearly nearer
+          if (!Number.isNaN(found) && (Number.isNaN(best) || Math.abs(found) < Math.abs(best) * 0.7)) best = found;
+          if (!Number.isNaN(best) && Math.abs(best) < 0.35) break;
+        }
+        if (!Number.isNaN(best) && a === 0) this.clearTurn[k] = Math.sign(best);
+      }
+      this.clearAngle[k] = Number.isNaN(best) ? 0 : Math.abs(best);
+      if (Number.isNaN(best)) continue;
+      side.wing.quaternion.premultiply(clearTurnQuaternion.setFromAxisAngle(clearAxis, best));
+      side.wing.updateMatrixWorld(true);
     }
   }
 
@@ -1013,6 +1244,11 @@ export class Avatar {
     return this.cape.mesh.localToWorld(out);
   }
 
+  /** The body's frame, barrel roll included, but not the wings' flap (the ribbons calm the flap in it) */
+  get rigMatrix(): THREE.Matrix4 {
+    return this.rig.matrixWorld;
+  }
+
   /** The direction the wings span, in world space: trails use it as their width */
   span(out: THREE.Vector3): THREE.Vector3 {
     return out.setFromMatrixColumn(this.rig.matrixWorld, 1).normalize();
@@ -1020,7 +1256,7 @@ export class Avatar {
 
   /** A wingbeat on demand (a run's flap ability): the wings at full effort for a moment */
   beat() {
-    this.effort = 1;
+    this.kick = 1;
   }
 
   /** The roll is visual; flight physics supplies its timing and displacement. */
@@ -1079,10 +1315,19 @@ export class Avatar {
     effort = Math.max(effort, climbing * 0.95);
     effort = clamp(effort * (1 - diving * 0.9), 0, 1);
     const st = this.stance;
-    effort = Math.max(effort * (1 - st.tuck * 0.9) * (1 - st.falcon * 0.8), st.hover, st.cast * 0.8, st.climb * 0.95, st.flare * 0.7, st.butterfly * 0.75);
-    this.effort += (effort - this.effort) * (1 - Math.exp(-dt * 3));
+    effort = Math.max(effort * (1 - st.tuck * 0.9) * (1 - st.falcon * 0.8), st.hover, st.cast * 0.8, st.climb * 0.95, st.flare * 0.7, st.butterfly * 0.75, this.kick);
+    // A requested beat swells in quickly (a fifth of a second), everything else eases
+    this.effort += (effort - this.effort) * (1 - Math.exp(-dt * (3 + 9 * this.kick)));
+    this.kick = Math.max(0, this.kick - dt * 1.6);
+    const controls = 1 - Math.exp(-dt * 10);
+    this.boost += (this.boostTarget - this.boost) * controls;
+    this.brake += (this.brakeTarget - this.brake) * controls;
+    if (this.boost < 1e-3 && this.boostTarget === 0) this.boost = 0;
+    if (this.brake < 1e-3 && this.brakeTarget === 0) this.brake = 0;
+    // Rolling beats faster, rising and settling with the roll (a step in rate shows as a hitch in the stroke)
+    const rolling = this.barrel.t >= 0 ? Math.sin(Math.PI * this.barrel.t) : 0;
     const before = Math.sin(this.flapPhase);
-    this.flapPhase += TAU * (ANIM.flapRate + ANIM.flapBoost * this.effort) * dt * rigRate(this.wingRig, this.wingSize) * (1 + this.climbing * 0.45) * (this.barrel.t >= 0 ? 1.6 : 1) * (1 + st.hover * 0.9) * (1 - st.butterfly * 0.45) * (1 + st.climb * 0.35);
+    this.flapPhase += TAU * (ANIM.flapRate + ANIM.flapBoost * this.effort) * dt * rigRate(this.wingRig, this.wingSize) * (1 + this.climbing * 0.45) * (1 + 0.6 * rolling) * (1 + st.hover * 0.9) * (1 - st.butterfly * 0.45) * (1 + st.climb * 0.35);
     const after = Math.sin(this.flapPhase);
     if (before > 0 && after <= 0 && this.time - this.lastFlap > 0.15) {
       this.lastFlap = this.time;
@@ -1190,6 +1435,8 @@ export class Avatar {
     // The wings' own build reshapes the pose: feathers spread, twist and bend; plates snap; one piece stays whole
     const folded = Math.max(st.tuck * 0.9, st.falcon * 0.85, st.stand, this.brake * 0.25, this.diving * 0.7);
     this.articulateWings(dt, { phase: this.flapPhase, amp, time: t, open: 1 - folded, speed: speedK, sweep, lean: this.lean, limp: false });
+    // Never through what's carried: a wing stops where the rocket (or the lantern) is in the way
+    this.clearWings();
 
     // Aura breathes with the flaps and burns brighter when skimming
     const auraMat = this.aura.material as THREE.SpriteMaterial;
@@ -1263,7 +1510,7 @@ export class Avatar {
         0.245 - v * 1.18 * spec.length * drape + scallop * Math.pow(v, 6),
         0.085 + 0.06 * v + 0.12 * v * v + 0.05 * (1 - u * u) * v + w - pitch * v * v,
       );
-      this.clearCloth(out);
+      this.clearCloth(out, 0.012);
     };
     this.cape.update(this.capeShape);
     this.scarf.forEach((cloth, i) => {
@@ -1276,14 +1523,23 @@ export class Avatar {
           0.27 - v * length,
           0.13 + 0.08 * v + 0.16 * v * v + wave * 1.4 * v * Math.sin(phase) - pitch * v,
         );
-        this.clearCloth(out);
+        this.clearCloth(out, 0);
       });
       cloth.keepAbove(this.cape, 0.02);
+      // Lifted over the cape, still in front of what's on the back
+      const back = this.backFront;
+      if (back) {
+        const position = cloth.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+        for (let i = 0; i < position.count; i++) position.setZ(i, Math.min(position.getZ(i), back.limit(position.getX(i), position.getY(i)) - 0.018));
+      }
     });
   }
 
-  /** Keep cloth behind the legs (+z in chest space), with a soft drape around them. */
-  private clearCloth(out: THREE.Vector3) {
+  /**
+   * Keep cloth behind the legs (+z in chest space), with a soft drape around them, and in front of what's
+   * carried on the back (by `gap` more, so the scarf lifted over the cape still clears it)
+   */
+  private clearCloth(out: THREE.Vector3, gap: number) {
     for (const { bounds } of this.clothObstacles) {
       // Cover half a cloth grid cell beyond the bounds so triangles between
       // samples also clear the boots. The z gap includes their ink outlines.
@@ -1292,6 +1548,8 @@ export class Avatar {
       const drape = 1 - smoothstep(0.06, 0.12, Math.max(dx, dy));
       out.z += Math.max(0, bounds.max.z + 0.025 - out.z) * drape;
     }
+    // Last, as its shape is exact where the legs' are loose boxes: a bent knee can't push the cape through it
+    if (this.backFront) out.z = Math.min(out.z, this.backFront.limit(out.x, out.y) - gap);
   }
 
   /** Starts the crash animation of this kind; `side` is the wing that hit (1 right, -1 left) */

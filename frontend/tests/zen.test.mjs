@@ -1,5 +1,3 @@
-// Zen mode: creative direction and code by Stella (GitHub: stella-sy-x), from
-// PR #51. Ported onto other branches by teammates; see CREDITS.md.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { World } from '../src/game/world/World.ts';

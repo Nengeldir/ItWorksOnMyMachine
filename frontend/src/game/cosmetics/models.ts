@@ -9,18 +9,18 @@ const GOLD = "#f3c869", IVORY = "#fff4df";
 // Each accessory owns its geometry; materials live for the lifetime of this module.
 const toon = toonMaterial({ side: THREE.DoubleSide, rim: 0.35 });
 const ink = outlineMaterial(0.006);
-export function paintedModel(builder: Builder): THREE.Group {
+export function paintedModel(builder: Builder, material: THREE.Material = toon): THREE.Group {
   const group = new THREE.Group(), geometry = builder.build();
-  const mesh = new THREE.Mesh(geometry, toon);
+  const mesh = new THREE.Mesh(geometry, material);
   mesh.add(new THREE.Mesh(geometry, ink));
   group.add(mesh);
   return group;
 }
 
 /** A painted model whose parts tagged with `builder.bone(i)` follow `feathers[i - 1]` (articulated wings) */
-export function skinnedModel(builder: Builder, feathers: readonly FeatherBone[]) {
+export function skinnedModel(builder: Builder, feathers: readonly FeatherBone[], material: THREE.Material = toon) {
   const group = new THREE.Group();
-  const skinned = skinnedMesh(builder.build(), toon, ink, feathers);
+  const skinned = skinnedMesh(builder.build(), material, ink, feathers);
   group.add(skinned.mesh);
   return { group, bones: skinned.bones, rest: skinned.rest };
 }

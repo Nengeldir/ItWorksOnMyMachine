@@ -1,4 +1,4 @@
-import { MathUtils, Vector3 } from "three";
+import { Color, MathUtils, SRGBColorSpace, Vector3 } from "three";
 
 export interface Palette {
   name: string;
@@ -30,4 +30,14 @@ export function sunDirection(palette: Palette): Vector3 {
   const el = MathUtils.degToRad(palette.sunElevation);
   const az = MathUtils.degToRad(palette.sunAzimuth);
   return new Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
+}
+
+const sky = new Color();
+const hsl = { h: 0, s: 0, l: 0 };
+
+/** Whether a sky is dark (night, dusk, the deep): its night, or its average brightness (horizon and zenith) */
+export function skyIsDark(palette: Palette): boolean {
+  const horizon = sky.set(palette.horizon).getHSL(hsl, SRGBColorSpace).l;
+  const zenith = sky.set(palette.zenith).getHSL(hsl, SRGBColorSpace).l;
+  return palette.night >= 0.5 || (horizon + zenith) / 2 < 0.45;
 }

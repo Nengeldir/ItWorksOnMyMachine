@@ -17,7 +17,7 @@ function preview() {
   const calls = { resets: 0, releases: 0, bursts: 0, snaps: 0, rings: [] };
   Object.assign(game, {
     world, flight, rails: new Autopilot(), scene: new Scene(),
-    prevPosition: spawn.position.clone(), prevQuaternion: new Quaternion(), prevVelocity: new Vector3(),
+    prevPosition: spawn.position.clone(), prevQuaternion: new Quaternion(), prevVelocity: new Vector3(), prevDodgeVelocity: new Vector3(),
     paused: false, startSlot: null, style: 0, accumulator: 0, elapsed: 0,
     input: { reset: () => calls.resets++, releasePointer: () => calls.releases++ },
     avatar: { resetMotion() {}, revive() {} }, fx: { reset() {} }, speedLines: { reset() {} },
